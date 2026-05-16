@@ -1,22 +1,11 @@
 import { Layout, Menu } from 'antd';
-import {
-  DashboardOutlined,
-  StockOutlined,
-  BankOutlined,
-  SwapOutlined,
-  BarChartOutlined,
-} from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
-const { Header, Sider, Content } = Layout;
+const { Sider, Content } = Layout;
 
-const NAV_ITEMS = [
-  { key: '/', icon: <DashboardOutlined />, label: 'Overview' },
-  { key: '/portfolio', icon: <StockOutlined />, label: 'Portfolio' },
-  { key: '/assets', icon: <BankOutlined />, label: 'Assets' },
-  { key: '/cash-flow', icon: <SwapOutlined />, label: 'Cash Flow' },
-  { key: '/balance-sheet', icon: <BarChartOutlined />, label: 'Balance Sheet' },
+const NAV_ITEMS: { key: string; label: string }[] = [
+  // Domain sections are added here as backends are connected
 ];
 
 interface AppShellProps {
@@ -42,7 +31,7 @@ export function AppShell({ children }: AppShellProps) {
             letterSpacing: 1,
           }}
         >
-          Personal Finance
+          unihub
         </div>
         <Menu
           theme="dark"
@@ -53,15 +42,6 @@ export function AppShell({ children }: AppShellProps) {
         />
       </Sider>
       <Layout>
-        <Header
-          style={{
-            background: '#fff',
-            padding: '0 24px',
-            borderBottom: '1px solid #f0f0f0',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        />
         <Content style={{ margin: 24 }}>{children}</Content>
       </Layout>
     </Layout>

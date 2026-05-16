@@ -1,0 +1,37 @@
+# Node
+node_modules/
+dist/
+.cache/
+
+# pnpm
+.pnpm-store/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+*.swp
+*.swo
+
+# Test / coverage
+coverage/
+.nyc_output/
+htmlcov/
+
+# Build artefacts
+*.log

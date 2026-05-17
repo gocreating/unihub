@@ -1,15 +1,39 @@
 # unihub
 
-A single, growing dashboard that serves as a personal central hub — one place to manage and visualize all dimensions of daily life. The dashboard frontend is the consistent interaction surface; new domains (finance, geography, travel, health, tasks, …) are connected to the hub over time as the project grows.
+Your personal life OS — one dashboard to capture, organise, and browse everything that matters to you.
 
-## Apps
+Most productivity tools are built for a single purpose: a contacts app, a music library, a vocabulary trainer, a finance tracker. unihub replaces the mental overhead of juggling all of them by bringing every dimension of daily life under one roof. As new areas of your life become worth tracking, a new domain is connected to the hub.
 
-| App | Path | Stack |
-|-----|------|-------|
-| Dashboard (frontend) | `apps/unihub/frontend/` | React 18 + Vite + Ant Design 5 + TanStack Query |
-| Dashboard (backend) | `apps/unihub/backend/` | Python 3.12 + Django 5 + DRF + PostgreSQL |
+## Domains
 
-## Quick Start
+| Domain | What you can do |
+|--------|----------------|
+| **Finance** | Track accounts, transactions, and net worth over time |
+| **Visiting** | Log places you've been and plan where you want to go next |
+| **Language** | Build word card decks and grammar cheat sheets for languages you're learning |
+| **People** | Maintain a contact list and map the relationships between the people in your life |
+| **Music** | Curate a personal song collection with ratings, tags, and notes |
+
+More domains are added over time. The interface stays the same; only the data behind it grows.
+
+## Philosophy
+
+- **Personal, not collaborative** — built for one user, not a team. No sharing, no permissions overhead.
+- **Owned data** — self-hosted with Docker. Your data lives in your own PostgreSQL database.
+- **Breadth over depth** — each domain starts simple and grows only when there's a real need.
+- **One backend, one database** — all domains share a single Django project and PostgreSQL instance. No microservices.
+
+## Deployment
+
+See [apps/unihub/DEPLOY.md](apps/unihub/DEPLOY.md) for local and production runbooks.
+
+**Local (Docker — recommended)**
+```bash
+docker compose -f apps/unihub/docker-compose.local.yml up -d
+```
+Frontend → http://localhost:3000 · Backend API → http://localhost:8000/api/docs/
+
+## Development Quick Start
 
 **Frontend**
 ```bash
@@ -25,8 +49,6 @@ uv sync
 uv run python manage.py migrate
 uv run python manage.py runserver
 ```
-
-## Development
 
 **Package managers**: `pnpm` (frontend), `uv` (backend) — never use npm, yarn, or pip directly.
 
@@ -50,21 +72,18 @@ uv run pytest         # pytest-django
 ```text
 apps/
   unihub/
-    frontend/    # Single hub SPA
-    backend/     # Django project — one DB, domain apps inside
-      unihub/    #   Django project root (settings, urls, wsgi)
-      finance/   #   Finance domain app
-      visiting/  #   Visiting domain app
-      health/    #   Health check
+    frontend/    # Single hub SPA (React + Vite + Ant Design)
+    backend/     # Django project — one DB, all domain apps inside
+      finance/   #   Finance domain
+      visiting/  #   Visiting domain
+      language/  #   Language learning domain
+      people/    #   People & relationships domain
+      music/     #   Music collection domain
+      health/    #   Health check endpoint
     docker-compose.local.yml
     docker-compose.production.yml
-    specs/
+    specs/       #   Domain specs (entity models, field docs)
+    DEPLOY.md    #   Deployment runbook
 .env.example     # Template — copy to apps/unihub/.env for production
-.claude/
-  commands/      # Speckit slash commands
 CLAUDE.md        # AI dev guidelines
 ```
-
-## Reference
-
-Architecture is modelled after [ov-fleet](../OverviewCorporation/ov-pro-tools/apps/ov-fleet) — the primary reference for backend layout, service layer conventions, and frontend organization.

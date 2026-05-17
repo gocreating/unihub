@@ -5,7 +5,9 @@ import type { ReactNode } from 'react';
 const { Sider, Content } = Layout;
 
 const NAV_ITEMS: { key: string; label: string }[] = [
-  // Domain sections are added here as backends are connected
+  { key: '/language', label: 'Language' },
+  { key: '/people',   label: 'People' },
+  { key: '/music',    label: 'Music' },
 ];
 
 interface AppShellProps {

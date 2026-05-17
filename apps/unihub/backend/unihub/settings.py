@@ -22,6 +22,9 @@ INSTALLED_APPS = [
     'health',
     'finance',    # finance domain app
     'visiting',   # visiting domain app
+    'language',   # language learning domain app
+    'people',     # people / relationship network domain app
+    'music',      # music collection domain app
 ]
 
 MIDDLEWARE = [

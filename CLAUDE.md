@@ -16,6 +16,9 @@ apps/
       unihub/    # Django project (settings, urls, wsgi)
       finance/   # Django app — finance entities
       visiting/  # Django app — visiting entities
+      language/  # Django app — language learning (WordCard, GrammarSheet)
+      people/    # Django app — people & relationships (Person, Relationship)
+      music/     # Django app — song collection (Song)
       health/    # Health check endpoint
     docker-compose.local.yml       # Build from source, local dev
     docker-compose.production.yml  # Pre-built images, production

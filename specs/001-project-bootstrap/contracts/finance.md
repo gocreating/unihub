@@ -2,6 +2,8 @@
 
 **Base prefix**: `/api/v1/finance/`
 
+> **Numeric precision**: All decimal values (`amount`, `rate`, net worth totals) are transmitted as **JSON strings**, never as JSON numbers. This preserves exact precision end-to-end. Clients must parse these fields with a Decimal library, not `parseFloat`.
+
 ---
 
 ## Accounts

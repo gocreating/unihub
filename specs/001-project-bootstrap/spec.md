@@ -20,6 +20,8 @@
 
 - Direct input: Each Account in the Finance domain MUST have a currency assigned (ISO 4217 code, e.g., USD, EUR, TWD). The Finance domain supports multiple currencies across accounts.
 - Q: When a balance sheet contains accounts in multiple currencies, how should net worth be displayed? → A: The Finance domain includes a user-managed exchange rate database where rates between currency pairs are recorded with timestamps. When computing net worth, the system applies the closest (most recent prior) rate to the balance sheet's date. The balance sheet aggregation shows both (a) per-currency subtotals and (b) a total converted to a user-selected base currency.
+- Direct input: All numeric values in the Finance domain (Balance amounts, ExchangeRate rates, computed net worth totals) MUST use exact decimal precision — never floating-point types. Backend stores values as fixed-precision decimal (not float). API transmits all numeric Finance values as JSON strings. Frontend performs all arithmetic using a Decimal library (e.g., decimal.js), never JavaScript's native `number` type.
+- Q: What short string format should be used for entity primary keys? → A: NanoID, 12 characters, alphanumeric-only alphabet (`A-Za-z0-9`, 62 chars — no underscores or dashes). Generated server-side. Applied to all domain entity models and the shared core infrastructure models.
 
 ---
 
@@ -154,6 +156,8 @@ Beyond the default table view, a domain may offer a domain-specific visualizatio
 - **FR-013**: The Finance domain MUST provide a user-managed exchange rate database. Each rate entry records: from-currency (ISO 4217), to-currency (ISO 4217), rate value (positive decimal), and date. Entries are user-created, -edited, and -deleted.
 - **FR-014**: When computing a base-currency total for a balance sheet, the system MUST apply the exchange rate with the most recent date that is on or before the balance sheet's date (closest-prior-rate rule). If no rate exists on or before that date for a required pair, the system MUST flag the gap and exclude that currency from the base-currency total — it MUST NOT silently use zero or an incorrect rate.
 - **FR-015**: Every balance sheet MUST display: (a) each account's balance in its native currency, (b) per-currency net worth subtotals (sum of asset balances minus sum of liability balances, grouped by currency), and (c) a total net worth in a user-selected base currency, computed using the closest-prior-rate rule. The base currency selection MUST be persisted per balance sheet.
+- **FR-016**: All numeric values in the Finance domain (balance amounts, exchange rates, computed totals) MUST be stored and processed as exact fixed-precision decimals — never as floating-point types. The API MUST transmit all Finance numeric values as JSON strings to preserve precision across the wire. The frontend MUST use a Decimal arithmetic library (not native JavaScript number arithmetic) for any Finance domain calculations.
+- **FR-017**: All entity primary keys MUST be 12-character NanoID strings generated server-side using the alphanumeric alphabet `A-Za-z0-9` (no underscores, no dashes). This applies to all models in the `core` infrastructure app and all domain entity models. Auto-increment integer PKs are prohibited. The `object_id` field in `AttributeValue` (used for the generic foreign key) MUST be a `CharField(12)` to match entity string PKs.
 
 ### Key Entities
 

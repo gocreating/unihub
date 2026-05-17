@@ -20,13 +20,13 @@ description: "Task list for UniHub Project Bootstrap"
 
 **Purpose**: Scaffold the monorepo structure and containerization before any code is written.
 
-- [ ] T001 Create directory structure per plan.md: `apps/unihub/backend/` and `apps/unihub/frontend/` with subdirectories for `core/`, `finance/`, `health/`, `tests/`
-- [ ] T002 [P] Initialize Django project (`unihub`) with uv in `apps/unihub/backend/`: run `uv init`, add Django 5.x, DRF, drf-spectacular, psycopg2-binary, gunicorn, httpx to `pyproject.toml`
-- [ ] T003 [P] Initialize Vite + React + TypeScript frontend with pnpm in `apps/unihub/frontend/`: run `pnpm create vite`, add Ant Design 5, @ant-design/pro-components, TanStack React Query 5, React Router 7, decimal.js to `package.json`
-- [ ] T004 Create `apps/unihub/docker-compose.local.yml` with `db` (PostgreSQL 16) and `backend` services
-- [ ] T005 [P] Create `apps/unihub/.env.example` with all required vars: `SECRET_KEY`, `POSTGRES_*`, `DEBUG`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`
-- [ ] T006 [P] Create `apps/unihub/backend/Dockerfile` (python:3.12-slim base, uv install, gunicorn entrypoint)
-- [ ] T007 [P] Create `apps/unihub/backend/entrypoint.sh` (wait for DB, run migrations, exec gunicorn)
+- [X] T001 Create directory structure per plan.md: `apps/unihub/backend/` and `apps/unihub/frontend/` with subdirectories for `core/`, `finance/`, `health/`, `tests/`
+- [X] T002 [P] Initialize Django project (`unihub`) with uv in `apps/unihub/backend/`: run `uv init`, add Django 5.x, DRF, drf-spectacular, psycopg2-binary, gunicorn, httpx to `pyproject.toml`
+- [X] T003 [P] Initialize Vite + React + TypeScript frontend with pnpm in `apps/unihub/frontend/`: run `pnpm create vite`, add Ant Design 5, @ant-design/pro-components, TanStack React Query 5, React Router 7, decimal.js to `package.json`
+- [X] T004 Create `apps/unihub/docker-compose.local.yml` with `db` (PostgreSQL 16) and `backend` services
+- [X] T005 [P] Create `apps/unihub/.env.example` with all required vars: `SECRET_KEY`, `POSTGRES_*`, `DEBUG`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`
+- [X] T006 [P] Create `apps/unihub/backend/Dockerfile` (python:3.12-slim base, uv install, gunicorn entrypoint)
+- [X] T007 [P] Create `apps/unihub/backend/entrypoint.sh` (wait for DB, run migrations, exec gunicorn)
 
 **Checkpoint**: `docker compose -f apps/unihub/docker-compose.local.yml up db -d` succeeds; backend container builds without errors.
 
@@ -40,23 +40,23 @@ description: "Task list for UniHub Project Bootstrap"
 
 ### Backend Foundation
 
-- [ ] T008 [P] Create NanoID utility in `apps/unihub/backend/core/nanoid.py`: add `nanoid` to `pyproject.toml`; implement `generate_id()` using alphabet `string.ascii_letters + string.digits` (no underscores/dashes), length 12; this function is used as `default=` on all model `id` fields project-wide
-- [ ] T009 Configure `apps/unihub/backend/unihub/settings.py`: `INSTALLED_APPS` (rest_framework, drf_spectacular, django.contrib.contenttypes, core, finance, health), `DATABASES` (PostgreSQL from env), `REST_FRAMEWORK` (session auth, DRF decimal coerce_to_string default), `CORS_ALLOWED_ORIGINS`
-- [ ] T009 Create `apps/unihub/backend/health/views.py` and `health/urls.py` with `GET /api/v1/health/` returning `{"status": "ok"}`; register in `unihub/urls.py`
-- [ ] T010 Create auth endpoints in `apps/unihub/backend/unihub/auth/views.py`: `POST /api/v1/auth/login/`, `POST /api/v1/auth/logout/`, `GET /api/v1/auth/me/`; register in `unihub/urls.py`
-- [ ] T011 Create `apps/unihub/backend/core/models.py` with `AttributeDefinition` (`id = CharField(12, pk, default=generate_id)`, content_type FK, name, data_type choices, is_system, display_order, options JSONField) and `AttributeValue` (`id = CharField(12, pk, default=generate_id)`, attribute_definition FK, content_type FK, `object_id = CharField(12)` — NOT PositiveIntegerField — plus GenericForeignKey, value TextField); add `UNIQUE` and `Index` constraints per data-model.md
-- [ ] T012 Create initial migration for `core` app: `apps/unihub/backend/core/migrations/0001_initial.py`
-- [ ] T013 [P] Configure drf-spectacular in `apps/unihub/backend/unihub/settings.py` and `urls.py`: expose schema at `GET /api/schema/` and Swagger UI at `GET /api/docs/`
-- [ ] T014 [P] Create `apps/unihub/backend/core/serializers.py` and `core/views.py` with `AttributeDefinitionViewSet` (list by content_type query param, create user-defined only, delete with `?confirm=true` two-step) and `AttributeValueViewSet` (list + bulk upsert for entity); register in `core/urls.py` and include in `unihub/urls.py`
+- [X] T008 [P] Create NanoID utility in `apps/unihub/backend/core/nanoid.py`: add `nanoid` to `pyproject.toml`; implement `generate_id()` using alphabet `string.ascii_letters + string.digits` (no underscores/dashes), length 12; this function is used as `default=` on all model `id` fields project-wide
+- [X] T009 Configure `apps/unihub/backend/unihub/settings.py`: `INSTALLED_APPS` (rest_framework, drf_spectacular, django.contrib.contenttypes, core, finance, health), `DATABASES` (PostgreSQL from env), `REST_FRAMEWORK` (session auth, DRF decimal coerce_to_string default), `CORS_ALLOWED_ORIGINS`
+- [X] T009 Create `apps/unihub/backend/health/views.py` and `health/urls.py` with `GET /api/v1/health/` returning `{"status": "ok"}`; register in `unihub/urls.py`
+- [X] T010 Create auth endpoints in `apps/unihub/backend/unihub/auth/views.py`: `POST /api/v1/auth/login/`, `POST /api/v1/auth/logout/`, `GET /api/v1/auth/me/`; register in `unihub/urls.py`
+- [X] T011 Create `apps/unihub/backend/core/models.py` with `AttributeDefinition` (`id = CharField(12, pk, default=generate_id)`, content_type FK, name, data_type choices, is_system, display_order, options JSONField) and `AttributeValue` (`id = CharField(12, pk, default=generate_id)`, attribute_definition FK, content_type FK, `object_id = CharField(12)` — NOT PositiveIntegerField — plus GenericForeignKey, value TextField); add `UNIQUE` and `Index` constraints per data-model.md
+- [X] T012 Create initial migration for `core` app: `apps/unihub/backend/core/migrations/0001_initial.py`
+- [X] T013 [P] Configure drf-spectacular in `apps/unihub/backend/unihub/settings.py` and `urls.py`: expose schema at `GET /api/schema/` and Swagger UI at `GET /api/docs/`
+- [X] T014 [P] Create `apps/unihub/backend/core/serializers.py` and `core/views.py` with `AttributeDefinitionViewSet` (list by content_type query param, create user-defined only, delete with `?confirm=true` two-step) and `AttributeValueViewSet` (list + bulk upsert for entity); register in `core/urls.py` and include in `unihub/urls.py`
 
 ### Frontend Foundation
 
-- [ ] T015 [P] Copy and adapt PageTable component from ov-fleet: create `apps/unihub/frontend/src/components/PageTable/index.tsx` (remove UmiJS `@umijs/max` imports; use React Router 7 `useNavigate` if needed; keep sticky-header/footer/scrollbar logic intact)
-- [ ] T016 [P] Copy `useStickyHeaderOffset.ts` to `apps/unihub/frontend/src/components/PageTable/useStickyHeaderOffset.ts` (56px header offset constant)
-- [ ] T017 Create `apps/unihub/frontend/src/layouts/AppShell.tsx` using ProLayout with `layout="side"`, fixed sidebar, logo/title in header, Finance nav entry; wrap children with `<Outlet />` for React Router 7
-- [ ] T018 Configure React Router 7 in `apps/unihub/frontend/src/main.tsx`: root route → AppShell, `/` → dashboard, `/finance/accounts` `/finance/balance-sheets` `/finance/exchange-rates` routes, `/login` route; wrap with `QueryClientProvider`
-- [ ] T019 Create API service skeleton: `apps/unihub/frontend/src/services/unihub-backend/index.ts` (export `API_BASE_URL = ''`), `auth.ts` (login, logout, getMe); add `generate-types` script to `apps/unihub/frontend/package.json` (`openapi-typescript http://localhost:8000/api/schema/ -o src/generated/api-types.ts`)
-- [ ] T020 Run `pnpm run generate-types` with backend running to produce initial `apps/unihub/frontend/src/generated/api-types.ts`; create `apps/unihub/frontend/src/services/unihub-backend/types.ts` re-exporting all Finance types
+- [X] T015 [P] Copy and adapt PageTable component from ov-fleet: create `apps/unihub/frontend/src/components/PageTable/index.tsx` (remove UmiJS `@umijs/max` imports; use React Router 7 `useNavigate` if needed; keep sticky-header/footer/scrollbar logic intact)
+- [X] T016 [P] Copy `useStickyHeaderOffset.ts` to `apps/unihub/frontend/src/components/PageTable/useStickyHeaderOffset.ts` (56px header offset constant)
+- [X] T017 Create `apps/unihub/frontend/src/layouts/AppShell.tsx` using ProLayout with `layout="side"`, fixed sidebar, logo/title in header, Finance nav entry; wrap children with `<Outlet />` for React Router 7
+- [X] T018 Configure React Router 7 in `apps/unihub/frontend/src/main.tsx`: root route → AppShell, `/` → dashboard, `/finance/accounts` `/finance/balance-sheets` `/finance/exchange-rates` routes, `/login` route; wrap with `QueryClientProvider`
+- [X] T019 Create API service skeleton: `apps/unihub/frontend/src/services/unihub-backend/index.ts` (export `API_BASE_URL = ''`), `auth.ts` (login, logout, getMe); add `generate-types` script to `apps/unihub/frontend/package.json` (`openapi-typescript http://localhost:8000/api/schema/ -o src/generated/api-types.ts`)
+- [X] T020 Run `pnpm run generate-types` with backend running to produce initial `apps/unihub/frontend/src/generated/api-types.ts`; create `apps/unihub/frontend/src/services/unihub-backend/types.ts` re-exporting all Finance types
 
 **Checkpoint**: Backend starts, `/api/v1/health/` returns 200, `/api/docs/` renders Swagger UI. Frontend dev server starts, AppShell renders with sidebar. Quality loop passes: `uv run ruff check . && uv run pytest` (backend); `pnpm lint && pnpm typecheck` (frontend).
 
@@ -68,10 +68,10 @@ description: "Task list for UniHub Project Bootstrap"
 
 **Independent Test**: Launch app → redirected to `/login` → log in → see AppShell with Finance in sidebar → click Finance → land on Finance accounts page.
 
-- [ ] T021 [P] [US1] Create login page in `apps/unihub/frontend/src/pages/auth/login.tsx`: form with username/password, calls `auth.login()`, redirects to `/` on success; show error on 400
-- [ ] T022 [US1] Add auth guard to router in `apps/unihub/frontend/src/main.tsx`: `useQuery(getMe)` on app load; redirect unauthenticated users to `/login`; redirect authenticated users away from `/login`
-- [ ] T023 [P] [US1] Create dashboard landing page in `apps/unihub/frontend/src/pages/dashboard/index.tsx`: simple welcome card with links to each domain section
-- [ ] T024 [US1] Verify acceptance scenarios: unauthenticated → login redirect; login → dashboard; sidebar Finance link → accounts page; back navigation works without full reload
+- [X] T021 [P] [US1] Create login page in `apps/unihub/frontend/src/pages/auth/login.tsx`: form with username/password, calls `auth.login()`, redirects to `/` on success; show error on 400
+- [X] T022 [US1] Add auth guard to router in `apps/unihub/frontend/src/main.tsx`: `useQuery(getMe)` on app load; redirect unauthenticated users to `/login`; redirect authenticated users away from `/login`
+- [X] T023 [P] [US1] Create dashboard landing page in `apps/unihub/frontend/src/pages/dashboard/index.tsx`: simple welcome card with links to each domain section
+- [X] T024 [US1] Verify acceptance scenarios: unauthenticated → login redirect; login → dashboard; sidebar Finance link → accounts page; back navigation works without full reload
 
 **Checkpoint**: User Story 1 independently testable. Auth flow and navigation work end-to-end.
 
@@ -85,20 +85,20 @@ description: "Task list for UniHub Project Bootstrap"
 
 ### Backend
 
-- [ ] T025 [P] [US2] Add `Account` model to `apps/unihub/backend/finance/models.py`: `id = CharField(12, pk, default=generate_id)`, `name` CharField(200), `account_type` CharField choices(asset/liability/equity), `currency` CharField(3), `created_at`/`updated_at` auto fields; ordering by `name`
-- [ ] T026 [US2] Create `apps/unihub/backend/finance/migrations/0001_initial.py` with Account table; add data migration `0002_seed_account_system_attrs.py` to seed system AttributeDefinitions for Account (name/text/0, account_type/single_select/1, currency/text/2) using ContentType
-- [ ] T027 [US2] Create `AccountSerializer` in `apps/unihub/backend/finance/serializers.py`: all system fields + `custom_attributes` (list of AttributeValue from GenericRelation); all DecimalField instances use `coerce_to_string=True`
-- [ ] T028 [US2] Create `AccountViewSet` in `apps/unihub/backend/finance/views.py`: ModelViewSet with list/create/retrieve/partial_update/destroy; `destroy` returns 400 with `affected_balance_count` if balances exist and `?confirm=true` not present; requires session auth
-- [ ] T029 [US2] Create `apps/unihub/backend/finance/urls.py` with router for AccountViewSet; include at `/api/v1/finance/` in `unihub/urls.py`
-- [ ] T030 [US2] Add integration tests in `apps/unihub/backend/tests/test_finance.py`: create account, list accounts, edit account, delete account without balances, delete account with balances (no confirm → 400, with confirm → 204)
+- [X] T025 [P] [US2] Add `Account` model to `apps/unihub/backend/finance/models.py`: `id = CharField(12, pk, default=generate_id)`, `name` CharField(200), `account_type` CharField choices(asset/liability/equity), `currency` CharField(3), `created_at`/`updated_at` auto fields; ordering by `name`
+- [X] T026 [US2] Create `apps/unihub/backend/finance/migrations/0001_initial.py` with Account table; add data migration `0002_seed_account_system_attrs.py` to seed system AttributeDefinitions for Account (name/text/0, account_type/single_select/1, currency/text/2) using ContentType
+- [X] T027 [US2] Create `AccountSerializer` in `apps/unihub/backend/finance/serializers.py`: all system fields + `custom_attributes` (list of AttributeValue from GenericRelation); all DecimalField instances use `coerce_to_string=True`
+- [X] T028 [US2] Create `AccountViewSet` in `apps/unihub/backend/finance/views.py`: ModelViewSet with list/create/retrieve/partial_update/destroy; `destroy` returns 400 with `affected_balance_count` if balances exist and `?confirm=true` not present; requires session auth
+- [X] T029 [US2] Create `apps/unihub/backend/finance/urls.py` with router for AccountViewSet; include at `/api/v1/finance/` in `unihub/urls.py`
+- [X] T030 [US2] Add integration tests in `apps/unihub/backend/tests/test_finance.py`: create account, list accounts, edit account, delete account without balances, delete account with balances (no confirm → 400, with confirm → 204)
 
 ### Frontend
 
-- [ ] T031 [P] [US2] Regenerate `apps/unihub/frontend/src/generated/api-types.ts` from updated schema
-- [ ] T032 [P] [US2] Add account service functions to `apps/unihub/frontend/src/services/unihub-backend/finance.ts`: `listAccounts`, `createAccount`, `updateAccount`, `deleteAccount` (with confirm param)
-- [ ] T033 [US2] Create Finance Accounts page in `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` using PageTable: columns for name, account_type, currency, actions; `widthForHeader` + `computeScrollX` for column sizing; TanStack Query for data fetching
-- [ ] T034 [US2] Add create/edit Account modal to `apps/unihub/frontend/src/pages/finance/accounts/index.tsx`: form with name (text), account_type (select), currency (text, ISO 4217 validated); optimistic update on save
-- [ ] T035 [US2] Add delete Account confirmation in `apps/unihub/frontend/src/pages/finance/accounts/index.tsx`: call DELETE without confirm first; if 400 with `affected_balance_count`, show warning dialog with count; on confirm re-call with `?confirm=true`
+- [X] T031 [P] [US2] Regenerate `apps/unihub/frontend/src/generated/api-types.ts` from updated schema
+- [X] T032 [P] [US2] Add account service functions to `apps/unihub/frontend/src/services/unihub-backend/finance.ts`: `listAccounts`, `createAccount`, `updateAccount`, `deleteAccount` (with confirm param)
+- [X] T033 [US2] Create Finance Accounts page in `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` using PageTable: columns for name, account_type, currency, actions; `widthForHeader` + `computeScrollX` for column sizing; TanStack Query for data fetching
+- [X] T034 [US2] Add create/edit Account modal to `apps/unihub/frontend/src/pages/finance/accounts/index.tsx`: form with name (text), account_type (select), currency (text, ISO 4217 validated); optimistic update on save
+- [X] T035 [US2] Add delete Account confirmation in `apps/unihub/frontend/src/pages/finance/accounts/index.tsx`: call DELETE without confirm first; if 400 with `affected_balance_count`, show warning dialog with count; on confirm re-call with `?confirm=true`
 
 **Checkpoint**: User Story 2 independently testable. All account CRUD operations work including cascade-delete warning.
 
@@ -112,19 +112,19 @@ description: "Task list for UniHub Project Bootstrap"
 
 ### Backend
 
-- [ ] T036 [P] [US2b] Add `BalanceSheet` and `Balance` models to `apps/unihub/backend/finance/models.py`: BalanceSheet (`id = CharField(12, pk, default=generate_id)`, date DateField, label CharField blank, base_currency CharField(3)); Balance (`id = CharField(12, pk, default=generate_id)`, account FK, balance_sheet FK, amount DecimalField(20,4), UNIQUE constraint); ordering BalanceSheet by `-date`
-- [ ] T037 [US2b] Create migration `apps/unihub/backend/finance/migrations/0003_balancesheet_balance.py` with BalanceSheet + Balance tables; add `0004_seed_balancesheet_system_attrs.py` to seed system AttributeDefinitions for BalanceSheet
-- [ ] T038 [US2b] Create `BalanceSheetSerializer` and `BalanceSerializer` in `apps/unihub/backend/finance/serializers.py`: `amount` uses `DecimalField(coerce_to_string=True, max_digits=20, decimal_places=4)` — never FloatField
-- [ ] T039 [US2b] Create `BalanceSheetViewSet` and nested balance endpoints in `apps/unihub/backend/finance/views.py`: BalanceSheet CRUD; `GET/PUT/DELETE balance-sheets/{id}/balances/{account_id}/` upsert balance; `GET balance-sheets/{id}/net-worth/` computes per-currency subtotals and closest-prior-rate base-currency total (see research.md Decision 3); missing-rate pairs returned in `missing_rates` list — never silently zeroed
-- [ ] T040 [US2b] Register balance sheet and balance URLs in `apps/unihub/backend/finance/urls.py`
-- [ ] T041 [US2b] Add integration tests in `apps/unihub/backend/tests/test_finance.py`: create balance sheet, enter balances, single-currency net worth correct, missing-rate flagged correctly
+- [X] T036 [P] [US2b] Add `BalanceSheet` and `Balance` models to `apps/unihub/backend/finance/models.py`: BalanceSheet (`id = CharField(12, pk, default=generate_id)`, date DateField, label CharField blank, base_currency CharField(3)); Balance (`id = CharField(12, pk, default=generate_id)`, account FK, balance_sheet FK, amount DecimalField(20,4), UNIQUE constraint); ordering BalanceSheet by `-date`
+- [X] T037 [US2b] Create migration `apps/unihub/backend/finance/migrations/0003_balancesheet_balance.py` with BalanceSheet + Balance tables; add `0004_seed_balancesheet_system_attrs.py` to seed system AttributeDefinitions for BalanceSheet
+- [X] T038 [US2b] Create `BalanceSheetSerializer` and `BalanceSerializer` in `apps/unihub/backend/finance/serializers.py`: `amount` uses `DecimalField(coerce_to_string=True, max_digits=20, decimal_places=4)` — never FloatField
+- [X] T039 [US2b] Create `BalanceSheetViewSet` and nested balance endpoints in `apps/unihub/backend/finance/views.py`: BalanceSheet CRUD; `GET/PUT/DELETE balance-sheets/{id}/balances/{account_id}/` upsert balance; `GET balance-sheets/{id}/net-worth/` computes per-currency subtotals and closest-prior-rate base-currency total (see research.md Decision 3); missing-rate pairs returned in `missing_rates` list — never silently zeroed
+- [X] T040 [US2b] Register balance sheet and balance URLs in `apps/unihub/backend/finance/urls.py`
+- [X] T041 [US2b] Add integration tests in `apps/unihub/backend/tests/test_finance.py`: create balance sheet, enter balances, single-currency net worth correct, missing-rate flagged correctly
 
 ### Frontend
 
-- [ ] T042 [P] [US2b] Regenerate `apps/unihub/frontend/src/generated/api-types.ts`
-- [ ] T043 [P] [US2b] Add balance sheet, balance, and net worth service functions to `apps/unihub/frontend/src/services/unihub-backend/finance.ts`
-- [ ] T044 [US2b] Create BalanceSheet list page in `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` using PageTable: columns for date, label, base_currency; create/edit/delete modal; sorted by date desc
-- [ ] T045 [US2b] Create BalanceSheet detail page in `apps/unihub/frontend/src/pages/finance/balance-sheets/[id].tsx`: PageTable of all accounts with editable amount column (inline or modal); import `decimal.js` — use `new Decimal(amountString)` for all arithmetic, never `parseFloat`; display per-currency subtotals and base-currency total summary card below table; show missing-rate warning chips for uncovered currencies
+- [X] T042 [P] [US2b] Regenerate `apps/unihub/frontend/src/generated/api-types.ts`
+- [X] T043 [P] [US2b] Add balance sheet, balance, and net worth service functions to `apps/unihub/frontend/src/services/unihub-backend/finance.ts`
+- [X] T044 [US2b] Create BalanceSheet list page in `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` using PageTable: columns for date, label, base_currency; create/edit/delete modal; sorted by date desc
+- [X] T045 [US2b] Create BalanceSheet detail page in `apps/unihub/frontend/src/pages/finance/balance-sheets/[id].tsx`: PageTable of all accounts with editable amount column (inline or modal); import `decimal.js` — use `new Decimal(amountString)` for all arithmetic, never `parseFloat`; display per-currency subtotals and base-currency total summary card below table; show missing-rate warning chips for uncovered currencies
 
 **Checkpoint**: User Story 2b independently testable with same-currency accounts. Multi-currency total requires US2c exchange rates.
 
@@ -138,18 +138,18 @@ description: "Task list for UniHub Project Bootstrap"
 
 ### Backend
 
-- [ ] T046 [P] [US2c] Add `ExchangeRate` model to `apps/unihub/backend/finance/models.py`: `id = CharField(12, pk, default=generate_id)`, `from_currency` CharField(3), `to_currency` CharField(3), `rate` DecimalField(24,8), `date` DateField; `UNIQUE(from_currency, to_currency, date)`; ordering `-date`
-- [ ] T047 [US2c] Create migration `apps/unihub/backend/finance/migrations/0005_exchangerate.py`; composite unique constraint creates index for closest-prior-rate query
-- [ ] T048 [US2c] Create `ExchangeRateSerializer` in `apps/unihub/backend/finance/serializers.py`: `rate` uses `DecimalField(coerce_to_string=True, max_digits=24, decimal_places=8)`; validate `rate > 0` and valid ISO 4217 codes
-- [ ] T049 [US2c] Create `ExchangeRateViewSet` in `apps/unihub/backend/finance/views.py`: list (with from_currency/to_currency filter), create, partial_update, destroy; register in `finance/urls.py`; update net-worth view to use closest-prior-rate from ExchangeRate table
-- [ ] T050 [US2c] Add integration tests in `apps/unihub/backend/tests/test_finance.py`: exchange rate CRUD; closest-prior-rate selection with multiple rates on different dates; multi-currency net worth with rates present; missing-rate flagging when no rate exists before balance sheet date
+- [X] T046 [P] [US2c] Add `ExchangeRate` model to `apps/unihub/backend/finance/models.py`: `id = CharField(12, pk, default=generate_id)`, `from_currency` CharField(3), `to_currency` CharField(3), `rate` DecimalField(24,8), `date` DateField; `UNIQUE(from_currency, to_currency, date)`; ordering `-date`
+- [X] T047 [US2c] Create migration `apps/unihub/backend/finance/migrations/0005_exchangerate.py`; composite unique constraint creates index for closest-prior-rate query
+- [X] T048 [US2c] Create `ExchangeRateSerializer` in `apps/unihub/backend/finance/serializers.py`: `rate` uses `DecimalField(coerce_to_string=True, max_digits=24, decimal_places=8)`; validate `rate > 0` and valid ISO 4217 codes
+- [X] T049 [US2c] Create `ExchangeRateViewSet` in `apps/unihub/backend/finance/views.py`: list (with from_currency/to_currency filter), create, partial_update, destroy; register in `finance/urls.py`; update net-worth view to use closest-prior-rate from ExchangeRate table
+- [X] T050 [US2c] Add integration tests in `apps/unihub/backend/tests/test_finance.py`: exchange rate CRUD; closest-prior-rate selection with multiple rates on different dates; multi-currency net worth with rates present; missing-rate flagging when no rate exists before balance sheet date
 
 ### Frontend
 
-- [ ] T051 [P] [US2c] Regenerate `apps/unihub/frontend/src/generated/api-types.ts`
-- [ ] T052 [P] [US2c] Add exchange rate service functions to `apps/unihub/frontend/src/services/unihub-backend/finance.ts`: `listExchangeRates`, `createExchangeRate`, `updateExchangeRate`, `deleteExchangeRate`
-- [ ] T053 [US2c] Create ExchangeRate list page in `apps/unihub/frontend/src/pages/finance/exchange-rates/index.tsx` using PageTable: columns for from_currency, to_currency, rate (displayed as string, no parseFloat), date; create/edit/delete modal
-- [ ] T054 [US2c] Update BalanceSheet detail page `apps/unihub/frontend/src/pages/finance/balance-sheets/[id].tsx`: refresh net worth query on exchange rate changes; display missing-rate warning per currency using Ant Design Alert; show which exchange rate date was used for each conversion (tooltip or sub-row)
+- [X] T051 [P] [US2c] Regenerate `apps/unihub/frontend/src/generated/api-types.ts`
+- [X] T052 [P] [US2c] Add exchange rate service functions to `apps/unihub/frontend/src/services/unihub-backend/finance.ts`: `listExchangeRates`, `createExchangeRate`, `updateExchangeRate`, `deleteExchangeRate`
+- [X] T053 [US2c] Create ExchangeRate list page in `apps/unihub/frontend/src/pages/finance/exchange-rates/index.tsx` using PageTable: columns for from_currency, to_currency, rate (displayed as string, no parseFloat), date; create/edit/delete modal
+- [X] T054 [US2c] Update BalanceSheet detail page `apps/unihub/frontend/src/pages/finance/balance-sheets/[id].tsx`: refresh net worth query on exchange rate changes; display missing-rate warning per currency using Ant Design Alert; show which exchange rate date was used for each conversion (tooltip or sub-row)
 
 **Checkpoint**: User Story 2c independently testable. Full multi-currency net worth with closest-prior-rate selection verified end-to-end.
 
@@ -163,16 +163,16 @@ description: "Task list for UniHub Project Bootstrap"
 
 ### Backend
 
-- [ ] T055 [P] [US3] Update `core/views.py` `AttributeDefinitionViewSet` to enforce `is_system=True` delete protection (return 400 with clear message); ensure `DELETE ?confirm=true` path returns `affected_entity_count` before deletion
-- [ ] T056 [US3] Add integration tests in `apps/unihub/backend/tests/test_core.py`: create user-defined attr, list attrs for content_type, create+set AttributeValue, delete attr with values (confirm flow), reject delete of system attr
+- [X] T055 [P] [US3] Update `core/views.py` `AttributeDefinitionViewSet` to enforce `is_system=True` delete protection (return 400 with clear message); ensure `DELETE ?confirm=true` path returns `affected_entity_count` before deletion
+- [X] T056 [US3] Add integration tests in `apps/unihub/backend/tests/test_core.py`: create user-defined attr, list attrs for content_type, create+set AttributeValue, delete attr with values (confirm flow), reject delete of system attr
 
 ### Frontend
 
-- [ ] T057 [P] [US3] Regenerate `apps/unihub/frontend/src/generated/api-types.ts`
-- [ ] T058 [P] [US3] Add core service functions to `apps/unihub/frontend/src/services/unihub-backend/core.ts`: `listAttributeDefinitions(contentType)`, `createAttributeDefinition`, `deleteAttributeDefinition(id, confirm?)`, `bulkUpsertAttributeValues`
-- [ ] T059 [US3] Create AttributeManagementPanel component in `apps/unihub/frontend/src/components/AttributeManagementPanel/index.tsx`: shows system attrs (read-only) and user-defined attrs (add/delete); delete triggers count-warning confirm dialog; accepts `contentType` prop for domain-agnostic reuse
-- [ ] T060 [US3] Add AttributeManagementPanel to Accounts page in `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` (drawer or settings tab); dynamically add custom attribute columns to PageTable when user-defined attrs exist
-- [ ] T061 [US3] Update Account create/edit modal to render user-defined attribute fields (text, number, date, boolean, single_select) alongside system fields in `apps/unihub/frontend/src/pages/finance/accounts/index.tsx`; call `bulkUpsertAttributeValues` after save
+- [X] T057 [P] [US3] Regenerate `apps/unihub/frontend/src/generated/api-types.ts`
+- [X] T058 [P] [US3] Add core service functions to `apps/unihub/frontend/src/services/unihub-backend/core.ts`: `listAttributeDefinitions(contentType)`, `createAttributeDefinition`, `deleteAttributeDefinition(id, confirm?)`, `bulkUpsertAttributeValues`
+- [X] T059 [US3] Create AttributeManagementPanel component in `apps/unihub/frontend/src/components/AttributeManagementPanel/index.tsx`: shows system attrs (read-only) and user-defined attrs (add/delete); delete triggers count-warning confirm dialog; accepts `contentType` prop for domain-agnostic reuse
+- [X] T060 [US3] Add AttributeManagementPanel to Accounts page in `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` (drawer or settings tab); dynamically add custom attribute columns to PageTable when user-defined attrs exist
+- [X] T061 [US3] Update Account create/edit modal to render user-defined attribute fields (text, number, date, boolean, single_select) alongside system fields in `apps/unihub/frontend/src/pages/finance/accounts/index.tsx`; call `bulkUpsertAttributeValues` after save
 
 **Checkpoint**: User Story 3 independently testable. Custom attribute add/fill/delete cycle works for Finance Accounts.
 
@@ -184,9 +184,9 @@ description: "Task list for UniHub Project Bootstrap"
 
 **Independent Test**: BalanceSheet list → toggle to "Chart" view → line chart shows net worth over time across all balance sheets → toggle back to table → data unchanged. BalanceSheet detail → toggle shows asset/liability breakdown by currency.
 
-- [ ] T062 [P] [US4] Add net worth trend line chart to `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx`: use `@ant-design/charts` or Ant Design Pro `StatisticCard`; X axis = balance sheet dates, Y axis = base-currency net worth (decimal.js for all value computation); toggle button to switch table ↔ chart view
-- [ ] T063 [P] [US4] Add account-type breakdown stacked bar chart (assets vs liabilities per currency) to `apps/unihub/frontend/src/pages/finance/balance-sheets/[id].tsx`; visible as a collapsible section below the net worth summary card
-- [ ] T064 [US4] Verify both views reflect entity changes: after editing a balance, React Query cache invalidation causes both table and chart views to re-render with updated values
+- [X] T062 [P] [US4] Add net worth trend line chart to `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx`: use `@ant-design/charts` or Ant Design Pro `StatisticCard`; X axis = balance sheet dates, Y axis = base-currency net worth (decimal.js for all value computation); toggle button to switch table ↔ chart view
+- [X] T063 [P] [US4] Add account-type breakdown stacked bar chart (assets vs liabilities per currency) to `apps/unihub/frontend/src/pages/finance/balance-sheets/[id].tsx`; visible as a collapsible section below the net worth summary card
+- [X] T064 [US4] Verify both views reflect entity changes: after editing a balance, React Query cache invalidation causes both table and chart views to re-render with updated values
 
 **Checkpoint**: User Story 4 independently testable. Chart and table views both reflect current data.
 
@@ -196,13 +196,13 @@ description: "Task list for UniHub Project Bootstrap"
 
 **Purpose**: Hardening, documentation, and final quality validation.
 
-- [ ] T065 [P] Add empty state components (Ant Design `Empty`) to Accounts, BalanceSheets, and ExchangeRates pages when list is empty
-- [ ] T066 [P] Add error boundary in `apps/unihub/frontend/src/main.tsx` and per-page API error display (Ant Design `Alert`) for failed queries and mutations
-- [ ] T067 [P] Create `apps/unihub/frontend/CLAUDE.md` with frontend-specific conventions (PageTable usage, decimal.js requirement, service layer patterns, type generation workflow)
-- [ ] T068 [P] Create `apps/unihub/backend/CLAUDE.md` with backend-specific conventions (DecimalField-only for Finance numerics, coerce_to_string, system attr seeding via data migration, integration test requirements)
-- [ ] T069 [P] Add `docker-compose.production.yml` with frontend Nginx build stage and backend gunicorn service; verify production build produces no TypeScript errors (`pnpm build`)
-- [ ] T070 Run full quality loop and fix all issues: `uv run ruff check . && uv run pytest` (backend); `pnpm lint && pnpm typecheck && pnpm test` (frontend)
-- [ ] T071 Export final `openapi.yaml` from running backend (`GET /api/schema/?format=yaml`) and commit to `apps/unihub/backend/openapi.yaml`
+- [X] T065 [P] Add empty state components (Ant Design `Empty`) to Accounts, BalanceSheets, and ExchangeRates pages when list is empty
+- [X] T066 [P] Add error boundary in `apps/unihub/frontend/src/main.tsx` and per-page API error display (Ant Design `Alert`) for failed queries and mutations
+- [X] T067 [P] Create `apps/unihub/frontend/CLAUDE.md` with frontend-specific conventions (PageTable usage, decimal.js requirement, service layer patterns, type generation workflow)
+- [X] T068 [P] Create `apps/unihub/backend/CLAUDE.md` with backend-specific conventions (DecimalField-only for Finance numerics, coerce_to_string, system attr seeding via data migration, integration test requirements)
+- [X] T069 [P] Add `docker-compose.production.yml` with frontend Nginx build stage and backend gunicorn service; verify production build produces no TypeScript errors (`pnpm build`)
+- [X] T070 Run full quality loop and fix all issues: `uv run ruff check . && uv run pytest` (backend); `pnpm lint && pnpm typecheck && pnpm test` (frontend)
+- [X] T071 Export final `openapi.yaml` from running backend (`GET /api/schema/?format=yaml`) and commit to `apps/unihub/backend/openapi.yaml`
 
 ---
 

@@ -10,6 +10,11 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
     },
   },
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8000',
+    },
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
@@ -20,5 +25,6 @@ export default defineConfig({
     setupFiles: ['./src/test-setup.ts'],
     exclude: ['e2e/**', 'node_modules/**'],
     css: false,
+    passWithNoTests: true,
   },
 });

@@ -1,0 +1,171 @@
+import { API_BASE_URL } from './index';
+
+// ── Types ────────────────────────────────────────────────────────────
+
+export interface CustomAttribute {
+  attribute_definition_id: string;
+  attribute_name: string;
+  value: string;
+}
+
+export interface Account {
+  id: string;
+  name: string;
+  account_type: 'asset' | 'liability' | 'equity';
+  currency: string;
+  created_at: string;
+  updated_at: string;
+  custom_attributes: CustomAttribute[];
+}
+
+export interface BalanceSheet {
+  id: string;
+  date: string;
+  label: string;
+  base_currency: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Balance {
+  id: string;
+  account_id: string;
+  account_name: string;
+  account_type: 'asset' | 'liability' | 'equity';
+  currency: string;
+  amount: string; // decimal string
+}
+
+export interface PerCurrencyEntry {
+  currency: string;
+  total_assets: string;
+  total_liabilities: string;
+  net_worth: string;
+}
+
+export interface MissingRate {
+  currency: string;
+  message: string;
+}
+
+export interface NetWorthResult {
+  balance_sheet_id: string;
+  date: string;
+  base_currency: string;
+  per_currency: PerCurrencyEntry[];
+  base_currency_total: {
+    net_worth: string;
+    covered_currencies: string[];
+    missing_rates: MissingRate[];
+  };
+}
+
+export interface ExchangeRate {
+  id: string;
+  from_currency: string;
+  to_currency: string;
+  rate: string; // decimal string
+  date: string;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────
+
+function getCsrfToken(): string {
+  const match = document.cookie.match(/csrftoken=([^;]+)/);
+  return match?.[1] ?? '';
+}
+
+async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const resp = await fetch(`${API_BASE_URL}${url}`, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+    ...options,
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw Object.assign(new Error(body.detail ?? 'Request failed'), { status: resp.status, body });
+  }
+  if (resp.status === 204) return undefined as T;
+  return resp.json() as Promise<T>;
+}
+
+// ── Accounts ─────────────────────────────────────────────────────────
+
+export function listAccounts(params?: { ordering?: string; search?: string }): Promise<Account[]> {
+  const qs = new URLSearchParams(params as Record<string, string>).toString();
+  return fetchJson<Account[]>(`/api/v1/finance/accounts/${qs ? `?${qs}` : ''}`);
+}
+
+export function getAccount(id: string): Promise<Account> {
+  return fetchJson<Account>(`/api/v1/finance/accounts/${id}/`);
+}
+
+export function createAccount(data: Pick<Account, 'name' | 'account_type' | 'currency'>): Promise<Account> {
+  return fetchJson<Account>('/api/v1/finance/accounts/', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateAccount(id: string, data: Partial<Pick<Account, 'name' | 'account_type' | 'currency'>>): Promise<Account> {
+  return fetchJson<Account>(`/api/v1/finance/accounts/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export function deleteAccount(id: string, confirm = false): Promise<void | { affected_balance_count: number; message: string }> {
+  const qs = confirm ? '?confirm=true' : '';
+  return fetchJson<void>(`/api/v1/finance/accounts/${id}/${qs}`, { method: 'DELETE' });
+}
+
+// ── Balance Sheets ────────────────────────────────────────────────────
+
+export function listBalanceSheets(params?: { ordering?: string }): Promise<BalanceSheet[]> {
+  const qs = new URLSearchParams(params as Record<string, string>).toString();
+  return fetchJson<BalanceSheet[]>(`/api/v1/finance/balance-sheets/${qs ? `?${qs}` : ''}`);
+}
+
+export function createBalanceSheet(data: Pick<BalanceSheet, 'date' | 'label' | 'base_currency'>): Promise<BalanceSheet> {
+  return fetchJson<BalanceSheet>('/api/v1/finance/balance-sheets/', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateBalanceSheet(id: string, data: Partial<Pick<BalanceSheet, 'date' | 'label' | 'base_currency'>>): Promise<BalanceSheet> {
+  return fetchJson<BalanceSheet>(`/api/v1/finance/balance-sheets/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export function deleteBalanceSheet(id: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/finance/balance-sheets/${id}/`, { method: 'DELETE' });
+}
+
+export function listBalances(sheetId: string): Promise<Balance[]> {
+  return fetchJson<Balance[]>(`/api/v1/finance/balance-sheets/${sheetId}/balances/`);
+}
+
+export function upsertBalance(sheetId: string, accountId: string, amount: string): Promise<Balance> {
+  return fetchJson<Balance>(`/api/v1/finance/balance-sheets/${sheetId}/balances/${accountId}/`, {
+    method: 'PUT',
+    body: JSON.stringify({ amount }),
+  });
+}
+
+export function deleteBalance(sheetId: string, accountId: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/finance/balance-sheets/${sheetId}/balances/${accountId}/delete/`, { method: 'DELETE' });
+}
+
+export function getNetWorth(sheetId: string): Promise<NetWorthResult> {
+  return fetchJson<NetWorthResult>(`/api/v1/finance/balance-sheets/${sheetId}/net-worth/`);
+}
+
+// ── Exchange Rates ────────────────────────────────────────────────────
+
+export function listExchangeRates(params?: { from_currency?: string; to_currency?: string; ordering?: string }): Promise<ExchangeRate[]> {
+  const qs = new URLSearchParams(params as Record<string, string>).toString();
+  return fetchJson<ExchangeRate[]>(`/api/v1/finance/exchange-rates/${qs ? `?${qs}` : ''}`);
+}
+
+export function createExchangeRate(data: Pick<ExchangeRate, 'from_currency' | 'to_currency' | 'rate' | 'date'>): Promise<ExchangeRate> {
+  return fetchJson<ExchangeRate>('/api/v1/finance/exchange-rates/', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateExchangeRate(id: string, data: Partial<Pick<ExchangeRate, 'from_currency' | 'to_currency' | 'rate' | 'date'>>): Promise<ExchangeRate> {
+  return fetchJson<ExchangeRate>(`/api/v1/finance/exchange-rates/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export function deleteExchangeRate(id: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/finance/exchange-rates/${id}/`, { method: 'DELETE' });
+}

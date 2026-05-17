@@ -1,23 +1,34 @@
-import { Layout, Menu } from 'antd';
+import { ProLayout } from '@ant-design/pro-components';
+import { Dropdown } from 'antd';
+import {
+  CustomerServiceOutlined,
+  DollarOutlined,
+  LogoutOutlined,
+  ReadOutlined,
+  TeamOutlined,
+} from '@ant-design/icons';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import { getMe, logout } from '@/services/unihub-backend/auth';
 
-const { Sider, Header, Content } = Layout;
-
-const NAV_ITEMS = [
-  {
-    key: 'finance',
-    label: 'Finance',
-    children: [
-      { key: '/finance/accounts', label: 'Accounts' },
-      { key: '/finance/balance-sheets', label: 'Balance Sheets' },
-      { key: '/finance/exchange-rates', label: 'Exchange Rates' },
-    ],
-  },
-  { key: '/language', label: 'Language' },
-  { key: '/people', label: 'People' },
-  { key: '/music', label: 'Music' },
-];
+const ROUTE_CONFIG = {
+  routes: [
+    {
+      path: '/finance',
+      name: 'Finance',
+      icon: <DollarOutlined />,
+      routes: [
+        { path: '/finance/accounts', name: 'Accounts' },
+        { path: '/finance/balance-sheets', name: 'Balance Sheets' },
+        { path: '/finance/exchange-rates', name: 'Exchange Rates' },
+      ],
+    },
+    { path: '/language', name: 'Language', icon: <ReadOutlined /> },
+    { path: '/people', name: 'People', icon: <TeamOutlined /> },
+    { path: '/music', name: 'Music', icon: <CustomerServiceOutlined /> },
+  ],
+};
 
 interface AppShellProps {
   children: ReactNode;
@@ -25,59 +36,63 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const queryClient = useQueryClient();
 
-  // Determine which top-level keys should be open
-  const openKeys = pathname.startsWith('/finance') ? ['finance'] : [];
+  const { data: user } = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: getMe,
+  });
+
+  const handleLogout = async () => {
+    await logout();
+    queryClient.clear();
+    navigate('/login', { replace: true });
+  };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider theme="dark" width={220} style={{ position: 'fixed', height: '100vh', left: 0, top: 0, bottom: 0 }}>
-        <div
-          style={{
-            height: 56,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            fontSize: 18,
-            fontWeight: 600,
-            letterSpacing: 1,
-          }}
+    <ProLayout
+      title="Unihub"
+      logo="/favicon.svg"
+      layout="mix"
+      navTheme="light"
+      colorPrimary="#1890ff"
+      fixSiderbar
+      fixedHeader
+      token={{ bgLayout: '#f0f2f5' }}
+      location={location}
+      route={ROUTE_CONFIG}
+      menuItemRender={(item, dom) => (
+        <span
+          style={{ cursor: 'pointer', display: 'block', width: '100%' }}
+          onClick={() => item.path && navigate(item.path)}
         >
-          unihub
-        </div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[pathname]}
-          defaultOpenKeys={openKeys}
-          items={NAV_ITEMS}
-          onClick={({ key }) => {
-            if (!['finance'].includes(key)) navigate(key);
-          }}
-          style={{ borderRight: 0 }}
-        />
-      </Sider>
-      <Layout style={{ marginLeft: 220 }}>
-        <Header
-          style={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 20,
-            background: '#fff',
-            padding: '0 24px',
-            height: 56,
-            lineHeight: '56px',
-            borderBottom: '1px solid #f0f0f0',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <span style={{ fontWeight: 600, fontSize: 16 }}>unihub</span>
-        </Header>
-        <Content style={{ margin: 24 }}>{children}</Content>
-      </Layout>
-    </Layout>
+          {dom}
+        </span>
+      )}
+      avatarProps={{
+        title: user?.username ?? '',
+        size: 'small',
+        render: (_, dom) => (
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'logout',
+                  icon: <LogoutOutlined />,
+                  label: 'Sign Out',
+                  onClick: handleLogout,
+                },
+              ],
+            }}
+          >
+            {dom}
+          </Dropdown>
+        ),
+      }}
+      siderMenuType="group"
+    >
+      {children}
+    </ProLayout>
   );
 }

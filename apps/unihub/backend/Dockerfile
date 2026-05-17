@@ -12,8 +12,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.6 /uv /uvx /bin/
 COPY pyproject.toml ./
 COPY unihub/ ./unihub/
 COPY health/ ./health/
+COPY core/ ./core/
 COPY finance/ ./finance/
 COPY visiting/ ./visiting/
+COPY language/ ./language/
+COPY people/ ./people/
+COPY music/ ./music/
 COPY manage.py ./
 
 RUN uv sync --no-dev --no-editable

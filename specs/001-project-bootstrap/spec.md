@@ -16,6 +16,11 @@
 - Q: What is the primary entity type (or types) the Finance domain tracks in v1? → A: Balance sheet snapshots — no transaction recording. Three entity types: Account (a financial account), BalanceSheet (a dated snapshot), and Balance (the value of a specific account within a specific balance sheet).
 - Q: What should happen to existing attribute values when a user-defined attribute definition is deleted? → A: Hard delete with confirmation warning — system warns how many entities have values, user confirms, all values are permanently removed along with the definition.
 
+### Session 2026-05-17 (continued)
+
+- Direct input: Each Account in the Finance domain MUST have a currency assigned (ISO 4217 code, e.g., USD, EUR, TWD). The Finance domain supports multiple currencies across accounts.
+- Q: When a balance sheet contains accounts in multiple currencies, how should net worth be displayed? → A: The Finance domain includes a user-managed exchange rate database where rates between currency pairs are recorded with timestamps. When computing net worth, the system applies the closest (most recent prior) rate to the balance sheet's date. The balance sheet aggregation shows both (a) per-currency subtotals and (b) a total converted to a user-selected base currency.
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*
@@ -38,7 +43,7 @@ A user opens unihub and sees a unified dashboard that serves as the entry point 
 
 ### User Story 2 - Manage Finance Accounts (Priority: P1)
 
-A user navigates to the Finance domain and manages their list of financial accounts (e.g., "Chase Checking", "Mortgage", "401k"). They can create, rename, and delete accounts, and assign each an account type (asset, liability, equity).
+A user navigates to the Finance domain and manages their list of financial accounts (e.g., "Chase Checking", "Mortgage", "401k"). They can create, rename, and delete accounts, and assign each an account type (asset, liability, equity) and a currency (e.g., USD, EUR, TWD).
 
 **Why this priority**: Accounts are the foundation of balance sheet snapshots. Without accounts defined, no balance sheet can be recorded.
 
@@ -46,7 +51,7 @@ A user navigates to the Finance domain and manages their list of financial accou
 
 **Acceptance Scenarios**:
 
-1. **Given** a user opens the Finance domain, **When** they create a new account with a name and type, **Then** the account appears in the account list.
+1. **Given** a user opens the Finance domain, **When** they create a new account with a name, type, and currency, **Then** the account appears in the account list showing its currency.
 2. **Given** an existing account, **When** the user edits the name or type and saves, **Then** the updated values persist.
 3. **Given** an account with no balances recorded, **When** the user deletes it, **Then** it is removed from the list.
 4. **Given** an account that has balances in one or more balance sheets, **When** the user attempts to delete it, **Then** the system warns that associated balance records will also be removed.
@@ -55,18 +60,35 @@ A user navigates to the Finance domain and manages their list of financial accou
 
 ### User Story 2b - Record and View Balance Sheets (Priority: P1)
 
-A user creates a balance sheet for a specific date (e.g., "May 2026"), then records a balance value for each of their accounts within that snapshot. They can view the balance sheet as a table showing all accounts and their balances, plus a calculated net worth total.
+A user creates a balance sheet for a specific date (e.g., "May 2026"), then records a balance value for each of their accounts within that snapshot. They can view the balance sheet as a table showing all accounts and their balances. The summary section shows per-currency subtotals and a total converted to the user's selected base currency using the closest available exchange rate on or before the balance sheet date.
 
-**Why this priority**: The balance sheet snapshot is the core value of the Finance domain in v1 — it gives the user a periodic net worth picture.
+**Why this priority**: The balance sheet snapshot is the core value of the Finance domain in v1 — it gives the user a periodic net worth picture across all currencies.
 
-**Independent Test**: Can be fully tested by creating one balance sheet, entering balances for two accounts (one asset, one liability), and verifying the net worth total is correctly computed.
+**Independent Test**: Can be fully tested by creating accounts in two currencies, entering at least one exchange rate, creating a balance sheet, entering balances, and verifying both per-currency subtotals and the base-currency total are correctly computed.
 
 **Acceptance Scenarios**:
 
 1. **Given** a user has at least one account, **When** they create a new balance sheet with a date, **Then** the balance sheet appears in the balance sheet list.
-2. **Given** an open balance sheet, **When** the user enters a balance value for an account, **Then** the value is saved and reflected in the sheet.
-3. **Given** a balance sheet with balances entered, **When** the user views it, **Then** they see all accounts, their individual balances, and a computed net worth (assets minus liabilities).
+2. **Given** an open balance sheet, **When** the user enters a balance value for an account, **Then** the value is saved and reflected in the sheet in that account's currency.
+3. **Given** a balance sheet with balances in multiple currencies and exchange rates recorded, **When** the user views the balance sheet, **Then** they see: (a) each account's balance in its native currency, (b) per-currency net worth subtotals (assets minus liabilities per currency), and (c) a total net worth converted to the selected base currency using the closest prior exchange rate.
 4. **Given** multiple balance sheets over time, **When** the user views the balance sheet list, **Then** sheets are ordered by date with the most recent first.
+
+---
+
+### User Story 2c - Manage Exchange Rates (Priority: P1)
+
+A user records exchange rates between currency pairs at specific dates (e.g., "1 USD = 31.5 TWD on 2026-05-01"). The system uses these rates when computing base-currency totals on balance sheets — applying the closest rate on or before the balance sheet's date.
+
+**Why this priority**: Without exchange rates, multi-currency balance sheet totals cannot be computed. This must be in place before balance sheet aggregation can be verified end-to-end.
+
+**Independent Test**: Can be fully tested by recording two rates for the same currency pair on different dates, creating a balance sheet dated between them, and verifying the correct (closest prior) rate is used in the total computation.
+
+**Acceptance Scenarios**:
+
+1. **Given** the Finance domain, **When** a user records an exchange rate with a from-currency, to-currency, rate value, and date, **Then** the rate appears in the exchange rate list.
+2. **Given** multiple rates for the same currency pair, **When** computing a balance sheet total, **Then** the system uses the rate with the most recent date that is on or before the balance sheet date.
+3. **Given** a user edits or deletes an exchange rate, **When** they view an affected balance sheet, **Then** the base-currency total is recomputed using the updated rates.
+4. **Given** a user selects a base currency for a balance sheet, **When** no exchange rate exists for a required currency pair on or before the balance sheet date, **Then** the system flags the missing rate and excludes that currency from the base-currency total, showing which currencies lack coverage.
 
 ---
 
@@ -108,6 +130,8 @@ Beyond the default table view, a domain may offer a domain-specific visualizatio
 - When a user deletes a user-defined attribute definition that has existing values on entities: system displays a warning with the count of affected entities, user must confirm, then all associated values are permanently deleted along with the definition.
 - What happens if a user tries to create an entity with a required attribute left blank?
 - What happens when two browser tabs are open to the same domain and one makes a change?
+- When a balance sheet needs a base-currency total but no exchange rate exists for a required currency pair on or before the balance sheet date: the system flags the missing pair and excludes it from the total, showing which currencies lack rate coverage.
+- What happens when a user changes the currency on an Account that already has balance records? (The existing balance amounts remain as-is; they are reinterpreted as the new currency going forward.)
 
 ---
 
@@ -126,6 +150,10 @@ Beyond the default table view, a domain may offer a domain-specific visualizatio
 - **FR-009**: System MUST expose a machine-readable API contract (OpenAPI schema) so the frontend can consume typed API responses without hand-writing types.
 - **FR-010**: System MUST support session-based authentication so that only the authenticated owner can access and modify their data.
 - **FR-011**: Each domain MAY provide a domain-specific visualization in addition to the default table view.
+- **FR-012**: Each Account in the Finance domain MUST have exactly one currency assigned at creation time (ISO 4217 code). Currency is required and cannot be blank; it MAY be changed after creation. Balance amounts for an account are denominated in that account's currency.
+- **FR-013**: The Finance domain MUST provide a user-managed exchange rate database. Each rate entry records: from-currency (ISO 4217), to-currency (ISO 4217), rate value (positive decimal), and date. Entries are user-created, -edited, and -deleted.
+- **FR-014**: When computing a base-currency total for a balance sheet, the system MUST apply the exchange rate with the most recent date that is on or before the balance sheet's date (closest-prior-rate rule). If no rate exists on or before that date for a required pair, the system MUST flag the gap and exclude that currency from the base-currency total — it MUST NOT silently use zero or an incorrect rate.
+- **FR-015**: Every balance sheet MUST display: (a) each account's balance in its native currency, (b) per-currency net worth subtotals (sum of asset balances minus sum of liability balances, grouped by currency), and (c) a total net worth in a user-selected base currency, computed using the closest-prior-rate rule. The base currency selection MUST be persisted per balance sheet.
 
 ### Key Entities
 
@@ -135,9 +163,10 @@ Beyond the default table view, a domain may offer a domain-specific visualizatio
 
 **Finance domain entities (v1):**
 
-- **Account**: A financial account owned by the user (e.g., "Chase Checking", "Mortgage"). Has a name and type: `asset`, `liability`, or `equity`. System attributes: `name`, `account_type`. May have user-defined attributes.
+- **Account**: A financial account owned by the user (e.g., "Chase Checking", "Mortgage"). System attributes: `name`, `account_type` (`asset` | `liability` | `equity`), `currency` (ISO 4217 code, e.g., `USD`, `EUR`, `TWD`). May have user-defined attributes.
 - **BalanceSheet**: A dated financial snapshot (e.g., "May 2026"). Has a date and an optional label. System attributes: `date`, `label`.
-- **Balance**: The recorded value of one Account within one BalanceSheet. Has a numeric balance amount. Linked to exactly one Account and one BalanceSheet. System attribute: `amount`.
+- **Balance**: The recorded value of one Account within one BalanceSheet. Has a numeric balance amount denominated in the Account's currency. Linked to exactly one Account and one BalanceSheet. System attribute: `amount`.
+- **ExchangeRate**: A user-recorded rate between two currencies at a point in time. Fields: `from_currency` (ISO 4217), `to_currency` (ISO 4217), `rate` (positive decimal), `date`. The (from_currency, to_currency, date) triple is unique. Used by the closest-prior-rate rule when computing base-currency totals on balance sheets.
 
 ---
 
@@ -149,6 +178,7 @@ Beyond the default table view, a domain may offer a domain-specific visualizatio
 - **SC-002**: A user can create a new entity in any domain (fill form, submit) in under 60 seconds on first use.
 - **SC-003**: A user can add a custom attribute to a domain and use it on a new entity without leaving the application or consulting documentation.
 - **SC-004**: All domain data tables support at least sorting by any column and filtering by text search, with results updating in under 1 second for datasets under 10,000 entities.
+- **SC-007**: Balance sheet base-currency totals are computed correctly using the closest-prior exchange rate — verified by creating rates on multiple dates and confirming the correct rate is selected for each balance sheet date.
 - **SC-005**: Adding a new life-domain section requires no changes to other domains' code — verified by adding a sixth domain without modifying any of the first five.
 - **SC-006**: The OpenAPI schema is always in sync with the actual API — any change to the backend automatically regenerates the schema consumed by the frontend.
 

@@ -1,50 +1,176 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+SYNC IMPACT REPORT
+==================
+Version change: (none) → 1.0.0 (initial constitution)
+Modified principles: N/A (initial ratification)
+Added sections:
+  - Core Principles (5 principles)
+  - Development Quality Gates
+  - Domain Addition Protocol
+  - Governance
+Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check section is generic)
+  - .specify/templates/spec-template.md ✅ No changes needed (generic template)
+  - .specify/templates/tasks-template.md ✅ No changes needed (generic template)
+Follow-up TODOs: None. All placeholders resolved.
+-->
+
+# UniHub Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Entity-Centric Domain Architecture (NON-NEGOTIABLE)
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+Every domain in UniHub MUST be built around entities managed through the shared
+entity/attribute infrastructure. This principle is non-negotiable and applies to
+all domains — current and future.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+- All domain entities MUST be created, read, updated, and deleted through the
+  shared entity management mechanism (AttributeDefinition + AttributeValue model).
+- All attributes — whether system-defined (built-in, `is_system=True`) or
+  user-defined (created at runtime) — MUST share a single `AttributeDefinition`
+  model. No domain may maintain a parallel or alternative attribute storage system.
+- System attributes are protected (cannot be deleted or renamed by the user) but
+  MUST flow through the same rendering, filtering, and storage path as user-defined
+  attributes.
+- Deleting a user-defined AttributeDefinition that has existing values MUST
+  display a confirmation warning showing the count of affected entities; upon
+  confirmation, all associated AttributeValues are permanently removed.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+**Rationale**: The shared entity/attribute infrastructure is the central value
+proposition of UniHub. Bypassing it — even for convenience — fragments the
+codebase and breaks the domain-agnostic guarantees that enable new domains to be
+added cheaply.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### II. Domain Independence
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Each life domain MUST be implemented as a standalone, independently deployable
+unit. No domain may import or depend on another domain's internal code.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+- Each domain lives in its own Django app under `apps/unihub/backend/`.
+- Adding a new domain MUST require no changes to any existing domain's code.
+- Domains share infrastructure (entity model, auth, DB) but MUST NOT share
+  business logic, models, or serializers across domain boundaries.
+- The v1 MVP ships the Finance domain only. All subsequent domains MUST follow
+  the same implementation pattern established by Finance.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+**Rationale**: Domain independence enables the hub to grow incrementally. Each
+domain can be tuned, refactored, or replaced without touching the others.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### III. Reference Implementation Alignment
+
+UniHub MUST follow the architectural patterns established in the ov-fleet
+reference implementation for backend layout, service layer, and frontend
+organization.
+
+- Backend: Django + DRF, session-based auth, DRF permission classes, OpenAPI
+  schema at `/api/docs/` via drf-spectacular, `httpx` for HTTP client calls,
+  `uv` for dependency management, `ruff` for linting, `pytest-django` for tests.
+- Frontend: React + Ant Design 5 + Pro Components, TanStack React Query for
+  data fetching, dashboard layout matching ov-pro-tools (fixed sidebar,
+  top header, content area), `pnpm` as package manager, `ESLint` for linting,
+  `Vitest` for tests.
+- Deviations from ov-fleet patterns MUST be documented in CLAUDE.md with
+  explicit rationale before implementation.
+
+**Rationale**: The reference implementation represents proven patterns for this
+stack. Alignment reduces decision fatigue, eases onboarding, and keeps the
+codebase predictable.
+
+### IV. API Contract-Driven Frontend
+
+The frontend MUST consume typed API responses generated from the backend's
+OpenAPI schema. Hand-written API response types are prohibited.
+
+- The backend MUST expose an OpenAPI schema that is always in sync with the
+  actual API (auto-generated by drf-spectacular).
+- All frontend service layer types MUST be generated from `openapi.yaml` via
+  `openapi-typescript`. No exceptions.
+- Any change to a backend serializer or viewset MUST trigger schema regeneration
+  before the corresponding frontend code is written or updated.
+
+**Rationale**: Auto-generated types are the single source of truth for the
+frontend/backend contract. They prevent type drift and eliminate a class of
+integration bugs entirely.
+
+### V. Quality Loop Enforcement
+
+Every change MUST pass the project quality loop before being considered complete.
+No exceptions for "quick fixes" or "trivial changes."
+
+Frontend (run from `apps/unihub/frontend/`):
+```
+pnpm lint && pnpm typecheck && pnpm test
+```
+
+Backend (run from `apps/unihub/backend/`):
+```
+uv run ruff check . && uv run pytest
+```
+
+- TypeScript strict mode (`strict: true`) MUST remain enabled. Disabling it or
+  adding `@ts-ignore` suppression is a constitution violation.
+- All new backend endpoints MUST have at least one pytest-django integration test.
+
+**Rationale**: The quality loop is the minimum bar for correctness. Skipping it
+creates compounding technical debt that is always more expensive to fix later.
+
+## Development Constraints
+
+- **Package managers**: `pnpm` for frontend, `uv` for backend. Never use `npm`,
+  `yarn`, or `pip` directly.
+- **Database**: PostgreSQL. Each domain shares one database instance; no
+  per-domain database is permitted in v1.
+- **Authentication**: Session-based (Django built-in + DRF session auth).
+  JWT or OAuth2 are out of scope for v1.
+- **Scope**: Single authenticated user owns all data. Multi-tenancy, sharing,
+  and collaboration features are out of scope for v1.
+- **Mobile**: Desktop/tablet browser widths only. Mobile layout is out of scope
+  for v1.
+- **Custom attribute types (v1)**: text, long text, number, date, boolean,
+  single-select. File/image attachments are out of scope for v1.
+
+## Domain Addition Protocol
+
+When connecting a new life domain to the hub, follow this exact sequence — no
+steps may be skipped or reordered:
+
+1. Create `apps/unihub/backend/<domain>/` as a new Django app (`models.py`,
+   `views.py`, `serializers.py`, `urls.py`, `migrations/`).
+2. Register the app in `INSTALLED_APPS` and add its URL prefix in
+   `unihub/urls.py`.
+3. Seed the domain's system AttributeDefinitions via a data migration or
+   management command — never hardcoded in application code.
+4. Add the domain's pages under `apps/unihub/frontend/src/pages/<domain>/`.
+5. Add a nav section entry in `AppShell.tsx`.
+6. Add a service file at `apps/unihub/frontend/src/services/<domain>.ts` with
+   types generated from the updated OpenAPI schema.
+
+Verify the Finance domain remains fully functional after adding any new domain
+(Principle II compliance check).
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution supersedes all other development practices and guidelines for
+UniHub. In cases of conflict, the constitution takes precedence.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Amendment procedure**:
+- Any amendment MUST update this file, increment the version, and set
+  `LAST_AMENDED_DATE` to the amendment date.
+- Amendments affecting Principle I (Entity-Centric Domain Architecture) require
+  explicit justification documenting why the entity management mechanism cannot
+  satisfy the requirement.
+- After any amendment, the Sync Impact Report (HTML comment at top of this file)
+  MUST be updated listing all affected templates and files.
+
+**Versioning policy**:
+- MAJOR: Backward-incompatible governance change or principle removal/redefinition.
+- MINOR: New principle or section added, or material expansion of existing guidance.
+- PATCH: Clarifications, wording fixes, non-semantic refinements.
+
+**Compliance review**:
+- Every implementation plan (`plan.md`) MUST include a Constitution Check section
+  that gates work against these principles before Phase 0 research begins.
+- Re-check constitution compliance after Phase 1 design.
+
+**Version**: 1.0.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-17

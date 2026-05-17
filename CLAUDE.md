@@ -42,6 +42,9 @@ Per-app CLAUDE.md files:
 **Ant Design 5 + Pro Components for UI**
 - Rationale: Enterprise-grade admin framework matching ov-fleet's UI stack. Rich data display components (ProTable, StatisticCard, charts).
 
+**PageTable as default tabular component**
+- All tabular data views MUST use `PageTable` (`src/components/PageTable/`), adapted from ov-fleet. It provides sticky header, sticky footer, sticky horizontal scrollbar, and column-follow-on-scroll — pre-configured. Use the exported helpers `widthForHeader()`, `measureTextWidth()`, `computeScrollX()` for column widths.
+
 **TanStack React Query for data fetching**
 - Rationale: Matches ov-fleet's data-fetching layer. Excellent caching and loading/error states.
 
@@ -155,6 +158,14 @@ When connecting a new dimension to the hub:
 3. Add the domain's pages under `apps/unihub/frontend/src/pages/<domain>/`
 4. Add a nav section entry in `AppShell.tsx`
 5. Add a service file at `apps/unihub/frontend/src/services/<domain>.ts`
+
+<!-- SPECKIT START -->
+## Active Feature
+
+**Branch**: `001-project-bootstrap` | **Plan**: [specs/001-project-bootstrap/plan.md](specs/001-project-bootstrap/plan.md)
+
+Bootstrapping UniHub v1 — Finance domain (balance sheet snapshots, multi-currency with exchange rate database). See plan for full project structure, data model, and API contracts.
+<!-- SPECKIT END -->
 
 ## Active Technologies
 - **Frontend**: TypeScript 5.7, React 18.3, Ant Design 5.24, @ant-design/pro-components 2.8, TanStack React Query 5, React Router 7, Vite 6, Vitest

@@ -1,18 +1,16 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: (none) → 1.0.0 (initial constitution)
-Modified principles: N/A (initial ratification)
+Version change: 1.0.0 → 1.1.0 (minor — new principle added)
+Modified principles: none renamed
 Added sections:
-  - Core Principles (5 principles)
-  - Development Quality Gates
-  - Domain Addition Protocol
-  - Governance
+  - Principle VI: PageTable as Default Tabular Component
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check section is generic)
-  - .specify/templates/spec-template.md ✅ No changes needed (generic template)
-  - .specify/templates/tasks-template.md ✅ No changes needed (generic template)
-Follow-up TODOs: None. All placeholders resolved.
+  - .specify/templates/plan-template.md ✅ No changes needed
+  - .specify/templates/spec-template.md ✅ No changes needed
+  - .specify/templates/tasks-template.md ✅ No changes needed
+  - CLAUDE.md ✅ Should reference PageTable in Frontend section
+Follow-up TODOs: None.
 -->
 
 # UniHub Constitution
@@ -115,6 +113,28 @@ uv run ruff check . && uv run pytest
 **Rationale**: The quality loop is the minimum bar for correctness. Skipping it
 creates compounding technical debt that is always more expensive to fix later.
 
+### VI. PageTable as Default Tabular Component
+
+Any tabular data display in the UniHub frontend MUST use the `PageTable`
+component as the default implementation. Custom table solutions are prohibited
+unless PageTable is demonstrably insufficient for the use case (requires
+documented justification).
+
+- The `PageTable` component is sourced from the ov-pro-tools reference repo
+  (`ov-fleet/frontend/src/components/PageTable/`) and adapted for unihub's
+  Vite/React Router 7 build context.
+- PageTable provides: sticky top header, sticky bottom footer, sticky bottom
+  horizontal scrollbar, and column headers that follow horizontal scroll — all
+  pre-configured and non-negotiable for tabular UIs.
+- All PageTable usages MUST use the exported helper utilities for column widths:
+  `widthForHeader()`, `measureTextWidth()`, `computeScrollX()`.
+- The component lives at `apps/unihub/frontend/src/components/PageTable/`.
+
+**Rationale**: PageTable encapsulates a set of UX improvements (sticky scrollbar,
+sticky header/footer) that would otherwise need to be reimplemented per page.
+Centralising it prevents drift and ensures a consistent table experience across
+all domains.
+
 ## Development Constraints
 
 - **Package managers**: `pnpm` for frontend, `uv` for backend. Never use `npm`,
@@ -173,4 +193,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.0.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-17
+**Version**: 1.1.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-17

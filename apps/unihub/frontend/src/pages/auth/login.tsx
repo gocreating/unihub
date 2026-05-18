@@ -3,6 +3,7 @@ import { Button, Card, Form, Input, Typography, message } from 'antd';
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { createStyles } from 'antd-style';
 import { useNavigate } from 'react-router-dom';
+import { useIntl } from 'react-intl';
 import { login } from '@/services/unihub-backend/auth';
 
 interface LoginFormValues {
@@ -41,6 +42,7 @@ const useStyles = createStyles(({ token }) => ({
 export function LoginPage() {
   const { styles } = useStyles();
   const navigate = useNavigate();
+  const { formatMessage: t } = useIntl();
   const [form] = Form.useForm<LoginFormValues>();
   const [loading, setLoading] = useState(false);
 
@@ -50,7 +52,7 @@ export function LoginPage() {
       await login(values.username, values.password);
       navigate('/', { replace: true });
     } catch {
-      message.error('Invalid username or password.');
+      message.error(t({ id: 'pages.auth.login.error' }));
     } finally {
       setLoading(false);
     }
@@ -66,20 +68,26 @@ export function LoginPage() {
         </div>
 
         <Form form={form} layout="vertical" onFinish={onFinish}>
-          <Form.Item name="username" rules={[{ required: true, message: 'Username is required' }]}>
+          <Form.Item
+            name="username"
+            rules={[{ required: true, message: t({ id: 'pages.auth.login.username.required' }) }]}
+          >
             <Input
               size="large"
               prefix={<UserOutlined />}
-              placeholder="Username"
+              placeholder={t({ id: 'pages.auth.login.username.placeholder' })}
               autoFocus
               autoComplete="username"
             />
           </Form.Item>
-          <Form.Item name="password" rules={[{ required: true, message: 'Password is required' }]}>
+          <Form.Item
+            name="password"
+            rules={[{ required: true, message: t({ id: 'pages.auth.login.password.required' }) }]}
+          >
             <Input.Password
               size="large"
               prefix={<LockOutlined />}
-              placeholder="Password"
+              placeholder={t({ id: 'pages.auth.login.password.placeholder' })}
               autoComplete="current-password"
             />
           </Form.Item>
@@ -90,7 +98,7 @@ export function LoginPage() {
               loading={loading}
               className={styles.submitButton}
             >
-              Sign In
+              {t({ id: 'pages.auth.login.submit' })}
             </Button>
           </Form.Item>
         </Form>

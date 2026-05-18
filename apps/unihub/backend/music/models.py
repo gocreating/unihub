@@ -15,7 +15,7 @@ class Song(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['artist', 'title']
+        ordering = ["artist", "title"]
 
     def __str__(self) -> str:
-        return f'{self.title} — {self.artist}'
+        return f"{self.title} — {self.artist}"

@@ -9,28 +9,10 @@ import {
 } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useIntl } from 'react-intl';
 import type { ReactNode } from 'react';
 import { getMe, logout } from '@/services/unihub-backend/auth';
 import { SelectLang } from '@/components/SelectLang';
-
-const ROUTE_CONFIG = {
-  routes: [
-    {
-      path: '/finance',
-      name: 'Finance',
-      icon: <DollarOutlined />,
-      routes: [
-        { path: '/finance/currencies', name: 'Currencies' },
-        { path: '/finance/accounts', name: 'Accounts' },
-        { path: '/finance/balance-sheets', name: 'Balance Sheets' },
-        { path: '/finance/exchange-rates', name: 'Exchange Rates' },
-      ],
-    },
-    { path: '/language', name: 'Language', icon: <ReadOutlined /> },
-    { path: '/people', name: 'People', icon: <TeamOutlined /> },
-    { path: '/music', name: 'Music', icon: <CustomerServiceOutlined /> },
-  ],
-};
 
 interface AppShellProps {
   children: ReactNode;
@@ -40,6 +22,7 @@ export function AppShell({ children }: AppShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const { formatMessage: t } = useIntl();
 
   const { data: user } = useQuery({
     queryKey: ['auth', 'me'],
@@ -50,6 +33,25 @@ export function AppShell({ children }: AppShellProps) {
     await logout();
     queryClient.clear();
     navigate('/login', { replace: true });
+  };
+
+  const routeConfig = {
+    routes: [
+      {
+        path: '/finance',
+        name: t({ id: 'menu.finance' }),
+        icon: <DollarOutlined />,
+        routes: [
+          { path: '/finance/currencies', name: t({ id: 'menu.finance.currencies' }) },
+          { path: '/finance/accounts', name: t({ id: 'menu.finance.accounts' }) },
+          { path: '/finance/balance-sheets', name: t({ id: 'menu.finance.balanceSheets' }) },
+          { path: '/finance/exchange-rates', name: t({ id: 'menu.finance.exchangeRates' }) },
+        ],
+      },
+      { path: '/language', name: t({ id: 'menu.language' }), icon: <ReadOutlined /> },
+      { path: '/people', name: t({ id: 'menu.people' }), icon: <TeamOutlined /> },
+      { path: '/music', name: t({ id: 'menu.music' }), icon: <CustomerServiceOutlined /> },
+    ],
   };
 
   return (
@@ -63,7 +65,7 @@ export function AppShell({ children }: AppShellProps) {
       fixedHeader
       token={{ bgLayout: '#f0f2f5' }}
       location={location}
-      route={ROUTE_CONFIG}
+      route={routeConfig}
       menuHeaderRender={false}
       headerTitleRender={(logo, title) => (
         <span
@@ -93,7 +95,7 @@ export function AppShell({ children }: AppShellProps) {
                 {
                   key: 'logout',
                   icon: <LogoutOutlined />,
-                  label: 'Sign Out',
+                  label: t({ id: 'menu.account.signOut' }),
                   onClick: handleLogout,
                 },
               ],

@@ -7,12 +7,12 @@ from core.nanoid import generate_id
 
 class AttributeDefinition(models.Model):
     DATA_TYPE_CHOICES = [
-        ('text', 'Text'),
-        ('long_text', 'Long Text'),
-        ('number', 'Number'),
-        ('date', 'Date'),
-        ('boolean', 'Boolean'),
-        ('single_select', 'Single Select'),
+        ("text", "Text"),
+        ("long_text", "Long Text"),
+        ("number", "Number"),
+        ("date", "Date"),
+        ("boolean", "Boolean"),
+        ("single_select", "Single Select"),
     ]
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
@@ -24,28 +24,28 @@ class AttributeDefinition(models.Model):
     options = models.JSONField(default=list, blank=True)
 
     class Meta:
-        unique_together = [('content_type', 'name')]
-        ordering = ['display_order', 'name']
+        unique_together = [("content_type", "name")]
+        ordering = ["display_order", "name"]
 
     def __str__(self):
-        return f'{self.content_type} / {self.name}'
+        return f"{self.content_type} / {self.name}"
 
 
 class AttributeValue(models.Model):
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     attribute_definition = models.ForeignKey(
-        AttributeDefinition, on_delete=models.CASCADE, related_name='values'
+        AttributeDefinition, on_delete=models.CASCADE, related_name="values"
     )
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.CharField(max_length=12)
-    entity = GenericForeignKey('content_type', 'object_id')
+    entity = GenericForeignKey("content_type", "object_id")
     value = models.TextField(blank=True)
 
     class Meta:
-        unique_together = [('attribute_definition', 'content_type', 'object_id')]
+        unique_together = [("attribute_definition", "content_type", "object_id")]
         indexes = [
-            models.Index(fields=['content_type', 'object_id']),
+            models.Index(fields=["content_type", "object_id"]),
         ]
 
     def __str__(self):
-        return f'{self.attribute_definition.name}={self.value}'
+        return f"{self.attribute_definition.name}={self.value}"

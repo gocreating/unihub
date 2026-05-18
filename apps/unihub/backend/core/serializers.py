@@ -9,20 +9,26 @@ class AttributeDefinitionSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttributeDefinition
         fields = [
-            'id', 'content_type', 'content_type_label', 'name', 'data_type',
-            'is_system', 'display_order', 'options',
+            "id",
+            "content_type",
+            "content_type_label",
+            "name",
+            "data_type",
+            "is_system",
+            "display_order",
+            "options",
         ]
-        read_only_fields = ['id', 'is_system', 'content_type_label']
+        read_only_fields = ["id", "is_system", "content_type_label"]
 
     def get_content_type_label(self, obj):
-        return f'{obj.content_type.app_label}.{obj.content_type.model}'
+        return f"{obj.content_type.app_label}.{obj.content_type.model}"
 
 
 class AttributeValueSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttributeValue
-        fields = ['id', 'attribute_definition', 'content_type', 'object_id', 'value']
-        read_only_fields = ['id']
+        fields = ["id", "attribute_definition", "content_type", "object_id", "value"]
+        read_only_fields = ["id"]
 
 
 class AttributeValueUpsertSerializer(serializers.Serializer):
@@ -33,5 +39,5 @@ class AttributeValueUpsertSerializer(serializers.Serializer):
         try:
             AttributeDefinition.objects.get(pk=value)
         except AttributeDefinition.DoesNotExist:
-            raise serializers.ValidationError('AttributeDefinition not found.')
+            raise serializers.ValidationError("AttributeDefinition not found.")
         return value

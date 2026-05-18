@@ -2,12 +2,6 @@ import { API_BASE_URL } from './index';
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export interface CustomAttribute {
-  attribute_definition_id: string;
-  attribute_name: string;
-  value: string;
-}
-
 export interface Currency {
   code: string;
   name: string;
@@ -18,9 +12,10 @@ export interface Account {
   id: string;
   name: string;
   currency: string;
+  open_datetime: string | null;
+  close_datetime: string | null;
   created_at: string;
   updated_at: string;
-  custom_attributes: CustomAttribute[];
 }
 
 export interface BalanceSheet {
@@ -85,8 +80,9 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 
 // ── Currencies ────────────────────────────────────────────────────────
 
-export function listCurrencies(): Promise<Currency[]> {
-  return fetchJson<Currency[]>('/api/v1/finance/currencies/');
+export function listCurrencies(params?: { search?: string; ordering?: string }): Promise<Currency[]> {
+  const qs = new URLSearchParams(params as Record<string, string>).toString();
+  return fetchJson<Currency[]>(`/api/v1/finance/currencies/${qs ? `?${qs}` : ''}`);
 }
 
 export function createCurrency(data: Currency): Promise<Currency> {
@@ -103,7 +99,7 @@ export function deleteCurrency(code: string): Promise<void> {
 
 // ── Accounts ─────────────────────────────────────────────────────────
 
-export function listAccounts(params?: { ordering?: string; search?: string }): Promise<Account[]> {
+export function listAccounts(params?: { ordering?: string; search?: string; as_of?: string }): Promise<Account[]> {
   const qs = new URLSearchParams(params as Record<string, string>).toString();
   return fetchJson<Account[]>(`/api/v1/finance/accounts/${qs ? `?${qs}` : ''}`);
 }
@@ -112,11 +108,11 @@ export function getAccount(id: string): Promise<Account> {
   return fetchJson<Account>(`/api/v1/finance/accounts/${id}/`);
 }
 
-export function createAccount(data: Pick<Account, 'name' | 'currency'>): Promise<Account> {
+export function createAccount(data: Pick<Account, 'name' | 'currency' | 'open_datetime' | 'close_datetime'>): Promise<Account> {
   return fetchJson<Account>('/api/v1/finance/accounts/', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateAccount(id: string, data: Partial<Pick<Account, 'name' | 'currency'>>): Promise<Account> {
+export function updateAccount(id: string, data: Partial<Pick<Account, 'name' | 'currency' | 'open_datetime' | 'close_datetime'>>): Promise<Account> {
   return fetchJson<Account>(`/api/v1/finance/accounts/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 

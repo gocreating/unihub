@@ -1,15 +1,16 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.1.0 → 1.2.0 (minor — new principle added: UI/UX Reference)
-Modified principles: none renamed
-Added sections:
-  - Principle VI: PageTable as Default Tabular Component
+Version change: 1.5.0 → 1.6.0 (minor — Principle VI expanded with mandatory empty-cell
+  display convention: null/empty values MUST show styled placeholder text)
+Modified principles:
+  - Principle VI: UI/UX Reference — added empty-cell display rule
+Added sections: none
+Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-  - CLAUDE.md ✅ Should reference PageTable in Frontend section
 Follow-up TODOs: None.
 -->
 
@@ -96,24 +97,53 @@ integration bugs entirely.
 Every change MUST pass the project quality loop before being considered complete.
 No exceptions for "quick fixes" or "trivial changes."
 
-Frontend (run from `apps/unihub/frontend/`):
-```
-pnpm lint && pnpm typecheck && pnpm test
-```
+**Frontend** (run from `apps/unihub/frontend/`):
 
-Backend (run from `apps/unihub/backend/`):
-```
-uv run ruff check . && uv run pytest
+```bash
+pnpm lint       # ESLint — MUST produce zero warnings
+pnpm typecheck  # tsc --noEmit strict
+pnpm test       # Vitest
 ```
 
-- TypeScript strict mode (`strict: true`) MUST remain enabled. Disabling it or
-  adding `@ts-ignore` suppression is a constitution violation.
-- All new backend endpoints MUST have at least one pytest-django integration test.
+**Backend** (run from `apps/unihub/backend/`):
 
-**Rationale**: The quality loop is the minimum bar for correctness. Skipping it
-creates compounding technical debt that is always more expensive to fix later.
+```bash
+uv run ruff format .
+uv run ruff check . --fix
+uv run pytest
+```
 
-### VII. UI/UX Reference: ov-fleet
+**TypeScript rules (non-negotiable)**:
+- `strict: true` MUST remain enabled in `tsconfig.json`. No exceptions.
+- `@ts-ignore` and `// @ts-nocheck` suppressions are a constitution violation.
+- No `any` type except where provably unavoidable and explicitly documented.
+- ESLint MUST report zero warnings — treat warnings as errors.
+
+**Test-first development (backend)**:
+- Tests MUST be written before implementation and MUST fail before the
+  implementation is written (red-green-refactor).
+- Test naming convention: `test_<function>_<scenario>` (e.g.,
+  `test_create_account_missing_currency`).
+- All new backend endpoints MUST have at least one `pytest-django` integration
+  test covering the happy path and at least one error path.
+- Mock external dependencies (HTTP service calls, third-party APIs), not
+  internal Django/DRF logic.
+
+**Backend code style (from ov-fleet)**:
+- Type hints MUST appear on all function signatures (parameters and return type).
+- Docstrings MUST be provided on all public functions and classes; use Google
+  style (`Args:`, `Returns:`, `Raises:`).
+- Use f-strings for all string formatting; no `%` formatting or `.format()`.
+- Raise specific exceptions with descriptive messages; bare `except:` clauses
+  are prohibited.
+- Use context managers (`with`) for all resource cleanup (files, DB connections,
+  locks).
+
+**Rationale**: The quality loop is the minimum bar for correctness. The
+test-first discipline (from ov-fleet) prevents regressions and forces
+requirements to be understood before code is written.
+
+### VI. UI/UX Reference: ov-fleet
 
 For any UI, UX, interaction, or visual detail that is not explicitly specified in
 a feature spec or this constitution, the ov-fleet application at
@@ -126,37 +156,84 @@ reference implementation to follow.
   icons on level 1, text-only (no icons) on level 2.
 - The site branding (logo + title) MUST be clickable and navigate to the home
   page (`/`).
-- The header MUST include a language selector (globe icon, top-right) supporting
-  at minimum: English (`en-US`), Traditional Chinese (`zh-TW`), and Simplified
-  Chinese (`zh-CN`). Language preference MUST persist across sessions via
-  `localStorage`.
-- Locale switching MUST update Ant Design component strings via `ConfigProvider`.
+- The header MUST include a language selector (translate icon, top-right)
+  supporting: English (`en-US`) and Traditional Chinese (`zh-TW`). Language
+  preference MUST persist across sessions via `localStorage`.
+- The language selector trigger MUST use the Material Design "translate" SVG
+  icon (not any `@ant-design/icons` component). Dropdown options MUST display
+  emoji country flags alongside the locale name.
+- Locale switching MUST update Ant Design component strings via `ConfigProvider`
+  AND update the dayjs global locale via `dayjs.locale()` so that relative-time
+  strings (e.g. `fromNow()`) are rendered in the active language. The dayjs
+  locale file for each supported locale MUST be imported at app entry.
+- **Datetime display**: Every datetime value rendered in a table cell, detail
+  view, or card MUST display both the absolute timestamp and the relative time.
+  The canonical format is `YYYY-MM-DD HH:mm (X days ago)` — implemented with
+  `dayjs(val).format('YYYY-MM-DD HH:mm')` and `dayjs(val).fromNow()` (requires
+  `dayjs/plugin/relativeTime` registered at app entry via `dayjs.extend(relativeTime)`).
+  When space is constrained, the relative time MAY be placed in an Ant Design
+  `<Tooltip>` on hover, but MUST NOT be omitted entirely.
+- **Empty cell display**: Every table cell or detail-view field whose value is
+  absent (null, undefined, or empty string) MUST display a visually distinct
+  placeholder rather than leaving the cell blank or rendering raw `null`. The
+  canonical implementation is `<Typography.Text type="secondary">—</Typography.Text>`.
+  The placeholder text MUST be styled with a muted/disabled color to distinguish
+  it from real data at a glance. Rendering nothing, a blank string, or the
+  literal string `"null"` or `"undefined"` is a constitution violation.
 
 **Rationale**: Maintaining a living reference implementation prevents UI drift
 and reduces design decisions to a lookup rather than a debate. ov-fleet is
 actively maintained on the same stack and represents the desired UX baseline.
+Relative timestamps reduce cognitive load — users should never need to calculate
+"how long ago" from a raw date string. Styled empty-cell placeholders prevent
+layout collapse and signal intentional absence of data, reducing confusion when
+users scan sparse tables.
 
-### VI. PageTable as Default Tabular Component
+### VII. PageTable Layout — NON-NEGOTIABLE
 
-Any tabular data display in the UniHub frontend MUST use the `PageTable`
-component as the default implementation. Custom table solutions are prohibited
-unless PageTable is demonstrably insufficient for the use case (requires
-documented justification).
+Every page that displays tabular data MUST use `PageTable` and MUST follow
+the exact layout structure below. No exceptions, no alternative wrappers.
 
-- The `PageTable` component is sourced from the ov-pro-tools reference repo
-  (`ov-fleet/frontend/src/components/PageTable/`) and adapted for unihub's
-  Vite/React Router 7 build context.
-- PageTable provides: sticky top header, sticky bottom footer, sticky bottom
-  horizontal scrollbar, and column headers that follow horizontal scroll — all
-  pre-configured and non-negotiable for tabular UIs.
-- All PageTable usages MUST use the exported helper utilities for column widths:
-  `widthForHeader()`, `measureTextWidth()`, `computeScrollX()`.
-- The component lives at `apps/unihub/frontend/src/components/PageTable/`.
+```
+┌─ gray page background (ProLayout content area) ──────────────────────┐
+│ ┌─ white container (pageCard) ───────────────────────────────────┐   │
+│ │  Page Title                          [ Action Button ]         │   │
+│ │─────────────────────────────────────────────────────────────── │   │
+│ │  Toolbar (Filters · Sort · Column visibility · …)              │   │
+│ │─────────────────────────────────────────────────────────────── │   │
+│ │  ┌─ ProTable ────────────────────────────────────────────┐    │   │
+│ │  │  sticky header · scrollable body · sticky footer      │    │   │
+│ │  └───────────────────────────────────────────────────────┘    │   │
+│ └────────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
+```
 
-**Rationale**: PageTable encapsulates a set of UX improvements (sticky scrollbar,
-sticky header/footer) that would otherwise need to be reimplemented per page.
-Centralising it prevents drift and ensures a consistent table experience across
-all domains.
+**Rules (all MUST be followed):**
+
+- The white container, title row, toolbar, and ProTable are ALL rendered
+  by `PageTable` — never duplicated or re-implemented in page components.
+- Page title goes in `pageTitle` prop (left side of title row).
+- The primary create/action button goes in `action` prop (right side of
+  title row, inside the white container).
+- Toolbar controls (filters, sort, column visibility) go in `headerTitle`
+  and/or `toolBarRender` props — they render inside the same white container
+  between the title row and the table.
+- Query load errors MUST be shown via `message.error()` (transient
+  notification), called in a `useEffect` on `isError`. Persistent `<Alert>`
+  elements rendered ABOVE or OUTSIDE `PageTable` are a constitution violation.
+- Modals (create/edit forms) are rendered as React portals and do not affect
+  the layout; they are acceptable siblings to `PageTable` in the page JSX.
+- All column widths MUST use `widthForHeader()`, `measureTextWidth()`, and
+  `computeScrollX()` exported from `PageTable`.
+- The `PageTable` component lives at
+  `apps/unihub/frontend/src/components/PageTable/`.
+
+**Rationale**: This layout is the single most visible pattern in the product.
+Every domain that adds a table page MUST land with exactly this structure —
+the white card enclosing title + toolbar + table on a gray background. Any
+deviation (Alert above the card, action button outside the card, table
+without a white wrapper) produces an inconsistent UI that accumulates across
+domains. This rule must be checked on every implementation plan and PR.
 
 ## Development Constraints
 
@@ -216,4 +293,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.2.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-18
+**Version**: 1.6.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-19

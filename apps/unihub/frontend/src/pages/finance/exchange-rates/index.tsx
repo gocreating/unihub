@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, DatePicker, Form, Input, Modal, Select, Space, message } from 'antd';
+import { Button, DatePicker, Form, Input, Modal, Select, Space, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
+import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
 import type { ExchangeRate } from '@/services/unihub-backend/finance';
 import {
@@ -16,6 +17,7 @@ import {
 
 export function ExchangeRatesPage() {
   const queryClient = useQueryClient();
+  const { formatMessage: t } = useIntl();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRate, setEditingRate] = useState<ExchangeRate | null>(null);
   const [form] = Form.useForm();
@@ -25,9 +27,13 @@ export function ExchangeRatesPage() {
     queryFn: () => listExchangeRates(),
   });
 
+  useEffect(() => {
+    if (isError) message.error(t({ id: 'pages.finance.exchangeRates.loadError' }));
+  }, [isError, t]);
+
   const { data: currencies = [] } = useQuery({
     queryKey: ['finance', 'currencies'],
-    queryFn: listCurrencies,
+    queryFn: () => listCurrencies(),
   });
 
   const currencyOptions = currencies.map((c) => ({
@@ -41,9 +47,9 @@ export function ExchangeRatesPage() {
       queryClient.invalidateQueries({ queryKey: ['finance', 'exchange-rates'] });
       setModalOpen(false);
       form.resetFields();
-      message.success('Exchange rate created.');
+      message.success(t({ id: 'pages.finance.exchangeRates.created' }));
     },
-    onError: () => message.error('Failed to create exchange rate.'),
+    onError: () => message.error(t({ id: 'pages.finance.exchangeRates.createError' })),
   });
 
   const updateMutation = useMutation({
@@ -53,18 +59,18 @@ export function ExchangeRatesPage() {
       queryClient.invalidateQueries({ queryKey: ['finance', 'exchange-rates'] });
       setModalOpen(false);
       form.resetFields();
-      message.success('Exchange rate updated.');
+      message.success(t({ id: 'pages.finance.exchangeRates.updated' }));
     },
-    onError: () => message.error('Failed to update exchange rate.'),
+    onError: () => message.error(t({ id: 'pages.finance.exchangeRates.updateError' })),
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteExchangeRate,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finance', 'exchange-rates'] });
-      message.success('Exchange rate deleted.');
+      message.success(t({ id: 'pages.finance.exchangeRates.deleted' }));
     },
-    onError: () => message.error('Failed to delete exchange rate.'),
+    onError: () => message.error(t({ id: 'pages.finance.exchangeRates.deleteError' })),
   });
 
   const openCreate = () => {
@@ -95,24 +101,32 @@ export function ExchangeRatesPage() {
 
   const columns: ProColumns<ExchangeRate>[] = useMemo(
     () => [
-      { title: 'Base', dataIndex: 'base_currency', ...widthForHeader('Base') },
-      { title: 'Quote', dataIndex: 'quote_currency', ...widthForHeader('Quote') },
-      { title: 'Rate', dataIndex: 'rate', ...widthForHeader('Rate', 120) },
+      { title: t({ id: 'pages.finance.exchangeRates.col.base' }), dataIndex: 'base_currency', ...widthForHeader('Base') },
+      { title: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataIndex: 'quote_currency', ...widthForHeader('Quote') },
       {
-        title: 'Date',
-        dataIndex: 'date',
-        ...widthForHeader('Date', 160),
-        sorter: true,
-        render: (val) => dayjs(val as string).format('YYYY-MM-DD HH:mm'),
+        title: t({ id: 'pages.finance.exchangeRates.col.rate' }),
+        dataIndex: 'rate',
+        ...widthForHeader('Rate', 120),
+        render: (val) => parseFloat(val as string).toString(),
       },
       {
-        title: 'Actions',
+        title: t({ id: 'common.date' }),
+        dataIndex: 'date',
+        ...widthForHeader('Date', 220),
+        sorter: true,
+        render: (val) => {
+          const d = dayjs(val as string);
+          return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
+        },
+      },
+      {
+        title: t({ id: 'common.actions' }),
         key: 'actions',
         ...widthForHeader('Actions'),
         render: (_, record) => (
           <Space>
             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-              Edit
+              {t({ id: 'common.edit' })}
             </Button>
             <Button
               size="small"
@@ -120,33 +134,30 @@ export function ExchangeRatesPage() {
               icon={<DeleteOutlined />}
               onClick={() => {
                 Modal.confirm({
-                  title: 'Delete Exchange Rate',
-                  content: 'Delete this exchange rate?',
+                  title: t({ id: 'pages.finance.exchangeRates.delete.title' }),
+                  content: t({ id: 'pages.finance.exchangeRates.delete.confirm' }),
                   okType: 'danger',
                   onOk: () => deleteMutation.mutate(record.id),
                 });
               }}
             >
-              Delete
+              {t({ id: 'common.delete' })}
             </Button>
           </Space>
         ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [t],
   );
 
   return (
     <>
-      {isError && (
-        <Alert type="error" message="Failed to load exchange rates." style={{ marginBottom: 16 }} showIcon />
-      )}
       <PageTable<ExchangeRate>
-        pageTitle="Exchange Rates"
+        pageTitle={t({ id: 'pages.finance.exchangeRates.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            New Rate
+            {t({ id: 'pages.finance.exchangeRates.new' })}
           </Button>
         }
         rowKey="id"
@@ -157,30 +168,30 @@ export function ExchangeRatesPage() {
       />
 
       <Modal
-        title={editingRate ? 'Edit Exchange Rate' : 'New Exchange Rate'}
+        title={editingRate ? t({ id: 'pages.finance.exchangeRates.edit' }) : t({ id: 'pages.finance.exchangeRates.new' })}
         open={modalOpen}
         onCancel={() => { setModalOpen(false); form.resetFields(); }}
         onOk={() => form.submit()}
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
         <Form form={form} layout="vertical" onFinish={onFinish}>
-          <Form.Item name="base_currency" label="Base Currency" rules={[{ required: true }]}>
-            <Select showSearch placeholder="Select base currency" optionFilterProp="label" options={currencyOptions} />
+          <Form.Item name="base_currency" label={t({ id: 'pages.finance.exchangeRates.form.baseCurrency' })} rules={[{ required: true }]}>
+            <Select showSearch placeholder={t({ id: 'pages.finance.exchangeRates.form.basePlaceholder' })} optionFilterProp="label" options={currencyOptions} />
           </Form.Item>
-          <Form.Item name="quote_currency" label="Quote Currency" rules={[{ required: true }]}>
-            <Select showSearch placeholder="Select quote currency" optionFilterProp="label" options={currencyOptions} />
+          <Form.Item name="quote_currency" label={t({ id: 'pages.finance.exchangeRates.form.quoteCurrency' })} rules={[{ required: true }]}>
+            <Select showSearch placeholder={t({ id: 'pages.finance.exchangeRates.form.quotePlaceholder' })} optionFilterProp="label" options={currencyOptions} />
           </Form.Item>
           <Form.Item
             name="rate"
-            label="Rate (1 base = ? quote)"
+            label={t({ id: 'pages.finance.exchangeRates.form.rate' })}
             rules={[
               { required: true },
-              { pattern: /^\d+(\.\d+)?$/, message: 'Enter a positive decimal number' },
+              { pattern: /^\d+(\.\d+)?$/, message: t({ id: 'pages.finance.exchangeRates.form.ratePattern' }) },
             ]}
           >
             <Input placeholder="e.g. 32.5" />
           </Form.Item>
-          <Form.Item name="date" label="Effective Date & Time" rules={[{ required: true }]}>
+          <Form.Item name="date" label={t({ id: 'pages.finance.exchangeRates.form.date' })} rules={[{ required: true }]}>
             <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
         </Form>

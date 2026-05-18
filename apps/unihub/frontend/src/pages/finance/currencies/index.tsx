@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Form, Input, Modal, Space, message } from 'antd';
+import { Button, Form, Input, Modal, Space, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
+import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
 import type { Currency } from '@/services/unihub-backend/finance';
 import {
@@ -14,14 +15,19 @@ import {
 
 export function CurrenciesPage() {
   const queryClient = useQueryClient();
+  const { formatMessage: t } = useIntl();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
   const [form] = Form.useForm();
 
   const { data: currencies = [], isLoading, isError } = useQuery({
     queryKey: ['finance', 'currencies'],
-    queryFn: listCurrencies,
+    queryFn: () => listCurrencies(),
   });
+
+  useEffect(() => {
+    if (isError) message.error(t({ id: 'pages.finance.currencies.loadError' }));
+  }, [isError, t]);
 
   const createMutation = useMutation({
     mutationFn: createCurrency,
@@ -29,9 +35,9 @@ export function CurrenciesPage() {
       queryClient.invalidateQueries({ queryKey: ['finance', 'currencies'] });
       setModalOpen(false);
       form.resetFields();
-      message.success('Currency created.');
+      message.success(t({ id: 'pages.finance.currencies.created' }));
     },
-    onError: () => message.error('Failed to create currency.'),
+    onError: () => message.error(t({ id: 'pages.finance.currencies.createError' })),
   });
 
   const updateMutation = useMutation({
@@ -41,18 +47,18 @@ export function CurrenciesPage() {
       queryClient.invalidateQueries({ queryKey: ['finance', 'currencies'] });
       setModalOpen(false);
       form.resetFields();
-      message.success('Currency updated.');
+      message.success(t({ id: 'pages.finance.currencies.updated' }));
     },
-    onError: () => message.error('Failed to update currency.'),
+    onError: () => message.error(t({ id: 'pages.finance.currencies.updateError' })),
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteCurrency,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finance', 'currencies'] });
-      message.success('Currency deleted.');
+      message.success(t({ id: 'pages.finance.currencies.deleted' }));
     },
-    onError: () => message.error('Failed to delete currency.'),
+    onError: () => message.error(t({ id: 'pages.finance.currencies.deleteError' })),
   });
 
   const openCreate = () => {
@@ -77,17 +83,23 @@ export function CurrenciesPage() {
 
   const columns: ProColumns<Currency>[] = useMemo(
     () => [
-      { title: 'Code', dataIndex: 'code', ...widthForHeader('Code'), sorter: true },
-      { title: 'Name', dataIndex: 'name', ...widthForHeader('Name') },
-      { title: 'Symbol', dataIndex: 'symbol', ...widthForHeader('Symbol') },
+      { title: t({ id: 'pages.finance.currencies.col.code' }), dataIndex: 'code', ...widthForHeader('Code'), sorter: true },
+      { title: t({ id: 'common.name' }), dataIndex: 'name', ...widthForHeader('Name') },
       {
-        title: 'Actions',
+        title: t({ id: 'pages.finance.currencies.col.symbol' }),
+        dataIndex: 'symbol',
+        ...widthForHeader('Symbol'),
+        render: (val) =>
+          val ? String(val) : <Typography.Text type="secondary">—</Typography.Text>,
+      },
+      {
+        title: t({ id: 'common.actions' }),
         key: 'actions',
         ...widthForHeader('Actions'),
         render: (_, record) => (
           <Space>
             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-              Edit
+              {t({ id: 'common.edit' })}
             </Button>
             <Button
               size="small"
@@ -95,33 +107,30 @@ export function CurrenciesPage() {
               icon={<DeleteOutlined />}
               onClick={() =>
                 Modal.confirm({
-                  title: 'Delete Currency',
-                  content: `Delete "${record.code} – ${record.name}"? Accounts using this currency will be affected.`,
+                  title: t({ id: 'pages.finance.currencies.delete.title' }),
+                  content: t({ id: 'pages.finance.currencies.delete.confirm' }, { code: record.code, name: record.name }),
                   okType: 'danger',
                   onOk: () => deleteMutation.mutate(record.code),
                 })
               }
             >
-              Delete
+              {t({ id: 'common.delete' })}
             </Button>
           </Space>
         ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [t],
   );
 
   return (
     <>
-      {isError && (
-        <Alert type="error" message="Failed to load currencies." style={{ marginBottom: 16 }} showIcon />
-      )}
       <PageTable<Currency>
-        pageTitle="Currencies"
+        pageTitle={t({ id: 'pages.finance.currencies.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            New Currency
+            {t({ id: 'pages.finance.currencies.new' })}
           </Button>
         }
         rowKey="code"
@@ -132,7 +141,7 @@ export function CurrenciesPage() {
       />
 
       <Modal
-        title={editingCurrency ? 'Edit Currency' : 'New Currency'}
+        title={editingCurrency ? t({ id: 'pages.finance.currencies.edit' }) : t({ id: 'pages.finance.currencies.new' })}
         open={modalOpen}
         onCancel={() => { setModalOpen(false); form.resetFields(); }}
         onOk={() => form.submit()}
@@ -141,24 +150,24 @@ export function CurrenciesPage() {
         <Form form={form} layout="vertical" onFinish={onFinish}>
           <Form.Item
             name="code"
-            label="Code (ISO 4217)"
+            label={t({ id: 'pages.finance.currencies.form.code' })}
             rules={[
               { required: true },
-              { pattern: /^[A-Za-z]{3}$/, message: 'Must be a 3-letter code (e.g. USD, TWD)' },
+              { pattern: /^[A-Za-z]{3}$/, message: t({ id: 'pages.finance.currencies.form.codePattern' }) },
             ]}
           >
             <Input
               maxLength={3}
               style={{ textTransform: 'uppercase' }}
               disabled={!!editingCurrency}
-              placeholder="e.g. USD"
+              placeholder={t({ id: 'pages.finance.currencies.form.codePlaceholder' })}
             />
           </Form.Item>
-          <Form.Item name="name" label="Name" rules={[{ required: true }]}>
-            <Input placeholder="e.g. US Dollar" />
+          <Form.Item name="name" label={t({ id: 'common.name' })} rules={[{ required: true }]}>
+            <Input placeholder={t({ id: 'pages.finance.currencies.form.namePlaceholder' })} />
           </Form.Item>
-          <Form.Item name="symbol" label="Symbol">
-            <Input placeholder="e.g. $" maxLength={10} />
+          <Form.Item name="symbol" label={t({ id: 'pages.finance.currencies.col.symbol' })}>
+            <Input placeholder={t({ id: 'pages.finance.currencies.form.symbolPlaceholder' })} maxLength={10} />
           </Form.Item>
         </Form>
       </Modal>

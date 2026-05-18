@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Col, Form, Input, Row, Spin, Statistic, Tooltip, Typography, message } from 'antd';
+import { Button, Card, Col, Form, Input, Modal, Row, Select, Spin, Statistic, Tooltip, Typography, message } from 'antd';
 import dayjs from 'dayjs';
-import { EditOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import Decimal from 'decimal.js';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
 import type { Balance } from '@/services/unihub-backend/finance';
 import {
   deleteBalance,
   getNetWorth,
+  listAccounts,
   listBalances,
   listBalanceSheets,
   upsertBalance,
@@ -20,11 +22,20 @@ interface EditAmountFormValues {
   amount: string;
 }
 
+interface AddBalanceFormValues {
+  account_id: string;
+  amount: string;
+}
+
 export function BalanceSheetDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { formatMessage: t } = useIntl();
   const [editingBalance, setEditingBalance] = useState<Balance | null>(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const [form] = Form.useForm<EditAmountFormValues>();
+  const [addForm] = Form.useForm<AddBalanceFormValues>();
 
   const { data: sheets = [] } = useQuery({
     queryKey: ['finance', 'balance-sheets'],
@@ -44,6 +55,12 @@ export function BalanceSheetDetailPage() {
     enabled: !!id,
   });
 
+  const { data: availableAccounts = [] } = useQuery({
+    queryKey: ['finance', 'accounts', 'as_of', sheet?.date],
+    queryFn: () => listAccounts({ as_of: sheet!.date }),
+    enabled: !!sheet && addModalOpen,
+  });
+
   const upsertMutation = useMutation({
     mutationFn: ({ accountId, amount }: { accountId: string; amount: string }) =>
       upsertBalance(id!, accountId, amount),
@@ -51,26 +68,38 @@ export function BalanceSheetDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['finance', 'balance-sheets', id] });
       setEditingBalance(null);
       form.resetFields();
-      message.success('Balance updated.');
+      message.success(t({ id: 'pages.finance.balanceSheets.detail.updated' }));
     },
-    onError: () => message.error('Failed to update balance.'),
+    onError: () => message.error(t({ id: 'pages.finance.balanceSheets.detail.updateError' })),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: ({ accountId, amount }: { accountId: string; amount: string }) =>
+      upsertBalance(id!, accountId, amount),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'balance-sheets', id] });
+      setAddModalOpen(false);
+      addForm.resetFields();
+      message.success(t({ id: 'pages.finance.balanceSheets.detail.updated' }));
+    },
+    onError: () => message.error(t({ id: 'pages.finance.balanceSheets.detail.updateError' })),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (accountId: string) => deleteBalance(id!, accountId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finance', 'balance-sheets', id] });
-      message.success('Balance removed.');
+      message.success(t({ id: 'pages.finance.balanceSheets.detail.removed' }));
     },
-    onError: () => message.error('Failed to remove balance.'),
+    onError: () => message.error(t({ id: 'pages.finance.balanceSheets.detail.removeError' })),
   });
 
   const columns: ProColumns<Balance>[] = useMemo(
     () => [
-      { title: 'Account', dataIndex: 'account_name', ...widthForHeader('Account') },
-      { title: 'Currency', dataIndex: 'currency', ...widthForHeader('Currency') },
+      { title: t({ id: 'pages.finance.balanceSheets.detail.col.account' }), dataIndex: 'account_name', ...widthForHeader('Account') },
+      { title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency') },
       {
-        title: 'Amount',
+        title: t({ id: 'pages.finance.balanceSheets.detail.col.amount' }),
         dataIndex: 'amount',
         ...widthForHeader('Amount', 100),
         render: (val, record) => {
@@ -86,7 +115,7 @@ export function BalanceSheetDetailPage() {
                 <Form.Item
                   name="amount"
                   style={{ margin: 0 }}
-                  rules={[{ required: true, pattern: /^-?\d+(\.\d+)?$/, message: 'Enter a valid number' }]}
+                  rules={[{ required: true, pattern: /^-?\d+(\.\d+)?$/, message: t({ id: 'pages.finance.balanceSheets.detail.amountRequired' }) }]}
                 >
                   <Input
                     autoFocus
@@ -100,7 +129,7 @@ export function BalanceSheetDetailPage() {
                     }}
                     suffix={
                       <Button type="link" size="small" htmlType="submit" loading={upsertMutation.isPending}>
-                        Save
+                        {t({ id: 'common.save' })}
                       </Button>
                     }
                   />
@@ -111,7 +140,7 @@ export function BalanceSheetDetailPage() {
           return (
             <span>
               {String(val)}&nbsp;
-              <Tooltip title="Edit amount">
+              <Tooltip title={t({ id: 'pages.finance.balanceSheets.detail.editAmount' })}>
                 <Button
                   type="link"
                   size="small"
@@ -127,25 +156,31 @@ export function BalanceSheetDetailPage() {
         },
       },
       {
-        title: 'Actions',
+        title: t({ id: 'common.actions' }),
         key: 'actions',
         ...widthForHeader('Actions'),
         render: (_, record) => (
           <Button size="small" danger onClick={() => deleteMutation.mutate(record.account_id)}>
-            Remove
+            {t({ id: 'common.remove' })}
           </Button>
         ),
       },
     ],
-    [editingBalance, form, upsertMutation, deleteMutation],
+    [editingBalance, form, upsertMutation, deleteMutation, t],
   );
 
   if (!sheet) return <Spin />;
 
   return (
     <div>
+      <div style={{ marginBottom: 16 }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/finance/balance-sheets')}>
+          {t({ id: 'pages.finance.balanceSheets.detail.back' })}
+        </Button>
+      </div>
+
       <Typography.Title level={4}>
-        {dayjs(sheet.date).format('YYYY-MM-DD HH:mm')}
+        {dayjs(sheet.date).format('YYYY-MM-DD HH:mm')} ({dayjs(sheet.date).fromNow()})
       </Typography.Title>
 
       {netWorthLoading ? (
@@ -156,7 +191,7 @@ export function BalanceSheetDetailPage() {
             <Col key={entry.currency} xs={24} sm={12} md={8} lg={6}>
               <Card size="small">
                 <Statistic
-                  title={`Net Worth (${entry.currency})`}
+                  title={t({ id: 'pages.finance.balanceSheets.detail.netWorth' }, { currency: entry.currency })}
                   value={new Decimal(entry.net_worth).toFixed(2)}
                   prefix={entry.currency}
                 />
@@ -167,13 +202,58 @@ export function BalanceSheetDetailPage() {
       ) : null}
 
       <PageTable<Balance>
-        pageTitle="Account Balances"
+        pageTitle={t({ id: 'pages.finance.balanceSheets.detail.title' })}
+        action={
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddModalOpen(true)}>
+            {t({ id: 'pages.finance.balanceSheets.detail.addBalance' })}
+          </Button>
+        }
         rowKey="id"
         columns={columns}
         dataSource={balances}
         loading={balancesLoading}
         scroll={{ x: computeScrollX(columns) }}
       />
+
+      <Modal
+        title={t({ id: 'pages.finance.balanceSheets.detail.addBalance' })}
+        open={addModalOpen}
+        onCancel={() => { setAddModalOpen(false); addForm.resetFields(); }}
+        onOk={() => addForm.submit()}
+        confirmLoading={addMutation.isPending}
+      >
+        <Form
+          form={addForm}
+          layout="vertical"
+          onFinish={(v) => addMutation.mutate({ accountId: v.account_id, amount: v.amount })}
+        >
+          <Form.Item
+            name="account_id"
+            label={t({ id: 'pages.finance.balanceSheets.detail.col.account' })}
+            rules={[{ required: true }]}
+          >
+            <Select
+              showSearch
+              placeholder={t({ id: 'pages.finance.balanceSheets.detail.selectAccount' })}
+              optionFilterProp="label"
+              options={availableAccounts.map((a) => ({
+                value: a.id,
+                label: `${a.name} (${a.currency})`,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
+            name="amount"
+            label={t({ id: 'pages.finance.balanceSheets.detail.col.amount' })}
+            rules={[
+              { required: true },
+              { pattern: /^-?\d+(\.\d+)?$/, message: t({ id: 'pages.finance.balanceSheets.detail.amountRequired' }) },
+            ]}
+          >
+            <Input placeholder="e.g. 5000.00" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

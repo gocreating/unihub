@@ -203,7 +203,7 @@ function useStickyHorizontalScrollbar(containerRef: RefObject<HTMLDivElement | n
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface PageTableProps<T extends Record<string, any>>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  extends Omit<ProTableProps<T, Record<string, any>>, 'search' | 'options' | 'className'> {
+  extends Omit<ProTableProps<T, Record<string, any>>, 'search' | 'className'> {
   pageTitle: ReactNode;
   action?: ReactNode;
   contentVisibility?: boolean;
@@ -215,6 +215,7 @@ function PageTable<T extends Record<string, any>>({
   action,
   contentVisibility: enableContentVisibility = false,
   pagination = false,
+  options = false,
   ...proTableProps
 }: PageTableProps<T>) {
   const { styles, cx } = useStyles();
@@ -248,7 +249,7 @@ function PageTable<T extends Record<string, any>>({
       >
         <ProTable<T>
           search={false}
-          options={false}
+          options={options}
           pagination={pagination}
           sticky={{ offsetHeader }}
           {...proTableProps}

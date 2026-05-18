@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
-export type LocaleKey = 'en-US' | 'zh-TW' | 'zh-CN';
+export type LocaleKey = 'en-US' | 'zh-TW';
 
 interface LocaleContextValue {
   locale: LocaleKey;

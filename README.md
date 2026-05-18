@@ -1,8 +1,8 @@
-# unihub
+# UniHub
 
 Your personal life OS — one dashboard to capture, organise, and browse everything that matters to you.
 
-Most productivity tools are built for a single purpose: a contacts app, a music library, a vocabulary trainer, a finance tracker. unihub replaces the mental overhead of juggling all of them by bringing every dimension of daily life under one roof. As new areas of your life become worth tracking, a new domain is connected to the hub.
+Most productivity tools are built for a single purpose: a contacts app, a music library, a vocabulary trainer, a finance tracker. UniHub replaces the mental overhead of juggling all of them by bringing every dimension of daily life under one roof. As new areas of your life become worth tracking, a new domain is connected to the hub.
 
 ## Domains
 

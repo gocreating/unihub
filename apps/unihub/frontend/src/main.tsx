@@ -1,5 +1,10 @@
 import './index.css';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import 'dayjs/locale/zh-tw';
 import { Component, StrictMode } from 'react';
+
+dayjs.extend(relativeTime);
 import type { ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Alert, Button } from 'antd';

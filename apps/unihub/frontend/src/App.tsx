@@ -1,13 +1,17 @@
 import { ConfigProvider, Spin } from 'antd';
 import enUS from 'antd/locale/en_US';
+import zhTW from 'antd/locale/zh_TW';
+import zhCN from 'antd/locale/zh_CN';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from '@/components/AppShell/AppShell';
+import { LocaleProvider, useLocale } from '@/contexts/LocaleContext';
 import { LoginPage } from '@/pages/auth/login';
 import { DashboardPage } from '@/pages/dashboard/index';
 import { AccountsPage } from '@/pages/finance/accounts/index';
 import { BalanceSheetsPage } from '@/pages/finance/balance-sheets/index';
 import { BalanceSheetDetailPage } from '@/pages/finance/balance-sheets/detail';
+import { CurrenciesPage } from '@/pages/finance/currencies/index';
 import { ExchangeRatesPage } from '@/pages/finance/exchange-rates/index';
 import { LanguagePage } from '@/pages/language/LanguagePage';
 import { PeoplePage } from '@/pages/people/PeoplePage';
@@ -57,6 +61,7 @@ function AppRoutes() {
             <AppShell>
               <Routes>
                 <Route path="/" element={<DashboardPage />} />
+                <Route path="/finance/currencies" element={<CurrenciesPage />} />
                 <Route path="/finance/accounts" element={<AccountsPage />} />
                 <Route path="/finance/balance-sheets" element={<BalanceSheetsPage />} />
                 <Route path="/finance/balance-sheets/:id" element={<BalanceSheetDetailPage />} />
@@ -73,14 +78,26 @@ function AppRoutes() {
   );
 }
 
+function LocaleAwareConfigProvider({ children }: { children: React.ReactNode }) {
+  const { locale } = useLocale();
+  const antdLocale = locale === 'zh-TW' ? zhTW : locale === 'zh-CN' ? zhCN : enUS;
+  return (
+    <ConfigProvider locale={antdLocale}>
+      {children}
+    </ConfigProvider>
+  );
+}
+
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ConfigProvider locale={enUS}>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </ConfigProvider>
-    </QueryClientProvider>
+    <LocaleProvider>
+      <QueryClientProvider client={queryClient}>
+        <LocaleAwareConfigProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </LocaleAwareConfigProvider>
+      </QueryClientProvider>
+    </LocaleProvider>
   );
 }

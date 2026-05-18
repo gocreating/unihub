@@ -1,7 +1,7 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.0.0 → 1.1.0 (minor — new principle added)
+Version change: 1.1.0 → 1.2.0 (minor — new principle added: UI/UX Reference)
 Modified principles: none renamed
 Added sections:
   - Principle VI: PageTable as Default Tabular Component
@@ -113,6 +113,29 @@ uv run ruff check . && uv run pytest
 **Rationale**: The quality loop is the minimum bar for correctness. Skipping it
 creates compounding technical debt that is always more expensive to fix later.
 
+### VII. UI/UX Reference: ov-fleet
+
+For any UI, UX, interaction, or visual detail that is not explicitly specified in
+a feature spec or this constitution, the ov-fleet application at
+`/home/cp/projects/OverviewCorporation/overview-pro-tools` is the authoritative
+reference implementation to follow.
+
+- Layout, spacing, component choice, interaction patterns, and visual hierarchy
+  MUST default to ov-fleet's implementation unless explicitly overridden.
+- The side navigation MUST follow ov-fleet's style: collapsible sections with
+  icons on level 1, text-only (no icons) on level 2.
+- The site branding (logo + title) MUST be clickable and navigate to the home
+  page (`/`).
+- The header MUST include a language selector (globe icon, top-right) supporting
+  at minimum: English (`en-US`), Traditional Chinese (`zh-TW`), and Simplified
+  Chinese (`zh-CN`). Language preference MUST persist across sessions via
+  `localStorage`.
+- Locale switching MUST update Ant Design component strings via `ConfigProvider`.
+
+**Rationale**: Maintaining a living reference implementation prevents UI drift
+and reduces design decisions to a lookup rather than a debate. ov-fleet is
+actively maintained on the same stack and represents the desired UX baseline.
+
 ### VI. PageTable as Default Tabular Component
 
 Any tabular data display in the UniHub frontend MUST use the `PageTable`
@@ -193,4 +216,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.1.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-17
+**Version**: 1.2.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-18

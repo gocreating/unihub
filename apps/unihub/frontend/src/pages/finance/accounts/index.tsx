@@ -11,7 +11,6 @@ import {
   Select,
   Space,
   Switch,
-  Tag,
   message,
 } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
@@ -24,6 +23,7 @@ import {
   createAccount,
   deleteAccount,
   listAccounts,
+  listCurrencies,
   updateAccount,
 } from '@/services/unihub-backend/finance';
 import {
@@ -31,12 +31,6 @@ import {
   listAttributeDefinitions,
   listAttributeValues,
 } from '@/services/unihub-backend/core';
-
-const ACCOUNT_TYPE_COLORS: Record<string, string> = {
-  asset: 'green',
-  liability: 'red',
-  equity: 'blue',
-};
 
 const CONTENT_TYPE = 'finance.account';
 
@@ -50,6 +44,11 @@ export function AccountsPage() {
   const { data: accounts = [], isLoading, isError } = useQuery({
     queryKey: ['finance', 'accounts'],
     queryFn: () => listAccounts(),
+  });
+
+  const { data: currencies = [] } = useQuery({
+    queryKey: ['finance', 'currencies'],
+    queryFn: listCurrencies,
   });
 
   const { data: attrDefs = [] } = useQuery({
@@ -154,7 +153,7 @@ export function AccountsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingAttrValues]);
 
-  const onFinish = (values: { name: string; account_type: Account['account_type']; currency: string }) => {
+  const onFinish = (values: { name: string; currency: string }) => {
     if (editingAccount) {
       updateMutation.mutate({ id: editingAccount.id, data: values });
     } else {
@@ -165,12 +164,6 @@ export function AccountsPage() {
   const columns: ProColumns<Account>[] = useMemo(
     () => [
       { title: 'Name', dataIndex: 'name', ...widthForHeader('Name'), sorter: true },
-      {
-        title: 'Type',
-        dataIndex: 'account_type',
-        ...widthForHeader('Type'),
-        render: (val) => <Tag color={ACCOUNT_TYPE_COLORS[val as string]}>{String(val).toUpperCase()}</Tag>,
-      },
       { title: 'Currency', dataIndex: 'currency', ...widthForHeader('Currency') },
       {
         title: 'Actions',
@@ -227,22 +220,16 @@ export function AccountsPage() {
           <Form.Item name="name" label="Name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="account_type" label="Type" rules={[{ required: true }]}>
-            <Select>
-              <Select.Option value="asset">Asset</Select.Option>
-              <Select.Option value="liability">Liability</Select.Option>
-              <Select.Option value="equity">Equity</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            name="currency"
-            label="Currency (ISO 4217)"
-            rules={[
-              { required: true },
-              { pattern: /^[A-Za-z]{3}$/, message: 'Must be a 3-letter currency code (e.g. USD, TWD)' },
-            ]}
-          >
-            <Input maxLength={3} style={{ textTransform: 'uppercase' }} />
+          <Form.Item name="currency" label="Currency" rules={[{ required: true }]}>
+            <Select
+              showSearch
+              placeholder="Select currency"
+              optionFilterProp="label"
+              options={currencies.map((c) => ({
+                value: c.code,
+                label: `${c.code} – ${c.name}`,
+              }))}
+            />
           </Form.Item>
 
           {userAttrs.map((attr) => (

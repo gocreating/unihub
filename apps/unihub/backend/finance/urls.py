@@ -1,9 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from finance.views import AccountViewSet, BalanceSheetViewSet, ExchangeRateViewSet
+from finance.views import AccountViewSet, BalanceSheetViewSet, CurrencyViewSet, ExchangeRateViewSet
 
 router = DefaultRouter()
+router.register('currencies', CurrencyViewSet, basename='currency')
 router.register('accounts', AccountViewSet, basename='account')
 router.register('balance-sheets', BalanceSheetViewSet, basename='balancesheet')
 router.register('exchange-rates', ExchangeRateViewSet, basename='exchangerate')

@@ -53,8 +53,8 @@ services:
       LOG_LEVEL: "INFO"
       # Auto-creates a superuser on first boot if none exists.
       # Change these before deploying to production.
-      DJANGO_SUPERUSER_USERNAME: admin
-      DJANGO_SUPERUSER_PASSWORD: admin
+      DJANGO_SUPERUSER_USERNAME: root
+      DJANGO_SUPERUSER_PASSWORD: root
       DJANGO_SUPERUSER_EMAIL: ""
 
   frontend:

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, DatePicker, Form, Input, Modal, Space, message } from 'antd';
+import { Alert, Button, DatePicker, Form, Input, Modal, Select, Space, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -9,6 +9,7 @@ import type { ExchangeRate } from '@/services/unihub-backend/finance';
 import {
   createExchangeRate,
   deleteExchangeRate,
+  listCurrencies,
   listExchangeRates,
   updateExchangeRate,
 } from '@/services/unihub-backend/finance';
@@ -23,6 +24,16 @@ export function ExchangeRatesPage() {
     queryKey: ['finance', 'exchange-rates'],
     queryFn: () => listExchangeRates(),
   });
+
+  const { data: currencies = [] } = useQuery({
+    queryKey: ['finance', 'currencies'],
+    queryFn: listCurrencies,
+  });
+
+  const currencyOptions = currencies.map((c) => ({
+    value: c.code,
+    label: `${c.code} – ${c.name}`,
+  }));
 
   const createMutation = useMutation({
     mutationFn: createExchangeRate,
@@ -69,12 +80,12 @@ export function ExchangeRatesPage() {
   };
 
   const onFinish = (values: {
-    from_currency: string;
-    to_currency: string;
+    base_currency: string;
+    quote_currency: string;
     rate: string;
     date: dayjs.Dayjs;
   }) => {
-    const data = { ...values, date: values.date.format('YYYY-MM-DD') };
+    const data = { ...values, date: values.date.toISOString() };
     if (editingRate) {
       updateMutation.mutate({ id: editingRate.id, data });
     } else {
@@ -84,10 +95,16 @@ export function ExchangeRatesPage() {
 
   const columns: ProColumns<ExchangeRate>[] = useMemo(
     () => [
-      { title: 'From', dataIndex: 'from_currency', ...widthForHeader('From') },
-      { title: 'To', dataIndex: 'to_currency', ...widthForHeader('To') },
-      { title: 'Rate', dataIndex: 'rate', ...widthForHeader('Rate', 100) },
-      { title: 'Date', dataIndex: 'date', ...widthForHeader('Date'), sorter: true },
+      { title: 'Base', dataIndex: 'base_currency', ...widthForHeader('Base') },
+      { title: 'Quote', dataIndex: 'quote_currency', ...widthForHeader('Quote') },
+      { title: 'Rate', dataIndex: 'rate', ...widthForHeader('Rate', 120) },
+      {
+        title: 'Date',
+        dataIndex: 'date',
+        ...widthForHeader('Date', 160),
+        sorter: true,
+        render: (val) => dayjs(val as string).format('YYYY-MM-DD HH:mm'),
+      },
       {
         title: 'Actions',
         key: 'actions',
@@ -147,32 +164,24 @@ export function ExchangeRatesPage() {
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
         <Form form={form} layout="vertical" onFinish={onFinish}>
-          <Form.Item
-            name="from_currency"
-            label="From Currency"
-            rules={[{ required: true }, { pattern: /^[A-Za-z]{3}$/, message: '3-letter code' }]}
-          >
-            <Input maxLength={3} style={{ textTransform: 'uppercase' }} />
+          <Form.Item name="base_currency" label="Base Currency" rules={[{ required: true }]}>
+            <Select showSearch placeholder="Select base currency" optionFilterProp="label" options={currencyOptions} />
           </Form.Item>
-          <Form.Item
-            name="to_currency"
-            label="To Currency"
-            rules={[{ required: true }, { pattern: /^[A-Za-z]{3}$/, message: '3-letter code' }]}
-          >
-            <Input maxLength={3} style={{ textTransform: 'uppercase' }} />
+          <Form.Item name="quote_currency" label="Quote Currency" rules={[{ required: true }]}>
+            <Select showSearch placeholder="Select quote currency" optionFilterProp="label" options={currencyOptions} />
           </Form.Item>
           <Form.Item
             name="rate"
-            label="Rate"
+            label="Rate (1 base = ? quote)"
             rules={[
               { required: true },
               { pattern: /^\d+(\.\d+)?$/, message: 'Enter a positive decimal number' },
             ]}
           >
-            <Input placeholder="e.g. 0.030769" />
+            <Input placeholder="e.g. 32.5" />
           </Form.Item>
-          <Form.Item name="date" label="Date" rules={[{ required: true }]}>
-            <DatePicker style={{ width: '100%' }} />
+          <Form.Item name="date" label="Effective Date & Time" rules={[{ required: true }]}>
+            <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
         </Form>
       </Modal>

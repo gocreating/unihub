@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Collapse, Form, Input, Row, Spin, Statistic, Tag, Tooltip, Typography, message } from 'antd';
+import { Button, Card, Col, Form, Input, Row, Spin, Statistic, Tooltip, Typography, message } from 'antd';
+import dayjs from 'dayjs';
 import { EditOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Column } from '@ant-design/plots';
 import Decimal from 'decimal.js';
 import { useParams } from 'react-router-dom';
 import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
@@ -44,24 +44,6 @@ export function BalanceSheetDetailPage() {
     enabled: !!id,
   });
 
-  // Breakdown chart data: assets / liabilities / equity per currency
-  const breakdownData = useMemo(() => {
-    const map: Record<string, Record<string, Decimal>> = {};
-    for (const b of balances) {
-      const cur = b.currency;
-      const type = b.account_type as string;
-      if (!map[cur]) map[cur] = {};
-      map[cur][type] = (map[cur][type] ?? new Decimal(0)).add(new Decimal(b.amount));
-    }
-    const rows: { currency: string; type: string; amount: number }[] = [];
-    for (const [cur, types] of Object.entries(map)) {
-      for (const [type, total] of Object.entries(types)) {
-        rows.push({ currency: cur, type: type.toUpperCase(), amount: total.toNumber() });
-      }
-    }
-    return rows;
-  }, [balances]);
-
   const upsertMutation = useMutation({
     mutationFn: ({ accountId, amount }: { accountId: string; amount: string }) =>
       upsertBalance(id!, accountId, amount),
@@ -86,12 +68,6 @@ export function BalanceSheetDetailPage() {
   const columns: ProColumns<Balance>[] = useMemo(
     () => [
       { title: 'Account', dataIndex: 'account_name', ...widthForHeader('Account') },
-      {
-        title: 'Type',
-        dataIndex: 'account_type',
-        ...widthForHeader('Type'),
-        render: (val) => <Tag>{String(val).toUpperCase()}</Tag>,
-      },
       { title: 'Currency', dataIndex: 'currency', ...widthForHeader('Currency') },
       {
         title: 'Amount',
@@ -110,7 +86,7 @@ export function BalanceSheetDetailPage() {
                 <Form.Item
                   name="amount"
                   style={{ margin: 0 }}
-                  rules={[{ required: true, pattern: /^\d+(\.\d+)?$/, message: 'Enter a valid number' }]}
+                  rules={[{ required: true, pattern: /^-?\d+(\.\d+)?$/, message: 'Enter a valid number' }]}
                 >
                   <Input
                     autoFocus
@@ -169,12 +145,12 @@ export function BalanceSheetDetailPage() {
   return (
     <div>
       <Typography.Title level={4}>
-        {sheet.label || sheet.date} — {sheet.base_currency}
+        {dayjs(sheet.date).format('YYYY-MM-DD HH:mm')}
       </Typography.Title>
 
       {netWorthLoading ? (
         <Spin />
-      ) : netWorth ? (
+      ) : netWorth && netWorth.per_currency.length > 0 ? (
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
           {netWorth.per_currency.map((entry) => (
             <Col key={entry.currency} xs={24} sm={12} md={8} lg={6}>
@@ -184,51 +160,11 @@ export function BalanceSheetDetailPage() {
                   value={new Decimal(entry.net_worth).toFixed(2)}
                   prefix={entry.currency}
                 />
-                <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                  Assets: {entry.total_assets} · Liabilities: {entry.total_liabilities}
-                </div>
               </Card>
-            </Col>
-          ))}
-          <Col xs={24} sm={12} md={8} lg={6}>
-            <Card size="small" style={{ borderColor: '#1890ff' }}>
-              <Statistic
-                title={`Total (${netWorth.base_currency})`}
-                value={new Decimal(netWorth.base_currency_total.net_worth).toFixed(2)}
-                prefix={netWorth.base_currency}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          {netWorth.base_currency_total.missing_rates.map((mr) => (
-            <Col key={mr.currency} xs={24}>
-              <Alert type="warning" showIcon message={mr.message} />
             </Col>
           ))}
         </Row>
       ) : null}
-
-      {breakdownData.length > 0 && (
-        <Collapse
-          ghost
-          style={{ marginBottom: 24 }}
-          items={[{
-            key: 'breakdown',
-            label: 'Account Type Breakdown',
-            children: (
-              <Column
-                data={breakdownData}
-                xField="currency"
-                yField="amount"
-                colorField="type"
-                stack
-                height={220}
-                legend={{ position: 'top' }}
-              />
-            ),
-          }]}
-        />
-      )}
 
       <PageTable<Balance>
         pageTitle="Account Balances"

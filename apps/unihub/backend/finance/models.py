@@ -3,16 +3,22 @@ from django.db import models
 from core.nanoid import generate_id
 
 
-class Account(models.Model):
-    ACCOUNT_TYPE_CHOICES = [
-        ('asset', 'Asset'),
-        ('liability', 'Liability'),
-        ('equity', 'Equity'),
-    ]
+class Currency(models.Model):
+    code = models.CharField(max_length=3, primary_key=True)
+    name = models.CharField(max_length=100)
+    symbol = models.CharField(max_length=10, blank=True)
 
+    class Meta:
+        ordering = ['code']
+        verbose_name_plural = 'currencies'
+
+    def __str__(self):
+        return f'{self.code} – {self.name}'
+
+
+class Account(models.Model):
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     name = models.CharField(max_length=200)
-    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES)
     currency = models.CharField(max_length=3)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -26,9 +32,7 @@ class Account(models.Model):
 
 class BalanceSheet(models.Model):
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
-    date = models.DateField()
-    label = models.CharField(max_length=200, blank=True)
-    base_currency = models.CharField(max_length=3)
+    date = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -36,7 +40,7 @@ class BalanceSheet(models.Model):
         ordering = ['-date']
 
     def __str__(self):
-        return self.label or str(self.date)
+        return str(self.date)
 
 
 class Balance(models.Model):
@@ -54,14 +58,14 @@ class Balance(models.Model):
 
 class ExchangeRate(models.Model):
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
-    from_currency = models.CharField(max_length=3)
-    to_currency = models.CharField(max_length=3)
+    base_currency = models.CharField(max_length=3)
+    quote_currency = models.CharField(max_length=3)
     rate = models.DecimalField(max_digits=24, decimal_places=8)
-    date = models.DateField()
+    date = models.DateTimeField()
 
     class Meta:
-        unique_together = [('from_currency', 'to_currency', 'date')]
+        unique_together = [('base_currency', 'quote_currency', 'date')]
         ordering = ['-date']
 
     def __str__(self):
-        return f'{self.from_currency}/{self.to_currency} {self.rate} ({self.date})'
+        return f'{self.base_currency}/{self.quote_currency} {self.rate} ({self.date})'

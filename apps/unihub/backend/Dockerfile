@@ -20,7 +20,7 @@ COPY people/ ./people/
 COPY music/ ./music/
 COPY manage.py ./
 
-RUN uv sync --no-dev --no-editable
+RUN UV_HTTP_TIMEOUT=120 uv sync --no-dev --no-editable
 
 # collectstatic does not connect to the DB
 RUN DJANGO_SECRET_KEY=collectstatic uv run python manage.py collectstatic --noinput

@@ -8,10 +8,15 @@ export interface CustomAttribute {
   value: string;
 }
 
+export interface Currency {
+  code: string;
+  name: string;
+  symbol: string;
+}
+
 export interface Account {
   id: string;
   name: string;
-  account_type: 'asset' | 'liability' | 'equity';
   currency: string;
   created_at: string;
   updated_at: string;
@@ -20,9 +25,7 @@ export interface Account {
 
 export interface BalanceSheet {
   id: string;
-  date: string;
-  label: string;
-  base_currency: string;
+  date: string; // ISO datetime string
   created_at: string;
   updated_at: string;
 }
@@ -31,15 +34,12 @@ export interface Balance {
   id: string;
   account_id: string;
   account_name: string;
-  account_type: 'asset' | 'liability' | 'equity';
   currency: string;
   amount: string; // decimal string
 }
 
 export interface PerCurrencyEntry {
   currency: string;
-  total_assets: string;
-  total_liabilities: string;
   net_worth: string;
 }
 
@@ -51,21 +51,15 @@ export interface MissingRate {
 export interface NetWorthResult {
   balance_sheet_id: string;
   date: string;
-  base_currency: string;
   per_currency: PerCurrencyEntry[];
-  base_currency_total: {
-    net_worth: string;
-    covered_currencies: string[];
-    missing_rates: MissingRate[];
-  };
 }
 
 export interface ExchangeRate {
   id: string;
-  from_currency: string;
-  to_currency: string;
+  base_currency: string;
+  quote_currency: string;
   rate: string; // decimal string
-  date: string;
+  date: string; // ISO datetime string
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -89,6 +83,24 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   return resp.json() as Promise<T>;
 }
 
+// ── Currencies ────────────────────────────────────────────────────────
+
+export function listCurrencies(): Promise<Currency[]> {
+  return fetchJson<Currency[]>('/api/v1/finance/currencies/');
+}
+
+export function createCurrency(data: Currency): Promise<Currency> {
+  return fetchJson<Currency>('/api/v1/finance/currencies/', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateCurrency(code: string, data: Partial<Omit<Currency, 'code'>>): Promise<Currency> {
+  return fetchJson<Currency>(`/api/v1/finance/currencies/${code}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export function deleteCurrency(code: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/finance/currencies/${code}/`, { method: 'DELETE' });
+}
+
 // ── Accounts ─────────────────────────────────────────────────────────
 
 export function listAccounts(params?: { ordering?: string; search?: string }): Promise<Account[]> {
@@ -100,11 +112,11 @@ export function getAccount(id: string): Promise<Account> {
   return fetchJson<Account>(`/api/v1/finance/accounts/${id}/`);
 }
 
-export function createAccount(data: Pick<Account, 'name' | 'account_type' | 'currency'>): Promise<Account> {
+export function createAccount(data: Pick<Account, 'name' | 'currency'>): Promise<Account> {
   return fetchJson<Account>('/api/v1/finance/accounts/', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateAccount(id: string, data: Partial<Pick<Account, 'name' | 'account_type' | 'currency'>>): Promise<Account> {
+export function updateAccount(id: string, data: Partial<Pick<Account, 'name' | 'currency'>>): Promise<Account> {
   return fetchJson<Account>(`/api/v1/finance/accounts/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
@@ -120,11 +132,11 @@ export function listBalanceSheets(params?: { ordering?: string }): Promise<Balan
   return fetchJson<BalanceSheet[]>(`/api/v1/finance/balance-sheets/${qs ? `?${qs}` : ''}`);
 }
 
-export function createBalanceSheet(data: Pick<BalanceSheet, 'date' | 'label' | 'base_currency'>): Promise<BalanceSheet> {
+export function createBalanceSheet(data: Pick<BalanceSheet, 'date'>): Promise<BalanceSheet> {
   return fetchJson<BalanceSheet>('/api/v1/finance/balance-sheets/', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateBalanceSheet(id: string, data: Partial<Pick<BalanceSheet, 'date' | 'label' | 'base_currency'>>): Promise<BalanceSheet> {
+export function updateBalanceSheet(id: string, data: Partial<Pick<BalanceSheet, 'date'>>): Promise<BalanceSheet> {
   return fetchJson<BalanceSheet>(`/api/v1/finance/balance-sheets/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
@@ -153,16 +165,16 @@ export function getNetWorth(sheetId: string): Promise<NetWorthResult> {
 
 // ── Exchange Rates ────────────────────────────────────────────────────
 
-export function listExchangeRates(params?: { from_currency?: string; to_currency?: string; ordering?: string }): Promise<ExchangeRate[]> {
+export function listExchangeRates(params?: { base_currency?: string; quote_currency?: string; ordering?: string }): Promise<ExchangeRate[]> {
   const qs = new URLSearchParams(params as Record<string, string>).toString();
   return fetchJson<ExchangeRate[]>(`/api/v1/finance/exchange-rates/${qs ? `?${qs}` : ''}`);
 }
 
-export function createExchangeRate(data: Pick<ExchangeRate, 'from_currency' | 'to_currency' | 'rate' | 'date'>): Promise<ExchangeRate> {
+export function createExchangeRate(data: Pick<ExchangeRate, 'base_currency' | 'quote_currency' | 'rate' | 'date'>): Promise<ExchangeRate> {
   return fetchJson<ExchangeRate>('/api/v1/finance/exchange-rates/', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateExchangeRate(id: string, data: Partial<Pick<ExchangeRate, 'from_currency' | 'to_currency' | 'rate' | 'date'>>): Promise<ExchangeRate> {
+export function updateExchangeRate(id: string, data: Partial<Pick<ExchangeRate, 'base_currency' | 'quote_currency' | 'rate' | 'date'>>): Promise<ExchangeRate> {
   return fetchJson<ExchangeRate>(`/api/v1/finance/exchange-rates/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 

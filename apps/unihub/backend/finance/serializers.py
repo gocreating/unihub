@@ -4,7 +4,13 @@ from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
 from core.models import AttributeValue
-from finance.models import Account, Balance, BalanceSheet, ExchangeRate
+from finance.models import Account, Balance, BalanceSheet, Currency, ExchangeRate
+
+
+class CurrencySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Currency
+        fields = ['code', 'name', 'symbol']
 
 
 class CustomAttributeSerializer(serializers.Serializer):
@@ -18,7 +24,7 @@ class AccountSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Account
-        fields = ['id', 'name', 'account_type', 'currency', 'created_at', 'updated_at', 'custom_attributes']
+        fields = ['id', 'name', 'currency', 'created_at', 'updated_at', 'custom_attributes']
         read_only_fields = ['id', 'created_at', 'updated_at', 'custom_attributes']
 
     def get_custom_attributes(self, obj):
@@ -36,40 +42,29 @@ class AccountSerializer(serializers.ModelSerializer):
         ]
 
     def validate_currency(self, value):
-        if len(value) != 3 or not value.isalpha():
-            raise serializers.ValidationError('currency must be a 3-letter ISO 4217 code.')
-        return value.upper()
-
-    def validate_account_type(self, value):
-        valid = {'asset', 'liability', 'equity'}
-        if value not in valid:
-            raise serializers.ValidationError(f'Must be one of: {", ".join(valid)}')
+        value = value.upper()
+        if not Currency.objects.filter(code=value).exists():
+            raise serializers.ValidationError(f'Currency "{value}" does not exist. Add it in Currency management first.')
         return value
 
 
 class BalanceSheetSerializer(serializers.ModelSerializer):
     class Meta:
         model = BalanceSheet
-        fields = ['id', 'date', 'label', 'base_currency', 'created_at', 'updated_at']
+        fields = ['id', 'date', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
-
-    def validate_base_currency(self, value):
-        if len(value) != 3 or not value.isalpha():
-            raise serializers.ValidationError('base_currency must be a 3-letter ISO 4217 code.')
-        return value.upper()
 
 
 class BalanceSerializer(serializers.ModelSerializer):
     account_id = serializers.CharField(source='account.id', read_only=True)
     account_name = serializers.CharField(source='account.name', read_only=True)
-    account_type = serializers.CharField(source='account.account_type', read_only=True)
     currency = serializers.CharField(source='account.currency', read_only=True)
     amount = serializers.DecimalField(max_digits=20, decimal_places=4, coerce_to_string=True)
 
     class Meta:
         model = Balance
-        fields = ['id', 'account_id', 'account_name', 'account_type', 'currency', 'amount']
-        read_only_fields = ['id', 'account_id', 'account_name', 'account_type', 'currency']
+        fields = ['id', 'account_id', 'account_name', 'currency', 'amount']
+        read_only_fields = ['id', 'account_id', 'account_name', 'currency']
 
 
 class BalanceUpsertSerializer(serializers.Serializer):
@@ -81,7 +76,7 @@ class ExchangeRateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ExchangeRate
-        fields = ['id', 'from_currency', 'to_currency', 'rate', 'date']
+        fields = ['id', 'base_currency', 'quote_currency', 'rate', 'date']
         read_only_fields = ['id']
 
     def validate_rate(self, value):
@@ -89,12 +84,14 @@ class ExchangeRateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('rate must be greater than 0.')
         return value
 
-    def validate_from_currency(self, value):
-        if len(value) != 3 or not value.isalpha():
-            raise serializers.ValidationError('Must be a 3-letter ISO 4217 code.')
-        return value.upper()
+    def validate_base_currency(self, value):
+        value = value.upper()
+        if not Currency.objects.filter(code=value).exists():
+            raise serializers.ValidationError(f'Currency "{value}" does not exist.')
+        return value
 
-    def validate_to_currency(self, value):
-        if len(value) != 3 or not value.isalpha():
-            raise serializers.ValidationError('Must be a 3-letter ISO 4217 code.')
-        return value.upper()
+    def validate_quote_currency(self, value):
+        value = value.upper()
+        if not Currency.objects.filter(code=value).exists():
+            raise serializers.ValidationError(f'Currency "{value}" does not exist.')
+        return value

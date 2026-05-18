@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { getMe, logout } from '@/services/unihub-backend/auth';
+import { SelectLang } from '@/components/SelectLang';
 
 const ROUTE_CONFIG = {
   routes: [
@@ -19,6 +20,7 @@ const ROUTE_CONFIG = {
       name: 'Finance',
       icon: <DollarOutlined />,
       routes: [
+        { path: '/finance/currencies', name: 'Currencies' },
         { path: '/finance/accounts', name: 'Accounts' },
         { path: '/finance/balance-sheets', name: 'Balance Sheets' },
         { path: '/finance/exchange-rates', name: 'Exchange Rates' },
@@ -62,6 +64,16 @@ export function AppShell({ children }: AppShellProps) {
       token={{ bgLayout: '#f0f2f5' }}
       location={location}
       route={ROUTE_CONFIG}
+      menuHeaderRender={false}
+      headerTitleRender={(logo, title) => (
+        <span
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+          onClick={() => navigate('/')}
+        >
+          {logo}
+          {title}
+        </span>
+      )}
       menuItemRender={(item, dom) => (
         <span
           style={{ cursor: 'pointer', display: 'block', width: '100%' }}
@@ -70,6 +82,7 @@ export function AppShell({ children }: AppShellProps) {
           {dom}
         </span>
       )}
+      actionsRender={() => [<SelectLang key="select-lang" />]}
       avatarProps={{
         title: user?.username ?? '',
         size: 'small',
@@ -90,7 +103,6 @@ export function AppShell({ children }: AppShellProps) {
           </Dropdown>
         ),
       }}
-      siderMenuType="group"
     >
       {children}
     </ProLayout>

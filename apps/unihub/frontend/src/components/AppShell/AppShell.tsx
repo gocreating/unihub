@@ -2,6 +2,7 @@ import { ProLayout } from '@ant-design/pro-components';
 import { Dropdown } from 'antd';
 import {
   CustomerServiceOutlined,
+  DatabaseOutlined,
   DollarOutlined,
   LogoutOutlined,
   ReadOutlined,
@@ -51,6 +52,7 @@ export function AppShell({ children }: AppShellProps) {
       { path: '/language', name: t({ id: 'menu.language' }), icon: <ReadOutlined /> },
       { path: '/people', name: t({ id: 'menu.people' }), icon: <TeamOutlined /> },
       { path: '/music', name: t({ id: 'menu.music' }), icon: <CustomerServiceOutlined /> },
+      { path: '/io', name: 'Import / Export', icon: <DatabaseOutlined /> },
     ],
   };
 

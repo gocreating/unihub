@@ -21,6 +21,7 @@ import { ExchangeRatesPage } from '@/pages/finance/exchange-rates/index';
 import { LanguagePage } from '@/pages/language/LanguagePage';
 import { PeoplePage } from '@/pages/people/PeoplePage';
 import { MusicPage } from '@/pages/music/MusicPage';
+import { IoPage } from '@/pages/io/index';
 import { getMe } from '@/services/unihub-backend/auth';
 
 const queryClient = new QueryClient({
@@ -76,6 +77,7 @@ function AppRoutes() {
                 <Route path="/language" element={<LanguagePage />} />
                 <Route path="/people" element={<PeoplePage />} />
                 <Route path="/music" element={<MusicPage />} />
+                <Route path="/io" element={<IoPage />} />
               </Routes>
             </AppShell>
           </AuthGuard>

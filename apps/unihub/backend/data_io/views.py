@@ -17,7 +17,10 @@ from data_io.serializers import (
     ImportConfirmResponseSerializer,
     ImportPreviewRequestSerializer,
     ImportPreviewResponseSerializer,
+    TableImportConfirmSerializer,
+    TableImportPreviewSerializer,
     TableInfoSerializer,
+    ZipImportRequestSerializer,
 )
 from data_io.services.csv_exporter import export_table, export_tables
 
@@ -99,8 +102,8 @@ class ExportView(APIView):
             return response
         else:
             zip_bytes = export_tables(descriptors)
-            today = datetime.date.today().strftime("%Y%m%d")
-            filename = f"unihub-export-{today}.zip"
+            now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"unihub-export-{now}.zip"
             response = HttpResponse(zip_bytes, content_type="application/zip")
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
             return response
@@ -207,3 +210,137 @@ class ImportConfirmView(APIView):
             "deleted": result["deleted"],
         }
         return Response(ImportConfirmResponseSerializer(response_data).data)
+
+
+def _parse_zip_tables(zip_file, mode: str) -> list[dict]:
+    """Extract CSVs from an uploaded ZIP and return per-table parse+diff results."""
+    import io as _io
+    import zipfile as _zipfile
+
+    from data_io.registry import get_registry
+    from data_io.services.change_preview import compute_diff
+    from data_io.services.csv_exporter import _zip_entry_name
+    from data_io.services.csv_importer import parse_csv
+
+    zip_bytes = zip_file.read()
+    registry = get_registry()
+    results = []
+
+    try:
+        zf = _zipfile.ZipFile(_io.BytesIO(zip_bytes))
+    except _zipfile.BadZipFile:
+        return []
+
+    zip_names = set(zf.namelist())
+    with zf:
+        for label, descriptor in registry.items():
+            entry = _zip_entry_name(label)
+            if entry not in zip_names:
+                continue
+            try:
+                csv_text = zf.read(entry).decode("utf-8")
+            except Exception:
+                continue
+            rows, errors = parse_csv(csv_text, descriptor)
+            if errors:
+                results.append(
+                    {
+                        "table_label": label,
+                        "display_name": descriptor.display_name,
+                        "creates": [],
+                        "updates": [],
+                        "deletes": [],
+                        "errors": [
+                            {"row": e.row, "column": e.column, "message": e.message}
+                            for e in errors
+                        ],
+                    }
+                )
+            else:
+                change_records = compute_diff(rows, descriptor, mode)
+                results.append(
+                    {
+                        "table_label": label,
+                        "display_name": descriptor.display_name,
+                        "creates": [r for r in change_records if r["operation"] == "create"],
+                        "updates": [r for r in change_records if r["operation"] == "update"],
+                        "deletes": [r for r in change_records if r["operation"] == "delete"],
+                        "errors": [],
+                        "_rows": rows,
+                        "_change_records": change_records,
+                    }
+                )
+
+    return results
+
+
+class ImportZipPreviewView(APIView):
+    """POST /api/v1/io/import/zip/preview/ — preview all tables in a ZIP (no writes)."""
+
+    def post(self, request: Request) -> Response:
+        serializer = ZipImportRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        mode: str = serializer.validated_data["mode"]
+        zip_file = serializer.validated_data["zip_file"]
+
+        results = _parse_zip_tables(zip_file, mode)
+        if not results:
+            return Response(
+                {"detail": "No recognized tables found in ZIP."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(TableImportPreviewSerializer(results, many=True).data)
+
+
+class ImportZipConfirmView(APIView):
+    """POST /api/v1/io/import/zip/confirm/ — apply all tables in a ZIP inside one transaction."""
+
+    def post(self, request: Request) -> Response:
+        from django.db import transaction
+
+        from data_io.registry import get_registry
+        from data_io.services.change_preview import apply_diff
+
+        serializer = ZipImportRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        mode: str = serializer.validated_data["mode"]
+        zip_file = serializer.validated_data["zip_file"]
+
+        results = _parse_zip_tables(zip_file, mode)
+        if not results:
+            return Response(
+                {"detail": "No recognized tables found in ZIP."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        any_errors = any(r["errors"] for r in results)
+        if any_errors:
+            return Response(
+                {"detail": "ZIP contains validation errors. Fix them before confirming."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        registry = get_registry()
+        confirm_results = []
+
+        with transaction.atomic():
+            for result in results:
+                label = result["table_label"]
+                descriptor = registry[label]
+                counts = apply_diff(result["_change_records"], descriptor, mode)
+                confirm_results.append(
+                    {
+                        "table_label": label,
+                        "display_name": result["display_name"],
+                        "created": counts["created"],
+                        "updated": counts["updated"],
+                        "deleted": counts["deleted"],
+                    }
+                )
+
+        return Response(TableImportConfirmSerializer(confirm_results, many=True).data)

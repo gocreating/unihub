@@ -82,3 +82,25 @@ class ImportConfirmResponseSerializer(serializers.Serializer):
     created = serializers.IntegerField()
     updated = serializers.IntegerField()
     deleted = serializers.IntegerField()
+
+
+class ZipImportRequestSerializer(serializers.Serializer):
+    zip_file = serializers.FileField()
+    mode = serializers.ChoiceField(choices=["upsert", "replace"])
+
+
+class TableImportPreviewSerializer(serializers.Serializer):
+    table_label = serializers.CharField()
+    display_name = serializers.CharField()
+    creates = ChangeRecordSerializer(many=True)
+    updates = ChangeRecordSerializer(many=True)
+    deletes = ChangeRecordSerializer(many=True)
+    errors = ValidationErrorSerializer(many=True)
+
+
+class TableImportConfirmSerializer(serializers.Serializer):
+    table_label = serializers.CharField()
+    display_name = serializers.CharField()
+    created = serializers.IntegerField()
+    updated = serializers.IntegerField()
+    deleted = serializers.IntegerField()

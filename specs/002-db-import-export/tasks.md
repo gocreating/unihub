@@ -19,9 +19,9 @@
 
 **Purpose**: Scaffold the `io` Django app and wire it into the project before any feature work begins.
 
-- [ ] T001 Create `io` app skeleton: `apps/unihub/backend/io/__init__.py`, `apps.py`, `urls.py`, `views.py`, `serializers.py`, `registry.py`, `migrations/__init__.py`, `services/__init__.py`, `services/csv_exporter.py`, `services/csv_importer.py`, `services/change_preview.py`, `tests/__init__.py`
-- [ ] T002 Add `'io'` to `INSTALLED_APPS` in `apps/unihub/backend/unihub/settings.py`
-- [ ] T003 Add `path("api/v1/io/", include("io.urls"))` to `apps/unihub/backend/unihub/urls.py`
+- [X] T001 Create `io` app skeleton: `apps/unihub/backend/io/__init__.py`, `apps.py`, `urls.py`, `views.py`, `serializers.py`, `registry.py`, `migrations/__init__.py`, `services/__init__.py`, `services/csv_exporter.py`, `services/csv_importer.py`, `services/change_preview.py`, `tests/__init__.py`
+- [X] T002 Add `'io'` to `INSTALLED_APPS` in `apps/unihub/backend/unihub/settings.py`
+- [X] T003 Add `path("api/v1/io/", include("io.urls"))` to `apps/unihub/backend/unihub/urls.py`
 
 ---
 
@@ -31,11 +31,11 @@
 
 **⚠️ CRITICAL**: Blocks all user story phases.
 
-- [ ] T004 Implement `FieldDescriptor` and `TableDescriptor` dataclasses, `register()`, `get_registry()`, and `get_table()` in `apps/unihub/backend/io/registry.py`
-- [ ] T005 [P] Write `apps/unihub/backend/io/tests/test_registry.py`: test `register()` succeeds, `get_table()` returns descriptor, duplicate registration raises, unknown table raises `KeyError`
-- [ ] T006 Register all Finance tables (`finance.currency`, `finance.account`, `finance.balancesheet`, `finance.exchangerate`, `finance.balance`) with correct `system_fields`, `has_user_attributes`, and `import_order` in `apps/unihub/backend/finance/apps.py` `FinanceConfig.ready()`
-- [ ] T007 [P] Register `core.attributedefinition` table in `apps/unihub/backend/core/apps.py` `CoreConfig.ready()`
-- [ ] T008 Implement all request/response DRF serializers in `apps/unihub/backend/io/serializers.py`: `FieldInfoSerializer`, `TableInfoSerializer`, `ExportRequestSerializer`, `ImportPreviewRequestSerializer`, `ChangeRecordSerializer`, `ValidationErrorSerializer`, `ImportPreviewResponseSerializer`, `ImportConfirmRequestSerializer`, `ImportConfirmResponseSerializer`
+- [X] T004 Implement `FieldDescriptor` and `TableDescriptor` dataclasses, `register()`, `get_registry()`, and `get_table()` in `apps/unihub/backend/io/registry.py`
+- [X] T005 [P] Write `apps/unihub/backend/io/tests/test_registry.py`: test `register()` succeeds, `get_table()` returns descriptor, duplicate registration raises, unknown table raises `KeyError`
+- [X] T006 Register all Finance tables (`finance.currency`, `finance.account`, `finance.balancesheet`, `finance.exchangerate`, `finance.balance`) with correct `system_fields`, `has_user_attributes`, and `import_order` in `apps/unihub/backend/finance/apps.py` `FinanceConfig.ready()`
+- [X] T007 [P] Register `core.attributedefinition` table in `apps/unihub/backend/core/apps.py` `CoreConfig.ready()`
+- [X] T008 Implement all request/response DRF serializers in `apps/unihub/backend/io/serializers.py`: `FieldInfoSerializer`, `TableInfoSerializer`, `ExportRequestSerializer`, `ImportPreviewRequestSerializer`, `ChangeRecordSerializer`, `ValidationErrorSerializer`, `ImportPreviewResponseSerializer`, `ImportConfirmRequestSerializer`, `ImportConfirmResponseSerializer`
 
 **Checkpoint**: Registry populated, serializers defined — user story phases can now begin.
 
@@ -49,21 +49,21 @@
 
 ### Backend
 
-- [ ] T009 Write `apps/unihub/backend/io/tests/test_csv_exporter.py`: test single-table CSV output (correct headers, correct rows), user-defined attribute columns included as `[name]:type`, empty table produces headers-only CSV, multi-table call produces valid ZIP with correct filenames
-- [ ] T010 Implement `apps/unihub/backend/io/services/csv_exporter.py`: `export_table(descriptor) → bytes` (CSV) and `export_tables(descriptors) → bytes` (ZIP); generates `{col}:{type}` and `[attr]:type` headers; fetches `AttributeValue` rows for `has_user_attributes=True` tables; serializes FK fields as PK strings
-- [ ] T011 Write `apps/unihub/backend/io/tests/test_views_export.py`: GET `/tables/` returns all registered tables; POST `/export/` single table returns CSV with correct `Content-Disposition`; multi-table returns ZIP; unknown `content_type_label` returns 400; unauthenticated request returns 403
-- [ ] T012 Implement `TablesView` (GET `/api/v1/io/tables/`) in `apps/unihub/backend/io/views.py`: returns `TableInfoSerializer` list for all registered tables, including dynamic `AttributeDefinition` fields for `has_user_attributes=True` tables
-- [ ] T013 Implement `ExportView` (POST `/api/v1/io/export/`) in `apps/unihub/backend/io/views.py`: validates `ExportRequestSerializer`; streams CSV or ZIP response; defaults `format` to `"csv"` for single table, `"zip"` for multiple
-- [ ] T014 Wire `TablesView` and `ExportView` routes in `apps/unihub/backend/io/urls.py`
+- [X] T009 Write `apps/unihub/backend/io/tests/test_csv_exporter.py`: test single-table CSV output (correct headers, correct rows), user-defined attribute columns included as `[name]:type`, empty table produces headers-only CSV, multi-table call produces valid ZIP with correct filenames
+- [X] T010 Implement `apps/unihub/backend/io/services/csv_exporter.py`: `export_table(descriptor) → bytes` (CSV) and `export_tables(descriptors) → bytes` (ZIP); generates `{col}:{type}` and `[attr]:type` headers; fetches `AttributeValue` rows for `has_user_attributes=True` tables; serializes FK fields as PK strings
+- [X] T011 Write `apps/unihub/backend/io/tests/test_views_export.py`: GET `/tables/` returns all registered tables; POST `/export/` single table returns CSV with correct `Content-Disposition`; multi-table returns ZIP; unknown `content_type_label` returns 400; unauthenticated request returns 403
+- [X] T012 Implement `TablesView` (GET `/api/v1/io/tables/`) in `apps/unihub/backend/io/views.py`: returns `TableInfoSerializer` list for all registered tables, including dynamic `AttributeDefinition` fields for `has_user_attributes=True` tables
+- [X] T013 Implement `ExportView` (POST `/api/v1/io/export/`) in `apps/unihub/backend/io/views.py`: validates `ExportRequestSerializer`; streams CSV or ZIP response; defaults `format` to `"csv"` for single table, `"zip"` for multiple
+- [X] T014 Wire `TablesView` and `ExportView` routes in `apps/unihub/backend/io/urls.py`
 
 ### Frontend
 
-- [ ] T015 Regenerate OpenAPI schema and frontend types: run `uv run python manage.py spectacular --color --file openapi.yaml` in `apps/unihub/backend/`, then `pnpm generate:types` in `apps/unihub/frontend/`
-- [ ] T016 Implement `listTables()` and `exportTables()` in `apps/unihub/frontend/src/services/unihub-backend/io.ts`; export barrel re-exports from `index.ts` and `types.ts`
-- [ ] T017 Implement `ImportExportDrawer` shell (open/close, tab bar for Export/Import) in `apps/unihub/frontend/src/components/ImportExport/index.tsx`; accept `contentTypeLabel`, `displayName`, `open`, `onClose` props
-- [ ] T018 Implement `ExportPanel` (table confirmed via prop, format selector, Download button using `URL.createObjectURL`, Copy to Clipboard button using `navigator.clipboard.writeText`) in `apps/unihub/frontend/src/components/ImportExport/ExportPanel.tsx`
-- [ ] T019 [P] Add `ImportExportDrawer` trigger button (toolbar) and drawer instance to `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` for `finance.account`
-- [ ] T020 [P] Add `ImportExportDrawer` trigger button (toolbar) and drawer instance to `apps/unihub/frontend/src/pages/finance/exchange-rates/index.tsx` for `finance.exchangerate`
+- [X] T015 Regenerate OpenAPI schema and frontend types: run `uv run python manage.py spectacular --color --file openapi.yaml` in `apps/unihub/backend/`, then `pnpm generate:types` in `apps/unihub/frontend/`
+- [X] T016 Implement `listTables()` and `exportTables()` in `apps/unihub/frontend/src/services/unihub-backend/io.ts`; export barrel re-exports from `index.ts` and `types.ts`
+- [X] T017 Implement `ImportExportDrawer` shell (open/close, tab bar for Export/Import) in `apps/unihub/frontend/src/components/ImportExport/index.tsx`; accept `contentTypeLabel`, `displayName`, `open`, `onClose` props
+- [X] T018 Implement `ExportPanel` (table confirmed via prop, format selector, Download button using `URL.createObjectURL`, Copy to Clipboard button using `navigator.clipboard.writeText`) in `apps/unihub/frontend/src/components/ImportExport/ExportPanel.tsx`
+- [X] T019 [P] Add `ImportExportDrawer` trigger button (toolbar) and drawer instance to `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` for `finance.account`
+- [X] T020 [P] Add `ImportExportDrawer` trigger button (toolbar) and drawer instance to `apps/unihub/frontend/src/pages/finance/exchange-rates/index.tsx` for `finance.exchangerate`
 
 **Checkpoint**: Export is fully functional end-to-end. User can download CSV and copy to clipboard from Finance pages.
 
@@ -77,20 +77,20 @@
 
 ### Backend
 
-- [ ] T021 Write `apps/unihub/backend/io/tests/test_csv_importer.py`: valid CSV parses correctly; header missing `:type` suffix returns `ValidationError`; column not in descriptor schema returns `ValidationError`; unknown FK value in row returns `ValidationError`; duplicate PKs within CSV returns `ValidationError`; empty CSV body (headers only) returns empty rows
-- [ ] T022 Implement `apps/unihub/backend/io/services/csv_importer.py`: `parse_csv(csv_text: str, descriptor: TableDescriptor) → tuple[list[ParsedRow], list[ValidationError]]`; validates header names and types against descriptor; parses each data row; validates FK existence; detects duplicate PKs
-- [ ] T023 Write `apps/unihub/backend/io/tests/test_change_preview.py`: new PK in CSV → ChangeRecord operation=create; existing PK with changed field → operation=update with correct `changed_fields`; existing PK with identical values → not included in output; upsert mode → no delete records regardless of rows absent from CSV
-- [ ] T024 Implement `compute_diff(parsed_rows, descriptor, mode) → list[ChangeRecord]` in `apps/unihub/backend/io/services/change_preview.py`: loads current DB rows keyed by PK; diffs against parsed rows; produces create/update records; in upsert mode, absent DB rows are not included
-- [ ] T025 Write preview endpoint tests in `apps/unihub/backend/io/tests/test_views_import.py`: POST `/import/preview/` happy path returns 200 with correct creates/updates lists; schema errors return 200 with non-empty `errors` and empty change lists; missing `table` or `mode` returns 400; `csv_text` and `csv_file` both absent returns 400
-- [ ] T026 Implement `ImportPreviewView` (POST `/api/v1/io/import/preview/`) in `apps/unihub/backend/io/views.py`: validates `ImportPreviewRequestSerializer`; calls `parse_csv` then `compute_diff`; returns `ImportPreviewResponseSerializer`; returns 200 even when `errors` is non-empty (no writes ever occur in this endpoint)
-- [ ] T027 Wire `ImportPreviewView` route in `apps/unihub/backend/io/urls.py`
+- [X] T021 Write `apps/unihub/backend/io/tests/test_csv_importer.py`: valid CSV parses correctly; header missing `:type` suffix returns `ValidationError`; column not in descriptor schema returns `ValidationError`; unknown FK value in row returns `ValidationError`; duplicate PKs within CSV returns `ValidationError`; empty CSV body (headers only) returns empty rows
+- [X] T022 Implement `apps/unihub/backend/io/services/csv_importer.py`: `parse_csv(csv_text: str, descriptor: TableDescriptor) → tuple[list[ParsedRow], list[ValidationError]]`; validates header names and types against descriptor; parses each data row; validates FK existence; detects duplicate PKs
+- [X] T023 Write `apps/unihub/backend/io/tests/test_change_preview.py`: new PK in CSV → ChangeRecord operation=create; existing PK with changed field → operation=update with correct `changed_fields`; existing PK with identical values → not included in output; upsert mode → no delete records regardless of rows absent from CSV
+- [X] T024 Implement `compute_diff(parsed_rows, descriptor, mode) → list[ChangeRecord]` in `apps/unihub/backend/io/services/change_preview.py`: loads current DB rows keyed by PK; diffs against parsed rows; produces create/update records; in upsert mode, absent DB rows are not included
+- [X] T025 Write preview endpoint tests in `apps/unihub/backend/io/tests/test_views_import.py`: POST `/import/preview/` happy path returns 200 with correct creates/updates lists; schema errors return 200 with non-empty `errors` and empty change lists; missing `table` or `mode` returns 400; `csv_text` and `csv_file` both absent returns 400
+- [X] T026 Implement `ImportPreviewView` (POST `/api/v1/io/import/preview/`) in `apps/unihub/backend/io/views.py`: validates `ImportPreviewRequestSerializer`; calls `parse_csv` then `compute_diff`; returns `ImportPreviewResponseSerializer`; returns 200 even when `errors` is non-empty (no writes ever occur in this endpoint)
+- [X] T027 Wire `ImportPreviewView` route in `apps/unihub/backend/io/urls.py`
 
 ### Frontend
 
-- [ ] T028 Add `importPreview()` function to `apps/unihub/frontend/src/services/unihub-backend/io.ts`
-- [ ] T029 Implement `ChangePreviewTable` (tabbed Ant Design `<Table>` inside drawer showing Creates / Updates / Errors tabs with row counts; `before`/`after` field diff for updates) in `apps/unihub/frontend/src/components/ImportExport/ChangePreviewTable.tsx`; use `<Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>` for empty cells
-- [ ] T030 Implement `ImportPanel` (mode selector, paste textarea, file upload `<input type="file" accept=".csv">` with `FileReader`, submit for preview, display `ChangePreviewTable` when preview data available) in `apps/unihub/frontend/src/components/ImportExport/ImportPanel.tsx`
-- [ ] T031 Wire `ImportPanel` into `ImportExportDrawer` tab in `apps/unihub/frontend/src/components/ImportExport/index.tsx`
+- [X] T028 Add `importPreview()` function to `apps/unihub/frontend/src/services/unihub-backend/io.ts`
+- [X] T029 Implement `ChangePreviewTable` (tabbed Ant Design `<Table>` inside drawer showing Creates / Updates / Errors tabs with row counts; `before`/`after` field diff for updates) in `apps/unihub/frontend/src/components/ImportExport/ChangePreviewTable.tsx`; use `<Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>` for empty cells
+- [X] T030 Implement `ImportPanel` (mode selector, paste textarea, file upload `<input type="file" accept=".csv">` with `FileReader`, submit for preview, display `ChangePreviewTable` when preview data available) in `apps/unihub/frontend/src/components/ImportExport/ImportPanel.tsx`
+- [X] T031 Wire `ImportPanel` into `ImportExportDrawer` tab in `apps/unihub/frontend/src/components/ImportExport/index.tsx`
 
 **Checkpoint**: Import preview is fully functional. Users see creates/updates diff before any writes.
 
@@ -104,16 +104,16 @@
 
 ### Backend
 
-- [ ] T032 Extend `apps/unihub/backend/io/tests/test_views_import.py` with upsert confirm tests: POST `/import/confirm/` with `mode=upsert` returns correct `created`/`updated` counts; rows absent from CSV remain in DB; `AttributeValue` rows are upserted alongside main model rows; confirming same CSV twice returns 0 creates and 0 updates (idempotent)
-- [ ] T033 Implement `apply_diff(change_records, descriptor, mode) → ApplyResult` in `apps/unihub/backend/io/services/change_preview.py`: uses `transaction.atomic`; for each CREATE calls `Model.objects.create()`; for each UPDATE calls `Model.objects.filter(pk=pk).update()`; for `has_user_attributes=True` tables, bulk-upserts `AttributeValue` records; returns `{created: int, updated: int, deleted: int}`
-- [ ] T034 Implement `ImportConfirmView` (POST `/api/v1/io/import/confirm/`) in `apps/unihub/backend/io/views.py`: identical request to preview; calls `parse_csv` → `compute_diff` → `apply_diff` inside one request; returns `ImportConfirmResponseSerializer`
-- [ ] T035 Wire `ImportConfirmView` route in `apps/unihub/backend/io/urls.py`
+- [X] T032 Extend `apps/unihub/backend/io/tests/test_views_import.py` with upsert confirm tests: POST `/import/confirm/` with `mode=upsert` returns correct `created`/`updated` counts; rows absent from CSV remain in DB; `AttributeValue` rows are upserted alongside main model rows; confirming same CSV twice returns 0 creates and 0 updates (idempotent)
+- [X] T033 Implement `apply_diff(change_records, descriptor, mode) → ApplyResult` in `apps/unihub/backend/io/services/change_preview.py`: uses `transaction.atomic`; for each CREATE calls `Model.objects.create()`; for each UPDATE calls `Model.objects.filter(pk=pk).update()`; for `has_user_attributes=True` tables, bulk-upserts `AttributeValue` records; returns `{created: int, updated: int, deleted: int}`
+- [X] T034 Implement `ImportConfirmView` (POST `/api/v1/io/import/confirm/`) in `apps/unihub/backend/io/views.py`: identical request to preview; calls `parse_csv` → `compute_diff` → `apply_diff` inside one request; returns `ImportConfirmResponseSerializer`
+- [X] T035 Wire `ImportConfirmView` route in `apps/unihub/backend/io/urls.py`
 
 ### Frontend
 
-- [ ] T036 Add `importConfirm()` function to `apps/unihub/frontend/src/services/unihub-backend/io.ts`
-- [ ] T037 Add Confirm and Cancel buttons below `ChangePreviewTable` in `apps/unihub/frontend/src/components/ImportExport/ImportPanel.tsx`; Confirm button disabled when `errors` is non-empty
-- [ ] T038 Handle confirm response in `apps/unihub/frontend/src/components/ImportExport/index.tsx`: show `message.success` with created/updated counts, close drawer, invalidate relevant React Query keys
+- [X] T036 Add `importConfirm()` function to `apps/unihub/frontend/src/services/unihub-backend/io.ts`
+- [X] T037 Add Confirm and Cancel buttons below `ChangePreviewTable` in `apps/unihub/frontend/src/components/ImportExport/ImportPanel.tsx`; Confirm button disabled when `errors` is non-empty
+- [X] T038 Handle confirm response in `apps/unihub/frontend/src/components/ImportExport/index.tsx`: show `message.success` with created/updated counts, close drawer, invalidate relevant React Query keys
 
 **Checkpoint**: Full upsert import flow works end-to-end. Export → modify → import → verify round-trip.
 
@@ -127,14 +127,14 @@
 
 ### Backend
 
-- [ ] T039 Extend `apps/unihub/backend/io/tests/test_views_import.py` with replace mode tests: preview returns non-empty `deletes` list for rows in DB not in CSV; confirm deletes those rows; upsert mode confirm never deletes; multi-field delete correctly reported in preview
-- [ ] T040 Extend `compute_diff()` in `apps/unihub/backend/io/services/change_preview.py` for replace mode: for each DB row whose PK is absent from the CSV, emit a ChangeRecord with `operation="delete"`
-- [ ] T041 Extend `apply_diff()` in `apps/unihub/backend/io/services/change_preview.py` for replace mode: within the existing `transaction.atomic`, delete rows whose PKs have `operation="delete"`
+- [X] T039 Extend `apps/unihub/backend/io/tests/test_views_import.py` with replace mode tests: preview returns non-empty `deletes` list for rows in DB not in CSV; confirm deletes those rows; upsert mode confirm never deletes; multi-field delete correctly reported in preview
+- [X] T040 Extend `compute_diff()` in `apps/unihub/backend/io/services/change_preview.py` for replace mode: for each DB row whose PK is absent from the CSV, emit a ChangeRecord with `operation="delete"`
+- [X] T041 Extend `apply_diff()` in `apps/unihub/backend/io/services/change_preview.py` for replace mode: within the existing `transaction.atomic`, delete rows whose PKs have `operation="delete"`
 
 ### Frontend
 
-- [ ] T042 Show DELETE tab and row count in `ChangePreviewTable` in `apps/unihub/frontend/src/components/ImportExport/ChangePreviewTable.tsx`; style DELETE rows distinctly (Ant Design `danger` color token)
-- [ ] T043 Show destructive warning (`Popconfirm` or `Modal.confirm`) when replace mode + `deletes.length > 0` before calling `importConfirm()` in `apps/unihub/frontend/src/components/ImportExport/ImportPanel.tsx`
+- [X] T042 Show DELETE tab and row count in `ChangePreviewTable` in `apps/unihub/frontend/src/components/ImportExport/ChangePreviewTable.tsx`; style DELETE rows distinctly (Ant Design `danger` color token)
+- [X] T043 Show destructive warning (`Popconfirm` or `Modal.confirm`) when replace mode + `deletes.length > 0` before calling `importConfirm()` in `apps/unihub/frontend/src/components/ImportExport/ImportPanel.tsx`
 
 **Checkpoint**: All four user stories are fully functional and independently testable.
 
@@ -142,9 +142,9 @@
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T044 [P] Regenerate final OpenAPI schema and types; update `apps/unihub/frontend/src/services/unihub-backend/index.ts` and `types.ts` barrel exports
-- [ ] T045 [P] Run backend quality loop from `apps/unihub/backend/`: `uv run ruff format .`, `uv run ruff check . --fix`, `uv run pytest` — fix all failures
-- [ ] T046 [P] Run frontend quality loop from `apps/unihub/frontend/`: `pnpm lint`, `pnpm typecheck`, `pnpm test` — fix all failures
+- [X] T044 [P] Regenerate final OpenAPI schema and types; update `apps/unihub/frontend/src/services/unihub-backend/index.ts` and `types.ts` barrel exports
+- [X] T045 [P] Run backend quality loop from `apps/unihub/backend/`: `uv run ruff format .`, `uv run ruff check . --fix`, `uv run pytest` — fix all failures
+- [X] T046 [P] Run frontend quality loop from `apps/unihub/frontend/`: `pnpm lint`, `pnpm typecheck`, `pnpm test` — fix all failures
 - [ ] T047 Execute round-trip smoke test from `quickstart.md`: export `finance.currency` → add one row → import preview (verify 1 create, 0 errors) → import confirm → export again → verify new row present
 
 ---

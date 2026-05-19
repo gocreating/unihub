@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, DatePicker, Form, Input, Modal, Select, Space, Tag, Tooltip, Typography, message } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
+import { ImportExportDrawer } from '@/components/ImportExport';
 import type { Account } from '@/services/unihub-backend/finance';
 import {
   createAccount,
@@ -31,6 +32,7 @@ export function AccountsPage() {
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
   const [modalOpen, setModalOpen] = useState(false);
+  const [ioDrawerOpen, setIoDrawerOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [form] = Form.useForm<AccountFormValues>();
 
@@ -187,15 +189,28 @@ export function AccountsPage() {
       <PageTable<Account>
         pageTitle={t({ id: 'pages.finance.accounts.title' })}
         action={
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            {t({ id: 'pages.finance.accounts.new' })}
-          </Button>
+          <Space>
+            <Button icon={<ImportOutlined />} onClick={() => setIoDrawerOpen(true)}>
+              Import / Export
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              {t({ id: 'pages.finance.accounts.new' })}
+            </Button>
+          </Space>
         }
         rowKey="id"
         columns={columns}
         dataSource={accounts}
         loading={isLoading}
         scroll={{ x: computeScrollX(columns) }}
+      />
+
+      <ImportExportDrawer
+        open={ioDrawerOpen}
+        onClose={() => setIoDrawerOpen(false)}
+        contentTypeLabel="finance.account"
+        displayName="Accounts"
+        invalidateKeys={[['finance', 'accounts']]}
       />
 
       <Modal

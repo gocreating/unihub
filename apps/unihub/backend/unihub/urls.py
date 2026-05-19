@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/v1/auth/me/", me_view),
     path("api/v1/health/", include("health.urls")),
     path("api/v1/core/", include("core.urls")),
+    path("api/v1/io/", include("data_io.urls")),
     path("api/v1/finance/", include("finance.urls")),
     path("api/visiting/", include("visiting.urls")),
     path("api/language/", include("language.urls")),

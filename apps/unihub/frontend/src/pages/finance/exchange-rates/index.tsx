@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, DatePicker, Form, Input, Modal, Select, Space, Tag, message } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
+import { ImportExportDrawer } from '@/components/ImportExport';
 import type { ExchangeRate } from '@/services/unihub-backend/finance';
 import {
   createExchangeRate,
@@ -19,6 +20,7 @@ export function ExchangeRatesPage() {
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
   const [modalOpen, setModalOpen] = useState(false);
+  const [ioDrawerOpen, setIoDrawerOpen] = useState(false);
   const [editingRate, setEditingRate] = useState<ExchangeRate | null>(null);
   const [form] = Form.useForm();
 
@@ -156,15 +158,28 @@ export function ExchangeRatesPage() {
       <PageTable<ExchangeRate>
         pageTitle={t({ id: 'pages.finance.exchangeRates.title' })}
         action={
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            {t({ id: 'pages.finance.exchangeRates.new' })}
-          </Button>
+          <Space>
+            <Button icon={<ImportOutlined />} onClick={() => setIoDrawerOpen(true)}>
+              Import / Export
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              {t({ id: 'pages.finance.exchangeRates.new' })}
+            </Button>
+          </Space>
         }
         rowKey="id"
         columns={columns}
         dataSource={rates}
         loading={isLoading}
         scroll={{ x: computeScrollX(columns) }}
+      />
+
+      <ImportExportDrawer
+        open={ioDrawerOpen}
+        onClose={() => setIoDrawerOpen(false)}
+        contentTypeLabel="finance.exchangerate"
+        displayName="Exchange Rates"
+        invalidateKeys={[['finance', 'exchange-rates']]}
       />
 
       <Modal

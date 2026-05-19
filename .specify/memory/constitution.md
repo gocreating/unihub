@@ -1,10 +1,10 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.5.0 → 1.6.0 (minor — Principle VI expanded with mandatory empty-cell
-  display convention: null/empty values MUST show styled placeholder text)
+Version change: 1.7.0 → 1.7.1 (patch — Principle VI empty-cell rule refined: placeholder
+  text MUST be non-selectable via user-select: none to signal intentional absence)
 Modified principles:
-  - Principle VI: UI/UX Reference — added empty-cell display rule
+  - Principle VI: UI/UX Reference — empty-cell display: added non-selectable requirement
 Added sections: none
 Removed sections: none
 Templates requiring updates:
@@ -176,10 +176,22 @@ reference implementation to follow.
 - **Empty cell display**: Every table cell or detail-view field whose value is
   absent (null, undefined, or empty string) MUST display a visually distinct
   placeholder rather than leaving the cell blank or rendering raw `null`. The
-  canonical implementation is `<Typography.Text type="secondary">—</Typography.Text>`.
-  The placeholder text MUST be styled with a muted/disabled color to distinguish
-  it from real data at a glance. Rendering nothing, a blank string, or the
-  literal string `"null"` or `"undefined"` is a constitution violation.
+  canonical implementation is:
+  `<Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>`.
+  Two requirements are non-negotiable: (1) the placeholder MUST be styled with a
+  muted/disabled color (`type="secondary"`) to distinguish it from real data, and
+  (2) it MUST be non-selectable (`userSelect: 'none'`) so users cannot accidentally
+  copy it and to signal that the absence is intentional, not an error. Rendering
+  nothing, a blank string, or the literal string `"null"` or `"undefined"` is a
+  constitution violation.
+- **Foreign-key value display**: Any table cell or detail-view field that renders
+  a value sourced from a related/foreign record (e.g., a currency code that
+  resolves to a Currency entity, a category resolved from a Categories table)
+  MUST be wrapped in Ant Design `<Tag>` to visually distinguish it from
+  free-form text fields. No additional color or styling is required beyond the
+  default `<Tag>` appearance; the goal is to make relational references
+  scannable at a glance. Example: currency columns in the Finance Exchange Rates
+  page MUST render `<Tag>{currency}</Tag>` rather than a plain string.
 
 **Rationale**: Maintaining a living reference implementation prevents UI drift
 and reduces design decisions to a lookup rather than a debate. ov-fleet is
@@ -187,7 +199,9 @@ actively maintained on the same stack and represents the desired UX baseline.
 Relative timestamps reduce cognitive load — users should never need to calculate
 "how long ago" from a raw date string. Styled empty-cell placeholders prevent
 layout collapse and signal intentional absence of data, reducing confusion when
-users scan sparse tables.
+users scan sparse tables. Tag-wrapped foreign-key values give users an instant
+visual cue that the field is a reference to another record rather than arbitrary
+text, improving scannability across data-dense tables.
 
 ### VII. PageTable Layout — NON-NEGOTIABLE
 
@@ -293,4 +307,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.6.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-19
+**Version**: 1.7.1 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-19

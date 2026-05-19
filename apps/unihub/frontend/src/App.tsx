@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { ConfigProvider, Spin } from 'antd';
 import enUS from 'antd/locale/en_US';
 import zhTW from 'antd/locale/zh_TW';
@@ -15,6 +14,7 @@ import { DashboardPage } from '@/pages/dashboard/index';
 import { AccountsPage } from '@/pages/finance/accounts/index';
 import { BalanceSheetsPage } from '@/pages/finance/balance-sheets/index';
 import { BalanceSheetDetailPage } from '@/pages/finance/balance-sheets/detail';
+import { BalanceSheetEditPage } from '@/pages/finance/balance-sheets/edit';
 import { BalanceSheetNewPage } from '@/pages/finance/balance-sheets/new';
 import { CurrenciesPage } from '@/pages/finance/currencies/index';
 import { ExchangeRatesPage } from '@/pages/finance/exchange-rates/index';
@@ -70,6 +70,7 @@ function AppRoutes() {
                 <Route path="/finance/accounts" element={<AccountsPage />} />
                 <Route path="/finance/balance-sheets" element={<BalanceSheetsPage />} />
                 <Route path="/finance/balance-sheets/new" element={<BalanceSheetNewPage />} />
+                <Route path="/finance/balance-sheets/:id/edit" element={<BalanceSheetEditPage />} />
                 <Route path="/finance/balance-sheets/:id" element={<BalanceSheetDetailPage />} />
                 <Route path="/finance/exchange-rates" element={<ExchangeRatesPage />} />
                 <Route path="/language" element={<LanguagePage />} />
@@ -89,9 +90,8 @@ function LocaleAwareProviders({ children }: { children: React.ReactNode }) {
   const antdLocale = locale === 'zh-TW' ? zhTW : enUS;
   const messages = locale === 'zh-TW' ? zhTWMessages : enUSMessages;
 
-  useEffect(() => {
-    dayjs.locale(locale === 'zh-TW' ? 'zh-tw' : 'en');
-  }, [locale]);
+  // Synchronous — must be set before children render so fromNow() uses the correct locale
+  dayjs.locale(locale === 'zh-TW' ? 'zh-tw' : 'en');
 
   return (
     <IntlProvider locale={locale} messages={messages}>

@@ -27,7 +27,7 @@ export default {
   'common.save': 'Save',
   'common.name': 'Name',
   'common.currency': 'Currency',
-  'common.date': 'Date',
+  'common.date': 'Time',
 
   // Finance — Currencies
   'pages.finance.currencies.search': 'Search currencies…',
@@ -66,18 +66,19 @@ export default {
   'pages.finance.accounts.createError': 'Failed to create account.',
   'pages.finance.accounts.updateError': 'Failed to update account.',
   'pages.finance.accounts.deleteError': 'Failed to delete account.',
-  'pages.finance.accounts.col.openDatetime': 'Open Date',
-  'pages.finance.accounts.col.closeDatetime': 'Close Date',
+  'pages.finance.accounts.col.openDatetime': 'Open Time',
+  'pages.finance.accounts.col.closeDatetime': 'Close Time',
   'pages.finance.accounts.form.currencyPlaceholder': 'Select currency',
-  'pages.finance.accounts.form.openDatetime': 'Open Date',
-  'pages.finance.accounts.form.closeDatetime': 'Close Date',
+  'pages.finance.accounts.form.openDatetime': 'Open Time',
+  'pages.finance.accounts.form.closeDatetime': 'Close Time',
 
   // Finance — Balance Sheets
   'pages.finance.balanceSheets.title': 'Balance Sheets',
   'pages.finance.balanceSheets.new': 'New Balance Sheet',
-  'pages.finance.balanceSheets.new.datePrompt': 'Select a date and time to see available accounts',
+  'pages.finance.balanceSheets.new.datePrompt': 'Select a time to see available accounts',
   'pages.finance.balanceSheets.new.submit': 'Create Balance Sheet',
   'pages.finance.balanceSheets.edit': 'Edit Balance Sheet',
+  'pages.finance.balanceSheets.edit.submit': 'Save Changes',
   'pages.finance.balanceSheets.delete.title': 'Delete Balance Sheet',
   'pages.finance.balanceSheets.delete.confirm': 'This will delete all balances in this sheet. Continue?',
   'pages.finance.balanceSheets.created': 'Balance sheet created.',
@@ -86,7 +87,7 @@ export default {
   'pages.finance.balanceSheets.createError': 'Failed to create balance sheet.',
   'pages.finance.balanceSheets.updateError': 'Failed to update balance sheet.',
   'pages.finance.balanceSheets.deleteError': 'Failed to delete balance sheet.',
-  'pages.finance.balanceSheets.form.dateTime': 'Date & Time',
+  'pages.finance.balanceSheets.form.dateTime': 'Time',
 
   // Finance — Balance Sheet Detail
   'pages.finance.balanceSheets.detail.back': 'Back to Balance Sheets',
@@ -124,7 +125,7 @@ export default {
   'pages.finance.exchangeRates.form.quoteCurrency': 'Quote Currency',
   'pages.finance.exchangeRates.form.rate': 'Rate (1 base = ? quote)',
   'pages.finance.exchangeRates.form.ratePattern': 'Enter a positive decimal number',
-  'pages.finance.exchangeRates.form.date': 'Effective Date & Time',
+  'pages.finance.exchangeRates.form.date': 'Effective Time',
   'pages.finance.exchangeRates.form.basePlaceholder': 'Select base currency',
   'pages.finance.exchangeRates.form.quotePlaceholder': 'Select quote currency',
 };

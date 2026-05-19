@@ -43,9 +43,9 @@ export function AppShell({ children }: AppShellProps) {
         icon: <DollarOutlined />,
         routes: [
           { path: '/finance/currencies', name: t({ id: 'menu.finance.currencies' }) },
+          { path: '/finance/exchange-rates', name: t({ id: 'menu.finance.exchangeRates' }) },
           { path: '/finance/accounts', name: t({ id: 'menu.finance.accounts' }) },
           { path: '/finance/balance-sheets', name: t({ id: 'menu.finance.balanceSheets' }) },
-          { path: '/finance/exchange-rates', name: t({ id: 'menu.finance.exchangeRates' }) },
         ],
       },
       { path: '/language', name: t({ id: 'menu.language' }), icon: <ReadOutlined /> },

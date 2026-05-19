@@ -90,7 +90,7 @@ export function CurrenciesPage() {
         dataIndex: 'symbol',
         ...widthForHeader('Symbol'),
         render: (val) =>
-          val ? String(val) : <Typography.Text type="secondary">—</Typography.Text>,
+          val ? String(val) : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
       },
       {
         title: t({ id: 'common.actions' }),

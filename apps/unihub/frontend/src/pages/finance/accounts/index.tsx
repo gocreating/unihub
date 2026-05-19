@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, DatePicker, Form, Input, Modal, Select, Space, Tooltip, Typography, message } from 'antd';
+import { Button, DatePicker, Form, Input, Modal, Select, Space, Tag, Tooltip, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -135,18 +135,17 @@ export function AccountsPage() {
   const columns: ProColumns<Account>[] = useMemo(
     () => [
       { title: t({ id: 'common.name' }), dataIndex: 'name', ...widthForHeader('Name'), sorter: true },
-      { title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency'), sorter: true },
+      { title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency'), sorter: true, render: (val) => <Tag>{val as string}</Tag> },
       {
         title: t({ id: 'pages.finance.accounts.col.openDatetime' }),
         dataIndex: 'open_datetime',
         ...widthForHeader('Open Date', 220),
         sorter: true,
-        render: (val) => {
-          const str = val as string | null;
-          const formatted = formatDateRelative(str);
+        render: (_, record) => {
+          const formatted = formatDateRelative(record.open_datetime);
           return formatted
-            ? <Tooltip title={dayjs(str!).format('YYYY-MM-DD HH:mm:ss')}>{formatted}</Tooltip>
-            : <Typography.Text type="secondary">—</Typography.Text>;
+            ? <Tooltip title={dayjs(record.open_datetime!).format('YYYY-MM-DD HH:mm:ss')}>{formatted}</Tooltip>
+            : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
         },
       },
       {
@@ -154,12 +153,11 @@ export function AccountsPage() {
         dataIndex: 'close_datetime',
         ...widthForHeader('Close Date', 220),
         sorter: true,
-        render: (val) => {
-          const str = val as string | null;
-          const formatted = formatDateRelative(str);
+        render: (_, record) => {
+          const formatted = formatDateRelative(record.close_datetime);
           return formatted
-            ? <Tooltip title={dayjs(str!).format('YYYY-MM-DD HH:mm:ss')}>{formatted}</Tooltip>
-            : <Typography.Text type="secondary">—</Typography.Text>;
+            ? <Tooltip title={dayjs(record.close_datetime!).format('YYYY-MM-DD HH:mm:ss')}>{formatted}</Tooltip>
+            : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
         },
       },
       {

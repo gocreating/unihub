@@ -27,7 +27,7 @@ export default {
   'common.save': '儲存',
   'common.name': '名稱',
   'common.currency': '貨幣',
-  'common.date': '日期',
+  'common.date': '時間',
 
   // Finance — Currencies
   'pages.finance.currencies.search': '搜尋貨幣…',
@@ -66,18 +66,19 @@ export default {
   'pages.finance.accounts.createError': '建立帳戶失敗。',
   'pages.finance.accounts.updateError': '更新帳戶失敗。',
   'pages.finance.accounts.deleteError': '刪除帳戶失敗。',
-  'pages.finance.accounts.col.openDatetime': '開設日期',
-  'pages.finance.accounts.col.closeDatetime': '關閉日期',
+  'pages.finance.accounts.col.openDatetime': '開設時間',
+  'pages.finance.accounts.col.closeDatetime': '關閉時間',
   'pages.finance.accounts.form.currencyPlaceholder': '選擇貨幣',
-  'pages.finance.accounts.form.openDatetime': '開設日期',
-  'pages.finance.accounts.form.closeDatetime': '關閉日期',
+  'pages.finance.accounts.form.openDatetime': '開設時間',
+  'pages.finance.accounts.form.closeDatetime': '關閉時間',
 
   // Finance — Balance Sheets
   'pages.finance.balanceSheets.title': '資產負債表',
   'pages.finance.balanceSheets.new': '新增資產負債表',
-  'pages.finance.balanceSheets.new.datePrompt': '選擇日期與時間以查看可用帳戶',
+  'pages.finance.balanceSheets.new.datePrompt': '選擇時間以查看可用帳戶',
   'pages.finance.balanceSheets.new.submit': '建立資產負債表',
   'pages.finance.balanceSheets.edit': '編輯資產負債表',
+  'pages.finance.balanceSheets.edit.submit': '儲存變更',
   'pages.finance.balanceSheets.delete.title': '刪除資產負債表',
   'pages.finance.balanceSheets.delete.confirm': '這將刪除此表中的所有餘額，確定繼續？',
   'pages.finance.balanceSheets.created': '資產負債表已建立。',
@@ -86,7 +87,7 @@ export default {
   'pages.finance.balanceSheets.createError': '建立資產負債表失敗。',
   'pages.finance.balanceSheets.updateError': '更新資產負債表失敗。',
   'pages.finance.balanceSheets.deleteError': '刪除資產負債表失敗。',
-  'pages.finance.balanceSheets.form.dateTime': '日期與時間',
+  'pages.finance.balanceSheets.form.dateTime': '時間',
 
   // Finance — Balance Sheet Detail
   'pages.finance.balanceSheets.detail.back': '返回資產負債表',
@@ -124,7 +125,7 @@ export default {
   'pages.finance.exchangeRates.form.quoteCurrency': '報價貨幣',
   'pages.finance.exchangeRates.form.rate': '匯率（1 基準 = ? 報價）',
   'pages.finance.exchangeRates.form.ratePattern': '請輸入正數',
-  'pages.finance.exchangeRates.form.date': '生效日期與時間',
+  'pages.finance.exchangeRates.form.date': '生效時間',
   'pages.finance.exchangeRates.form.basePlaceholder': '選擇基準貨幣',
   'pages.finance.exchangeRates.form.quotePlaceholder': '選擇報價貨幣',
 };

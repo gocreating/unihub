@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, DatePicker, Form, Input, Modal, Select, Space, message } from 'antd';
+import { Button, DatePicker, Form, Input, Modal, Select, Space, Tag, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -101,8 +101,8 @@ export function ExchangeRatesPage() {
 
   const columns: ProColumns<ExchangeRate>[] = useMemo(
     () => [
-      { title: t({ id: 'pages.finance.exchangeRates.col.base' }), dataIndex: 'base_currency', ...widthForHeader('Base') },
-      { title: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataIndex: 'quote_currency', ...widthForHeader('Quote') },
+      { title: t({ id: 'pages.finance.exchangeRates.col.base' }), dataIndex: 'base_currency', ...widthForHeader('Base'), render: (val) => <Tag>{val as string}</Tag> },
+      { title: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataIndex: 'quote_currency', ...widthForHeader('Quote'), render: (val) => <Tag>{val as string}</Tag> },
       {
         title: t({ id: 'pages.finance.exchangeRates.col.rate' }),
         dataIndex: 'rate',

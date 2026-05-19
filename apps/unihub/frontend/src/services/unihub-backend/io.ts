@@ -44,6 +44,13 @@ export interface ImportConfirmResponse {
   deleted: number;
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────
+
+function getCsrfToken(): string {
+  const match = document.cookie.match(/csrftoken=([^;]+)/);
+  return match?.[1] ?? '';
+}
+
 // ── API calls ────────────────────────────────────────────────────────
 
 export async function listTables(): Promise<TableInfo[]> {
@@ -58,7 +65,7 @@ export async function exportTables(tables: string[]): Promise<Blob> {
   const resp = await fetch(`${API_BASE_URL}/api/v1/io/export/`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
     body: JSON.stringify({ tables }),
   });
   if (!resp.ok) throw new Error(`exportTables failed: ${resp.status}`);
@@ -74,7 +81,10 @@ export async function importPreview(
   const resp = await fetch(`${API_BASE_URL}/api/v1/io/import/preview/`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': getCsrfToken(),
+    },
     body: body.toString(),
   });
   if (!resp.ok) throw new Error(`importPreview failed: ${resp.status}`);
@@ -90,7 +100,10 @@ export async function importConfirm(
   const resp = await fetch(`${API_BASE_URL}/api/v1/io/import/confirm/`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': getCsrfToken(),
+    },
     body: body.toString(),
   });
   if (!resp.ok) throw new Error(`importConfirm failed: ${resp.status}`);

@@ -33,6 +33,25 @@ fi
 echo "Running migrations..."
 python manage.py migrate --noinput
 
+# Auto-create superuser when DJANGO_SUPERUSER_PASSWORD is set and no superuser exists.
+# Set DJANGO_SUPERUSER_USERNAME / DJANGO_SUPERUSER_EMAIL / DJANGO_SUPERUSER_PASSWORD
+# in your environment or docker-compose file.
+if [ -n "$DJANGO_SUPERUSER_PASSWORD" ]; then
+    python manage.py shell -c "
+from django.contrib.auth.models import User
+import os
+if not User.objects.filter(is_superuser=True).exists():
+    User.objects.create_superuser(
+        username=os.environ.get('DJANGO_SUPERUSER_USERNAME', 'admin'),
+        email=os.environ.get('DJANGO_SUPERUSER_EMAIL', ''),
+        password=os.environ['DJANGO_SUPERUSER_PASSWORD'],
+    )
+    print('Superuser created.')
+else:
+    print('Superuser already exists, skipping.')
+"
+fi
+
 echo "Starting gunicorn..."
 exec gunicorn unihub.wsgi:application \
     --bind 0.0.0.0:8000 \

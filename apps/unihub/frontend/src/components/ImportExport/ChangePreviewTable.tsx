@@ -1,5 +1,6 @@
 import { Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useIntl } from 'react-intl';
 import type { ChangeRecord, ValidationError } from '@/services/unihub-backend/io';
 
 const { Text } = Typography;
@@ -21,7 +22,8 @@ function columnsFromRecord(records: ChangeRecord[]): string[] {
 }
 
 function CreateTable({ records }: { records: ChangeRecord[] }) {
-  if (records.length === 0) return <Text type="secondary">No rows to create.</Text>;
+  const { formatMessage: t } = useIntl();
+  if (records.length === 0) return <Text type="secondary">{t({ id: 'pages.io.preview.create.empty' })}</Text>;
   const cols = columnsFromRecord(records);
   const columns: ColumnsType<ChangeRecord> = cols.map((col) => ({
     title: col,
@@ -42,16 +44,17 @@ function CreateTable({ records }: { records: ChangeRecord[] }) {
 }
 
 function UpdateTable({ records }: { records: ChangeRecord[] }) {
-  if (records.length === 0) return <Text type="secondary">No rows to update.</Text>;
+  const { formatMessage: t } = useIntl();
+  if (records.length === 0) return <Text type="secondary">{t({ id: 'pages.io.preview.update.empty' })}</Text>;
   const columns: ColumnsType<ChangeRecord> = [
     {
-      title: 'PK',
+      title: t({ id: 'pages.io.preview.col.pk' }),
       dataIndex: 'pk',
       key: 'pk',
       width: 120,
     },
     {
-      title: 'Changed Fields',
+      title: t({ id: 'pages.io.preview.col.changedFields' }),
       key: 'changes',
       render: (_, record) =>
         record.changed_fields.map((f) => (
@@ -77,7 +80,8 @@ function UpdateTable({ records }: { records: ChangeRecord[] }) {
 }
 
 function DeleteTable({ records }: { records: ChangeRecord[] }) {
-  if (records.length === 0) return <Text type="secondary">No rows to delete.</Text>;
+  const { formatMessage: t } = useIntl();
+  if (records.length === 0) return <Text type="secondary">{t({ id: 'pages.io.preview.delete.empty' })}</Text>;
   const cols = columnsFromRecord(records);
   const columns: ColumnsType<ChangeRecord> = cols.map((col) => ({
     title: col,
@@ -99,12 +103,15 @@ function DeleteTable({ records }: { records: ChangeRecord[] }) {
 }
 
 function ErrorList({ errors }: { errors: ValidationError[] }) {
+  const { formatMessage: t } = useIntl();
   return (
     <ul style={{ paddingLeft: 16 }}>
       {errors.map((e, i) => (
         <li key={i}>
           <Text type="danger">
-            {e.row > 0 ? `Row ${e.row}` : 'Header'}
+            {e.row > 0
+              ? t({ id: 'pages.io.preview.error.row' }, { row: e.row })
+              : t({ id: 'pages.io.preview.error.header' })}
             {e.column ? ` (${e.column})` : ''}: {e.message}
           </Text>
         </li>
@@ -114,12 +121,15 @@ function ErrorList({ errors }: { errors: ValidationError[] }) {
 }
 
 export function ChangePreviewTable({ creates, updates, deletes, errors }: ChangePreviewTableProps) {
+  const { formatMessage: t } = useIntl();
+
   const items = [
     {
       key: 'creates',
       label: (
         <span>
-          <Tag color="green">{creates.length}</Tag>Create
+          <Tag color="green">{creates.length}</Tag>
+          {t({ id: 'pages.io.preview.tab.create' })}
         </span>
       ),
       children: <CreateTable records={creates} />,
@@ -128,7 +138,8 @@ export function ChangePreviewTable({ creates, updates, deletes, errors }: Change
       key: 'updates',
       label: (
         <span>
-          <Tag color="orange">{updates.length}</Tag>Update
+          <Tag color="orange">{updates.length}</Tag>
+          {t({ id: 'pages.io.preview.tab.update' })}
         </span>
       ),
       children: <UpdateTable records={updates} />,
@@ -137,19 +148,11 @@ export function ChangePreviewTable({ creates, updates, deletes, errors }: Change
       key: 'deletes',
       label: (
         <span>
-          <Tag color="red">{deletes.length}</Tag>Delete
+          <Tag color="red">{deletes.length}</Tag>
+          {t({ id: 'pages.io.preview.tab.delete' })}
         </span>
       ),
-      children: (
-        <>
-          {deletes.length > 0 && (
-            <Text type="danger" style={{ display: 'block', marginBottom: 8 }}>
-              Warning: these rows will be permanently deleted.
-            </Text>
-          )}
-          <DeleteTable records={deletes} />
-        </>
-      ),
+      children: <DeleteTable records={deletes} />,
     },
     ...(errors.length > 0
       ? [
@@ -157,7 +160,8 @@ export function ChangePreviewTable({ creates, updates, deletes, errors }: Change
             key: 'errors',
             label: (
               <span>
-                <Tag color="red">{errors.length}</Tag>Errors
+                <Tag color="red">{errors.length}</Tag>
+                {t({ id: 'pages.io.preview.tab.errors' })}
               </span>
             ),
             children: <ErrorList errors={errors} />,
@@ -167,13 +171,15 @@ export function ChangePreviewTable({ creates, updates, deletes, errors }: Change
   ];
 
   const defaultKey =
-    errors.length > 0
-      ? 'errors'
-      : creates.length > 0
-        ? 'creates'
-        : updates.length > 0
-          ? 'updates'
-          : 'deletes';
+    creates.length > 0
+      ? 'creates'
+      : updates.length > 0
+        ? 'updates'
+        : deletes.length > 0
+          ? 'deletes'
+          : errors.length > 0
+            ? 'errors'
+            : 'creates';
 
   return <Tabs defaultActiveKey={defaultKey} items={items} size="small" />;
 }

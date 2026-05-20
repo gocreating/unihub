@@ -6,6 +6,7 @@ import {
   DollarOutlined,
   LogoutOutlined,
   ReadOutlined,
+  SettingOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -52,7 +53,14 @@ export function AppShell({ children }: AppShellProps) {
       { path: '/language', name: t({ id: 'menu.language' }), icon: <ReadOutlined /> },
       { path: '/people', name: t({ id: 'menu.people' }), icon: <TeamOutlined /> },
       { path: '/music', name: t({ id: 'menu.music' }), icon: <CustomerServiceOutlined /> },
-      { path: '/io', name: 'Import / Export', icon: <DatabaseOutlined /> },
+      {
+        path: '/system',
+        name: t({ id: 'menu.system' }),
+        icon: <SettingOutlined />,
+        routes: [
+          { path: '/system/io', name: t({ id: 'menu.system.io' }), icon: <DatabaseOutlined /> },
+        ],
+      },
     ],
   };
 

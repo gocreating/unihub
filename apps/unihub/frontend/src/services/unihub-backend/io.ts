@@ -44,23 +44,6 @@ export interface ImportConfirmResponse {
   deleted: number;
 }
 
-export interface ZipTablePreviewResult {
-  table_label: string;
-  display_name: string;
-  creates: ChangeRecord[];
-  updates: ChangeRecord[];
-  deletes: ChangeRecord[];
-  errors: ValidationError[];
-}
-
-export interface ZipTableConfirmResult {
-  table_label: string;
-  display_name: string;
-  created: number;
-  updated: number;
-  deleted: number;
-}
-
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function getCsrfToken(): string {
@@ -125,38 +108,4 @@ export async function importConfirm(
   });
   if (!resp.ok) throw new Error(`importConfirm failed: ${resp.status}`);
   return resp.json() as Promise<ImportConfirmResponse>;
-}
-
-export async function importZipPreview(
-  zipFile: File,
-  mode: 'upsert' | 'replace',
-): Promise<ZipTablePreviewResult[]> {
-  const body = new FormData();
-  body.append('zip_file', zipFile);
-  body.append('mode', mode);
-  const resp = await fetch(`${API_BASE_URL}/api/v1/io/import/zip/preview/`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'X-CSRFToken': getCsrfToken() },
-    body,
-  });
-  if (!resp.ok) throw new Error(`importZipPreview failed: ${resp.status}`);
-  return resp.json() as Promise<ZipTablePreviewResult[]>;
-}
-
-export async function importZipConfirm(
-  zipFile: File,
-  mode: 'upsert' | 'replace',
-): Promise<ZipTableConfirmResult[]> {
-  const body = new FormData();
-  body.append('zip_file', zipFile);
-  body.append('mode', mode);
-  const resp = await fetch(`${API_BASE_URL}/api/v1/io/import/zip/confirm/`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'X-CSRFToken': getCsrfToken() },
-    body,
-  });
-  if (!resp.ok) throw new Error(`importZipConfirm failed: ${resp.status}`);
-  return resp.json() as Promise<ZipTableConfirmResult[]>;
 }

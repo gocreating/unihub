@@ -7,5 +7,7 @@ export default {
   'menu.language': 'Language',
   'menu.people': 'People',
   'menu.music': 'Music',
+  'menu.system': 'System',
+  'menu.system.io': 'Data Migration',
   'menu.account.signOut': 'Sign Out',
 };

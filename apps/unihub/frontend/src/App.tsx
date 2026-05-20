@@ -77,7 +77,7 @@ function AppRoutes() {
                 <Route path="/language" element={<LanguagePage />} />
                 <Route path="/people" element={<PeoplePage />} />
                 <Route path="/music" element={<MusicPage />} />
-                <Route path="/io" element={<IoPage />} />
+                <Route path="/system/io" element={<IoPage />} />
               </Routes>
             </AppShell>
           </AuthGuard>

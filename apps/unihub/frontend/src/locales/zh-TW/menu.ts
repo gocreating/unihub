@@ -7,5 +7,7 @@ export default {
   'menu.language': '語言學習',
   'menu.people': '人際關係',
   'menu.music': '音樂',
+  'menu.system': '系統',
+  'menu.system.io': '資料遷移',
   'menu.account.signOut': '登出',
 };

@@ -162,9 +162,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `002-db-import-export` | **Plan**: [specs/002-db-import-export/plan.md](specs/002-db-import-export/plan.md)
+**Branch**: `003-legacy-data-migration` | **Plan**: [specs/003-legacy-data-migration/plan.md](specs/003-legacy-data-migration/plan.md)
 
-Infrastructure-level import/export for all domain tables — CSV/ZIP export, upsert/replace import, clipboard and file sourcing, change preview. New `io` Django app + shared `<ImportExportDrawer>` frontend component. See plan for registry design, API contracts, and data model.
+One-off Python script (`data_migration/migrate.py`) that converts legacy finance CSVs into unihub's import format. Produces 5 output CSVs (currencies, accounts, balance sheets, balances header-only, exchange rates) in `data_migration/unihub-ready/`. See plan for column mapping, constitution check, and implementation approach.
 <!-- SPECKIT END -->
 
 ## Active Technologies

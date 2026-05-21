@@ -1,11 +1,13 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.7.0 → 1.7.1 (patch — Principle VI empty-cell rule refined: placeholder
-  text MUST be non-selectable via user-select: none to signal intentional absence)
-Modified principles:
-  - Principle VI: UI/UX Reference — empty-cell display: added non-selectable requirement
-Added sections: none
+Version change: 1.7.1 → 1.8.0 (minor — Principle VIII i18n added as a first-class,
+  non-negotiable requirement. All user-facing text must be internationalised via
+  react-intl; hardcoded strings in components are a violation. Applied immediately
+  to the codebase: Import/Export page, ChangePreviewTable, nav menu.)
+Modified principles: none
+Added sections:
+  - Principle VIII: Internationalisation (i18n)
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed
@@ -249,6 +251,48 @@ deviation (Alert above the card, action button outside the card, table
 without a white wrapper) produces an inconsistent UI that accumulates across
 domains. This rule must be checked on every implementation plan and PR.
 
+### VIII. Internationalisation (i18n) — NON-NEGOTIABLE
+
+All user-facing text throughout the application MUST be internationalised.
+Hardcoded strings in component files are a constitution violation.
+
+**Supported locales (v1)**: English (`en-US`) and Traditional Chinese (`zh-TW`).
+Both locales MUST be kept in sync — adding a key in one locale file without the
+corresponding entry in the other is a violation.
+
+**Mandatory rules**:
+
+- Every user-facing string (labels, buttons, headings, messages, placeholders,
+  tooltips, error text, success notifications) MUST be referenced via
+  `useIntl().formatMessage({ id: '...' })` or the `<FormattedMessage>` component.
+  No raw string literals in JSX. No `t('...')` pattern — use `formatMessage`.
+- Message keys MUST follow the established namespace convention:
+  - `menu.*` — navigation labels
+  - `common.*` — cross-page reusable labels (e.g. `common.save`, `common.delete`)
+  - `pages.<domain>.<feature>.*` — page-specific strings
+- Locale files live at `apps/unihub/frontend/src/locales/en-US/` and
+  `apps/unihub/frontend/src/locales/zh-TW/`, split into `menu.ts` and `pages.ts`.
+- When a new component or page is added, ALL its user-facing strings MUST be
+  added to both locale files in the same commit. No deferred i18n.
+- `react-intl` is the ONLY permitted i18n library. Do not introduce alternatives.
+- Navigation items MUST use `t({ id: 'menu.*' })` in `AppShell.tsx` — never
+  hardcode nav labels directly in the route config.
+- The language selector (Principle VI) and its `localStorage` persistence
+  mechanism MUST remain operational. Any change to the locale switching path
+  MUST be tested end-to-end.
+
+**Backend**:
+- API error messages that surface directly in the UI MUST either use locale-
+  neutral codes the frontend translates, or be kept generic enough that the
+  frontend can wrap them in a translated message. Raw Django validation errors
+  SHOULD NOT appear directly as user-visible text without frontend translation.
+
+**Rationale**: UniHub targets a multilingual user base (initial: en-US, zh-TW).
+Internationalisation retrofitted after the fact is far more expensive than
+building it in from the start. The `react-intl` library is already wired into
+the app; the cost of using `formatMessage` over a hardcoded string is zero —
+the benefit is a fully localisable product.
+
 ## Development Constraints
 
 - **Package managers**: `pnpm` for frontend, `uv` for backend. Never use `npm`,
@@ -276,7 +320,8 @@ steps may be skipped or reordered:
 3. Seed the domain's system AttributeDefinitions via a data migration or
    management command — never hardcoded in application code.
 4. Add the domain's pages under `apps/unihub/frontend/src/pages/<domain>/`.
-5. Add a nav section entry in `AppShell.tsx`.
+5. Add a nav section entry in `AppShell.tsx` using a `menu.*` i18n key
+   (Principle VIII).
 6. Add a service file at `apps/unihub/frontend/src/services/<domain>.ts` with
    types generated from the updated OpenAPI schema.
 
@@ -307,4 +352,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.7.1 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-19
+**Version**: 1.8.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-20

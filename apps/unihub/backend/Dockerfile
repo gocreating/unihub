@@ -18,6 +18,7 @@ COPY visiting/ ./visiting/
 COPY language/ ./language/
 COPY people/ ./people/
 COPY music/ ./music/
+COPY data_io/ ./data_io/
 COPY manage.py ./
 
 RUN UV_HTTP_TIMEOUT=120 uv sync --no-dev --no-editable

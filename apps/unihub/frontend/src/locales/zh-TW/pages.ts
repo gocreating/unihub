@@ -27,6 +27,7 @@ export default {
   'common.save': '儲存',
   'common.name': '名稱',
   'common.currency': '貨幣',
+  'common.cancel': '取消',
   'common.date': '時間',
 
   // Finance — Currencies
@@ -128,4 +129,71 @@ export default {
   'pages.finance.exchangeRates.form.date': '生效時間',
   'pages.finance.exchangeRates.form.basePlaceholder': '選擇基準貨幣',
   'pages.finance.exchangeRates.form.quotePlaceholder': '選擇報價貨幣',
+
+  // IO — 頁面框架
+  'pages.io.title': '資料遷移',
+  'pages.io.loadError': '無法載入資料表登錄。',
+  'pages.io.tab.export': '匯出',
+  'pages.io.tab.import': '匯入',
+
+  // IO — 匯出：樹狀選擇 / 操作
+  'pages.io.export.selectAll': '全選',
+  'pages.io.export.noSelection': '從左側選擇資料表以匯出。',
+  'pages.io.export.downloadCsv': '下載 CSV',
+  'pages.io.export.downloadZip': '下載 ZIP（{count} 個資料表）',
+  'pages.io.export.copyClipboard': '複製到剪貼簿',
+  'pages.io.export.success': '已下載 {filename}',
+  'pages.io.export.error': '匯出失敗，請重試。',
+  'pages.io.export.copySuccess': '已複製到剪貼簿',
+  'pages.io.export.copyError': '複製到剪貼簿失敗',
+
+  // IO — 匯入：模式選擇
+  'pages.io.import.mode.label': '匯入模式',
+  'pages.io.import.mode.upsert.title': '增補',
+  'pages.io.import.mode.upsert.desc': '— 新增資料列並更新現有資料列；來源中不存在的資料列保持不變',
+  'pages.io.import.mode.replace.title': '取代',
+  'pages.io.import.mode.replace.desc': '— 完全同步；來源中不存在的資料列將被刪除',
+  'pages.io.import.mode.replace.warning': '取代模式將永久刪除來源中不存在的資料列。',
+
+  // IO — 共用資料表根節點（匯出與匯入樹共用）
+  'pages.io.tree.allNode': '全部資料表',
+
+  // IO — 匯入：垂直步驟標題
+  'pages.io.import.step.data': '設定資料來源',
+  'pages.io.import.step.mode': '設定匯入策略',
+  'pages.io.import.step.preview': '確認匯入',
+  'pages.io.import.step.result': '結果',
+  'pages.io.import.result.done': '完成',
+
+  // IO — 匯入：「全部」拖放區（多檔）
+  'pages.io.import.dropzone.text': '將 CSV 檔案拖曳至此',
+  'pages.io.import.dropzone.hint': '依檔名自動對應資料表',
+  'pages.io.import.dropzone.noMatch': '沒有檔案對應到任何已登錄的資料表。',
+  'pages.io.import.emptyState': '選擇資料表以開始匯入',
+
+  // IO — 匯入：右側面板（每個資料表的操作區）
+  'pages.io.import.panel.dragText': '點擊或拖曳 CSV 檔案至此',
+  'pages.io.import.panel.pastePlaceholder': '或在此貼上 CSV 文字…',
+  'pages.io.import.panel.preview': '預覽變更',
+  'pages.io.import.panel.confirm': '套用變更',
+  'pages.io.import.panel.previewError': '預覽失敗。',
+  'pages.io.import.panel.missingCsv': '{count} 個已勾選的資料表尚未提供 CSV 資料 — 請點擊左側標紅的資料表以提供資料，或取消勾選以略過。',
+  'pages.io.import.panel.importSuccess': '完成：新增 {created} 筆，更新 {updated} 筆，刪除 {deleted} 筆。',
+  'pages.io.import.panel.importError': '匯入失敗。',
+  'pages.io.import.panel.hasErrors': '請修正驗證錯誤後再匯入。',
+  'pages.io.import.panel.noChanges': '無變更 — 資料庫已與此 CSV 相符。',
+
+  // IO — 變更預覽
+  'pages.io.preview.tab.create': '新增',
+  'pages.io.preview.tab.update': '更新',
+  'pages.io.preview.tab.delete': '刪除',
+  'pages.io.preview.tab.errors': '錯誤',
+  'pages.io.preview.create.empty': '無需新增的資料列。',
+  'pages.io.preview.update.empty': '無需更新的資料列。',
+  'pages.io.preview.delete.empty': '無需刪除的資料列。',
+  'pages.io.preview.col.pk': '主鍵',
+  'pages.io.preview.col.changedFields': '變更欄位',
+  'pages.io.preview.delete.warning': '警告：這些資料列將被永久刪除。',
+  'pages.io.preview.error.row': '第 {row} 列',
+  'pages.io.preview.error.header': '標題列',
 };

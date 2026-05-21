@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "core",
     "health",
+    "data_io",  # import/export infrastructure
     "finance",  # finance domain app
     "visiting",  # visiting domain app
     "language",  # language learning domain app

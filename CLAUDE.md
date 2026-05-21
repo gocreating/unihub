@@ -162,9 +162,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `001-project-bootstrap` | **Plan**: [specs/001-project-bootstrap/plan.md](specs/001-project-bootstrap/plan.md)
+**Branch**: `002-db-import-export` | **Plan**: [specs/002-db-import-export/plan.md](specs/002-db-import-export/plan.md)
 
-Bootstrapping UniHub v1 — Finance domain (balance sheet snapshots, multi-currency with exchange rate database). See plan for full project structure, data model, and API contracts.
+Infrastructure-level import/export for all domain tables — CSV/ZIP export, upsert/replace import, clipboard and file sourcing, change preview. New `io` Django app + shared `<ImportExportDrawer>` frontend component. See plan for registry design, API contracts, and data model.
 <!-- SPECKIT END -->
 
 ## Active Technologies

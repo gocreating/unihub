@@ -27,6 +27,7 @@ export default {
   'common.save': 'Save',
   'common.name': 'Name',
   'common.currency': 'Currency',
+  'common.cancel': 'Cancel',
   'common.date': 'Time',
 
   // Finance — Currencies
@@ -128,4 +129,71 @@ export default {
   'pages.finance.exchangeRates.form.date': 'Effective Time',
   'pages.finance.exchangeRates.form.basePlaceholder': 'Select base currency',
   'pages.finance.exchangeRates.form.quotePlaceholder': 'Select quote currency',
+
+  // IO — page chrome
+  'pages.io.title': 'Data Migration',
+  'pages.io.loadError': 'Failed to load table registry.',
+  'pages.io.tab.export': 'Export',
+  'pages.io.tab.import': 'Import',
+
+  // IO — Export tree / actions
+  'pages.io.export.selectAll': 'Select all',
+  'pages.io.export.noSelection': 'Select tables from the left to export.',
+  'pages.io.export.downloadCsv': 'Download CSV',
+  'pages.io.export.downloadZip': 'Download ZIP ({count} tables)',
+  'pages.io.export.copyClipboard': 'Copy to Clipboard',
+  'pages.io.export.success': 'Downloaded {filename}',
+  'pages.io.export.error': 'Export failed. Please try again.',
+  'pages.io.export.copySuccess': 'Copied to clipboard',
+  'pages.io.export.copyError': 'Failed to copy to clipboard',
+
+  // IO — Import: mode selector
+  'pages.io.import.mode.label': 'Import mode',
+  'pages.io.import.mode.upsert.title': 'Upsert',
+  'pages.io.import.mode.upsert.desc': '— add new rows and update existing ones; rows absent from the source are left untouched',
+  'pages.io.import.mode.replace.title': 'Replace',
+  'pages.io.import.mode.replace.desc': '— sync exactly; rows absent from the source are deleted',
+  'pages.io.import.mode.replace.warning': 'Replace mode permanently deletes rows not present in the source.',
+
+  // IO — shared tree root label (used in both export and import trees)
+  'pages.io.tree.allNode': 'All Tables',
+
+  // IO — Import: vertical stepper titles
+  'pages.io.import.step.data': 'Configure Data Source',
+  'pages.io.import.step.mode': 'Configure Import Strategy',
+  'pages.io.import.step.preview': 'Review & Confirm',
+  'pages.io.import.step.result': 'Result',
+  'pages.io.import.result.done': 'Done',
+
+  // IO — Import: "All" drop zone (multi-file)
+  'pages.io.import.dropzone.text': 'Drop CSV files here',
+  'pages.io.import.dropzone.hint': 'Auto-matched to tables by filename',
+  'pages.io.import.dropzone.noMatch': 'No files matched a registered table.',
+  'pages.io.import.emptyState': 'Select a table to start importing',
+
+  // IO — Import: right panel (per-table workspace)
+  'pages.io.import.panel.dragText': 'Drop or click to upload a CSV file',
+  'pages.io.import.panel.pastePlaceholder': 'Or paste CSV text here…',
+  'pages.io.import.panel.preview': 'Preview Changes',
+  'pages.io.import.panel.confirm': 'Apply Changes',
+  'pages.io.import.panel.previewError': 'Preview failed.',
+  'pages.io.import.panel.missingCsv': '{count} checked table(s) have no CSV data — click each highlighted table on the left to provide data, or uncheck to skip.',
+  'pages.io.import.panel.importSuccess': 'Done: {created} created, {updated} updated, {deleted} deleted.',
+  'pages.io.import.panel.importError': 'Import failed.',
+  'pages.io.import.panel.hasErrors': 'Fix validation errors before importing.',
+  'pages.io.import.panel.noChanges': 'No changes — the database already matches this CSV.',
+
+  // IO — Change preview table
+  'pages.io.preview.tab.create': 'Create',
+  'pages.io.preview.tab.update': 'Update',
+  'pages.io.preview.tab.delete': 'Delete',
+  'pages.io.preview.tab.errors': 'Errors',
+  'pages.io.preview.create.empty': 'No rows to create.',
+  'pages.io.preview.update.empty': 'No rows to update.',
+  'pages.io.preview.delete.empty': 'No rows to delete.',
+  'pages.io.preview.col.pk': 'PK',
+  'pages.io.preview.col.changedFields': 'Changed Fields',
+  'pages.io.preview.delete.warning': 'Warning: these rows will be permanently deleted.',
+  'pages.io.preview.error.row': 'Row {row}',
+  'pages.io.preview.error.header': 'Header',
 };

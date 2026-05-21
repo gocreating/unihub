@@ -177,6 +177,7 @@ export default {
   'pages.io.import.panel.preview': '預覽變更',
   'pages.io.import.panel.confirm': '套用變更',
   'pages.io.import.panel.previewError': '預覽失敗。',
+  'pages.io.import.panel.missingCsv': '{count} 個已勾選的資料表尚未提供 CSV 資料 — 請點擊左側標紅的資料表以提供資料，或取消勾選以略過。',
   'pages.io.import.panel.importSuccess': '完成：新增 {created} 筆，更新 {updated} 筆，刪除 {deleted} 筆。',
   'pages.io.import.panel.importError': '匯入失敗。',
   'pages.io.import.panel.hasErrors': '請修正驗證錯誤後再匯入。',

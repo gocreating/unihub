@@ -450,7 +450,11 @@ function ImportSection({ tables }: { tables: TableInfo[] }) {
 
   function renderNodeTitle(node: TreeDataNode): React.ReactNode {
     const key = node.key as string;
-    if (key === ALL_KEY || key.startsWith(CAT_PREFIX)) return node.title as React.ReactNode;
+    if (key === ALL_KEY || key.startsWith(CAT_PREFIX)) {
+      return (
+        <span style={{ whiteSpace: 'nowrap' }}>{node.title as string}</span>
+      );
+    }
 
     const isChecked = checkedTables.includes(key);
     const csv = getTableCsv(key);
@@ -467,7 +471,7 @@ function ImportSection({ tables }: { tables: TableInfo[] }) {
           : '#52c41a';
 
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
         <span
           style={{
             width: 7,
@@ -595,36 +599,47 @@ function ImportSection({ tables }: { tables: TableInfo[] }) {
           title: t({ id: 'pages.io.import.step.data' }),
           description: (
             <div style={{ paddingTop: 8 }}>
-              <Splitter
-                style={{
-                  border: '1px solid #d9d9d9',
-                  borderRadius: 6,
-                  height: 'auto',
-                }}
-              >
-                <Splitter.Panel defaultSize="30%" min="20%" max="50%">
-                  <div style={{ padding: '8px 4px', overflowY: 'auto', maxHeight: 600 }}>
-                    <Tree
-                      key={tables.length}
-                      checkable
-                      defaultExpandAll
-                      treeData={treeData}
-                      checkedKeys={checkedKeys}
-                      onCheck={(checked) => setCheckedKeys(checked as string[])}
-                      selectedKeys={[activeKey]}
-                      onSelect={(keys) => {
-                        if (keys.length > 0) setActiveKey(keys[0] as string);
-                      }}
-                      titleRender={renderNodeTitle}
-                    />
-                  </div>
-                </Splitter.Panel>
-                <Splitter.Panel>
-                  <div style={{ padding: 20, overflowY: 'auto', maxHeight: 600 }}>
-                    {rightPanel}
-                  </div>
-                </Splitter.Panel>
-              </Splitter>
+              <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                <Splitter
+                  style={{
+                    border: '1px solid #d9d9d9',
+                    borderRadius: 6,
+                  }}
+                >
+                  <Splitter.Panel defaultSize="30%" min="20%" max="50%">
+                    <div style={{ padding: '8px 4px', overflow: 'auto', height: '100%', boxSizing: 'border-box' }}>
+                      <Tree
+                        key={tables.length}
+                        checkable
+                        defaultExpandAll
+                        treeData={treeData}
+                        checkedKeys={checkedKeys}
+                        onCheck={(checked) => setCheckedKeys(checked as string[])}
+                        selectedKeys={[activeKey]}
+                        onSelect={(keys) => {
+                          if (keys.length > 0) setActiveKey(keys[0] as string);
+                        }}
+                        titleRender={renderNodeTitle}
+                      />
+                    </div>
+                  </Splitter.Panel>
+                  <Splitter.Panel>
+                    <div style={{ padding: 20, overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}>
+                      {rightPanel}
+                    </div>
+                  </Splitter.Panel>
+                </Splitter>
+                {invalidChecked.length > 0 && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message={t(
+                      { id: 'pages.io.import.panel.missingCsv' },
+                      { count: invalidChecked.length },
+                    )}
+                  />
+                )}
+              </Space>
             </div>
           ),
         },

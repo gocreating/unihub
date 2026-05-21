@@ -177,6 +177,7 @@ export default {
   'pages.io.import.panel.preview': 'Preview Changes',
   'pages.io.import.panel.confirm': 'Apply Changes',
   'pages.io.import.panel.previewError': 'Preview failed.',
+  'pages.io.import.panel.missingCsv': '{count} checked table(s) have no CSV data — click each highlighted table on the left to provide data, or uncheck to skip.',
   'pages.io.import.panel.importSuccess': 'Done: {created} created, {updated} updated, {deleted} deleted.',
   'pages.io.import.panel.importError': 'Import failed.',
   'pages.io.import.panel.hasErrors': 'Fix validation errors before importing.',

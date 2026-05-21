@@ -84,7 +84,7 @@ The user imports the remaining migrated files and sees all finance accounts, bal
 
 - **SC-001**: All 5 output CSV files are present in the output directory (`finance_currency.csv`, `finance_account.csv`, `finance_balancesheet.csv`, `finance_balance.csv`, `finance_exchangerate.csv`).
 - **SC-002**: Importing the output directory into unihub's Import flow completes with zero errors and zero skipped rows for the in-scope tables.
-- **SC-003**: The number of rows in each output file matches expectations derived from the legacy source: 2 currencies, 36 accounts, 25 balance sheets, 0 balances (header only), 35 exchange rates.
+- **SC-003**: The number of rows in each output file matches expectations derived from the legacy source: 2 currencies, 37 accounts, 26 balance sheets, 0 balances (header only), 35 exchange rates.
 - **SC-004**: All exchange rate values in the output differ from their legacy float source values by no more than 0.000001 (six decimal places of precision).
 - **SC-005**: No legacy-system NanoID reference appears in any FK field of the output — all cross-table references are resolved to their value equivalents (currency codes, etc.).
 

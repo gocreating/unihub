@@ -30,8 +30,8 @@ data_migration/
 
 **Purpose**: Create the script file and exclude generated output from git.
 
-- [ ] T001 Create `data_migration/migrate.py` with module docstring, stdlib imports (`csv`, `pathlib`, `sys`, `decimal`), `LEGACY_DIR` and `OUTPUT_DIR` path constants pointing to `data_migration/2026_05_17_legacy/` and `data_migration/unihub-ready/`, and a `main()` stub with `if __name__ == "__main__": main()` entry point
-- [ ] T002 [P] Add `data_migration/unihub-ready/` to `.gitignore` (repo root)
+- [x] T001 Create `data_migration/migrate.py` with module docstring, stdlib imports (`csv`, `pathlib`, `sys`, `decimal`), `LEGACY_DIR` and `OUTPUT_DIR` path constants pointing to `data_migration/2026_05_17_legacy/` and `data_migration/unihub-ready/`, and a `main()` stub with `if __name__ == "__main__": main()` entry point
+- [x] T002 [P] Add `data_migration/unihub-ready/` to `.gitignore` (repo root)
 
 ---
 
@@ -41,7 +41,7 @@ data_migration/
 
 **⚠️ CRITICAL**: US1 and US2 both depend on this phase.
 
-- [ ] T003 Implement `build_asset_map() -> dict[str, str]` in `data_migration/migrate.py` — reads `LEGACY_DIR / "finance_asset.csv"` via `csv.DictReader`, returns `{row["reference"]: row["symbol"]}` for ALL assets (settleable and non-settleable); used by `write_currencies`, `write_accounts`, and `write_exchange_rates`
+- [x] T003 Implement `build_asset_map() -> dict[str, str]` in `data_migration/migrate.py` — reads `LEGACY_DIR / "finance_asset.csv"` via `csv.DictReader`, returns `{row["reference"]: row["symbol"]}` for ALL assets (settleable and non-settleable); used by `write_currencies`, `write_accounts`, and `write_exchange_rates`
 
 **Checkpoint**: Foundation ready — US1 and US2 implementation can begin.
 
@@ -53,8 +53,8 @@ data_migration/
 
 **Independent Test**: Run `python3 data_migration/migrate.py`, open `data_migration/unihub-ready/finance_currency.csv`, confirm header is `code:string,name:text,symbol:text` and exactly 2 data rows (TWD, USD) are present.
 
-- [ ] T004 [US1] Implement `write_currencies(asset_map: dict[str, str]) -> None` in `data_migration/migrate.py` — reads `LEGACY_DIR / "finance_asset.csv"` via `csv.DictReader`, filters rows where `row["is_settleable"] == "true"`, writes `OUTPUT_DIR / "finance_currency.csv"` with header `code:string,name:text,symbol:text` and one row per settleable asset mapping `symbol → code`, `name → name`, `symbol → symbol`
-- [ ] T005 [US1] Wire `build_asset_map()` and `write_currencies()` into `main()` in `data_migration/migrate.py`: create `OUTPUT_DIR` via `OUTPUT_DIR.mkdir(parents=True, exist_ok=True)`, then call both functions; run `python3 data_migration/migrate.py` and verify `data_migration/unihub-ready/finance_currency.csv` has 2 data rows
+- [x] T004 [US1] Implement `write_currencies(asset_map: dict[str, str]) -> None` in `data_migration/migrate.py` — reads `LEGACY_DIR / "finance_asset.csv"` via `csv.DictReader`, filters rows where `row["is_settleable"] == "true"`, writes `OUTPUT_DIR / "finance_currency.csv"` with header `code:string,name:text,symbol:text` and one row per settleable asset mapping `symbol → code`, `name → name`, `symbol → symbol`
+- [x] T005 [US1] Wire `build_asset_map()` and `write_currencies()` into `main()` in `data_migration/migrate.py`: create `OUTPUT_DIR` via `OUTPUT_DIR.mkdir(parents=True, exist_ok=True)`, then call both functions; run `python3 data_migration/migrate.py` and verify `data_migration/unihub-ready/finance_currency.csv` has 2 data rows
 
 **Checkpoint**: US1 complete — `finance_currency.csv` is importable into unihub independently.
 
@@ -66,11 +66,11 @@ data_migration/
 
 **Independent Test**: Run `python3 data_migration/migrate.py`, confirm all 5 files exist in `data_migration/unihub-ready/` with row counts: currencies=2, accounts=36, balance sheets=25, balances=0 (header only), exchange rates=35.
 
-- [ ] T006 [P] [US2] Implement `write_accounts(asset_map: dict[str, str]) -> None` in `data_migration/migrate.py` — reads `LEGACY_DIR / "finance_account.csv"` via `csv.DictReader`, writes `OUTPUT_DIR / "finance_account.csv"` with header `id:string,name:text,currency:string,open_datetime:datetime,close_datetime:datetime`, mapping `reference → id`, `name → name`, `asset_map[settlement_asset_reference] → currency`, `opened_time → open_datetime`, `closed_time → close_datetime` (empty string if absent); abort with descriptive error if any `settlement_asset_reference` is missing from `asset_map`
-- [ ] T007 [P] [US2] Implement `write_balance_sheets() -> None` in `data_migration/migrate.py` — reads `LEGACY_DIR / "finance_balance_sheet.csv"` via `csv.DictReader`, writes `OUTPUT_DIR / "finance_balancesheet.csv"` with header `id:string,date:datetime`, mapping `reference → id`, `balanced_time → date`
-- [ ] T008 [P] [US2] Implement `write_balance_empty() -> None` in `data_migration/migrate.py` — writes `OUTPUT_DIR / "finance_balance.csv"` containing only the header row `id:string,account_id:string,balance_sheet_id:string,amount:decimal` and no data rows
-- [ ] T009 [US2] Implement `write_exchange_rates(asset_map: dict[str, str]) -> None` in `data_migration/migrate.py` — reads `LEGACY_DIR / "finance_price.csv"` via `csv.DictReader`, writes `OUTPUT_DIR / "finance_exchangerate.csv"` with header `id:string,base_currency:string,quote_currency:string,rate:decimal,date:datetime`, mapping `reference → id`, `asset_map[base_asset_reference] → base_currency`, `asset_map[quote_asset_reference] → quote_currency`, `Decimal(row["value"]).quantize(Decimal("0.000001")) → rate`, `confirmed_time → date`; abort with descriptive error if any asset reference is missing from `asset_map`
-- [ ] T010 [US2] Wire `write_accounts()`, `write_balance_sheets()`, `write_balance_empty()`, and `write_exchange_rates()` into `main()` in `data_migration/migrate.py`; run `python3 data_migration/migrate.py` and verify all 5 files exist in `data_migration/unihub-ready/` with row counts: 2, 36, 25, 0, 35
+- [x] T006 [P] [US2] Implement `write_accounts(asset_map: dict[str, str]) -> None` in `data_migration/migrate.py` — reads `LEGACY_DIR / "finance_account.csv"` via `csv.DictReader`, writes `OUTPUT_DIR / "finance_account.csv"` with header `id:string,name:text,currency:string,open_datetime:datetime,close_datetime:datetime`, mapping `reference → id`, `name → name`, `asset_map[settlement_asset_reference] → currency`, `opened_time → open_datetime`, `closed_time → close_datetime` (empty string if absent); abort with descriptive error if any `settlement_asset_reference` is missing from `asset_map`
+- [x] T007 [P] [US2] Implement `write_balance_sheets() -> None` in `data_migration/migrate.py` — reads `LEGACY_DIR / "finance_balance_sheet.csv"` via `csv.DictReader`, writes `OUTPUT_DIR / "finance_balancesheet.csv"` with header `id:string,date:datetime`, mapping `reference → id`, `balanced_time → date`
+- [x] T008 [P] [US2] Implement `write_balance_empty() -> None` in `data_migration/migrate.py` — writes `OUTPUT_DIR / "finance_balance.csv"` containing only the header row `id:string,account_id:string,balance_sheet_id:string,amount:decimal` and no data rows
+- [x] T009 [US2] Implement `write_exchange_rates(asset_map: dict[str, str]) -> None` in `data_migration/migrate.py` — reads `LEGACY_DIR / "finance_price.csv"` via `csv.DictReader`, writes `OUTPUT_DIR / "finance_exchangerate.csv"` with header `id:string,base_currency:string,quote_currency:string,rate:decimal,date:datetime`, mapping `reference → id`, `asset_map[base_asset_reference] → base_currency`, `asset_map[quote_asset_reference] → quote_currency`, `Decimal(row["value"]).quantize(Decimal("0.000001")) → rate`, `confirmed_time → date`; abort with descriptive error if any asset reference is missing from `asset_map`
+- [x] T010 [US2] Wire `write_accounts()`, `write_balance_sheets()`, `write_balance_empty()`, and `write_exchange_rates()` into `main()` in `data_migration/migrate.py`; run `python3 data_migration/migrate.py` and verify all 5 files exist in `data_migration/unihub-ready/` with row counts: 2, 36, 25, 0, 35
 
 **Checkpoint**: All 5 output CSVs present with correct row counts — full import is ready.
 
@@ -80,7 +80,7 @@ data_migration/
 
 **Purpose**: Lint the script and perform end-to-end import verification.
 
-- [ ] T011 [P] Lint `data_migration/migrate.py` using `uvx ruff check data_migration/migrate.py --fix` from repo root; resolve any remaining violations so zero are reported
+- [x] T011 [P] Lint `data_migration/migrate.py` using `uvx ruff check data_migration/migrate.py --fix` from repo root; resolve any remaining violations so zero are reported
 - [ ] T012 Import `data_migration/unihub-ready/` into unihub via **System → Import / Export** and verify: all 4 in-scope tables import with zero errors, currencies TWD + USD appear, 36 accounts appear with correct currency tags, 25 balance sheets appear, 35 exchange rates appear
 
 ---

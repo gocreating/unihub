@@ -165,6 +165,10 @@ export default {
   'pages.io.import.step.result': 'Result',
   'pages.io.import.result.done': 'Done',
 
+  // IO — Import: dependency warnings
+  'pages.io.import.dep.warningTitle': 'Missing dependencies',
+  'pages.io.import.dep.warningItem': '{table} requires {dep}',
+
   // IO — Import: "All" drop zone (multi-file)
   'pages.io.import.dropzone.text': 'Drop CSV files here',
   'pages.io.import.dropzone.hint': 'Auto-matched to tables by filename',

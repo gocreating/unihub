@@ -34,7 +34,7 @@ def _serialize_db_value(field_desc: FieldDescriptor, row: object) -> str:
     if isinstance(val, datetime.date):
         return val.isoformat()
     if isinstance(val, Decimal):
-        return str(val)
+        return format(val.normalize(), "f")
     if isinstance(val, bool):
         return "true" if val else "false"
     return str(val)
@@ -71,6 +71,7 @@ def compute_diff(
         List of ChangeRecord dicts with keys: pk, operation, before, after, changed_fields.
     """
     pk_header = _get_pk_header(descriptor)
+    header_to_field = {f.csv_header: f for f in descriptor.system_fields}
 
     # Load current DB state keyed by PK string
     db_rows: dict[str, dict[str, str]] = {}
@@ -105,6 +106,13 @@ def compute_diff(
 
             for header in csv_row:
                 csv_val = csv_row[header]
+                # Normalize decimal strings so "2030.0000" == "2030"
+                field_desc = header_to_field.get(header)
+                if field_desc and field_desc.data_type == "decimal" and csv_val:
+                    try:
+                        csv_val = format(Decimal(csv_val).normalize(), "f")
+                    except Exception:
+                        pass
                 db_val = db_row_dict.get(header, "")
                 if csv_val != db_val:
                     changed.append(header)

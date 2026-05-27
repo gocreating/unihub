@@ -15,6 +15,7 @@ export interface TableInfo {
   content_type_label: string;
   display_name: string;
   fields: FieldInfo[];
+  depends_on: string[];
 }
 
 export interface ChangeRecord {
@@ -42,6 +43,15 @@ export interface ImportConfirmResponse {
   created: number;
   updated: number;
   deleted: number;
+}
+
+export interface TablePreviewResult {
+  table_label: string;
+  display_name: string;
+  creates: ChangeRecord[];
+  updates: ChangeRecord[];
+  deletes: ChangeRecord[];
+  errors: ValidationError[];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -108,4 +118,21 @@ export async function importConfirm(
   });
   if (!resp.ok) throw new Error(`importConfirm failed: ${resp.status}`);
   return resp.json() as Promise<ImportConfirmResponse>;
+}
+
+export async function importBatchPreview(
+  tables: Array<{ table: string; csv_text: string }>,
+  mode: 'upsert' | 'replace',
+): Promise<TablePreviewResult[]> {
+  const resp = await fetch(`${API_BASE_URL}/api/v1/io/import/batch-preview/`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCsrfToken(),
+    },
+    body: JSON.stringify({ mode, tables }),
+  });
+  if (!resp.ok) throw new Error(`importBatchPreview failed: ${resp.status}`);
+  return resp.json() as Promise<TablePreviewResult[]>;
 }

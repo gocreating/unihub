@@ -12,6 +12,7 @@ class TableInfoSerializer(serializers.Serializer):
     content_type_label = serializers.CharField()
     display_name = serializers.CharField()
     fields = FieldInfoSerializer(many=True)
+    depends_on = serializers.ListField(child=serializers.CharField())
 
 
 class ExportRequestSerializer(serializers.Serializer):
@@ -104,3 +105,14 @@ class TableImportConfirmSerializer(serializers.Serializer):
     created = serializers.IntegerField()
     updated = serializers.IntegerField()
     deleted = serializers.IntegerField()
+
+
+class BatchPreviewTableRequestSerializer(serializers.Serializer):
+    table = serializers.CharField()
+    csv_text = serializers.CharField(required=False, allow_blank=True, default="")
+    csv_file = serializers.FileField(required=False, default=None)
+
+
+class BatchImportPreviewRequestSerializer(serializers.Serializer):
+    mode = serializers.ChoiceField(choices=["upsert", "replace"])
+    tables = BatchPreviewTableRequestSerializer(many=True, allow_empty=False)

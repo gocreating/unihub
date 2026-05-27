@@ -31,8 +31,8 @@ import { useIntl } from 'react-intl';
 import type { ImportPreviewResponse, TableInfo } from '@/services/unihub-backend/io';
 import {
   exportTables,
+  importBatchPreview,
   importConfirm,
-  importPreview,
   listTables,
 } from '@/services/unihub-backend/io';
 import { ChangePreviewTable } from '@/components/ImportExport/ChangePreviewTable';
@@ -71,6 +71,41 @@ function matchFileToTable(filename: string, tables: TableInfo[]): TableInfo | un
 
 function isTableKey(key: string): boolean {
   return key !== ALL_KEY && !key.startsWith(CAT_PREFIX);
+}
+
+function topoSort(labels: string[], tables: TableInfo[]): string[] {
+  const labelSet = new Set(labels);
+  const tableMap = new Map(tables.map((t) => [t.content_type_label, t]));
+  const inDegree = new Map<string, number>(labels.map((l) => [l, 0]));
+  const dependents = new Map<string, string[]>(labels.map((l) => [l, []]));
+
+  for (const label of labels) {
+    const tbl = tableMap.get(label);
+    if (!tbl) continue;
+    for (const dep of tbl.depends_on) {
+      if (labelSet.has(dep)) {
+        inDegree.set(label, (inDegree.get(label) ?? 0) + 1);
+        dependents.get(dep)!.push(label);
+      }
+    }
+  }
+
+  const queue = labels.filter((l) => (inDegree.get(l) ?? 0) === 0);
+  const result: string[] = [];
+
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    result.push(node);
+    for (const dep of dependents.get(node) ?? []) {
+      const newDeg = (inDegree.get(dep) ?? 0) - 1;
+      inDegree.set(dep, newDeg);
+      if (newDeg === 0) queue.push(dep);
+    }
+  }
+
+  const resultSet = new Set(result);
+  labels.filter((l) => !resultSet.has(l)).forEach((l) => result.push(l));
+  return result;
 }
 
 function buildTreeData(
@@ -331,6 +366,14 @@ function ImportSection({ tables }: { tables: TableInfo[] }) {
   const invalidChecked = checkedTables.filter((l) => !getTableCsv(l).trim());
   const previewDisabled = checkedTables.length === 0 || invalidChecked.length > 0;
 
+  const missingDeps = checkedTables.flatMap((label) => {
+    const tbl = tables.find((t) => t.content_type_label === label);
+    if (!tbl) return [];
+    return tbl.depends_on
+      .filter((dep) => !checkedTables.includes(dep))
+      .map((dep) => ({ table: label, dep }));
+  });
+
   function autoCheckTable(label: string) {
     setCheckedKeys((prev) => (prev.includes(label) ? prev : [...prev, label]));
   }
@@ -390,13 +433,18 @@ function ImportSection({ tables }: { tables: TableInfo[] }) {
     setPreviewing(true);
     setPreviewMap(null);
     try {
-      const entries = await Promise.all(
-        toPreview.map(async (label) => {
-          const result = await importPreview(label, mode, getTableCsv(label));
-          return [label, result] as const;
-        }),
-      );
-      setPreviewMap(Object.fromEntries(entries));
+      const batchEntries = toPreview.map((label) => ({ table: label, csv_text: getTableCsv(label) }));
+      const results = await importBatchPreview(batchEntries, mode);
+      const map: Record<string, ImportPreviewResponse> = {};
+      for (const r of results) {
+        map[r.table_label] = {
+          creates: r.creates,
+          updates: r.updates,
+          deletes: r.deletes,
+          errors: r.errors,
+        };
+      }
+      setPreviewMap(map);
     } catch {
       void message.error(t({ id: 'pages.io.import.panel.previewError' }));
     } finally {
@@ -416,13 +464,12 @@ function ImportSection({ tables }: { tables: TableInfo[] }) {
     if (toConfirm.length === 0) return;
     setConfirming(true);
     try {
-      const results = await Promise.all(
-        toConfirm.map((label) => importConfirm(label, mode, getTableCsv(label))),
-      );
-      const total = results.reduce(
-        (acc, r) => ({ created: acc.created + r.created, updated: acc.updated + r.updated, deleted: acc.deleted + r.deleted }),
-        { created: 0, updated: 0, deleted: 0 },
-      );
+      const sorted = topoSort(toConfirm, tables);
+      let total = { created: 0, updated: 0, deleted: 0 };
+      for (const label of sorted) {
+        const r = await importConfirm(label, mode, getTableCsv(label));
+        total = { created: total.created + r.created, updated: total.updated + r.updated, deleted: total.deleted + r.deleted };
+      }
       void queryClient.invalidateQueries();
       setImportResult({ kind: 'success', ...total });
     } catch {
@@ -637,6 +684,26 @@ function ImportSection({ tables }: { tables: TableInfo[] }) {
                       { id: 'pages.io.import.panel.missingCsv' },
                       { count: invalidChecked.length },
                     )}
+                  />
+                )}
+                {missingDeps.length > 0 && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message={t({ id: 'pages.io.import.dep.warningTitle' })}
+                    description={
+                      <ul style={{ margin: 0, paddingLeft: 16 }}>
+                        {missingDeps.map(({ table, dep }) => {
+                          const tblDisplay = tables.find((x) => x.content_type_label === table)?.display_name ?? table;
+                          const depDisplay = tables.find((x) => x.content_type_label === dep)?.display_name ?? dep;
+                          return (
+                            <li key={`${table}:${dep}`}>
+                              {t({ id: 'pages.io.import.dep.warningItem' }, { table: tblDisplay, dep: depDisplay })}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    }
                   />
                 )}
               </Space>

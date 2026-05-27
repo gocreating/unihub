@@ -39,25 +39,49 @@ function PatGuide() {
       items={[
         {
           key: 'guide',
-          label: 'How to create a GitHub Personal Access Token',
+          label: 'Personal Access Token guide',
           children: (
-            <Space direction="vertical" size="small" style={{ width: '100%' }}>
-              <Paragraph style={{ margin: 0 }}>
-                {t({ id: 'pages.io.sync.config.patGuide.intro' })}{' '}
-                <a
-                  href="https://github.com/settings/personal-access-tokens/new"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {t({ id: 'pages.io.sync.config.patGuide.link' })}
-                </a>
-              </Paragraph>
-              <ol style={{ margin: 0, paddingLeft: 20 }}>
-                <li>{t({ id: 'pages.io.sync.config.patGuide.step1' })}</li>
-                <li>{t({ id: 'pages.io.sync.config.patGuide.step2' })}</li>
-                <li>{t({ id: 'pages.io.sync.config.patGuide.step3' })}</li>
-                <li>{t({ id: 'pages.io.sync.config.patGuide.step4' })}</li>
-              </ol>
+            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              {/* Already have a token */}
+              <div>
+                <Text strong>{t({ id: 'pages.io.sync.config.patGuide.existing.heading' })}</Text>
+                <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+                  <li>
+                    <Text>{t({ id: 'pages.io.sync.config.patGuide.existing.saved' })}</Text>
+                  </li>
+                  <li>
+                    <Text>{t({ id: 'pages.io.sync.config.patGuide.existing.regen' })}</Text>{' '}
+                    <a
+                      href="https://github.com/settings/personal-access-tokens"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t({ id: 'pages.io.sync.config.patGuide.existing.regenLink' })}
+                    </a>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Creating a new token */}
+              <div>
+                <Text strong>{t({ id: 'pages.io.sync.config.patGuide.new.heading' })}</Text>
+                <Paragraph style={{ margin: '4px 0 0' }}>
+                  {t({ id: 'pages.io.sync.config.patGuide.intro' })}{' '}
+                  <a
+                    href="https://github.com/settings/personal-access-tokens/new"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t({ id: 'pages.io.sync.config.patGuide.link' })}
+                  </a>
+                </Paragraph>
+                <ol style={{ margin: 0, paddingLeft: 20 }}>
+                  <li>{t({ id: 'pages.io.sync.config.patGuide.step1' })}</li>
+                  <li>{t({ id: 'pages.io.sync.config.patGuide.step2' })}</li>
+                  <li>{t({ id: 'pages.io.sync.config.patGuide.step3' })}</li>
+                  <li>{t({ id: 'pages.io.sync.config.patGuide.step4' })}</li>
+                </ol>
+              </div>
             </Space>
           ),
         },

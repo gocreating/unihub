@@ -108,12 +108,22 @@ class GitSyncService:
                 ["git", "fetch", self._authenticated_url(), "--quiet"], check=False
             )
             if fetch.returncode != 0:
+                # Empty repo has no HEAD yet — not an error, just no remote commits
+                stderr = fetch.stderr.strip()
+                if "couldn't find remote ref" in stderr or "does not have any commits" in stderr:
+                    return SyncStatusData(
+                        status="no_remote",
+                        ahead_count=0,
+                        behind_count=0,
+                        remote_commit=None,
+                        error_message=None,
+                    )
                 return SyncStatusData(
                     status="error",
                     ahead_count=0,
                     behind_count=0,
                     remote_commit=None,
-                    error_message=self._sanitise(fetch.stderr.strip()),
+                    error_message=self._sanitise(stderr),
                 )
 
             # Get ahead/behind counts

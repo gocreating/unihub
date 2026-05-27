@@ -180,6 +180,14 @@ class GitSyncService:
                 error_message=self._sanitise(str(exc)),
             )
 
+    @staticmethod
+    def _commit_message(tables: list[str]) -> str:
+        if not tables:
+            return "sync: no tables"
+        if len(tables) <= 4:
+            return "sync: " + ", ".join(tables)
+        return f"sync: {len(tables)} tables ({', '.join(tables[:3])}, …)"
+
     # ── Publish ───────────────────────────────────────────────────────────────
 
     def publish(self) -> SyncPublishData | None:
@@ -201,7 +209,7 @@ class GitSyncService:
         if diff.returncode == 0:
             return None  # nothing changed
 
-        self._run(["git", "commit", "-m", "data snapshot"])
+        self._run(["git", "commit", "-m", self._commit_message(tables_exported)])
 
         push = self._run(
             ["git", "push", self._authenticated_url(), "HEAD"], check=False
@@ -228,7 +236,7 @@ class GitSyncService:
         if diff.returncode == 0:
             return None
 
-        self._run(["git", "commit", "-m", "data snapshot"])
+        self._run(["git", "commit", "-m", self._commit_message(tables_exported)])
 
         push = self._run(
             ["git", "push", "--force", self._authenticated_url(), "HEAD"], check=False

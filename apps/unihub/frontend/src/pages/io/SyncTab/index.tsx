@@ -4,12 +4,10 @@ import {
   Button,
   Card,
   Collapse,
-  Descriptions,
   Form,
   Input,
   Modal,
   Space,
-  Tag,
   Typography,
   message,
 } from 'antd';
@@ -17,7 +15,6 @@ import {
   CheckCircleOutlined,
   CloudDownloadOutlined,
   CloudUploadOutlined,
-  SyncOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIntl } from 'react-intl';
@@ -27,7 +24,6 @@ import {
   forcePublishSync,
   getApplyPreview,
   getSyncConfig,
-  getSyncStatus,
   publishSync,
   saveSyncConfig,
 } from '@/services/unihub-backend/sync';
@@ -93,20 +89,6 @@ function PatGuide() {
       ]}
     />
   );
-}
-
-// ── Status badge ──────────────────────────────────────────────────────
-
-function StatusTag({ status }: { status: string }) {
-  const colorMap: Record<string, string> = {
-    in_sync: 'green',
-    ahead: 'blue',
-    behind: 'orange',
-    diverged: 'red',
-    no_remote: 'default',
-    error: 'red',
-  };
-  return <Tag color={colorMap[status] ?? 'default'}>{status.replace('_', ' ')}</Tag>;
 }
 
 // ── Config Section ────────────────────────────────────────────────────
@@ -186,76 +168,6 @@ function ConfigSection({ configured }: { configured: boolean }) {
   return (
     <Card title={t({ id: 'pages.io.sync.config.title' })} size="small">
       {formContent}
-    </Card>
-  );
-}
-
-// ── Status Section ────────────────────────────────────────────────────
-
-function StatusSection({ configured }: { configured: boolean }) {
-  const { formatMessage: t } = useIntl();
-
-  const { data: status, isLoading, refetch } = useQuery({
-    queryKey: ['sync', 'status'],
-    queryFn: getSyncStatus,
-    enabled: configured,
-  });
-
-  const { data: config } = useQuery({
-    queryKey: ['sync', 'config'],
-    queryFn: getSyncConfig,
-    enabled: configured,
-  });
-
-  if (!configured) return null;
-
-  function statusLabel() {
-    if (!status) return null;
-    const s = status.status;
-    if (s === 'in_sync') return t({ id: 'pages.io.sync.status.inSync' });
-    if (s === 'ahead') return t({ id: 'pages.io.sync.status.ahead' }, { count: status.ahead_count });
-    if (s === 'behind') return t({ id: 'pages.io.sync.status.behind' }, { count: status.behind_count });
-    if (s === 'diverged') return t({ id: 'pages.io.sync.status.diverged' });
-    if (s === 'no_remote') return t({ id: 'pages.io.sync.status.noRemote' });
-    if (s === 'error') return t({ id: 'pages.io.sync.status.error' }, { message: status.error_message ?? '' });
-    return s;
-  }
-
-  return (
-    <Card
-      title={t({ id: 'pages.io.sync.status.title' })}
-      size="small"
-      extra={
-        <Button size="small" icon={<SyncOutlined spin={isLoading} />} onClick={() => void refetch()}>
-          Refresh
-        </Button>
-      }
-    >
-      <Descriptions size="small" column={1}>
-        {status && (
-          <Descriptions.Item label="Status">
-            <Space>
-              <StatusTag status={status.status} />
-              <Text type="secondary">{statusLabel()}</Text>
-            </Space>
-          </Descriptions.Item>
-        )}
-        {config?.last_published_at && (
-          <Descriptions.Item label="Last published">
-            {new Date(config.last_published_at).toLocaleString()}
-            {config.last_published_commit && (
-              <Text type="secondary" style={{ marginLeft: 8, fontFamily: 'monospace', fontSize: 11 }}>
-                {config.last_published_commit.slice(0, 7)}
-              </Text>
-            )}
-          </Descriptions.Item>
-        )}
-        {config?.last_applied_at && (
-          <Descriptions.Item label="Last applied">
-            {new Date(config.last_applied_at).toLocaleString()}
-          </Descriptions.Item>
-        )}
-      </Descriptions>
     </Card>
   );
 }
@@ -426,7 +338,6 @@ export function SyncTab() {
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       {configured ? (
         <>
-          <StatusSection configured={configured} />
           <ActionsCard configured={configured} />
           <ConfigSection configured={configured} />
         </>

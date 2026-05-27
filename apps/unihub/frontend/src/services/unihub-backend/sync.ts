@@ -49,6 +49,13 @@ export interface SyncApplyConfirmResult {
   results: Array<{ table: string; display_name: string; applied: number }>;
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────
+
+function getCsrfToken(): string {
+  const match = document.cookie.match(/csrftoken=([^;]+)/);
+  return match?.[1] ?? '';
+}
+
 // ── API calls ────────────────────────────────────────────────────────
 
 export async function getSyncConfig(): Promise<SyncConfigRead> {
@@ -61,7 +68,7 @@ export async function saveSyncConfig(data: SyncConfigWrite): Promise<SyncConfigR
   const res = await fetch(`${API_BASE_URL}/api/v1/sync/config/`, {
     method: 'PUT',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to save sync config');
@@ -78,7 +85,7 @@ export async function publishSync(): Promise<SyncPublishResult> {
   const res = await fetch(`${API_BASE_URL}/api/v1/sync/publish/`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
     body: '{}',
   });
   if (res.status === 409) {
@@ -93,7 +100,7 @@ export async function forcePublishSync(): Promise<SyncPublishResult> {
   const res = await fetch(`${API_BASE_URL}/api/v1/sync/force-publish/`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
     body: '{}',
   });
   if (!res.ok) throw new Error('Force publish failed');
@@ -110,7 +117,7 @@ export async function confirmApply(): Promise<SyncApplyConfirmResult> {
   const res = await fetch(`${API_BASE_URL}/api/v1/sync/apply/confirm/`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
     body: '{}',
   });
   if (!res.ok) throw new Error('Apply failed');

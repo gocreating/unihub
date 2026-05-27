@@ -248,7 +248,12 @@ class GitSyncService:
     def apply_preview(self) -> list | None:
         """Fetch latest remote state, return per-table change preview or None if up-to-date."""
         self.ensure_clone()
-        self._run(["git", "fetch", self._authenticated_url(), "--quiet"])
+        fetch = self._run(["git", "fetch", self._authenticated_url(), "--quiet"], check=False)
+        if fetch.returncode != 0:
+            stderr = fetch.stderr.strip()
+            if "couldn't find remote ref" in stderr or "does not have any commits" in stderr:
+                return None  # empty remote repo — nothing to apply
+            raise GitError(self._sanitise(stderr))
 
         counts = self._run(
             ["git", "rev-list", "--left-right", "--count", "HEAD...FETCH_HEAD"],

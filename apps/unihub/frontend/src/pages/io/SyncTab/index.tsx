@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Button,
@@ -116,6 +116,12 @@ function ConfigSection() {
     queryFn: getSyncConfig,
   });
 
+  useEffect(() => {
+    if (config?.repo_url) {
+      form.setFieldValue('repo_url', config.repo_url);
+    }
+  }, [config?.repo_url, form]);
+
   const save = useMutation({
     mutationFn: saveSyncConfig,
     onSuccess: () => {
@@ -132,7 +138,6 @@ function ConfigSection() {
       <Form
         form={form}
         layout="vertical"
-        initialValues={{ repo_url: config?.repo_url ?? '' }}
         onFinish={(values) => save.mutate(values)}
         style={{ maxWidth: 560 }}
       >

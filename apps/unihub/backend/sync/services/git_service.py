@@ -180,6 +180,13 @@ class GitSyncService:
                 error_message=self._sanitise(str(exc)),
             )
 
+    def _changed_tables(self, all_tables: list[str]) -> list[str]:
+        """Return only the tables whose CSV files are staged as changed."""
+        from sync.services.publish_helper import _csv_filename
+        result = self._run(["git", "diff", "--cached", "--name-only"], check=False)
+        changed_files = set(result.stdout.splitlines())
+        return [t for t in all_tables if _csv_filename(t) in changed_files]
+
     @staticmethod
     def _commit_message(tables: list[str]) -> str:
         if not tables:
@@ -209,7 +216,8 @@ class GitSyncService:
         if diff.returncode == 0:
             return None  # nothing changed
 
-        self._run(["git", "commit", "-m", self._commit_message(tables_exported)])
+        changed = self._changed_tables(tables_exported)
+        self._run(["git", "commit", "-m", self._commit_message(changed)])
 
         push = self._run(
             ["git", "push", self._authenticated_url(), "HEAD"], check=False
@@ -220,7 +228,7 @@ class GitSyncService:
             raise GitError(self._sanitise(push.stderr))
 
         sha = self._run(["git", "rev-parse", "HEAD"]).stdout.strip()
-        return SyncPublishData(commit_sha=sha, tables_exported=tables_exported)
+        return SyncPublishData(commit_sha=sha, tables_exported=changed)
 
     def force_publish(self) -> SyncPublishData | None:
         """Like publish() but force-pushes, overwriting the remote."""
@@ -236,7 +244,8 @@ class GitSyncService:
         if diff.returncode == 0:
             return None
 
-        self._run(["git", "commit", "-m", self._commit_message(tables_exported)])
+        changed = self._changed_tables(tables_exported)
+        self._run(["git", "commit", "-m", self._commit_message(changed)])
 
         push = self._run(
             ["git", "push", "--force", self._authenticated_url(), "HEAD"], check=False
@@ -245,7 +254,7 @@ class GitSyncService:
             raise GitError(self._sanitise(push.stderr))
 
         sha = self._run(["git", "rev-parse", "HEAD"]).stdout.strip()
-        return SyncPublishData(commit_sha=sha, tables_exported=tables_exported)
+        return SyncPublishData(commit_sha=sha, tables_exported=changed)
 
     # ── Apply ─────────────────────────────────────────────────────────────────
 

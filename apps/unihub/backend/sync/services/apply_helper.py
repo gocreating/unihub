@@ -33,13 +33,18 @@ def preview_from_fetch_head(clone_dir: Path) -> list:
 
         csv_bytes = proc.stdout.encode("utf-8")
         diff = compute_diff(descriptor, csv_bytes)
+        added = len([r for r in diff if r["action"] == "add"])
+        modified = len([r for r in diff if r["action"] == "modify"])
+        deleted = len([r for r in diff if r["action"] == "delete"])
+        if added + modified + deleted == 0:
+            continue
         results.append(
             {
                 "table": label,
                 "display_name": descriptor.display_name,
-                "added": len([r for r in diff if r["action"] == "add"]),
-                "modified": len([r for r in diff if r["action"] == "modify"]),
-                "deleted": len([r for r in diff if r["action"] == "delete"]),
+                "added": added,
+                "modified": modified,
+                "deleted": deleted,
                 "rows": diff,
             }
         )

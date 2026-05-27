@@ -79,7 +79,7 @@ class GitSyncService:
     def _configure_identity(self) -> None:
         """Ensure git user.email and user.name are set in the clone."""
         self._run(["git", "config", "user.email", "sync@unihub.local"])
-        self._run(["git", "config", "user.name", "unihub"])
+        self._run(["git", "config", "user.name", "unihub-bot"])
 
     # ── Clone management ──────────────────────────────────────────────────────
 
@@ -201,9 +201,7 @@ class GitSyncService:
         if diff.returncode == 0:
             return None  # nothing changed
 
-        from datetime import datetime, timezone
-        ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        self._run(["git", "commit", "-m", f"Sync at {ts}"])
+        self._run(["git", "commit", "-m", "data snapshot"])
 
         push = self._run(
             ["git", "push", self._authenticated_url(), "HEAD"], check=False
@@ -230,9 +228,7 @@ class GitSyncService:
         if diff.returncode == 0:
             return None
 
-        from datetime import datetime, timezone
-        ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        self._run(["git", "commit", "-m", f"Sync at {ts}"])
+        self._run(["git", "commit", "-m", "data snapshot"])
 
         push = self._run(
             ["git", "push", "--force", self._authenticated_url(), "HEAD"], check=False

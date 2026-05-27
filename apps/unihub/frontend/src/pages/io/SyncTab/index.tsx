@@ -13,7 +13,12 @@ import {
   Typography,
   message,
 } from 'antd';
-import { SyncOutlined } from '@ant-design/icons';
+import {
+  CheckCircleOutlined,
+  CloudDownloadOutlined,
+  CloudUploadOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIntl } from 'react-intl';
 import type { SyncApplyChange, SyncConfigWrite } from '@/services/unihub-backend/sync';
@@ -106,7 +111,7 @@ function StatusTag({ status }: { status: string }) {
 
 // ── Config Section ────────────────────────────────────────────────────
 
-function ConfigSection() {
+function ConfigSection({ configured }: { configured: boolean }) {
   const { formatMessage: t } = useIntl();
   const queryClient = useQueryClient();
   const [form] = Form.useForm<SyncConfigWrite>();
@@ -133,14 +138,9 @@ function ConfigSection() {
     },
   });
 
-  return (
-    <Card title={t({ id: 'pages.io.sync.config.title' })} size="small">
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={(values) => save.mutate(values)}
-        style={{ maxWidth: 560 }}
-      >
+  const formContent = (
+    <div style={{ maxWidth: 560 }}>
+      <Form form={form} layout="vertical" onFinish={(values) => save.mutate(values)}>
         <Form.Item
           name="repo_url"
           label={t({ id: 'pages.io.sync.config.repoUrl' })}
@@ -152,9 +152,14 @@ function ConfigSection() {
         <Form.Item
           name="pat"
           label={t({ id: 'pages.io.sync.config.pat' })}
-          rules={[{ required: true }]}
+          rules={configured ? [] : [{ required: true }]}
+          extra={configured ? t({ id: 'pages.io.sync.config.pat.updateHint' }) : undefined}
         >
-          <Input.Password placeholder={t({ id: 'pages.io.sync.config.pat.placeholder' })} />
+          <Input.Password
+            placeholder={
+              configured ? '••••••••' : t({ id: 'pages.io.sync.config.pat.placeholder' })
+            }
+          />
         </Form.Item>
 
         <Form.Item>
@@ -165,6 +170,27 @@ function ConfigSection() {
       </Form>
 
       <PatGuide />
+    </div>
+  );
+
+  if (configured) {
+    return (
+      <Collapse
+        size="small"
+        items={[
+          {
+            key: 'config',
+            label: t({ id: 'pages.io.sync.config.title' }),
+            children: formContent,
+          },
+        ]}
+      />
+    );
+  }
+
+  return (
+    <Card title={t({ id: 'pages.io.sync.config.title' })} size="small">
+      {formContent}
     </Card>
   );
 }
@@ -239,12 +265,14 @@ function StatusSection({ configured }: { configured: boolean }) {
   );
 }
 
-// ── Publish Section ───────────────────────────────────────────────────
+// ── Actions Card (publish + apply in one place) ───────────────────────
 
-function PublishSection({ configured }: { configured: boolean }) {
+function ActionsCard({ configured }: { configured: boolean }) {
   const { formatMessage: t } = useIntl();
   const queryClient = useQueryClient();
   const [diverged, setDiverged] = useState(false);
+  const [previewResult, setPreviewResult] = useState<SyncApplyChange[] | null>(null);
+  const [previewing, setPreviewing] = useState(false);
 
   const publish = useMutation({
     mutationFn: publishSync,
@@ -284,58 +312,6 @@ function PublishSection({ configured }: { configured: boolean }) {
     },
   });
 
-  if (!configured) return null;
-
-  return (
-    <>
-      <Button
-        type="primary"
-        loading={publish.isPending}
-        onClick={() => publish.mutate()}
-        disabled={forcePublish.isPending}
-      >
-        {t({ id: 'pages.io.sync.publish.button' })}
-      </Button>
-
-      <Modal
-        open={diverged}
-        title={t({ id: 'pages.io.sync.diverged.title' })}
-        footer={null}
-        onCancel={() => setDiverged(false)}
-      >
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Alert
-            type="warning"
-            showIcon
-            message={t({ id: 'pages.io.sync.diverged.description' })}
-          />
-          <Space>
-            <Button
-              danger
-              type="primary"
-              loading={forcePublish.isPending}
-              onClick={() => forcePublish.mutate()}
-            >
-              {t({ id: 'pages.io.sync.diverged.forcePublish' })}
-            </Button>
-            <Button onClick={() => setDiverged(false)}>
-              {t({ id: 'pages.io.sync.diverged.cancel' })}
-            </Button>
-          </Space>
-        </Space>
-      </Modal>
-    </>
-  );
-}
-
-// ── Apply Section ─────────────────────────────────────────────────────
-
-function ApplySection({ configured }: { configured: boolean }) {
-  const { formatMessage: t } = useIntl();
-  const queryClient = useQueryClient();
-  const [previewResult, setPreviewResult] = useState<SyncApplyChange[] | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-
   const confirm = useMutation({
     mutationFn: confirmApply,
     onSuccess: () => {
@@ -368,28 +344,76 @@ function ApplySection({ configured }: { configured: boolean }) {
   if (!configured) return null;
 
   return (
-    <Space direction="vertical" style={{ width: '100%' }} size="small">
-      <Button loading={previewing} onClick={() => void handlePreview()}>
-        {t({ id: 'pages.io.sync.apply.previewButton' })}
-      </Button>
+    <>
+      <Card size="small">
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Space wrap>
+            <Button
+              type="primary"
+              icon={<CloudUploadOutlined />}
+              loading={publish.isPending}
+              onClick={() => publish.mutate()}
+              disabled={forcePublish.isPending}
+            >
+              {t({ id: 'pages.io.sync.publish.button' })}
+            </Button>
+            <Button
+              icon={<CloudDownloadOutlined />}
+              loading={previewing}
+              onClick={() => void handlePreview()}
+            >
+              {t({ id: 'pages.io.sync.apply.previewButton' })}
+            </Button>
+          </Space>
 
-      {previewResult !== null && previewResult.length > 0 && (
-        <Space direction="vertical" style={{ width: '100%' }} size="small">
-          {previewResult.map((ch) => (
-            <Text key={ch.table} type="secondary" style={{ fontSize: 12 }}>
-              {ch.display_name}: +{ch.added} ~{ch.modified} -{ch.deleted}
-            </Text>
-          ))}
-          <Button
-            type="primary"
-            loading={confirm.isPending}
-            onClick={() => confirm.mutate()}
-          >
-            {t({ id: 'pages.io.sync.apply.confirmButton' })}
-          </Button>
+          {previewResult !== null && previewResult.length > 0 && (
+            <Space direction="vertical" style={{ width: '100%' }} size="small">
+              {previewResult.map((ch) => (
+                <Text key={ch.table} type="secondary" style={{ fontSize: 12 }}>
+                  {ch.display_name}: +{ch.added} ~{ch.modified} -{ch.deleted}
+                </Text>
+              ))}
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                loading={confirm.isPending}
+                onClick={() => confirm.mutate()}
+              >
+                {t({ id: 'pages.io.sync.apply.confirmButton' })}
+              </Button>
+            </Space>
+          )}
         </Space>
-      )}
-    </Space>
+      </Card>
+
+      <Modal
+        open={diverged}
+        title={t({ id: 'pages.io.sync.diverged.title' })}
+        footer={null}
+        onCancel={() => setDiverged(false)}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Alert
+            type="warning"
+            showIcon
+            message={t({ id: 'pages.io.sync.diverged.description' })}
+          />
+          <Space>
+            <Button
+              danger
+              type="primary"
+              loading={forcePublish.isPending}
+              onClick={() => forcePublish.mutate()}
+            >
+              {t({ id: 'pages.io.sync.diverged.forcePublish' })}
+            </Button>
+            <Button onClick={() => setDiverged(false)}>
+              {t({ id: 'pages.io.sync.diverged.cancel' })}
+            </Button>
+          </Space>
+        </Space>
+      </Modal>
+    </>
   );
 }
 
@@ -405,17 +429,14 @@ export function SyncTab() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
-      <ConfigSection />
-      {configured && (
+      {configured ? (
         <>
           <StatusSection configured={configured} />
-          <Card size="small">
-            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-              <PublishSection configured={configured} />
-              <ApplySection configured={configured} />
-            </Space>
-          </Card>
+          <ActionsCard configured={configured} />
+          <ConfigSection configured={configured} />
         </>
+      ) : (
+        <ConfigSection configured={false} />
       )}
     </Space>
   );

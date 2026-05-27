@@ -31,10 +31,14 @@ class SyncConfigReadSerializer(serializers.ModelSerializer):
 
 
 class SyncConfigWriteSerializer(serializers.Serializer):
-    """Write serializer — accepts plaintext PAT, encrypts before saving."""
+    """Write serializer — accepts plaintext PAT, encrypts before saving.
+
+    PAT is optional when updating an existing config (blank = keep existing).
+    PAT is required when creating the first config.
+    """
 
     repo_url = serializers.URLField(max_length=500)
-    pat = serializers.CharField(write_only=True)
+    pat = serializers.CharField(write_only=True, required=False, allow_blank=True, default="")
 
     def validate_repo_url(self, value: str) -> str:
         if not _GITHUB_HTTPS_RE.match(value):
@@ -44,21 +48,26 @@ class SyncConfigWriteSerializer(serializers.Serializer):
             )
         return value.rstrip("/")
 
-    def validate_pat(self, value: str) -> str:
-        if not value.strip():
-            raise serializers.ValidationError("PAT may not be blank.")
-        return value
+    def validate(self, attrs: dict) -> dict:
+        pat = attrs.get("pat", "").strip()
+        if not pat and not SyncConfig.objects.exists():
+            raise serializers.ValidationError({"pat": "PAT is required for the initial configuration."})
+        return attrs
 
     def save(self) -> SyncConfig:
         data = self.validated_data
-        config, _ = SyncConfig.objects.update_or_create(
-            pk=SyncConfig.objects.values_list("pk", flat=True).first() or None,
-            defaults={
-                "repo_url": data["repo_url"],
-                "pat_encrypted": encrypt_pat(data["pat"]),
-            },
+        pat = data.get("pat", "").strip()
+        existing_pk = SyncConfig.objects.values_list("pk", flat=True).first()
+        if existing_pk:
+            update_fields = {"repo_url": data["repo_url"]}
+            if pat:
+                update_fields["pat_encrypted"] = encrypt_pat(pat)
+            SyncConfig.objects.filter(pk=existing_pk).update(**update_fields)
+            return SyncConfig.objects.get(pk=existing_pk)
+        return SyncConfig.objects.create(
+            repo_url=data["repo_url"],
+            pat_encrypted=encrypt_pat(pat),
         )
-        return config
 
 
 class SyncStatusSerializer(serializers.Serializer):

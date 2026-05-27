@@ -78,7 +78,7 @@ class SyncPublishView(APIView):
             return Response({"error": "not_configured"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            result = _get_git_service(config).publish(config.device_name)
+            result = _get_git_service(config).publish()
         except DivergedException:
             return Response({"error": "diverged"}, status=status.HTTP_409_CONFLICT)
 
@@ -107,7 +107,7 @@ class SyncForcePublishView(APIView):
         if config is None:
             return Response({"error": "not_configured"}, status=status.HTTP_400_BAD_REQUEST)
 
-        result = _get_git_service(config).force_publish(config.device_name)
+        result = _get_git_service(config).force_publish()
 
         if result is None:
             return Response({"status": "up_to_date"})

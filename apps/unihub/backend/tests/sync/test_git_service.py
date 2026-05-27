@@ -111,7 +111,7 @@ def test_publish_creates_commit_and_returns_data(
     svc.ensure_clone()
 
     with patch("sync.services.publish_helper.write_csvs_to_clone", side_effect=_write_dummy_csv):
-        result = svc.publish("test-device")
+        result = svc.publish()
 
     assert result is not None
     assert len(result.commit_sha) == 40
@@ -126,11 +126,11 @@ def test_publish_returns_none_when_no_changes(
     svc.ensure_clone()
     # publish once to create a real commit
     with patch("sync.services.publish_helper.write_csvs_to_clone", side_effect=_write_dummy_csv):
-        svc.publish("test-device")
+        svc.publish()
 
     # publish again — same file content, nothing new to commit
     with patch("sync.services.publish_helper.write_csvs_to_clone", side_effect=_write_dummy_csv):
-        result = svc.publish("test-device")
+        result = svc.publish()
 
     assert result is None
 
@@ -149,7 +149,7 @@ def test_publish_raises_diverged_on_rejected_push(
         repo_url=bare_repo["repo_url"], pat=bare_repo["pat"], clone_dir=other
     )
     other_svc.ensure_clone()
-    other_svc._configure_identity("other-device")
+    other_svc._configure_identity()
     (other / "other.txt").write_text("from other device")
     subprocess.run(["git", "add", "."], check=True, capture_output=True, cwd=str(other))
     subprocess.run(
@@ -165,7 +165,7 @@ def test_publish_raises_diverged_on_rejected_push(
     # svc publish should create a local commit and fail to push (non-fast-forward)
     with patch("sync.services.publish_helper.write_csvs_to_clone", side_effect=_write_dummy_csv):
         with pytest.raises(DivergedException):
-            svc.publish("test-device")
+            svc.publish()
 
 
 def test_force_publish_pushes_with_force(
@@ -181,7 +181,7 @@ def test_force_publish_pushes_with_force(
         repo_url=bare_repo["repo_url"], pat=bare_repo["pat"], clone_dir=other
     )
     other_svc.ensure_clone()
-    other_svc._configure_identity("other-device")
+    other_svc._configure_identity()
     (other / "other2.txt").write_text("from other device 2")
     subprocess.run(["git", "add", "."], check=True, capture_output=True, cwd=str(other))
     subprocess.run(
@@ -195,7 +195,7 @@ def test_force_publish_pushes_with_force(
     )
 
     with patch("sync.services.publish_helper.write_csvs_to_clone", side_effect=_write_dummy_csv):
-        result = svc.force_publish("test-device")
+        result = svc.force_publish()
 
     assert result is not None
     assert len(result.commit_sha) == 40

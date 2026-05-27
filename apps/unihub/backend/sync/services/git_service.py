@@ -76,10 +76,10 @@ class GitSyncService:
             check=check,
         )
 
-    def _configure_identity(self, device_name: str) -> None:
+    def _configure_identity(self) -> None:
         """Ensure git user.email and user.name are set in the clone."""
         self._run(["git", "config", "user.email", "sync@unihub.local"])
-        self._run(["git", "config", "user.name", device_name])
+        self._run(["git", "config", "user.name", "unihub"])
 
     # ── Clone management ──────────────────────────────────────────────────────
 
@@ -172,7 +172,7 @@ class GitSyncService:
 
     # ── Publish ───────────────────────────────────────────────────────────────
 
-    def publish(self, device_name: str) -> SyncPublishData | None:
+    def publish(self) -> SyncPublishData | None:
         """Export all tables to CSV, commit, push. Returns None if up-to-date.
 
         Raises:
@@ -181,7 +181,7 @@ class GitSyncService:
         from sync.services.publish_helper import write_csvs_to_clone
 
         self.ensure_clone()
-        self._configure_identity(device_name)
+        self._configure_identity()
 
         tables_exported = write_csvs_to_clone(self.clone_dir)
 
@@ -193,7 +193,7 @@ class GitSyncService:
 
         from datetime import datetime, timezone
         ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        self._run(["git", "commit", "-m", f"Sync from {device_name} at {ts}"])
+        self._run(["git", "commit", "-m", f"Sync at {ts}"])
 
         push = self._run(
             ["git", "push", self._authenticated_url(), "HEAD"], check=False
@@ -206,12 +206,12 @@ class GitSyncService:
         sha = self._run(["git", "rev-parse", "HEAD"]).stdout.strip()
         return SyncPublishData(commit_sha=sha, tables_exported=tables_exported)
 
-    def force_publish(self, device_name: str) -> SyncPublishData | None:
+    def force_publish(self) -> SyncPublishData | None:
         """Like publish() but force-pushes, overwriting the remote."""
         from sync.services.publish_helper import write_csvs_to_clone
 
         self.ensure_clone()
-        self._configure_identity(device_name)
+        self._configure_identity()
 
         tables_exported = write_csvs_to_clone(self.clone_dir)
         self._run(["git", "add", "-A"])
@@ -222,7 +222,7 @@ class GitSyncService:
 
         from datetime import datetime, timezone
         ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        self._run(["git", "commit", "-m", f"Sync from {device_name} at {ts}"])
+        self._run(["git", "commit", "-m", f"Sync at {ts}"])
 
         push = self._run(
             ["git", "push", "--force", self._authenticated_url(), "HEAD"], check=False

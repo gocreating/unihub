@@ -20,7 +20,6 @@ class SyncConfigReadSerializer(serializers.ModelSerializer):
         fields = [
             "is_configured",
             "repo_url",
-            "device_name",
             "last_published_at",
             "last_published_commit",
             "last_applied_at",
@@ -36,7 +35,6 @@ class SyncConfigWriteSerializer(serializers.Serializer):
 
     repo_url = serializers.URLField(max_length=500)
     pat = serializers.CharField(write_only=True)
-    device_name = serializers.CharField(max_length=100)
 
     def validate_repo_url(self, value: str) -> str:
         if not _GITHUB_HTTPS_RE.match(value):
@@ -58,7 +56,6 @@ class SyncConfigWriteSerializer(serializers.Serializer):
             defaults={
                 "repo_url": data["repo_url"],
                 "pat_encrypted": encrypt_pat(data["pat"]),
-                "device_name": data["device_name"],
             },
         )
         return config

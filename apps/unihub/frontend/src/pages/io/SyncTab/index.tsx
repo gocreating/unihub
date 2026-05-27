@@ -3,23 +3,20 @@ import {
   Alert,
   Button,
   Card,
+  Collapse,
   Descriptions,
   Form,
   Input,
   Modal,
   Space,
   Tag,
-  Tooltip,
   Typography,
   message,
 } from 'antd';
-import { QuestionCircleOutlined, SyncOutlined } from '@ant-design/icons';
+import { SyncOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIntl } from 'react-intl';
-import type {
-  SyncApplyChange,
-  SyncConfigWrite,
-} from '@/services/unihub-backend/sync';
+import type { SyncApplyChange, SyncConfigWrite } from '@/services/unihub-backend/sync';
 import {
   confirmApply,
   forcePublishSync,
@@ -31,6 +28,43 @@ import {
 } from '@/services/unihub-backend/sync';
 
 const { Text, Paragraph } = Typography;
+
+// ── PAT guide ─────────────────────────────────────────────────────────
+
+function PatGuide() {
+  const { formatMessage: t } = useIntl();
+  return (
+    <Collapse
+      size="small"
+      items={[
+        {
+          key: 'guide',
+          label: 'How to create a GitHub Personal Access Token',
+          children: (
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Paragraph style={{ margin: 0 }}>
+                {t({ id: 'pages.io.sync.config.patGuide.intro' })}{' '}
+                <a
+                  href="https://github.com/settings/personal-access-tokens/new"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t({ id: 'pages.io.sync.config.patGuide.link' })}
+                </a>
+              </Paragraph>
+              <ol style={{ margin: 0, paddingLeft: 20 }}>
+                <li>{t({ id: 'pages.io.sync.config.patGuide.step1' })}</li>
+                <li>{t({ id: 'pages.io.sync.config.patGuide.step2' })}</li>
+                <li>{t({ id: 'pages.io.sync.config.patGuide.step3' })}</li>
+                <li>{t({ id: 'pages.io.sync.config.patGuide.step4' })}</li>
+              </ol>
+            </Space>
+          ),
+        },
+      ]}
+    />
+  );
+}
 
 // ── Status badge ──────────────────────────────────────────────────────
 
@@ -74,7 +108,7 @@ function ConfigSection() {
       <Form
         form={form}
         layout="vertical"
-        initialValues={{ repo_url: config?.repo_url ?? '', device_name: config?.device_name ?? '' }}
+        initialValues={{ repo_url: config?.repo_url ?? '' }}
         onFinish={(values) => save.mutate(values)}
         style={{ maxWidth: 560 }}
       >
@@ -88,25 +122,10 @@ function ConfigSection() {
 
         <Form.Item
           name="pat"
-          label={
-            <span>
-              {t({ id: 'pages.io.sync.config.pat' })}{' '}
-              <Tooltip title={t({ id: 'pages.io.sync.config.patGuide' })}>
-                <QuestionCircleOutlined />
-              </Tooltip>
-            </span>
-          }
+          label={t({ id: 'pages.io.sync.config.pat' })}
           rules={[{ required: true }]}
         >
           <Input.Password placeholder={t({ id: 'pages.io.sync.config.pat.placeholder' })} />
-        </Form.Item>
-
-        <Form.Item
-          name="device_name"
-          label={t({ id: 'pages.io.sync.config.deviceName' })}
-          rules={[{ required: true }]}
-        >
-          <Input placeholder={t({ id: 'pages.io.sync.config.deviceName.placeholder' })} />
         </Form.Item>
 
         <Form.Item>
@@ -116,9 +135,7 @@ function ConfigSection() {
         </Form.Item>
       </Form>
 
-      <Paragraph type="secondary" style={{ fontSize: 12, maxWidth: 560 }}>
-        {t({ id: 'pages.io.sync.config.patGuide' })}
-      </Paragraph>
+      <PatGuide />
     </Card>
   );
 }
@@ -174,7 +191,7 @@ function StatusSection({ configured }: { configured: boolean }) {
           </Descriptions.Item>
         )}
         {config?.last_published_at && (
-          <Descriptions.Item label={t({ id: 'pages.io.sync.status.lastPublished' }, { time: '' }).replace(': ', '')}>
+          <Descriptions.Item label="Last published">
             {new Date(config.last_published_at).toLocaleString()}
             {config.last_published_commit && (
               <Text type="secondary" style={{ marginLeft: 8, fontFamily: 'monospace', fontSize: 11 }}>
@@ -184,7 +201,7 @@ function StatusSection({ configured }: { configured: boolean }) {
           </Descriptions.Item>
         )}
         {config?.last_applied_at && (
-          <Descriptions.Item label={t({ id: 'pages.io.sync.status.lastApplied' }, { time: '' }).replace(': ', '')}>
+          <Descriptions.Item label="Last applied">
             {new Date(config.last_applied_at).toLocaleString()}
           </Descriptions.Item>
         )}

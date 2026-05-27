@@ -10,7 +10,6 @@ class SyncConfig(models.Model):
 
     repo_url = models.URLField(max_length=500)
     pat_encrypted = models.TextField()
-    device_name = models.CharField(max_length=100)
     last_published_at = models.DateTimeField(null=True, blank=True)
     last_published_commit = models.CharField(max_length=40, null=True, blank=True)
     last_applied_at = models.DateTimeField(null=True, blank=True)

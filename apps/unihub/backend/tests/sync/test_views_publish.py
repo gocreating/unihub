@@ -13,7 +13,6 @@ FORCE_URL = "/api/v1/sync/force-publish/"
 VALID_CONFIG = {
     "repo_url": "https://github.com/testuser/my-sync-repo",
     "pat": "ghp_testtoken123456789abcdef",
-    "device_name": "test-device",
 }
 
 

@@ -10,7 +10,6 @@ URL = "/api/v1/sync/status/"
 VALID_CONFIG = {
     "repo_url": "https://github.com/testuser/my-sync-repo",
     "pat": "ghp_testtoken123456789abcdef",
-    "device_name": "test-device",
 }
 
 

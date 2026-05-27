@@ -5,6 +5,7 @@ import { API_BASE_URL } from './index';
 export interface SyncConfigRead {
   is_configured: boolean;
   repo_url?: string;
+  pat?: string;
   last_published_at?: string | null;
   last_published_commit?: string | null;
   last_applied_at?: string | null;

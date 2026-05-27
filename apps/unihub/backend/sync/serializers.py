@@ -11,15 +11,15 @@ _GITHUB_HTTPS_RE = re.compile(r"^https://github\.com/[^/]+/[^/]+/?$")
 
 
 class SyncConfigReadSerializer(serializers.ModelSerializer):
-    """Read-only serializer — never exposes the encrypted PAT."""
-
     is_configured = serializers.SerializerMethodField()
+    pat = serializers.SerializerMethodField()
 
     class Meta:
         model = SyncConfig
         fields = [
             "is_configured",
             "repo_url",
+            "pat",
             "last_published_at",
             "last_published_commit",
             "last_applied_at",
@@ -28,6 +28,10 @@ class SyncConfigReadSerializer(serializers.ModelSerializer):
 
     def get_is_configured(self, obj: SyncConfig) -> bool:  # noqa: ARG002
         return True
+
+    def get_pat(self, obj: SyncConfig) -> str:
+        from sync.services.crypto import decrypt_pat
+        return decrypt_pat(obj.pat_encrypted)
 
 
 class SyncConfigWriteSerializer(serializers.Serializer):

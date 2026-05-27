@@ -123,9 +123,9 @@ function ConfigSection({ configured }: { configured: boolean }) {
 
   useEffect(() => {
     if (config?.repo_url) {
-      form.setFieldValue('repo_url', config.repo_url);
+      form.setFieldsValue({ repo_url: config.repo_url, pat: config.pat ?? '' });
     }
-  }, [config?.repo_url, form]);
+  }, [config?.repo_url, config?.pat, form]);
 
   const save = useMutation({
     mutationFn: saveSyncConfig,
@@ -153,13 +153,8 @@ function ConfigSection({ configured }: { configured: boolean }) {
           name="pat"
           label={t({ id: 'pages.io.sync.config.pat' })}
           rules={configured ? [] : [{ required: true }]}
-          extra={configured ? t({ id: 'pages.io.sync.config.pat.updateHint' }) : undefined}
         >
-          <Input.Password
-            placeholder={
-              configured ? '••••••••' : t({ id: 'pages.io.sync.config.pat.placeholder' })
-            }
-          />
+          <Input.Password placeholder={t({ id: 'pages.io.sync.config.pat.placeholder' })} />
         </Form.Item>
 
         <Form.Item>

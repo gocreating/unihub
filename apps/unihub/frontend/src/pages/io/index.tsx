@@ -36,6 +36,7 @@ import {
   listTables,
 } from '@/services/unihub-backend/io';
 import { ChangePreviewTable } from '@/components/ImportExport/ChangePreviewTable';
+import { SyncTab } from './SyncTab';
 
 const { TextArea } = Input;
 const { Text, Title } = Typography;
@@ -817,6 +818,11 @@ export function IoPage() {
       key: 'import',
       label: t({ id: 'pages.io.tab.import' }),
       children: <ImportSection tables={tables} />,
+    },
+    {
+      key: 'sync',
+      label: t({ id: 'pages.io.tab.sync' }),
+      children: <SyncTab />,
     },
   ];
 

@@ -252,46 +252,44 @@ function ActionsCard({ configured }: { configured: boolean }) {
 
   return (
     <>
-      <Card size="small">
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Space wrap>
+      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <Space wrap>
+          <Button
+            type="primary"
+            icon={<CloudUploadOutlined />}
+            loading={publish.isPending}
+            onClick={() => publish.mutate()}
+            disabled={forcePublish.isPending}
+          >
+            {t({ id: 'pages.io.sync.publish.button' })}
+          </Button>
+          <Button
+            icon={<CloudDownloadOutlined />}
+            loading={previewing}
+            onClick={() => void handlePreview()}
+          >
+            {t({ id: 'pages.io.sync.apply.previewButton' })}
+          </Button>
+        </Space>
+
+        {previewResult !== null && previewResult.length > 0 && (
+          <Space direction="vertical" style={{ width: '100%' }} size="small">
+            {previewResult.map((ch) => (
+              <Text key={ch.table} type="secondary" style={{ fontSize: 12 }}>
+                {ch.display_name}: +{ch.added} ~{ch.modified} -{ch.deleted}
+              </Text>
+            ))}
             <Button
               type="primary"
-              icon={<CloudUploadOutlined />}
-              loading={publish.isPending}
-              onClick={() => publish.mutate()}
-              disabled={forcePublish.isPending}
+              icon={<CheckCircleOutlined />}
+              loading={confirm.isPending}
+              onClick={() => confirm.mutate()}
             >
-              {t({ id: 'pages.io.sync.publish.button' })}
-            </Button>
-            <Button
-              icon={<CloudDownloadOutlined />}
-              loading={previewing}
-              onClick={() => void handlePreview()}
-            >
-              {t({ id: 'pages.io.sync.apply.previewButton' })}
+              {t({ id: 'pages.io.sync.apply.confirmButton' })}
             </Button>
           </Space>
-
-          {previewResult !== null && previewResult.length > 0 && (
-            <Space direction="vertical" style={{ width: '100%' }} size="small">
-              {previewResult.map((ch) => (
-                <Text key={ch.table} type="secondary" style={{ fontSize: 12 }}>
-                  {ch.display_name}: +{ch.added} ~{ch.modified} -{ch.deleted}
-                </Text>
-              ))}
-              <Button
-                type="primary"
-                icon={<CheckCircleOutlined />}
-                loading={confirm.isPending}
-                onClick={() => confirm.mutate()}
-              >
-                {t({ id: 'pages.io.sync.apply.confirmButton' })}
-              </Button>
-            </Space>
-          )}
-        </Space>
-      </Card>
+        )}
+      </Space>
 
       <Modal
         open={diverged}

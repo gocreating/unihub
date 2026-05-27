@@ -29,6 +29,17 @@ class TableDescriptor:
     has_user_attributes: bool = False
     import_order: int = 99
 
+    @property
+    def depends_on(self) -> list[str]:
+        """Unique FK content_type_labels this table directly depends on, in field order."""
+        seen: set[str] = set()
+        result: list[str] = []
+        for fd in self.system_fields:
+            if fd.is_fk and fd.fk_content_type_label and fd.fk_content_type_label not in seen:
+                seen.add(fd.fk_content_type_label)
+                result.append(fd.fk_content_type_label)
+        return result
+
 
 _registry: dict[str, TableDescriptor] = {}
 
@@ -54,6 +65,42 @@ def get_table(content_type_label: str) -> TableDescriptor:
             f"Table '{content_type_label}' is not registered in the io registry."
         )
     return _registry[content_type_label]
+
+
+def topo_sort(labels: list[str]) -> list[str]:
+    """Return labels sorted in topological dependency order (dependencies first).
+
+    Only edges between labels in the input set are considered. Unknown labels and
+    cycles fall back to the original input order for the affected nodes.
+    """
+    label_set = set(labels)
+    in_degree: dict[str, int] = {lbl: 0 for lbl in labels}
+    dependents: dict[str, list[str]] = {lbl: [] for lbl in labels}
+
+    for label in labels:
+        try:
+            descriptor = get_table(label)
+        except KeyError:
+            continue
+        for dep in descriptor.depends_on:
+            if dep in label_set:
+                in_degree[label] += 1
+                dependents[dep].append(label)
+
+    queue = [lbl for lbl in labels if in_degree[lbl] == 0]
+    result: list[str] = []
+
+    while queue:
+        node = queue.pop(0)
+        result.append(node)
+        for dependent in dependents[node]:
+            in_degree[dependent] -= 1
+            if in_degree[dependent] == 0:
+                queue.append(dependent)
+
+    result_set = set(result)
+    result.extend(lbl for lbl in labels if lbl not in result_set)
+    return result
 
 
 def _clear_registry() -> None:

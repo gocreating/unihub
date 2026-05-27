@@ -165,6 +165,10 @@ export default {
   'pages.io.import.step.result': '結果',
   'pages.io.import.result.done': '完成',
 
+  // IO — 匯入：依賴項目警告
+  'pages.io.import.dep.warningTitle': '缺少依賴項目',
+  'pages.io.import.dep.warningItem': '{table} 需要先匯入 {dep}',
+
   // IO — 匯入：「全部」拖放區（多檔）
   'pages.io.import.dropzone.text': '將 CSV 檔案拖曳至此',
   'pages.io.import.dropzone.hint': '依檔名自動對應資料表',

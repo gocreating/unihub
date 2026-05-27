@@ -10,8 +10,9 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from data_io.registry import get_registry, get_table
+from data_io.registry import get_registry, get_table, topo_sort
 from data_io.serializers import (
+    BatchImportPreviewRequestSerializer,
     ExportRequestSerializer,
     ImportConfirmRequestSerializer,
     ImportConfirmResponseSerializer,
@@ -70,6 +71,7 @@ class TablesView(APIView):
                     "content_type_label": label,
                     "display_name": descriptor.display_name,
                     "fields": fields,
+                    "depends_on": descriptor.depends_on,
                 }
             )
 
@@ -325,6 +327,10 @@ class ImportZipConfirmView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        sorted_labels = topo_sort([r["table_label"] for r in results])
+        label_to_result = {r["table_label"]: r for r in results}
+        results = [label_to_result[lbl] for lbl in sorted_labels if lbl in label_to_result]
+
         registry = get_registry()
         confirm_results = []
 
@@ -344,3 +350,91 @@ class ImportZipConfirmView(APIView):
                 )
 
         return Response(TableImportConfirmSerializer(confirm_results, many=True).data)
+
+
+class ImportBatchPreviewView(APIView):
+    """POST /api/v1/io/import/batch-preview/ — preview multiple tables in topo order.
+
+    Accepts a list of {table, csv_text|csv_file} entries. Tables are processed in
+    topological dependency order; PKs collected from each table are passed as
+    allowed_fk_pks to subsequent tables so cross-CSV FK references validate correctly.
+    """
+
+    def post(self, request: Request) -> Response:
+        from data_io.registry import get_registry, topo_sort
+        from data_io.services.change_preview import compute_diff
+        from data_io.services.csv_importer import parse_csv
+
+        serializer = BatchImportPreviewRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        mode: str = serializer.validated_data["mode"]
+        table_entries: list[dict] = serializer.validated_data["tables"]
+
+        registry = get_registry()
+
+        # Build a map from label → csv_text
+        csv_map: dict[str, str] = {}
+        for entry in table_entries:
+            label = entry["table"]
+            csv_file = entry.get("csv_file")
+            csv_text = entry.get("csv_text", "")
+            if csv_file is not None:
+                csv_text = csv_file.read().decode("utf-8")
+            csv_map[label] = csv_text
+
+        # Validate all labels are registered
+        unknown = [lbl for lbl in csv_map if lbl not in registry]
+        if unknown:
+            return Response(
+                {"detail": f"Unknown table(s): {', '.join(unknown)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        sorted_labels = topo_sort(list(csv_map.keys()))
+
+        # allowed_fk_pks accumulates PKs as each table is processed
+        allowed_fk_pks: dict[str, set[str]] = {}
+        results = []
+
+        for label in sorted_labels:
+            descriptor = registry[label]
+            csv_text = csv_map[label]
+
+            rows, errors = parse_csv(csv_text, descriptor, allowed_fk_pks=allowed_fk_pks)
+
+            if errors:
+                results.append(
+                    {
+                        "table_label": label,
+                        "display_name": descriptor.display_name,
+                        "creates": [],
+                        "updates": [],
+                        "deletes": [],
+                        "errors": [
+                            {"row": e.row, "column": e.column, "message": e.message}
+                            for e in errors
+                        ],
+                    }
+                )
+            else:
+                # Collect PKs from this batch so downstream tables can reference them
+                pk_field = next((f for f in descriptor.system_fields if f.is_pk), None)
+                if pk_field:
+                    pks = {row[pk_field.csv_header] for row in rows if row.get(pk_field.csv_header)}
+                    allowed_fk_pks[label] = allowed_fk_pks.get(label, set()) | pks
+
+                change_records = compute_diff(rows, descriptor, mode)
+                results.append(
+                    {
+                        "table_label": label,
+                        "display_name": descriptor.display_name,
+                        "creates": [r for r in change_records if r["operation"] == "create"],
+                        "updates": [r for r in change_records if r["operation"] == "update"],
+                        "deletes": [r for r in change_records if r["operation"] == "delete"],
+                        "errors": [],
+                    }
+                )
+
+        return Response(TableImportPreviewSerializer(results, many=True).data)

@@ -47,12 +47,26 @@ def _get_user_attr_header_set(descriptor: TableDescriptor) -> set[str]:
 
 
 def _validate_fk_value(
-    field_desc: FieldDescriptor, value: str, row_num: int
+    field_desc: FieldDescriptor,
+    value: str,
+    row_num: int,
+    allowed_fk_pks: dict[str, set[str]] | None = None,
 ) -> ValidationIssue | None:
-    """Check that a FK reference value exists in the target table."""
+    """Check that a FK reference value exists in the target table.
+
+    allowed_fk_pks maps content_type_label → set of PKs that are being
+    imported in the same batch and should be treated as valid references
+    even before they are written to the database.
+    """
     if not value:
         return None
-    app_label, model_name = field_desc.fk_content_type_label.split(".")  # type: ignore[union-attr]
+    fk_label: str = field_desc.fk_content_type_label  # type: ignore[assignment]
+
+    # Accept if the PK is present in the batch being imported
+    if allowed_fk_pks and fk_label in allowed_fk_pks and value in allowed_fk_pks[fk_label]:
+        return None
+
+    app_label, model_name = fk_label.split(".")
     from django.apps import apps
 
     try:
@@ -61,7 +75,7 @@ def _validate_fk_value(
             return ValidationIssue(
                 row=row_num,
                 column=field_desc.csv_header,
-                message=f"Referenced {field_desc.fk_content_type_label} '{value}' does not exist.",
+                message=f"Referenced {fk_label} '{value}' does not exist.",
             )
     except LookupError:
         pass
@@ -71,6 +85,7 @@ def _validate_fk_value(
 def parse_csv(
     csv_text: str,
     descriptor: TableDescriptor,
+    allowed_fk_pks: dict[str, set[str]] | None = None,
 ) -> tuple[list[dict[str, str]], list[ValidationIssue]]:
     """Parse CSV text against a TableDescriptor.
 
@@ -155,7 +170,7 @@ def parse_csv(
         # FK existence validation
         for fk_field in fk_fields:
             val = row.get(fk_field.csv_header, "")
-            issue = _validate_fk_value(fk_field, val, row_num)
+            issue = _validate_fk_value(fk_field, val, row_num, allowed_fk_pks=allowed_fk_pks)
             if issue:
                 row_errors.append(issue)
 

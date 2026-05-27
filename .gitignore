@@ -8,6 +8,9 @@ dist/
 
 # Python
 __pycache__/
+
+# Data migration output
+data_migration/unihub-ready/
 *.py[cod]
 *.egg-info/
 .venv/

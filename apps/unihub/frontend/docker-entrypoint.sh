@@ -1,6 +1,6 @@
 #!/bin/sh
 
-export BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
+export BACKEND_URL="${BACKEND_URL:-http://localhost:8001}"
 export NGINX_LISTEN_PORT="${NGINX_LISTEN_PORT:-80}"
 
 envsubst '${BACKEND_URL} ${NGINX_LISTEN_PORT}' \

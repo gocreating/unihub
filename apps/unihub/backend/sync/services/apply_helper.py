@@ -14,11 +14,11 @@ def preview_from_fetch_head(clone_dir: Path) -> list:
     """Read CSVs from FETCH_HEAD tree and return per-table change previews."""
     from data_io.registry import get_registry
     from data_io.services.change_preview import compute_diff
+    from data_io.services.csv_importer import parse_csv
 
     registry = get_registry()
     results = []
 
-    # Read each CSV from the FETCH_HEAD tree without modifying the working tree
     for label, descriptor in registry.items():
         filename = _csv_filename(label)
         proc = subprocess.run(
@@ -31,13 +31,17 @@ def preview_from_fetch_head(clone_dir: Path) -> list:
         if proc.returncode != 0:
             continue  # table not present in remote snapshot
 
-        csv_bytes = proc.stdout.encode("utf-8")
-        diff = compute_diff(descriptor, csv_bytes)
+        parsed_rows, errors = parse_csv(proc.stdout, descriptor)
+        if errors:
+            continue
+
+        diff = compute_diff(parsed_rows, descriptor, mode="replace")
         added = len([r for r in diff if r["action"] == "add"])
         modified = len([r for r in diff if r["action"] == "modify"])
         deleted = len([r for r in diff if r["action"] == "delete"])
         if added + modified + deleted == 0:
             continue
+
         results.append(
             {
                 "table": label,
@@ -56,6 +60,7 @@ def import_from_clone(clone_dir: Path) -> list:
     """Import all table CSVs from the working tree into the DB."""
     from data_io.registry import get_registry
     from data_io.services.change_preview import apply_diff, compute_diff
+    from data_io.services.csv_importer import parse_csv
 
     registry = get_registry()
     results = []
@@ -65,14 +70,17 @@ def import_from_clone(clone_dir: Path) -> list:
         if not csv_path.exists():
             continue
 
-        csv_bytes = csv_path.read_bytes()
-        diff = compute_diff(descriptor, csv_bytes)
-        applied = apply_diff(descriptor, diff)
+        parsed_rows, errors = parse_csv(csv_path.read_text(encoding="utf-8"), descriptor)
+        if errors:
+            continue
+
+        diff = compute_diff(parsed_rows, descriptor, mode="replace")
+        counts = apply_diff(diff, descriptor, mode="replace")
         results.append(
             {
                 "table": label,
                 "display_name": descriptor.display_name,
-                "applied": applied,
+                "applied": counts.get("created", 0) + counts.get("updated", 0) + counts.get("deleted", 0),
             }
         )
 

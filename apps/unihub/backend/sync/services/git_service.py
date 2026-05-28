@@ -268,21 +268,13 @@ class GitSyncService:
                 return None  # empty remote repo — nothing to apply
             raise GitError(self._sanitise(stderr))
 
-        counts = self._run(
-            ["git", "rev-list", "--left-right", "--count", "HEAD...FETCH_HEAD"],
-            check=False,
-        )
-        if counts.returncode != 0:
-            return []
-
-        parts = counts.stdout.strip().split()
-        behind = int(parts[1]) if len(parts) > 1 else 0
-        if behind == 0:
-            return None  # already up to date
-
-        # Checkout FETCH_HEAD into a temp tree to read CSVs without modifying HEAD
+        # Always diff FETCH_HEAD CSVs against the local DB — the git ahead/behind
+        # count only reflects commit history, not whether the DB is in sync with
+        # the latest snapshot (e.g. a fresh clone already has HEAD == FETCH_HEAD
+        # but the local DB may be empty).
         from sync.services.apply_helper import preview_from_fetch_head
-        return preview_from_fetch_head(self.clone_dir)
+        changes = preview_from_fetch_head(self.clone_dir)
+        return changes if changes else None
 
     def apply_confirm(self) -> list:
         """Pull latest remote state and import all tables. Returns confirm results."""

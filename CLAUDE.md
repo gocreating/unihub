@@ -162,9 +162,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `005-apply-page-table-component` | **Plan**: [specs/005-apply-page-table-component/plan.md](specs/005-apply-page-table-component/plan.md)
+**Branch**: `006-finance-app-enhancement` | **Plan**: [specs/006-finance-app-enhancement/plan.md](specs/006-finance-app-enhancement/plan.md)
 
-Applies the `PageTable` component as the universal tabular data view. All Finance pages already use `PageTable`. Remaining work: move net worth totals from Cards above the table to a sticky `footer` prop in `balance-sheets/detail.tsx`, add two i18n keys, and add an exclusion comment to `ChangePreviewTable`. Frontend-only. See plan for full implementation details and constitution check.
+Finance domain visual and analytical enhancement. Key deliverables: (1) universal numeric formatting across all finance tables (comma separators, right-alignment, decimal alignment); (2) switchable pie-chart visualization card + multi-dimensional tree aggregation added to balance sheet detail page; (3) switchable time-series chart card added to balance sheet list page; (4) currency-symbol-prefixed monetary inputs on create/edit forms. Frontend-only — no backend changes. See plan for full implementation details and constitution check.
 <!-- SPECKIT END -->
 
 ## Active Technologies

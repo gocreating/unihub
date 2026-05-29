@@ -162,9 +162,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `004-data-sync-across-devices` | **Plan**: [specs/004-data-sync-devices/plan.md](specs/004-data-sync-devices/plan.md)
+**Branch**: `005-apply-page-table-component` | **Plan**: [specs/005-apply-page-table-component/plan.md](specs/005-apply-page-table-component/plan.md)
 
-Adds a **Sync tab** to the existing data migration page (`/system/io`). Users configure a private GitHub repository + Personal Access Token; the backend uses git over HTTPS to publish per-table CSV snapshots and apply them back. New `sync` Django app with `SyncConfig` model + `GitSyncService`. Frontend `SyncTab` component reuses existing `ChangePreviewTable`. All strings i18n'd in `pages.io.sync.*` namespace. See plan for full 12-step implementation sequence and constitution check.
+Applies the `PageTable` component as the universal tabular data view. All Finance pages already use `PageTable`. Remaining work: move net worth totals from Cards above the table to a sticky `footer` prop in `balance-sheets/detail.tsx`, add two i18n keys, and add an exclusion comment to `ChangePreviewTable`. Frontend-only. See plan for full implementation details and constitution check.
 <!-- SPECKIT END -->
 
 ## Active Technologies

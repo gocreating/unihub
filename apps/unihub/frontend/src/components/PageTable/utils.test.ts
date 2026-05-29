@@ -17,6 +17,12 @@ describe('widthForHeader', () => {
     const { width } = widthForHeader('');
     expect(width).toBe(44);
   });
+
+  it('floor=0 does not suppress computed width', () => {
+    // U-04: floor of 0 means no floor applied — computed value wins
+    const { width } = widthForHeader('A', 0);
+    expect(width).toBe(52); // 1*8 + 44
+  });
 });
 
 describe('measureTextWidth', () => {
@@ -34,6 +40,16 @@ describe('measureTextWidth', () => {
   it('adds extra padding when specified', () => {
     expect(measureTextWidth('Hi', 10)).toBe(2 * 8 + 24 + 10);
   });
+
+  it('treats CJK characters as double-width (14px each)', () => {
+    // "國泰" = 2 CJK chars → 2*14 + 24 = 52
+    expect(measureTextWidth('國泰')).toBe(52);
+  });
+
+  it('handles mixed CJK and ASCII correctly', () => {
+    // "A國" = 8 + 14 + 24 = 46
+    expect(measureTextWidth('A國')).toBe(46);
+  });
 });
 
 describe('computeScrollX', () => {
@@ -50,4 +66,10 @@ describe('computeScrollX', () => {
   it('returns 0 for empty columns', () => {
     expect(computeScrollX([])).toBe(0);
   });
+
+  it('uses explicit width and ignores fallback when width is set (U-13)', () => {
+    // U-13: single column with width=100 and custom fallback=50 → 100 (not 50)
+    expect(computeScrollX([{ width: 100 }], 50)).toBe(100);
+  });
 });
+

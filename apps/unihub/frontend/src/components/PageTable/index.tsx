@@ -19,6 +19,8 @@ import { type ReactNode, type RefObject, useEffect, useRef } from 'react';
 import { useStickyHeaderOffset } from './useStickyHeaderOffset';
 // eslint-disable-next-line react-refresh/only-export-components
 export { widthForHeader, measureTextWidth, computeScrollX, twoLineCellStyle } from './utils';
+// eslint-disable-next-line react-refresh/only-export-components
+export { useActionsColWidth } from './useActionsColWidth';
 
 const useStyles = createStyles(({ token }) => ({
   pageCard: {
@@ -81,6 +83,23 @@ const useStyles = createStyles(({ token }) => ({
       flexWrap: 'nowrap !important' as never,
       flexShrink: '0 !important' as never,
       gap: `${token.marginXS}px !important`,
+    },
+    // JS-applied mobile class (ProTable adds this at width < 375px)
+    '& .ant-pro-table-list-toolbar-container-mobile': {
+      flexDirection: 'row !important' as never,
+      flexWrap: 'nowrap !important' as never,
+      gap: `${token.marginXS}px !important`,
+      overflowX: 'auto',
+    },
+    '& .ant-pro-table-list-toolbar-right .ant-space': {
+      gap: `${token.marginXS}px !important`,
+      flexWrap: 'nowrap !important' as never,
+    },
+    // Collapse toolbar button labels to icon-only on narrower viewports
+    [`@media (max-width: ${token.screenLG}px)`]: {
+      '.ant-pro-table-list-toolbar button > .toolbar-label': {
+        display: 'none',
+      },
     },
   },
   noHorizontalPadding: {
@@ -203,7 +222,7 @@ function useStickyHorizontalScrollbar(containerRef: RefObject<HTMLDivElement | n
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface PageTableProps<T extends Record<string, any>>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  extends Omit<ProTableProps<T, Record<string, any>>, 'search' | 'className'> {
+  extends Omit<ProTableProps<T, Record<string, any>>, 'search' | 'options' | 'className'> {
   pageTitle: ReactNode;
   action?: ReactNode;
   contentVisibility?: boolean;
@@ -215,7 +234,6 @@ function PageTable<T extends Record<string, any>>({
   action,
   contentVisibility: enableContentVisibility = false,
   pagination = false,
-  options = false,
   ...proTableProps
 }: PageTableProps<T>) {
   const { styles, cx } = useStyles();
@@ -249,7 +267,7 @@ function PageTable<T extends Record<string, any>>({
       >
         <ProTable<T>
           search={false}
-          options={options}
+          options={false}
           pagination={pagination}
           sticky={{ offsetHeader }}
           {...proTableProps}

@@ -1,13 +1,16 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.7.1 → 1.8.0 (minor — Principle VIII i18n added as a first-class,
-  non-negotiable requirement. All user-facing text must be internationalised via
-  react-intl; hardcoded strings in components are a violation. Applied immediately
-  to the codebase: Import/Export page, ChangePreviewTable, nav menu.)
-Modified principles: none
-Added sections:
-  - Principle VIII: Internationalisation (i18n)
+Version change: 1.8.0 → 1.9.0 (minor — Principle VII updated to: (1) fix
+  ProTable→PageTable naming inconsistency in the ASCII diagram and rules,
+  (2) explicitly state that ALL tabular views including IO/system pages must
+  use PageTable, not domain pages only, (3) prohibit ProTable's built-in
+  search form — all filter/search controls must be custom and external to the
+  table component.)
+Modified principles:
+  - Principle VII: PageTable Layout — fixed naming, added IO/system scope,
+    added no-built-in-search rule
+Added sections: none
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed
@@ -209,6 +212,10 @@ text, improving scannability across data-dense tables.
 
 Every page that displays tabular data MUST use `PageTable` and MUST follow
 the exact layout structure below. No exceptions, no alternative wrappers.
+This applies to ALL tabular views in the application — domain data pages
+(Finance, Language, Music, People, Visiting, and any future domain) AND
+system/utility pages (IO import-export preview, sync preview, and any future
+system page that renders a table).
 
 ```
 ┌─ gray page background (ProLayout content area) ──────────────────────┐
@@ -217,7 +224,7 @@ the exact layout structure below. No exceptions, no alternative wrappers.
 │ │─────────────────────────────────────────────────────────────── │   │
 │ │  Toolbar (Filters · Sort · Column visibility · …)              │   │
 │ │─────────────────────────────────────────────────────────────── │   │
-│ │  ┌─ ProTable ────────────────────────────────────────────┐    │   │
+│ │  ┌─ PageTable ───────────────────────────────────────────┐    │   │
 │ │  │  sticky header · scrollable body · sticky footer      │    │   │
 │ │  └───────────────────────────────────────────────────────┘    │   │
 │ └────────────────────────────────────────────────────────────────┘   │
@@ -226,7 +233,7 @@ the exact layout structure below. No exceptions, no alternative wrappers.
 
 **Rules (all MUST be followed):**
 
-- The white container, title row, toolbar, and ProTable are ALL rendered
+- The white container, title row, toolbar, and table are ALL rendered
   by `PageTable` — never duplicated or re-implemented in page components.
 - Page title goes in `pageTitle` prop (left side of title row).
 - The primary create/action button goes in `action` prop (right side of
@@ -234,6 +241,11 @@ the exact layout structure below. No exceptions, no alternative wrappers.
 - Toolbar controls (filters, sort, column visibility) go in `headerTitle`
   and/or `toolBarRender` props — they render inside the same white container
   between the title row and the table.
+- PageTable's inherited ProTable `search` prop MUST NOT be used. All search,
+  filter, and sort interactions MUST be implemented as custom controls,
+  either passed via `headerTitle`/`toolBarRender` props or rendered outside
+  PageTable entirely. The built-in ProTable search form is permanently
+  disabled/ignored across the entire application.
 - Query load errors MUST be shown via `message.error()` (transient
   notification), called in a `useEffect` on `isError`. Persistent `<Alert>`
   elements rendered ABOVE or OUTSIDE `PageTable` are a constitution violation.
@@ -352,4 +364,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.8.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-20
+**Version**: 1.9.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-29

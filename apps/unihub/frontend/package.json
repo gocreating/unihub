@@ -24,6 +24,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "generate-types": "openapi-typescript http://localhost:8001/api/schema/ -o src/generated/api-types.ts"
   },
   "dependencies": {
@@ -41,6 +43,7 @@
     "react-router-dom": "^7.13.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^14.6.1",

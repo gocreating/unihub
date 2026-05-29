@@ -5,7 +5,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
+import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
 import type { ExchangeRate } from '@/services/unihub-backend/finance';
 import {
   createExchangeRate,
@@ -99,20 +99,34 @@ export function ExchangeRatesPage() {
     }
   };
 
+  const actionsColWidth = useActionsColWidth(rates);
+
+  const dataWidths = useMemo(() => {
+    const w = { base_currency: 0, quote_currency: 0, rate: 0, date: 0 };
+    for (const r of rates) {
+      w.base_currency = Math.max(w.base_currency, measureTextWidth(r.base_currency));
+      w.quote_currency = Math.max(w.quote_currency, measureTextWidth(r.quote_currency));
+      w.rate = Math.max(w.rate, measureTextWidth(parseFloat(r.rate).toString()));
+      const d = dayjs(r.date);
+      w.date = Math.max(w.date, measureTextWidth(`${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`));
+    }
+    return w;
+  }, [rates]);
+
   const columns: ProColumns<ExchangeRate>[] = useMemo(
     () => [
-      { title: t({ id: 'pages.finance.exchangeRates.col.base' }), dataIndex: 'base_currency', ...widthForHeader('Base'), render: (val) => <Tag>{val as string}</Tag> },
-      { title: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataIndex: 'quote_currency', ...widthForHeader('Quote'), render: (val) => <Tag>{val as string}</Tag> },
+      { title: t({ id: 'pages.finance.exchangeRates.col.base' }), dataIndex: 'base_currency', ...widthForHeader('Base', dataWidths.base_currency), render: (val) => <Tag>{val as string}</Tag> },
+      { title: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataIndex: 'quote_currency', ...widthForHeader('Quote', dataWidths.quote_currency), render: (val) => <Tag>{val as string}</Tag> },
       {
         title: t({ id: 'pages.finance.exchangeRates.col.rate' }),
         dataIndex: 'rate',
-        ...widthForHeader('Rate', 120),
+        ...widthForHeader('Rate', Math.max(120, dataWidths.rate)),
         render: (val) => parseFloat(val as string).toString(),
       },
       {
         title: t({ id: 'common.date' }),
         dataIndex: 'date',
-        ...widthForHeader('Date', 220),
+        ...widthForHeader('Date', Math.max(220, dataWidths.date)),
         sorter: true,
         render: (val) => {
           const d = dayjs(val as string);
@@ -122,8 +136,9 @@ export function ExchangeRatesPage() {
       {
         title: t({ id: 'common.actions' }),
         key: 'actions',
-        ...widthForHeader('Actions'),
+        width: actionsColWidth,
         render: (_, record) => (
+          <span data-actions-col>
           <Space>
             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
               {t({ id: 'common.edit' })}
@@ -144,11 +159,12 @@ export function ExchangeRatesPage() {
               {t({ id: 'common.delete' })}
             </Button>
           </Space>
+          </span>
         ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t],
+    [t, dataWidths, actionsColWidth],
   );
 
   return (

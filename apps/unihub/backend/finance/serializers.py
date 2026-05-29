@@ -8,7 +8,7 @@ from finance.models import Account, Balance, BalanceSheet, Currency, ExchangeRat
 class CurrencySerializer(serializers.ModelSerializer):
     class Meta:
         model = Currency
-        fields = ["code", "name", "symbol"]
+        fields = ["code", "name", "symbol", "is_base_currency"]
 
 
 class AccountSerializer(serializers.ModelSerializer):

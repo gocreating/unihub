@@ -44,6 +44,52 @@ def twd(auth_client):
 
 
 @pytest.mark.django_db
+class TestCurrencies:
+    def test_currency_response_includes_is_base_currency(self, auth_client):
+        resp = auth_client.post(
+            "/api/v1/finance/currencies/",
+            {"code": "EUR", "name": "Euro", "symbol": "€"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 201
+        assert "is_base_currency" in resp.json()
+        assert resp.json()["is_base_currency"] is False
+
+    def test_create_currency_as_base(self, auth_client):
+        resp = auth_client.post(
+            "/api/v1/finance/currencies/",
+            {"code": "USD", "name": "US Dollar", "symbol": "$", "is_base_currency": True},
+            content_type="application/json",
+        )
+        assert resp.status_code == 201
+        assert resp.json()["is_base_currency"] is True
+
+    def test_update_currency_set_as_base(self, auth_client, usd):
+        resp = auth_client.patch(
+            f"/api/v1/finance/currencies/{usd['code']}/",
+            {"is_base_currency": True},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert resp.json()["is_base_currency"] is True
+
+    def test_list_currencies_includes_is_base_currency(self, auth_client, usd, twd):
+        auth_client.patch(
+            "/api/v1/finance/currencies/USD/",
+            {"is_base_currency": True},
+            content_type="application/json",
+        )
+        resp = auth_client.get("/api/v1/finance/currencies/")
+        assert resp.status_code == 200
+        data = {c["code"]: c for c in resp.json()}
+        assert data["USD"]["is_base_currency"] is True
+        assert data["TWD"]["is_base_currency"] is False
+
+    def test_currency_is_base_currency_defaults_false(self, auth_client, usd):
+        assert usd["is_base_currency"] is False
+
+
+@pytest.mark.django_db
 class TestAccounts:
     def test_create_account(self, auth_client, usd):
         resp = auth_client.post(

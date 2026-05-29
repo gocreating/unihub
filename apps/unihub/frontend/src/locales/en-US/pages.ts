@@ -19,6 +19,8 @@ export default {
   'pages.dashboard.music.description': 'Organize your music collection.',
 
   // Common
+  'common.yes': 'Yes',
+  'common.no': 'No',
   'common.actions': 'Actions',
   'common.edit': 'Edit',
   'common.delete': 'Delete',
@@ -46,6 +48,8 @@ export default {
   'pages.finance.currencies.deleteError': 'Failed to delete currency.',
   'pages.finance.currencies.col.code': 'Code',
   'pages.finance.currencies.col.symbol': 'Symbol',
+  'pages.finance.currencies.col.isBaseCurrency': 'Base Currency',
+  'pages.finance.currencies.form.isBaseCurrency': 'Eligible as base currency for net worth valuation',
   'pages.finance.currencies.form.code': 'Code (ISO 4217)',
   'pages.finance.currencies.form.codePattern': 'Must be a 3-letter code (e.g. USD, TWD)',
   'pages.finance.currencies.form.codePlaceholder': 'e.g. USD',
@@ -90,6 +94,13 @@ export default {
   'pages.finance.balanceSheets.deleteError': 'Failed to delete balance sheet.',
   'pages.finance.balanceSheets.form.dateTime': 'Time',
 
+  // Finance — Balance Sheet — Base currency
+  'pages.finance.balanceSheets.baseCurrency.label': 'Base Currency',
+  'pages.finance.balanceSheets.baseCurrency.none': 'None — no base currencies configured',
+
+  // Finance — Balance Sheet List — net worth column
+  'pages.finance.balanceSheets.col.netWorth': 'Net Worth ({currency})',
+
   // Finance — Balance Sheet Detail — Visualization (US2)
   'pages.finance.balanceSheets.detail.visualization.title': 'Visualization',
   'pages.finance.balanceSheets.detail.visualization.assetVsDebt': 'Asset vs Debt',
@@ -99,15 +110,20 @@ export default {
   'pages.finance.balanceSheets.detail.visualization.noDebts': 'No debt accounts',
 
   // Finance — Balance Sheet Detail — Aggregation (US3)
-  'pages.finance.balanceSheets.detail.aggregation.title': 'Breakdown',
+  'pages.finance.balanceSheets.detail.aggregation.title': 'Aggregation View',
   'pages.finance.balanceSheets.detail.aggregation.groupBy': 'Group by',
-  'pages.finance.balanceSheets.detail.aggregation.dimType': 'Type',
+  'pages.finance.balanceSheets.detail.aggregation.dimType': 'A/L Type',
   'pages.finance.balanceSheets.detail.aggregation.dimCurrency': 'Currency',
   'pages.finance.balanceSheets.detail.aggregation.empty': 'Select at least one grouping dimension to see a breakdown',
   'pages.finance.balanceSheets.detail.aggregation.col.group': 'Group',
   'pages.finance.balanceSheets.detail.aggregation.col.amount': 'Amount',
   'pages.finance.balanceSheets.detail.aggregation.label.asset': 'Asset',
   'pages.finance.balanceSheets.detail.aggregation.label.debt': 'Debt',
+
+  // Finance — Balance Sheet Detail — net worth column
+  'pages.finance.balanceSheets.detail.col.netWorth': 'Net Worth ({currency})',
+  'pages.finance.balanceSheets.detail.col.amountWithSymbol': 'Amount',
+  'pages.finance.balanceSheets.detail.aggregation.total': 'Total Net Worth',
 
   // Finance — Balance Sheet Detail
   'pages.finance.balanceSheets.detail.back': 'Back to Balance Sheets',

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Modal, Segmented, Space, Spin, Typography, message } from 'antd';
+import { Button, Card, Modal, Select, Segmented, Space, Spin, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { Column, Line } from '@ant-design/plots';
 import type { ProColumns } from '@ant-design/pro-components';
@@ -14,9 +14,15 @@ import {
   deleteBalanceSheet,
   listBalances,
   listBalanceSheets,
+  listCurrencies,
+  listExchangeRates,
 } from '@/services/unihub-backend/finance';
+import { computeNetWorthInBase, formatAmount, getCurrencySymbol } from '@/utils/finance';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 
 type BalanceListChartType = 'net-worth-trend' | 'stacked-breakdown';
+
+const CARD_TITLE_STYLE: React.CSSProperties = { margin: 0 };
 
 interface NetWorthDataPoint {
   date: string;
@@ -41,6 +47,19 @@ export function BalanceSheetsPage() {
     queryFn: () => listBalanceSheets(),
   });
 
+  const { data: currencies = [] } = useQuery({
+    queryKey: ['finance', 'currencies'],
+    queryFn: () => listCurrencies(),
+  });
+
+  const { data: rates = [] } = useQuery({
+    queryKey: ['finance', 'exchange-rates'],
+    queryFn: () => listExchangeRates(),
+  });
+
+  const baseCurrencies = useMemo(() => currencies.filter((c) => c.is_base_currency), [currencies]);
+  const [baseCurrency, setBaseCurrency] = useBaseCurrency(baseCurrencies);
+
   const balanceQueries = useQueries({
     queries: sheets.map((sheet) => ({
       queryKey: ['finance', 'balance-sheets', sheet.id, 'balances'] as const,
@@ -58,12 +77,18 @@ export function BalanceSheetsPage() {
   const netWorthData = useMemo<NetWorthDataPoint[]>(() => {
     return sheets
       .map((sheet, i) => {
-        const balances = balanceQueries[i]?.data ?? [];
-        const netWorth = balances.reduce((sum, b) => sum.plus(b.amount), new Decimal(0)).toNumber();
+        const sheetBalances = balanceQueries[i]?.data ?? [];
+        // Use the same FX-conversion formula as the table column so values match.
+        const netWorth = baseCurrency
+          ? sheetBalances.reduce((sum, b) => {
+              const nwv = computeNetWorthInBase(b.amount, b.currency, baseCurrency, rates, sheet.date);
+              return nwv ? sum.plus(nwv) : sum;
+            }, new Decimal(0)).toNumber()
+          : sheetBalances.reduce((sum, b) => sum.plus(b.amount), new Decimal(0)).toNumber();
         return { date: dayjs(sheet.date).format('YYYY-MM-DD'), netWorth };
       })
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [sheets, balanceQueries]);
+  }, [sheets, balanceQueries, baseCurrency, rates]);
 
   const stackedData = useMemo<StackedDataPoint[]>(() => {
     return sheets
@@ -77,6 +102,20 @@ export function BalanceSheetsPage() {
       })
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [sheets, balanceQueries]);
+
+  const sheetNetWorths = useMemo<Record<string, Decimal | null>>(() => {
+    if (!baseCurrency) return {};
+    return Object.fromEntries(
+      sheets.map((sheet, i) => {
+        const balances = balanceQueries[i]?.data ?? [];
+        const total = balances.reduce((sum, b) => {
+          const nwv = computeNetWorthInBase(b.amount, b.currency, baseCurrency, rates, sheet.date);
+          return nwv ? sum.plus(nwv) : sum;
+        }, new Decimal(0));
+        return [sheet.id, total];
+      }),
+    );
+  }, [sheets, balanceQueries, baseCurrency, rates]);
 
   const deleteMutation = useMutation({
     mutationFn: deleteBalanceSheet,
@@ -110,6 +149,20 @@ export function BalanceSheetsPage() {
           return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
         },
       },
+      ...(baseCurrency
+        ? [{
+            title: t({ id: 'pages.finance.balanceSheets.col.netWorth' }, { currency: baseCurrency }),
+            key: 'net_worth',
+            width: 160,
+            align: 'right' as const,
+            render: (_dom: unknown, record: BalanceSheet) => {
+              if (allBalancesLoading) return <Spin size="small" />;
+              const nwv = sheetNetWorths[record.id];
+              if (!nwv) return <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
+              return `${getCurrencySymbol(baseCurrency)} ${formatAmount(nwv.toString())}`;
+            },
+          }]
+        : []),
       {
         title: t({ id: 'common.actions' }),
         key: 'actions',
@@ -152,14 +205,27 @@ export function BalanceSheetsPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, navigate, dataWidths, actionsColWidth],
+    [t, navigate, dataWidths, actionsColWidth, baseCurrency, sheetNetWorths, allBalancesLoading],
   );
 
   return (
     <>
-      {/* Visualization card — always visible above PageTable (US4) */}
+      {/* Base currency selector — always visible, disabled when no base currencies configured */}
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Typography.Text strong>{t({ id: 'pages.finance.balanceSheets.baseCurrency.label' })}:</Typography.Text>
+        <Select
+          value={baseCurrency}
+          onChange={setBaseCurrency}
+          disabled={baseCurrencies.length === 0}
+          placeholder={t({ id: 'pages.finance.balanceSheets.baseCurrency.none' })}
+          style={{ width: 200 }}
+          options={baseCurrencies.map((c) => ({ value: c.code, label: `${c.code} – ${c.name}` }))}
+        />
+      </div>
+
+      {/* Visualization card */}
       <Card
-        title={t({ id: 'pages.finance.balanceSheets.visualization.title' })}
+        title={<Typography.Title level={4} style={CARD_TITLE_STYLE}>{t({ id: 'pages.finance.balanceSheets.visualization.title' })}</Typography.Title>}
         style={{ marginBottom: 24 }}
       >
         {sheets.length === 0 ? (

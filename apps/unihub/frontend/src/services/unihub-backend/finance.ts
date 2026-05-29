@@ -6,6 +6,7 @@ export interface Currency {
   code: string;
   name: string;
   symbol: string;
+  is_base_currency: boolean;
 }
 
 export interface Account {

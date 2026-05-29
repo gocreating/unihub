@@ -7,6 +7,7 @@ class Currency(models.Model):
     code = models.CharField(max_length=3, primary_key=True)
     name = models.CharField(max_length=100)
     symbol = models.CharField(max_length=10, blank=True)
+    is_base_currency = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["code"]

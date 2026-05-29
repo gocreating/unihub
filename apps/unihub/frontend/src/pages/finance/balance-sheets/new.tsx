@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Breadcrumb, Button, DatePicker, InputNumber, Tag, message } from 'antd';
+import { Breadcrumb, Button, DatePicker, Input, Tag, message } from 'antd';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -49,10 +49,12 @@ export function BalanceSheetNewPage() {
   };
 
   const dataWidths = useMemo(() => {
-    const w = { name: 0, currency: 0 };
+    const w = { name: 0, currency: 0, amount: 0 };
     for (const a of accounts) {
       w.name = Math.max(w.name, measureTextWidth(a.name));
       w.currency = Math.max(w.currency, measureTextWidth(a.currency));
+      // Amount column: addonBefore symbol + a representative large number
+      w.amount = Math.max(w.amount, measureTextWidth(`${getCurrencySymbol(a.currency)}  00,000.00`));
     }
     return w;
   }, [accounts]);
@@ -66,18 +68,17 @@ export function BalanceSheetNewPage() {
     {
       title: t({ id: 'pages.finance.balanceSheets.detail.col.amount' }),
       key: 'amount',
-      ...widthForHeader('Amount', 160),
+      ...widthForHeader('Amount', Math.max(160, dataWidths.amount)),
       render: (_, record) => (
-        <InputNumber
+        <Input
           value={amountMap[record.id] ?? ''}
-          onChange={(v) =>
-            setAmountMap((prev) => ({ ...prev, [record.id]: v !== null && v !== undefined ? String(v) : '' }))
+          onChange={(e) =>
+            setAmountMap((prev) => ({ ...prev, [record.id]: e.target.value }))
           }
           placeholder="0.00"
-          controls={false}
           addonBefore={getCurrencySymbol(record.currency)}
-          style={{ width: 180 }}
-          inputMode="decimal"
+          className="amount-input"
+          style={{ width: '100%' }}
         />
       ),
     },
@@ -87,8 +88,7 @@ export function BalanceSheetNewPage() {
       ...widthForHeader('Currency', dataWidths.currency),
       render: (val) => <Tag>{val as string}</Tag>,
     },
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, dataWidths]);
+  ], [t, dataWidths, amountMap]);
 
   return (
     <div>

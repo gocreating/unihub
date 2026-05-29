@@ -16,3 +16,8 @@ body {
 .ant-layout {
   min-height: 100vh;
 }
+
+/* Right-align text inside monetary amount input fields */
+.amount-input .ant-input {
+  text-align: right;
+}

@@ -8,6 +8,7 @@ import {
   Input,
   Modal,
   Space,
+  Tag,
   Typography,
   message,
 } from 'antd';
@@ -19,6 +20,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIntl } from 'react-intl';
 import type { SyncApplyChange, SyncConfigWrite } from '@/services/unihub-backend/sync';
+import { ChangePreviewTable } from '@/components/ImportExport/ChangePreviewTable';
 import {
   confirmApply,
   forcePublishSync,
@@ -273,12 +275,39 @@ function ActionsCard({ configured }: { configured: boolean }) {
         </Space>
 
         {previewResult !== null && previewResult.length > 0 && (
-          <Space direction="vertical" style={{ width: '100%' }} size="small">
-            {previewResult.map((ch) => (
-              <Text key={ch.table} type="secondary" style={{ fontSize: 12 }}>
-                {ch.display_name}: +{ch.added} ~{ch.modified} -{ch.deleted}
-              </Text>
-            ))}
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Collapse
+              defaultActiveKey={previewResult.map((ch) => ch.table)}
+              items={previewResult.map((ch) => {
+                const creates = ch.rows.filter((r) => r.operation === 'create');
+                const updates = ch.rows.filter((r) => r.operation === 'update');
+                const deletes = ch.rows.filter((r) => r.operation === 'delete');
+                return {
+                  key: ch.table,
+                  label: (
+                    <span>
+                      <Text strong>{ch.display_name}</Text>
+                      <Text type="secondary" style={{ fontSize: 11, marginLeft: 8 }}>
+                        ({ch.table})
+                      </Text>
+                      <span style={{ marginLeft: 8 }}>
+                        {creates.length > 0 && <Tag color="green">+{creates.length}</Tag>}
+                        {updates.length > 0 && <Tag color="orange">~{updates.length}</Tag>}
+                        {deletes.length > 0 && <Tag color="red">-{deletes.length}</Tag>}
+                      </span>
+                    </span>
+                  ),
+                  children: (
+                    <ChangePreviewTable
+                      creates={creates}
+                      updates={updates}
+                      deletes={deletes}
+                      errors={[]}
+                    />
+                  ),
+                };
+              })}
+            />
             <Button
               type="primary"
               icon={<CheckCircleOutlined />}

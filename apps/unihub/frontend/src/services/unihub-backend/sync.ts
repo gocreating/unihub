@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './index';
+import type { ChangeRecord } from './io';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ export interface SyncApplyChange {
   added: number;
   modified: number;
   deleted: number;
-  rows: unknown[];
+  rows: ChangeRecord[];
 }
 
 export interface SyncApplyPreviewResult {

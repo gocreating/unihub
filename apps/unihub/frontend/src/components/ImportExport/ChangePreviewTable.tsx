@@ -1,3 +1,9 @@
+// Intentionally uses antd/Table (not PageTable). This is a diff-preview
+// sub-component embedded inside the IO panel — not a top-level page.
+// PageTable's sticky behaviors (useStickyFix, useStickyHorizontalScrollbar)
+// require the document body as the scroll container, which conflicts with a
+// panel parent. Datasets here are small (preview diffs, pageSize ≤ 10) so
+// sticky header/scrollbar provide no UX value.
 import { Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useIntl } from 'react-intl';

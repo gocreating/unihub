@@ -5,7 +5,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
+import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
 import type { Account } from '@/services/unihub-backend/finance';
 import {
   createAccount,
@@ -132,14 +132,27 @@ export function AccountsPage() {
     }
   };
 
+  const actionsColWidth = useActionsColWidth(accounts);
+
+  const dataWidths = useMemo(() => {
+    const w = { name: 0, currency: 0, open_datetime: 0, close_datetime: 0 };
+    for (const a of accounts) {
+      w.name = Math.max(w.name, measureTextWidth(a.name));
+      w.currency = Math.max(w.currency, measureTextWidth(a.currency));
+      w.open_datetime = Math.max(w.open_datetime, measureTextWidth(formatDateRelative(a.open_datetime)));
+      w.close_datetime = Math.max(w.close_datetime, measureTextWidth(formatDateRelative(a.close_datetime)));
+    }
+    return w;
+  }, [accounts]);
+
   const columns: ProColumns<Account>[] = useMemo(
     () => [
-      { title: t({ id: 'common.name' }), dataIndex: 'name', ...widthForHeader('Name'), sorter: true },
-      { title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency'), sorter: true, render: (val) => <Tag>{val as string}</Tag> },
+      { title: t({ id: 'common.name' }), dataIndex: 'name', ...widthForHeader('Name', dataWidths.name), sorter: true },
+      { title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency', dataWidths.currency), sorter: true, render: (val) => <Tag>{val as string}</Tag> },
       {
         title: t({ id: 'pages.finance.accounts.col.openDatetime' }),
         dataIndex: 'open_datetime',
-        ...widthForHeader('Open Date', 220),
+        ...widthForHeader('Open Date', Math.max(220, dataWidths.open_datetime)),
         sorter: true,
         render: (_, record) => {
           const formatted = formatDateRelative(record.open_datetime);
@@ -151,7 +164,7 @@ export function AccountsPage() {
       {
         title: t({ id: 'pages.finance.accounts.col.closeDatetime' }),
         dataIndex: 'close_datetime',
-        ...widthForHeader('Close Date', 220),
+        ...widthForHeader('Close Date', Math.max(220, dataWidths.close_datetime)),
         sorter: true,
         render: (_, record) => {
           const formatted = formatDateRelative(record.close_datetime);
@@ -163,8 +176,9 @@ export function AccountsPage() {
       {
         title: t({ id: 'common.actions' }),
         key: 'actions',
-        ...widthForHeader('Actions'),
+        width: actionsColWidth,
         render: (_, record) => (
+          <span data-actions-col>
           <Space>
             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
               {t({ id: 'common.edit' })}
@@ -173,11 +187,12 @@ export function AccountsPage() {
               {t({ id: 'common.delete' })}
             </Button>
           </Space>
+          </span>
         ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t],
+    [t, dataWidths, actionsColWidth],
   );
 
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} – ${c.name}` }));

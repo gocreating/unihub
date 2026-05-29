@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Breadcrumb, Button, Card, Col, Row, Spin, Statistic, Tag } from 'antd';
 import dayjs from 'dayjs';
@@ -6,7 +7,7 @@ import type { ProColumns } from '@ant-design/pro-components';
 import Decimal from 'decimal.js';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
+import PageTable, { computeScrollX, measureTextWidth, widthForHeader } from '@/components/PageTable';
 import type { Balance } from '@/services/unihub-backend/finance';
 import {
   getNetWorth,
@@ -37,11 +38,21 @@ export function BalanceSheetDetailPage() {
     enabled: !!id,
   });
 
-  const columns: ProColumns<Balance>[] = [
-    { title: t({ id: 'pages.finance.balanceSheets.detail.col.account' }), dataIndex: 'account_name', ...widthForHeader('Account'), render: (val) => <Tag>{val as string}</Tag> },
-    { title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency'), render: (val) => <Tag>{val as string}</Tag> },
-    { title: t({ id: 'pages.finance.balanceSheets.detail.col.amount' }), dataIndex: 'amount', ...widthForHeader('Amount', 120) },
-  ];
+  const dataWidths = useMemo(() => {
+    const w = { account_name: 0, currency: 0, amount: 0 };
+    for (const b of balances) {
+      w.account_name = Math.max(w.account_name, measureTextWidth(b.account_name));
+      w.currency = Math.max(w.currency, measureTextWidth(b.currency));
+      w.amount = Math.max(w.amount, measureTextWidth(b.amount));
+    }
+    return w;
+  }, [balances]);
+
+  const columns: ProColumns<Balance>[] = useMemo(() => [
+    { title: t({ id: 'pages.finance.balanceSheets.detail.col.account' }), dataIndex: 'account_name', ...widthForHeader('Account', dataWidths.account_name), render: (val) => <Tag>{val as string}</Tag> },
+    { title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency', dataWidths.currency), render: (val) => <Tag>{val as string}</Tag> },
+    { title: t({ id: 'pages.finance.balanceSheets.detail.col.amount' }), dataIndex: 'amount', ...widthForHeader('Amount', Math.max(120, dataWidths.amount)) },
+  ], [t, dataWidths]);
 
   if (!sheet) return <Spin />;
 

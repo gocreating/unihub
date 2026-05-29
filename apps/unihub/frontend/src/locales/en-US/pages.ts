@@ -104,6 +104,7 @@ export default {
   'pages.finance.balanceSheets.detail.editAmount': 'Edit amount',
   'pages.finance.balanceSheets.detail.amountRequired': 'Enter a valid number',
   'pages.finance.balanceSheets.detail.netWorth': 'Net Worth ({currency})',
+  'pages.finance.balanceSheets.detail.footer.netWorth': 'Net Worth',
 
   // Finance — Exchange Rates
   'pages.finance.exchangeRates.filterBase': 'Filter by base currency…',

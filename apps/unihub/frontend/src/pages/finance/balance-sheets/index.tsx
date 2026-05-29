@@ -6,7 +6,7 @@ import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
+import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
 import type { BalanceSheet } from '@/services/unihub-backend/finance';
 import {
   deleteBalanceSheet,
@@ -32,12 +32,23 @@ export function BalanceSheetsPage() {
     onError: () => message.error(t({ id: 'pages.finance.balanceSheets.deleteError' })),
   });
 
+  const actionsColWidth = useActionsColWidth(sheets);
+
+  const dataWidths = useMemo(() => {
+    const w = { date: 0 };
+    for (const s of sheets) {
+      const d = dayjs(s.date);
+      w.date = Math.max(w.date, measureTextWidth(`${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`));
+    }
+    return w;
+  }, [sheets]);
+
   const columns: ProColumns<BalanceSheet>[] = useMemo(
     () => [
       {
         title: t({ id: 'common.date' }),
         dataIndex: 'date',
-        ...widthForHeader('Date', 220),
+        ...widthForHeader('Date', Math.max(220, dataWidths.date)),
         sorter: true,
         render: (val) => {
           const d = dayjs(val as string);
@@ -47,8 +58,9 @@ export function BalanceSheetsPage() {
       {
         title: t({ id: 'common.actions' }),
         key: 'actions',
-        ...widthForHeader('Actions'),
+        width: actionsColWidth,
         render: (_, record) => (
+          <span data-actions-col>
           <Space>
             <Button
               size="small"
@@ -80,11 +92,12 @@ export function BalanceSheetsPage() {
               {t({ id: 'common.delete' })}
             </Button>
           </Space>
+          </span>
         ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, navigate],
+    [t, navigate, dataWidths, actionsColWidth],
   );
 
   return (

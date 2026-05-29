@@ -4,7 +4,7 @@ import { Button, Form, Input, Modal, Space, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
+import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
 import type { Currency } from '@/services/unihub-backend/finance';
 import {
   createCurrency,
@@ -81,22 +81,35 @@ export function CurrenciesPage() {
     }
   };
 
+  const actionsColWidth = useActionsColWidth(currencies);
+
+  const dataWidths = useMemo(() => {
+    const w = { code: 0, name: 0, symbol: 0 };
+    for (const c of currencies) {
+      w.code = Math.max(w.code, measureTextWidth(c.code));
+      w.name = Math.max(w.name, measureTextWidth(c.name));
+      w.symbol = Math.max(w.symbol, measureTextWidth(c.symbol));
+    }
+    return w;
+  }, [currencies]);
+
   const columns: ProColumns<Currency>[] = useMemo(
     () => [
-      { title: t({ id: 'pages.finance.currencies.col.code' }), dataIndex: 'code', ...widthForHeader('Code'), sorter: true },
-      { title: t({ id: 'common.name' }), dataIndex: 'name', ...widthForHeader('Name') },
+      { title: t({ id: 'pages.finance.currencies.col.code' }), dataIndex: 'code', ...widthForHeader('Code', dataWidths.code), sorter: true },
+      { title: t({ id: 'common.name' }), dataIndex: 'name', ...widthForHeader('Name', dataWidths.name) },
       {
         title: t({ id: 'pages.finance.currencies.col.symbol' }),
         dataIndex: 'symbol',
-        ...widthForHeader('Symbol'),
+        ...widthForHeader('Symbol', dataWidths.symbol),
         render: (val) =>
           val ? String(val) : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
       },
       {
         title: t({ id: 'common.actions' }),
         key: 'actions',
-        ...widthForHeader('Actions'),
+        width: actionsColWidth,
         render: (_, record) => (
+          <span data-actions-col>
           <Space>
             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
               {t({ id: 'common.edit' })}
@@ -117,11 +130,12 @@ export function CurrenciesPage() {
               {t({ id: 'common.delete' })}
             </Button>
           </Space>
+          </span>
         ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t],
+    [t, dataWidths, actionsColWidth],
   );
 
   return (

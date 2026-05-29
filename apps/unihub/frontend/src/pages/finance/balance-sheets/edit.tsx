@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Breadcrumb, Button, DatePicker, Input, Spin, Tag, message } from 'antd';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, widthForHeader } from '@/components/PageTable';
+import PageTable, { computeScrollX, measureTextWidth, widthForHeader } from '@/components/PageTable';
 import type { Account } from '@/services/unihub-backend/finance';
 import {
   listAccounts,
@@ -81,11 +81,20 @@ export function BalanceSheetEditPage() {
     }
   };
 
-  const columns: ProColumns<Account>[] = [
+  const dataWidths = useMemo(() => {
+    const w = { name: 0, currency: 0 };
+    for (const a of accounts) {
+      w.name = Math.max(w.name, measureTextWidth(a.name));
+      w.currency = Math.max(w.currency, measureTextWidth(a.currency));
+    }
+    return w;
+  }, [accounts]);
+
+  const columns: ProColumns<Account>[] = useMemo(() => [
     {
       title: t({ id: 'pages.finance.balanceSheets.detail.col.account' }),
       dataIndex: 'name',
-      ...widthForHeader('Account'),
+      ...widthForHeader('Account', dataWidths.name),
     },
     {
       title: t({ id: 'pages.finance.balanceSheets.detail.col.amount' }),
@@ -105,10 +114,11 @@ export function BalanceSheetEditPage() {
     {
       title: t({ id: 'common.currency' }),
       dataIndex: 'currency',
-      ...widthForHeader('Currency'),
+      ...widthForHeader('Currency', dataWidths.currency),
       render: (val) => <Tag>{val as string}</Tag>,
     },
-  ];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, dataWidths]);
 
   if (sheetsLoading) return <Spin />;
   if (!sheet) return <Spin />;

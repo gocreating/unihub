@@ -104,6 +104,7 @@ export default {
   'pages.finance.balanceSheets.detail.editAmount': '編輯金額',
   'pages.finance.balanceSheets.detail.amountRequired': '請輸入有效數字',
   'pages.finance.balanceSheets.detail.netWorth': '淨值（{currency}）',
+  'pages.finance.balanceSheets.detail.footer.netWorth': '淨資產',
 
   // Finance — Exchange Rates
   'pages.finance.exchangeRates.filterBase': '依基準貨幣篩選…',

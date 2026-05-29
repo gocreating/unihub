@@ -15,8 +15,8 @@
 
 **Purpose**: Extend the test setup so hooks that use `ResizeObserver` and `MutationObserver` can be tested in jsdom.
 
-- [ ] T001 Extend `apps/unihub/frontend/src/test-setup.ts` to add a global `ResizeObserver` mock (stores callbacks, exposes `observe`/`disconnect`/`trigger` methods)
-- [ ] T002 Verify `@testing-library/react` and `@testing-library/jest-dom` are available — confirm in `apps/unihub/frontend/package.json`
+- [x] T001 Extend `apps/unihub/frontend/src/test-setup.ts` to add a global `ResizeObserver` mock (stores callbacks, exposes `observe`/`disconnect`/`trigger` methods)
+- [x] T002 Verify `@testing-library/react` and `@testing-library/jest-dom` are available — confirm in `apps/unihub/frontend/package.json`
 
 **Checkpoint**: `pnpm test` runs without crashing on any file that uses `ResizeObserver`.
 
@@ -28,11 +28,11 @@
 
 ⚠️ **CRITICAL**: Tests written in Phase 3 target the corrected component. Do these fixes first.
 
-- [ ] T003 Add three missing CSS rules to `stickyToolbar` block in `apps/unihub/frontend/src/components/PageTable/index.tsx`:
+- [x] T003 Add three missing CSS rules to `stickyToolbar` block in `apps/unihub/frontend/src/components/PageTable/index.tsx`:
   - `.ant-pro-table-list-toolbar-container-mobile` → `flexDirection: 'row !important'`, `flexWrap: 'nowrap !important'`, `gap`, `overflowX: 'auto'`
   - `& .ant-pro-table-list-toolbar-right .ant-space` → `gap`, `flexWrap: 'nowrap !important'`
   - `@media (max-width: ${token.screenLG}px)` → `.toolbar-label { display: none }` (copy exactly from ov-fleet)
-- [ ] T004 Remove `options` from `PageTableProps` interface in `apps/unihub/frontend/src/components/PageTable/index.tsx` so the type matches ov-fleet exactly: `Omit<ProTableProps<T, Record<string, any>>, 'search' | 'options' | 'className'>` — the component already hardcodes `options={false}` internally
+- [x] T004 Remove `options` from `PageTableProps` interface in `apps/unihub/frontend/src/components/PageTable/index.tsx` so the type matches ov-fleet exactly: `Omit<ProTableProps<T, Record<string, any>>, 'search' | 'options' | 'className'>` — the component already hardcodes `options={false}` internally
 
 **Checkpoint**: `pnpm typecheck` passes. No page passes `options` prop, so removing from the type causes no errors.
 
@@ -46,34 +46,34 @@
 
 ### T005–T017: `utils.test.ts` — Extend to 100% coverage
 
-- [ ] T005 Add test U-04 to `apps/unihub/frontend/src/components/PageTable/utils.test.ts`: `widthForHeader('A', 0)` → `{ width: 52 }` (floor=0 means no floor)
-- [ ] T006 Add test U-13: `computeScrollX([{width: 100}], 50)` → `100` (single column, custom fallback not used)
+- [x] T005 Add test U-04 to `apps/unihub/frontend/src/components/PageTable/utils.test.ts`: `widthForHeader('A', 0)` → `{ width: 52 }` (floor=0 means no floor)
+- [x] T006 Add test U-13: `computeScrollX([{width: 100}], 50)` → `100` (single column, custom fallback not used)
 
 ### T007–T012: `useStickyHeaderOffset.test.ts` — New file
 
-- [ ] T007 Create `apps/unihub/frontend/src/components/PageTable/useStickyHeaderOffset.test.ts`
-- [ ] T008 [P] Implement H-01: initial state returns `toolbarTop=56`, `offsetHeader=56` before any DOM is present
-- [ ] T009 [P] Implement H-02: site header `offsetHeight=72`, no toolbar → `toolbarTop=72`, `offsetHeader=72`
-- [ ] T010 [P] Implement H-03: site header=72 + toolbar `offsetHeight=48` → `toolbarTop=72`, `offsetHeader=120`
-- [ ] T011 [P] Implement H-04: no `.ant-layout-header` or `header` element → fallback `toolbarTop=56`
-- [ ] T012 [P] Implement H-05 + H-06: ResizeObserver triggers update on header resize; observer disconnected on unmount
+- [x] T007 Create `apps/unihub/frontend/src/components/PageTable/useStickyHeaderOffset.test.ts`
+- [x] T008 [P] Implement H-01: initial state returns `toolbarTop=56`, `offsetHeader=56` before any DOM is present
+- [x] T009 [P] Implement H-02: site header `offsetHeight=72`, no toolbar → `toolbarTop=72`, `offsetHeader=72`
+- [x] T010 [P] Implement H-03: site header=72 + toolbar `offsetHeight=48` → `toolbarTop=72`, `offsetHeader=120`
+- [x] T011 [P] Implement H-04: no `.ant-layout-header` or `header` element → fallback `toolbarTop=56`
+- [x] T012 [P] Implement H-05 + H-06: ResizeObserver triggers update on header resize; observer disconnected on unmount
 
 ### T013–T026: `PageTable.test.tsx` — New file
 
-- [ ] T013 Create `apps/unihub/frontend/src/components/PageTable/PageTable.test.tsx` with necessary imports and a minimal `renderPageTable` helper
-- [ ] T014 [P] Implement F-01 + F-02: render PageTable → `data-sticky-fix` attribute on `document.documentElement` and `<style data-sticky-fix>` in `document.head`
-- [ ] T015 [P] Implement F-03 + F-04: injected style contains `height:auto!important` and `overflow:visible!important` rules
-- [ ] T016 [P] Implement F-05 + F-06: unmount removes `data-sticky-fix` attribute and style tag
-- [ ] T017 [P] Implement P-01 + P-02 + P-03: renders `pageTitle`, renders `action`, renders without action when omitted
-- [ ] T018 [P] Implement P-04 + P-05 + P-06: `stickyToolbar` class present iff `headerTitle` or `toolBarRender` provided
-- [ ] T019 [P] Implement P-07 + P-08: `contentVisibility` class applied/not-applied based on prop
-- [ ] T020 [P] Implement P-09 + P-10: `pagination={false}` default; custom pagination passed through
-- [ ] T021 [P] Implement P-11 + P-12: ProTable always receives `search={false}` and `options={false}`
-- [ ] T022 Implement S-01: mock `body.scrollWidth > body.clientWidth` → `div[data-custom-scrollbar]` inserted in DOM
-- [ ] T023 Implement S-02: `scrollWidth <= clientWidth` → scrollbar `display: none`
-- [ ] T024 Implement S-05: `.ant-table-sticky-scroll` present → its `display` forced to `none`
-- [ ] T025 Implement S-06: spacer `style.width` equals `body.scrollWidth`
-- [ ] T026 Implement S-10 + S-11: unmount removes scrollbar div and cleans up scroll event listeners
+- [x] T013 Create `apps/unihub/frontend/src/components/PageTable/PageTable.test.tsx` with necessary imports and a minimal `renderPageTable` helper
+- [x] T014 [P] Implement F-01 + F-02: render PageTable → `data-sticky-fix` attribute on `document.documentElement` and `<style data-sticky-fix>` in `document.head`
+- [x] T015 [P] Implement F-03 + F-04: injected style contains `height:auto!important` and `overflow:visible!important` rules
+- [x] T016 [P] Implement F-05 + F-06: unmount removes `data-sticky-fix` attribute and style tag
+- [x] T017 [P] Implement P-01 + P-02 + P-03: renders `pageTitle`, renders `action`, renders without action when omitted
+- [x] T018 [P] Implement P-04 + P-05 + P-06: `stickyToolbar` class present iff `headerTitle` or `toolBarRender` provided
+- [x] T019 [P] Implement P-07 + P-08: `contentVisibility` class applied/not-applied based on prop
+- [x] T020 [P] Implement P-09 + P-10: `pagination={false}` default; custom pagination passed through
+- [x] T021 [P] Implement P-11 + P-12: ProTable always receives `search={false}` and `options={false}`
+- [x] T022 Implement S-01: mock `body.scrollWidth > body.clientWidth` → `div[data-custom-scrollbar]` inserted in DOM
+- [x] T023 Implement S-02: `scrollWidth <= clientWidth` → scrollbar `display: none`
+- [x] T024 Implement S-05: `.ant-table-sticky-scroll` present → its `display` forced to `none`
+- [x] T025 Implement S-06: spacer `style.width` equals `body.scrollWidth`
+- [x] T026 Implement S-10 + S-11: unmount removes scrollbar div and cleans up scroll event listeners
 
 **Checkpoint**: `pnpm test` is green. All new tests pass. Zero tests skipped due to jsdom limitations should be explicitly marked `.skip` with a comment.
 
@@ -88,13 +88,13 @@
 
 **Independent Test**: Open any Finance page, scroll horizontally — header stays aligned with body. No cell value is truncated. Resize browser to narrow width → horizontal scrollbar appears.
 
-- [ ] T027 [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/currencies/index.tsx` — measure max content width for each column (code, name) across currency rows; rebuild `columns` with widened widths; recompute `scroll.x`
-- [ ] T028 [P] [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` — measure name, currency, balance, created_at columns across account rows
-- [ ] T029 [P] [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/exchange-rates/index.tsx` — measure from_currency, to_currency, rate, date columns across exchange rate rows
-- [ ] T030 [P] [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` — measure date, notes columns across balance sheet rows
-- [ ] T031 [P] [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/balance-sheets/new.tsx` — measure account, currency, amount columns
-- [ ] T032 [P] [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/balance-sheets/edit.tsx` — measure account, currency, amount columns
-- [ ] T033 [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/balance-sheets/detail.tsx` — measure account_name, currency, amount columns
+- [x] T027 [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/currencies/index.tsx` — measure max content width for each column (code, name) across currency rows; rebuild `columns` with widened widths; recompute `scroll.x`
+- [x] T028 [P] [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` — measure name, currency, balance, created_at columns across account rows
+- [x] T029 [P] [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/exchange-rates/index.tsx` — measure from_currency, to_currency, rate, date columns across exchange rate rows
+- [x] T030 [P] [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` — measure date, notes columns across balance sheet rows
+- [x] T031 [P] [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/balance-sheets/new.tsx` — measure account, currency, amount columns
+- [x] T032 [P] [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/balance-sheets/edit.tsx` — measure account, currency, amount columns
+- [x] T033 [US1] [US3] Add `dataWidths` `useMemo` to `apps/unihub/frontend/src/pages/finance/balance-sheets/detail.tsx` — measure account_name, currency, amount columns
 
 **Checkpoint**: Open any Finance page with real data. Scroll horizontally — header stays perfectly aligned. All cell values fully visible without truncation. `pnpm typecheck && pnpm lint` passes.
 
@@ -106,13 +106,13 @@
 
 **Independent Test**: Open `/finance/balance-sheets/<id>` — net worth totals appear as a sticky footer inside the PageTable white card. Scroll down through balance rows — the footer stays visible at the bottom of the viewport.
 
-- [ ] T034 [US1] In `apps/unihub/frontend/src/pages/finance/balance-sheets/detail.tsx`:
+- [x] T034 [US1] In `apps/unihub/frontend/src/pages/finance/balance-sheets/detail.tsx`:
   - Remove the `Row/Col/Card/Statistic` block rendered above `<PageTable>` (lines 64–80)
   - Add a `NetWorthFooter` inline sub-component that renders `netWorth.per_currency` entries as a compact `Flex` row using `Statistic size="small"` with `prefix={entry.currency}`
   - Add `footer={() => netWorth?.per_currency.length ? <NetWorthFooter netWorth={netWorth} /> : null}` prop to `<PageTable>`
   - Remove `Spin`, `Row`, `Col`, `Card`, `Statistic` from imports if no longer used elsewhere in the file
-- [ ] T035 Add i18n key `pages.finance.balanceSheets.detail.footer.netWorth` to `apps/unihub/frontend/src/locales/en-US/pages.ts` → value: `"Net Worth"`
-- [ ] T036 [P] Add i18n key `pages.finance.balanceSheets.detail.footer.netWorth` to `apps/unihub/frontend/src/locales/zh-TW/pages.ts` → value: `"淨資產"`
+- [x] T035 Add i18n key `pages.finance.balanceSheets.detail.footer.netWorth` to `apps/unihub/frontend/src/locales/en-US/pages.ts` → value: `"Net Worth"`
+- [x] T036 [P] Add i18n key `pages.finance.balanceSheets.detail.footer.netWorth` to `apps/unihub/frontend/src/locales/zh-TW/pages.ts` → value: `"淨資產"`
 
 **Checkpoint**: Open balance-sheets detail with data. Net worth footer is inside the table card at the bottom. Scroll down — it stays sticky. No Statistic cards appear above the table. `pnpm typecheck && pnpm lint` passes.
 
@@ -136,8 +136,8 @@ These are verification tasks. No new code is expected — the `dataWidths` fix i
 
 **Purpose**: Exclusion comment, quality loop, and final manual verification checklist.
 
-- [ ] T039 Add an exclusion comment to the top of `apps/unihub/frontend/src/components/ImportExport/ChangePreviewTable.tsx` explaining why it intentionally uses `antd/Table` (not PageTable): sub-component in panel context, not a page, sticky behaviors require document as scroll container which conflicts with panel parent, small datasets
-- [ ] T040 Run full quality loop from `apps/unihub/frontend/`: `pnpm lint` → zero warnings; `pnpm typecheck` → zero errors; `pnpm test` → all tests pass. Fix any issues found before marking complete.
+- [x] T039 Add an exclusion comment to the top of `apps/unihub/frontend/src/components/ImportExport/ChangePreviewTable.tsx` explaining why it intentionally uses `antd/Table` (not PageTable): sub-component in panel context, not a page, sticky behaviors require document as scroll container which conflicts with panel parent, small datasets
+- [x] T040 Run full quality loop from `apps/unihub/frontend/`: `pnpm lint` → zero warnings; `pnpm typecheck` → zero errors; `pnpm test` → all tests pass. Fix any issues found before marking complete.
 - [ ] T041 Manual browser verification checklist (follow `quickstart.md`):
   - [ ] Open each Finance page — no cell content is truncated
   - [ ] Horizontal scroll on a wide page — sticky header stays aligned

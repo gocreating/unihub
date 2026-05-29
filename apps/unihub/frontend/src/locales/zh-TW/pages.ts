@@ -90,6 +90,25 @@ export default {
   'pages.finance.balanceSheets.deleteError': '刪除資產負債表失敗。',
   'pages.finance.balanceSheets.form.dateTime': '時間',
 
+  // Finance — Balance Sheet Detail — Visualization (US2)
+  'pages.finance.balanceSheets.detail.visualization.title': '視覺化',
+  'pages.finance.balanceSheets.detail.visualization.assetVsDebt': '資產 vs 負債',
+  'pages.finance.balanceSheets.detail.visualization.assetsOnly': '僅資產',
+  'pages.finance.balanceSheets.detail.visualization.debtsOnly': '僅負債',
+  'pages.finance.balanceSheets.detail.visualization.noAssets': '無資產帳戶',
+  'pages.finance.balanceSheets.detail.visualization.noDebts': '無負債帳戶',
+
+  // Finance — Balance Sheet Detail — Aggregation (US3)
+  'pages.finance.balanceSheets.detail.aggregation.title': '分組明細',
+  'pages.finance.balanceSheets.detail.aggregation.groupBy': '分組方式',
+  'pages.finance.balanceSheets.detail.aggregation.dimType': '類型',
+  'pages.finance.balanceSheets.detail.aggregation.dimCurrency': '幣別',
+  'pages.finance.balanceSheets.detail.aggregation.empty': '請選擇至少一個分組維度以查看明細',
+  'pages.finance.balanceSheets.detail.aggregation.col.group': '群組',
+  'pages.finance.balanceSheets.detail.aggregation.col.amount': '金額',
+  'pages.finance.balanceSheets.detail.aggregation.label.asset': '資產',
+  'pages.finance.balanceSheets.detail.aggregation.label.debt': '負債',
+
   // Finance — Balance Sheet Detail
   'pages.finance.balanceSheets.detail.back': '返回資產負債表',
   'pages.finance.balanceSheets.detail.title': '帳戶餘額',
@@ -105,6 +124,13 @@ export default {
   'pages.finance.balanceSheets.detail.amountRequired': '請輸入有效數字',
   'pages.finance.balanceSheets.detail.netWorth': '淨值（{currency}）',
   'pages.finance.balanceSheets.detail.footer.netWorth': '淨資產',
+
+  // Finance — Balance Sheets list — Visualization (US4)
+  'pages.finance.balanceSheets.visualization.title': '趨勢圖',
+  'pages.finance.balanceSheets.visualization.netWorthTrend': '淨資產趨勢',
+  'pages.finance.balanceSheets.visualization.stackedBreakdown': '餘額分析',
+  'pages.finance.balanceSheets.visualization.netWorth': '淨資產',
+  'pages.finance.balanceSheets.visualization.empty': '尚無資產負債表',
 
   // Finance — Exchange Rates
   'pages.finance.exchangeRates.filterBase': '依基準貨幣篩選…',

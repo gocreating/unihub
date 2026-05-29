@@ -1,19 +1,17 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.8.0 → 1.9.0 (minor — Principle VII updated to: (1) fix
-  ProTable→PageTable naming inconsistency in the ASCII diagram and rules,
-  (2) explicitly state that ALL tabular views including IO/system pages must
-  use PageTable, not domain pages only, (3) prohibit ProTable's built-in
-  search form — all filter/search controls must be custom and external to the
-  table component.)
-Modified principles:
-  - Principle VII: PageTable Layout — fixed naming, added IO/system scope,
-    added no-built-in-search rule
-Added sections: none
+Version change: 1.9.0 → 1.10.0 (minor — added Principle IX: Base Currency Net
+  Worth Valuation, governing the is_base_currency flag on the Currency model and
+  the requirement to show converted net worth valuations alongside original amounts
+  when a base currency is selected.)
+Modified principles: none
+Added sections:
+  - Principle IX: Base Currency Net Worth Valuation
 Removed sections: none
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ No changes needed
+  - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check
+    section is generic and reads live from this file)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
 Follow-up TODOs: None.
@@ -305,6 +303,57 @@ building it in from the start. The `react-intl` library is already wired into
 the app; the cost of using `formatMessage` over a hardcoded string is zero —
 the benefit is a fully localisable product.
 
+### IX. Base Currency Net Worth Valuation
+
+In the Finance domain, individual currencies MAY be designated as eligible base
+currencies for net worth valuation. When a base currency is selected in the
+application context, all Finance pages that display monetary amounts MUST show
+each amount's equivalent valuation in the selected base currency alongside the
+original amount.
+
+**Data model rule**:
+- The `Currency` model MUST include a boolean field `is_base_currency` (default
+  `False`). Only currencies with `is_base_currency=True` appear in the base
+  currency selector. Backend serializers MUST expose this field; it MUST be
+  included in the generated OpenAPI schema and frontend types.
+
+**Selector rule**:
+- Every Finance page that displays monetary amounts MUST render a base currency
+  selector at the top of the page. The selector lists only currencies where
+  `is_base_currency=True`. If no such currencies exist, the selector MUST be
+  hidden and no net worth valuation column MUST be rendered.
+- The selected base currency SHOULD persist across page navigations via
+  `localStorage` (key: `finance.baseCurrency`) so the user does not need to
+  reselect it on every visit.
+
+**Valuation display rules**:
+- When a base currency is selected, every table and card that shows a monetary
+  amount MUST include an additional net worth valuation column/field showing the
+  converted amount in the base currency.
+- Conversion MUST use the most recent `ExchangeRate` record available for the
+  currency pair (account currency → base currency). Rate lookup: find the record
+  with `base_currency = account_currency` and `quote_currency = base_currency`
+  (or the inverse and divide). Use the latest `date` among matching records.
+- When no `ExchangeRate` record covers a given pair, the net worth valuation cell
+  MUST display the standard empty-cell placeholder
+  (`<Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>`)
+  rather than crashing, hiding the column, or displaying a raw error.
+- In tree-aggregated views, the tree root node MUST display the total net worth as
+  the sum of all leaf-level converted amounts. Leaves with missing exchange rates
+  contribute `0` to the root total; a note or tooltip SHOULD indicate that the
+  total is partial when any rates are missing.
+- Net worth valuation amounts MUST be formatted using `formatAmount()` (Principle V
+  quality loop) and displayed with the base currency symbol prefix (via
+  `getCurrencySymbol()`).
+
+**Rationale**: The ability to view all balances through a single currency lens is
+the core analytical value of a multi-currency personal finance tracker. Requiring
+the valuation to appear alongside the original amount — rather than replacing it
+— preserves full transparency. The empty-placeholder rule for missing exchange
+rates prevents silent data loss and maintains UI consistency with Principle VI.
+Persisting the base currency selection in `localStorage` eliminates repetitive
+user interaction across page navigations.
+
 ## Development Constraints
 
 - **Package managers**: `pnpm` for frontend, `uv` for backend. Never use `npm`,
@@ -364,4 +413,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.9.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-29
+**Version**: 1.10.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-30

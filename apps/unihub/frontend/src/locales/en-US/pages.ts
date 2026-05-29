@@ -90,6 +90,25 @@ export default {
   'pages.finance.balanceSheets.deleteError': 'Failed to delete balance sheet.',
   'pages.finance.balanceSheets.form.dateTime': 'Time',
 
+  // Finance — Balance Sheet Detail — Visualization (US2)
+  'pages.finance.balanceSheets.detail.visualization.title': 'Visualization',
+  'pages.finance.balanceSheets.detail.visualization.assetVsDebt': 'Asset vs Debt',
+  'pages.finance.balanceSheets.detail.visualization.assetsOnly': 'Assets Only',
+  'pages.finance.balanceSheets.detail.visualization.debtsOnly': 'Debts Only',
+  'pages.finance.balanceSheets.detail.visualization.noAssets': 'No asset accounts',
+  'pages.finance.balanceSheets.detail.visualization.noDebts': 'No debt accounts',
+
+  // Finance — Balance Sheet Detail — Aggregation (US3)
+  'pages.finance.balanceSheets.detail.aggregation.title': 'Breakdown',
+  'pages.finance.balanceSheets.detail.aggregation.groupBy': 'Group by',
+  'pages.finance.balanceSheets.detail.aggregation.dimType': 'Type',
+  'pages.finance.balanceSheets.detail.aggregation.dimCurrency': 'Currency',
+  'pages.finance.balanceSheets.detail.aggregation.empty': 'Select at least one grouping dimension to see a breakdown',
+  'pages.finance.balanceSheets.detail.aggregation.col.group': 'Group',
+  'pages.finance.balanceSheets.detail.aggregation.col.amount': 'Amount',
+  'pages.finance.balanceSheets.detail.aggregation.label.asset': 'Asset',
+  'pages.finance.balanceSheets.detail.aggregation.label.debt': 'Debt',
+
   // Finance — Balance Sheet Detail
   'pages.finance.balanceSheets.detail.back': 'Back to Balance Sheets',
   'pages.finance.balanceSheets.detail.title': 'Account Balances',
@@ -105,6 +124,13 @@ export default {
   'pages.finance.balanceSheets.detail.amountRequired': 'Enter a valid number',
   'pages.finance.balanceSheets.detail.netWorth': 'Net Worth ({currency})',
   'pages.finance.balanceSheets.detail.footer.netWorth': 'Net Worth',
+
+  // Finance — Balance Sheets list — Visualization (US4)
+  'pages.finance.balanceSheets.visualization.title': 'Trends',
+  'pages.finance.balanceSheets.visualization.netWorthTrend': 'Net Worth Trend',
+  'pages.finance.balanceSheets.visualization.stackedBreakdown': 'Balance Breakdown',
+  'pages.finance.balanceSheets.visualization.netWorth': 'Net Worth',
+  'pages.finance.balanceSheets.visualization.empty': 'No balance sheets yet',
 
   // Finance — Exchange Rates
   'pages.finance.exchangeRates.filterBase': 'Filter by base currency…',

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Breadcrumb, Button, DatePicker, Input, Spin, Tag, message } from 'antd';
+import { Breadcrumb, Button, DatePicker, InputNumber, Spin, Tag, message } from 'antd';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -14,6 +14,7 @@ import {
   updateBalanceSheet,
   upsertBalance,
 } from '@/services/unihub-backend/finance';
+import { getCurrencySymbol } from '@/utils/finance';
 
 export function BalanceSheetEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -101,13 +102,16 @@ export function BalanceSheetEditPage() {
       key: 'amount',
       ...widthForHeader('Amount', 160),
       render: (_, record) => (
-        <Input
+        <InputNumber
           value={amountMap[record.id] ?? ''}
-          onChange={(e) =>
-            setAmountMap((prev) => ({ ...prev, [record.id]: e.target.value }))
+          onChange={(v) =>
+            setAmountMap((prev) => ({ ...prev, [record.id]: v !== null && v !== undefined ? String(v) : '' }))
           }
           placeholder="0.00"
-          style={{ width: 140 }}
+          controls={false}
+          addonBefore={getCurrencySymbol(record.currency)}
+          style={{ width: 180 }}
+          inputMode="decimal"
         />
       ),
     },

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Breadcrumb, Button, DatePicker, Input, Tag, message } from 'antd';
+import { Breadcrumb, Button, DatePicker, InputNumber, Tag, message } from 'antd';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +12,7 @@ import {
   listAccounts,
   upsertBalance,
 } from '@/services/unihub-backend/finance';
+import { getCurrencySymbol } from '@/utils/finance';
 
 export function BalanceSheetNewPage() {
   const navigate = useNavigate();
@@ -67,13 +68,16 @@ export function BalanceSheetNewPage() {
       key: 'amount',
       ...widthForHeader('Amount', 160),
       render: (_, record) => (
-        <Input
+        <InputNumber
           value={amountMap[record.id] ?? ''}
-          onChange={(e) =>
-            setAmountMap((prev) => ({ ...prev, [record.id]: e.target.value }))
+          onChange={(v) =>
+            setAmountMap((prev) => ({ ...prev, [record.id]: v !== null && v !== undefined ? String(v) : '' }))
           }
           placeholder="0.00"
-          style={{ width: 140 }}
+          controls={false}
+          addonBefore={getCurrencySymbol(record.currency)}
+          style={{ width: 180 }}
+          inputMode="decimal"
         />
       ),
     },

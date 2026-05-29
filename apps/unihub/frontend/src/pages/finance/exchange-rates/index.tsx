@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
 import type { ExchangeRate } from '@/services/unihub-backend/finance';
+import { formatAmount } from '@/utils/finance';
 import {
   createExchangeRate,
   deleteExchangeRate,
@@ -121,7 +122,8 @@ export function ExchangeRatesPage() {
         title: t({ id: 'pages.finance.exchangeRates.col.rate' }),
         dataIndex: 'rate',
         ...widthForHeader('Rate', Math.max(120, dataWidths.rate)),
-        render: (val) => parseFloat(val as string).toString(),
+        align: 'right',
+        render: (val) => formatAmount(val as string),
       },
       {
         title: t({ id: 'common.date' }),

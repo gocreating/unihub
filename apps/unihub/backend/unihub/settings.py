@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "language",  # language learning domain app
     "people",  # people / relationship network domain app
     "music",  # music collection domain app
+    "sync",  # data sync infrastructure
 ]
 
 MIDDLEWARE = [
@@ -79,6 +80,8 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
+
+SYNC_REPO_DIR = BASE_DIR.parent / "sync_repo"
 
 STATIC_URL = "/djstatic/"
 STATIC_ROOT = BASE_DIR / "staticfiles"

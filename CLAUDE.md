@@ -162,9 +162,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `003-legacy-data-migration` | **Plan**: [specs/003-legacy-data-migration/plan.md](specs/003-legacy-data-migration/plan.md)
+**Branch**: `004-data-sync-across-devices` | **Plan**: [specs/004-data-sync-devices/plan.md](specs/004-data-sync-devices/plan.md)
 
-One-off Python script (`data_migration/migrate.py`) that converts legacy finance CSVs into unihub's import format. Produces 5 output CSVs (currencies, accounts, balance sheets, balances header-only, exchange rates) in `data_migration/unihub-ready/`. See plan for column mapping, constitution check, and implementation approach.
+Adds a **Sync tab** to the existing data migration page (`/system/io`). Users configure a private GitHub repository + Personal Access Token; the backend uses git over HTTPS to publish per-table CSV snapshots and apply them back. New `sync` Django app with `SyncConfig` model + `GitSyncService`. Frontend `SyncTab` component reuses existing `ChangePreviewTable`. All strings i18n'd in `pages.io.sync.*` namespace. See plan for full 12-step implementation sequence and constitution check.
 <!-- SPECKIT END -->
 
 ## Active Technologies

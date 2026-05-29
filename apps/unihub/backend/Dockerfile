@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries \
     && apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client \
+    && apt-get install -y --no-install-recommends postgresql-client git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -19,6 +19,7 @@ COPY language/ ./language/
 COPY people/ ./people/
 COPY music/ ./music/
 COPY data_io/ ./data_io/
+COPY sync/ ./sync/
 COPY manage.py ./
 
 RUN UV_HTTP_TIMEOUT=120 uv sync --no-dev --no-editable

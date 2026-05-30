@@ -147,8 +147,11 @@ export function BalanceSheetsPage() {
     const accounts = [...new Set(stackedData.map((d) => d.accountName))];
     const series = accounts.map((acc) => ({
       name: acc,
-      type: 'bar' as const,
+      type: 'line' as const,
       stack: 'total',
+      smooth: 0.3,
+      symbol: 'none',
+      areaStyle: { opacity: 0.6 },
       emphasis: { focus: 'series' as const },
       data: dates.map((date) => {
         const entry = stackedData.find((d) => d.date === date && d.accountName === acc);
@@ -159,7 +162,7 @@ export function BalanceSheetsPage() {
       tooltip: {
         trigger: 'axis',
         confine: true,
-        axisPointer: { type: 'shadow', animation: false },
+        axisPointer: { animation: false },
         formatter: (raw) => {
           const params = raw as unknown as { axisValueLabel: string; seriesName: string; value: number; marker: string }[];
           const date = params[0]?.axisValueLabel ?? '';

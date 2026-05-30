@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Checkbox, Modal, Select, Space, Spin, Typography, message } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Card, Modal, Select, Space, Spin, Typography, message } from 'antd';
+import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, MinusOutlined, PlusOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import type { ProColumns } from '@ant-design/pro-components';
@@ -132,6 +132,13 @@ export function BalanceSheetsPage() {
   const stackedAccounts = useMemo(
     () => [...new Set(stackedData.map((d) => d.accountName))],
     [stackedData],
+  );
+
+  // Classify each account as 'assets' or 'debts' based on net total across all dates.
+  // Used for Equity Curve legend background colors (green = asset majority, red = debt).
+  const stackGroups = useMemo(
+    () => classifyAccountStacks(stackedData, stackedAccounts),
+    [stackedData, stackedAccounts],
   );
 
   // Account name → custom color map. Falls back to ECHARTS_COLORS by index when empty.
@@ -471,8 +478,8 @@ export function BalanceSheetsPage() {
       {/* Visualization card */}
       <Card
         tabList={[
-          { key: 'net-worth-trend',    label: t({ id: 'pages.finance.balanceSheets.visualization.netWorthTrend' }) },
-          { key: 'stacked-breakdown',  label: t({ id: 'pages.finance.balanceSheets.visualization.stackedBreakdown' }) },
+          { key: 'net-worth-trend',   label: 'Equity Curve' },
+          { key: 'stacked-breakdown', label: 'Account Trend' },
         ]}
         activeTabKey={chartType}
         onTabChange={(key) => setChartType(key as BalanceListChartType)}
@@ -498,22 +505,37 @@ export function BalanceSheetsPage() {
                     opts={{ renderer: 'svg' }}
                   />
                 </div>
-                {/* Select-all / Unselect-all for net worth trend */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, paddingInline: 4 }}>
-                  <Checkbox
-                    indeterminate={excludedFromNetWorth.size > 0 && excludedFromNetWorth.size < stackedAccounts.length}
-                    checked={excludedFromNetWorth.size === 0}
-                    onChange={(e) =>
-                      setExcludedFromNetWorth(e.target.checked ? new Set() : new Set(stackedAccounts))
-                    }
-                  >
-                    Select All
-                  </Checkbox>
+                {/* Select-all / Unselect-all — styled as a legend pill (same shape as account pills) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, paddingInline: 4 }}>
+                  {(() => {
+                    const allActive = excludedFromNetWorth.size === 0;
+                    const someActive = excludedFromNetWorth.size < stackedAccounts.length;
+                    return (
+                      <button
+                        onClick={() => setExcludedFromNetWorth(allActive ? new Set(stackedAccounts) : new Set())}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '3px 10px', border: 'none', borderRadius: 12, cursor: 'pointer',
+                          background: allActive ? '#1677ff' : someActive ? '#69b1ff' : '#e8e8e8',
+                          fontSize: 12, color: (allActive || someActive) ? '#fff' : '#bfbfbf',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {allActive
+                          ? <CheckOutlined style={{ fontSize: 10 }} />
+                          : someActive
+                          ? <MinusOutlined style={{ fontSize: 10 }} />
+                          : <MinusOutlined style={{ fontSize: 10, opacity: 0.4 }} />}
+                        All
+                      </button>
+                    );
+                  })()}
                 </div>
-                {/* Per-account legend — dot uses the account's custom color; pill stays neutral */}
+                {/* Per-account legend — green pill for asset-majority, red for debt-majority */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, paddingInline: 4 }}>
                   {stackedAccounts.map((acc) => {
-                    const accentColor = resolveAccountColor(acc, accountColors.get(acc));
+                    const isAsset = (stackGroups.get(acc) ?? 'assets') === 'assets';
+                    const activeColor = isAsset ? '#52c41a' : '#ff4d4f';
                     const excluded = excludedFromNetWorth.has(acc);
                     return (
                       <button
@@ -528,14 +550,14 @@ export function BalanceSheetsPage() {
                         style={{
                           display: 'flex', alignItems: 'center', gap: 5,
                           padding: '3px 10px',
-                          border: '1px solid #d9d9d9',
+                          border: 'none',
                           borderRadius: 12, cursor: 'pointer',
-                          background: excluded ? '#fff' : '#f5f5f5',
-                          fontSize: 12, color: excluded ? '#bfbfbf' : '#595959',
+                          background: excluded ? '#e8e8e8' : activeColor,
+                          fontSize: 12, color: excluded ? '#bfbfbf' : '#fff',
                           transition: 'all 0.2s',
                         }}
                       >
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: excluded ? '#d9d9d9' : accentColor }} />
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: excluded ? '#bfbfbf' : 'rgba(255,255,255,0.6)' }} />
                         {excluded ? <s>{acc}</s> : acc}
                       </button>
                     );
@@ -553,17 +575,31 @@ export function BalanceSheetsPage() {
                     opts={{ renderer: 'svg' }}
                   />
                 </div>
-                {/* Select-all / Unselect-all for balance breakdown */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, paddingInline: 4 }}>
-                  <Checkbox
-                    indeterminate={hiddenSeries.size > 0 && hiddenSeries.size < stackedAccounts.length}
-                    checked={hiddenSeries.size === 0}
-                    onChange={(e) =>
-                      setHiddenSeries(e.target.checked ? new Set() : new Set(stackedAccounts))
-                    }
-                  >
-                    Select All
-                  </Checkbox>
+                {/* Select-all / Unselect-all — styled as a legend pill (same shape as account pills) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, paddingInline: 4 }}>
+                  {(() => {
+                    const allActive = hiddenSeries.size === 0;
+                    const someActive = hiddenSeries.size < stackedAccounts.length;
+                    return (
+                      <button
+                        onClick={() => setHiddenSeries(allActive ? new Set(stackedAccounts) : new Set())}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '3px 10px', border: 'none', borderRadius: 12, cursor: 'pointer',
+                          background: allActive ? '#1677ff' : someActive ? '#69b1ff' : '#e8e8e8',
+                          fontSize: 12, color: (allActive || someActive) ? '#fff' : '#bfbfbf',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {allActive
+                          ? <CheckOutlined style={{ fontSize: 10 }} />
+                          : someActive
+                          ? <MinusOutlined style={{ fontSize: 10 }} />
+                          : <MinusOutlined style={{ fontSize: 10, opacity: 0.4 }} />}
+                        All
+                      </button>
+                    );
+                  })()}
                 </div>
                 {/* Per-account legend — click to toggle, hover to highlight area in chart */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, paddingInline: 4 }}>

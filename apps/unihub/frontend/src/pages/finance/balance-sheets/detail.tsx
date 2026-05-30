@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Breadcrumb, Button, Card, Checkbox, Dropdown,
@@ -7,7 +7,7 @@ import {
 import { CaretDownFilled, CaretRightFilled, EditOutlined, HolderOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
-import type { ProColumns } from '@ant-design/pro-components';
+import { ProTable, type ProColumns } from '@ant-design/pro-components';
 import Decimal from 'decimal.js';
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -31,12 +31,44 @@ import {
   type GroupingDimension,
 } from '@/utils/finance';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
+import { resolveAccountColor } from '@/utils/chartData';
 
-type BalanceDetailChartType = 'asset-vs-debt' | 'assets-only' | 'debts-only';
+type BalanceDetailChartType = 'asset-vs-debt' | 'assets-only' | 'debts-only' | 'aggregation';
 
 const DIMENSION_OPTIONS: GroupingDimension[] = ['type', 'currency'];
 // Extra width budget for tree expand icon + up to 2 indentation levels (15px each).
 const TREE_INDENT_BUDGET = 64;
+
+/**
+ * Collect keys for the default-expanded state:
+ * expand every non-leaf node EXCEPT those whose children are all leaves
+ * (the level directly above accounts).  Those stay collapsed so accounts
+ * are hidden until the user explicitly opens them.
+ */
+function collectDefaultExpandedKeys(nodes: AggTreeNode[]): React.Key[] {
+  const keys: React.Key[] = [];
+  for (const node of nodes) {
+    if (!node.children || node.children.length === 0) continue;
+    const allChildrenAreLeaves = node.children.every((c) => !c.children || c.children.length === 0);
+    if (!allChildrenAreLeaves) {
+      keys.push(node.key);
+      keys.push(...collectDefaultExpandedKeys(node.children));
+    }
+  }
+  return keys;
+}
+
+/** Collect all nodes reachable through currently-expanded keys (for dynamic column width). */
+function collectVisibleNodes(nodes: AggTreeNode[], expandedKeySet: Set<React.Key>): AggTreeNode[] {
+  const result: AggTreeNode[] = [];
+  for (const node of nodes) {
+    result.push(node);
+    if (expandedKeySet.has(node.key) && node.children) {
+      result.push(...collectVisibleNodes(node.children, expandedKeySet));
+    }
+  }
+  return result;
+}
 
 export function BalanceSheetDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -48,7 +80,7 @@ export function BalanceSheetDetailPage() {
   // Dimension state: orderedDimensions controls the display/drag order of ALL dimensions
   // (both checked and unchecked). checkedDimensions records which are active for grouping.
   const [orderedDimensions, setOrderedDimensions] = useState<GroupingDimension[]>(DIMENSION_OPTIONS);
-  const [checkedDimensions, setCheckedDimensions] = useState<Set<GroupingDimension>>(new Set());
+  const [checkedDimensions, setCheckedDimensions] = useState<Set<GroupingDimension>>(new Set<GroupingDimension>(['type', 'currency']));
 
   // The active grouping passed to buildAggTree: checked items in their display order.
   const activeGrouping = useMemo(
@@ -101,41 +133,75 @@ export function BalanceSheetDetailPage() {
   const debtBalances = useMemo(() => balances.filter((b) => new Decimal(b.amount).lt(0)), [balances]);
 
   const pieData = useMemo(() => {
-    if (chartType === 'asset-vs-debt') {
-      const assetTotal = assetBalances.reduce((s, b) => s.plus(b.amount), new Decimal(0));
-      const debtTotal = debtBalances.reduce((s, b) => s.plus(b.amount), new Decimal(0)).abs();
-      return [
-        { type: t({ id: 'pages.finance.balanceSheets.detail.aggregation.label.asset' }), value: assetTotal.toNumber() },
-        { type: t({ id: 'pages.finance.balanceSheets.detail.aggregation.label.debt' }), value: debtTotal.toNumber() },
-      ];
-    }
-    if (chartType === 'assets-only') {
-      return assetBalances.map((b) => ({ type: b.account_name, value: new Decimal(b.amount).toNumber() }));
-    }
-    return debtBalances.map((b) => ({ type: b.account_name, value: new Decimal(b.amount).abs().toNumber() }));
-  }, [chartType, assetBalances, debtBalances, t]);
+    const sym = getCurrencySymbol(baseCurrency ?? '');
+    const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
 
-  const pieOption = useMemo((): EChartsOption => ({
-    tooltip: {
-      trigger: 'item',
-      confine: true,
-      formatter: (params) => {
-        const p = params as { name: string; value: number; percent: number; marker: string };
-        return `${p.marker}${p.name}<br/>${formatAmount(String(p.value))} (${p.percent.toFixed(1)}%)`;
+    if (chartType === 'asset-vs-debt') {
+      const assetTotal = assetBalances.reduce((s, b) => {
+        const v = computeNw ? (computeNw(b.amount, b.currency) ?? new Decimal(b.amount)) : new Decimal(b.amount);
+        return s.plus(v);
+      }, new Decimal(0));
+      const debtTotal = debtBalances.reduce((s, b) => {
+        const v = computeNw ? (computeNw(b.amount, b.currency) ?? new Decimal(b.amount)) : new Decimal(b.amount);
+        return s.plus(v.abs());
+      }, new Decimal(0));
+      return {
+        items: [
+          { name: t({ id: 'pages.finance.balanceSheets.detail.aggregation.label.asset' }), value: assetTotal.toNumber() },
+          { name: t({ id: 'pages.finance.balanceSheets.detail.aggregation.label.debt' }),  value: debtTotal.toNumber() },
+        ],
+        // Fixed green/red palette — always set at option level so ECharts doesn't carry
+        // over the previous tab's palette when notMerge resets the chart.
+        colors: ['#52c41a', '#ff4d4f'] as string[],
+        fmtVal,
+      };
+    }
+
+    // Assets Only / Debts Only: use account color, FX value when available, sort desc.
+    const items = (chartType === 'assets-only' ? assetBalances : debtBalances)
+      .map((b) => {
+        const raw = new Decimal(b.amount);
+        const nwv = computeNw ? computeNw(b.amount, b.currency) : null;
+        const value = (nwv?.abs() ?? raw.abs()).toNumber();
+        return {
+          name: b.account_name,
+          value,
+          color: resolveAccountColor(b.account_name, b.color || undefined),
+        };
+      })
+      .sort((a, b) => b.value - a.value);
+    // Build option-level color array in the same order as data items so ECharts assigns
+    // each account its color regardless of whether notMerge clears per-item itemStyle.
+    return { items, colors: items.map((i) => i.color), fmtVal };
+  }, [chartType, assetBalances, debtBalances, baseCurrency, computeNw, t]);
+
+  const pieOption = useMemo((): EChartsOption => {
+    const { items, colors, fmtVal } = pieData;
+    return {
+      // Always set color at option level — reliable across tab switches with notMerge.
+      color: colors,
+      tooltip: {
+        trigger: 'item',
+        confine: true,
+        formatter: (params) => {
+          const p = params as { name: string; value: number; percent: number; marker: string };
+          return `${p.marker}${p.name}<br/>${fmtVal(p.value)} (${p.percent.toFixed(1)}%)`;
+        },
       },
-    },
-    legend: { show: false },
-    series: [
-      {
+      legend: { show: false },
+      series: [{
         type: 'pie',
-        radius: ['38%', '65%'],
-        data: pieData.map((d) => ({ name: d.type, value: d.value })),
+        roseType: 'area',
+        radius: ['10%', '68%'],
+        itemStyle: { borderRadius: 6 },
+        // Strip `color` field — it's only for building the option-level color array above.
+        data: items.map(({ name, value }) => ({ name, value })),
         label: { formatter: '{b}: {d}%', overflow: 'truncate' },
         labelLayout: { hideOverlap: true },
         emphasis: { label: { fontSize: 14, fontWeight: 'bold' } },
-      },
-    ],
-  }), [pieData]);
+      }],
+    };
+  }, [pieData]);
 
   const aggLabels = useMemo(
     () => ({
@@ -164,42 +230,38 @@ export function BalanceSheetDetailPage() {
   const treeWithRoot = useMemo(
     () =>
       baseCurrency
-        ? buildTreeWithRoot(treeData, totalNwInBase, t({ id: 'pages.finance.balanceSheets.detail.aggregation.total' }))
+        ? buildTreeWithRoot(treeData, totalNwInBase, 'All')
         : treeData,
-    [treeData, baseCurrency, totalNwInBase, t],
+    [treeData, baseCurrency, totalNwInBase],
   );
 
+  // Controlled tree expand state — all parent nodes expanded by default, leaf accounts collapsed.
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>(() => collectDefaultExpandedKeys(treeWithRoot));
+  // Reset to all-parents-expanded whenever the tree structure changes (dimensions switched, etc.).
+  useEffect(() => {
+    setExpandedKeys(collectDefaultExpandedKeys(treeWithRoot));
+  }, [treeWithRoot]);
+
   // ── PageTable-pattern column widths for the breakdown table ──────────────
+  // Computed from VISIBLE nodes (changes as user expands/collapses rows).
   const aggDataWidths = useMemo(() => {
-    const rootLabel = t({ id: 'pages.finance.balanceSheets.detail.aggregation.total' });
-    const w = {
-      label: measureTextWidth(rootLabel),
-      currency: 0,
-      amount: 0,
-      netWorth: baseCurrency ? measureTextWidth(`${getCurrencySymbol(baseCurrency)} 00,000.00`) : 0,
-    };
-    for (const b of balances) {
-      w.label = Math.max(
-        w.label,
-        measureTextWidth(b.account_name),
-        measureTextWidth(b.currency),
-        measureTextWidth(aggLabels.asset),
-        measureTextWidth(aggLabels.debt),
-      );
-      w.currency = Math.max(w.currency, measureTextWidth(b.currency));
-      w.amount = Math.max(w.amount, measureTextWidth(`${getCurrencySymbol(b.currency)} ${formatAmount(b.amount)}`));
-      if (computeNw && baseCurrency) {
-        const nwv = computeNw(b.amount, b.currency);
-        if (nwv) {
-          w.netWorth = Math.max(
-            w.netWorth,
-            measureTextWidth(`${getCurrencySymbol(baseCurrency)} ${formatAmount(nwv.toString())}`),
-          );
-        }
+    const expandedKeySet = new Set<React.Key>(expandedKeys);
+    const visibleNodes = collectVisibleNodes(treeWithRoot, expandedKeySet);
+    const w = { label: 0, amount: 0, netWorth: 0 };
+    for (const node of visibleNodes) {
+      w.label = Math.max(w.label, measureTextWidth(node.label));
+      if (node.currency) {
+        w.amount = Math.max(w.amount, measureTextWidth(`${getCurrencySymbol(node.currency)} ${formatAmount(node.amount.toString())}`));
+      }
+      if (baseCurrency && node.netWorthInBase != null) {
+        w.netWorth = Math.max(w.netWorth, measureTextWidth(`${getCurrencySymbol(baseCurrency)} ${formatAmount(node.netWorthInBase.toString())}`));
       }
     }
+    if (baseCurrency && w.netWorth === 0) {
+      w.netWorth = measureTextWidth(`${getCurrencySymbol(baseCurrency)} 00,000.00`);
+    }
     return w;
-  }, [balances, aggLabels, baseCurrency, computeNw, t]);
+  }, [treeWithRoot, expandedKeys, baseCurrency]);
 
   const aggTableColumns = useMemo((): ProColumns<AggTreeNode>[] => [
     {
@@ -210,23 +272,15 @@ export function BalanceSheetDetailPage() {
       ...widthForHeader('Group', Math.max(160, aggDataWidths.label + TREE_INDENT_BUDGET)),
     },
     {
-      title: t({ id: 'common.currency' }),
-      dataIndex: 'currency',
-      key: 'currency',
-      ...widthForHeader('Currency', Math.max(80, aggDataWidths.currency)),
-      render: (_dom, record) =>
-        record.currency
-          ? <Tag>{record.currency}</Tag>
-          : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
-    },
-    {
       title: t({ id: 'pages.finance.balanceSheets.detail.aggregation.col.amount' }),
       dataIndex: 'amount',
       key: 'amount',
       align: 'right',
       ...widthForHeader('Amount', Math.max(120, aggDataWidths.amount)),
       render: (_dom, record) => {
-        if (record.key === 'root') {
+        // Root node and multi-currency aggregates (e.g. "Asset" spanning TWD+USD):
+        // summing different currencies is meaningless, show placeholder.
+        if (record.key === 'root' || (!record.currency && !record.isLeaf)) {
           return <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
         }
         return record.currency
@@ -295,8 +349,10 @@ export function BalanceSheetDetailPage() {
   ], [t, dataWidths, baseCurrency, computeNw]);
 
   const isPieEmpty =
-    (chartType === 'assets-only' && assetBalances.length === 0) ||
-    (chartType === 'debts-only' && debtBalances.length === 0);
+    chartType !== 'aggregation' && (
+      (chartType === 'assets-only' && assetBalances.length === 0) ||
+      (chartType === 'debts-only' && debtBalances.length === 0)
+    );
 
   const emptyPieMsg =
     chartType === 'assets-only'
@@ -424,18 +480,76 @@ export function BalanceSheetDetailPage() {
         />
       </div>
 
-      {/* Visualization card */}
+      {/* Visualization card — 4 tabs: 3 rose charts + aggregation table */}
       <Card
         tabList={[
-          { key: 'asset-vs-debt', label: t({ id: 'pages.finance.balanceSheets.detail.visualization.assetVsDebt' }) },
-          { key: 'assets-only',   label: t({ id: 'pages.finance.balanceSheets.detail.visualization.assetsOnly' }) },
-          { key: 'debts-only',    label: t({ id: 'pages.finance.balanceSheets.detail.visualization.debtsOnly' }) },
+          { key: 'asset-vs-debt', label: 'A/L' },
+          { key: 'assets-only',   label: 'Assets Breakdown' },
+          { key: 'debts-only',    label: 'Debts Breakdown' },
+          { key: 'aggregation',   label: 'Statistics' },
         ]}
         activeTabKey={chartType}
         onTabChange={(key) => setChartType(key as BalanceDetailChartType)}
         style={{ marginBottom: 24 }}
       >
-        {isPieEmpty ? (
+        {chartType === 'aggregation' ? (
+          // Use ProTable ghost directly — no nested PageTable/ProCard structure that would
+          // interfere with the parent Card's tab-bar border-bottom.
+          <>
+            {/* Dimension selector sits inside the Card's natural 24px padding. */}
+            <div style={{ marginBottom: 12 }}>{dimensionSelector}</div>
+            <div>
+              <ProTable<AggTreeNode>
+                ghost
+                search={false}
+                options={false}
+                pagination={false}
+                rowKey="key"
+                columns={aggTableColumns}
+                dataSource={treeWithRoot}
+                expandable={{
+                  expandedRowKeys: expandedKeys,
+                  onExpand: (expanded, record) => {
+                    setExpandedKeys((prev) =>
+                      expanded
+                        ? [...prev, record.key as React.Key]
+                        : prev.filter((k) => k !== record.key),
+                    );
+                  },
+                  expandRowByClick: true,
+                  expandIcon: ({ expanded, onExpand, record }) => {
+                    const hasChildren = record.children && record.children.length > 0;
+                    if (!hasChildren) return <span style={{ display: 'inline-block', width: 16, marginRight: 4 }} />;
+                    return expanded ? (
+                      <CaretDownFilled
+                        onClick={(e) => { e.stopPropagation(); onExpand(record, e); }}
+                        style={{ cursor: 'pointer', marginRight: 4, fontSize: 10, color: '#8c8c8c' }}
+                      />
+                    ) : (
+                      <CaretRightFilled
+                        onClick={(e) => { e.stopPropagation(); onExpand(record, e); }}
+                        style={{ cursor: 'pointer', marginRight: 4, fontSize: 10, color: '#8c8c8c' }}
+                      />
+                    );
+                  },
+                }}
+                childrenColumnName="children"
+                size="small"
+                scroll={{ x: computeScrollX(aggTableColumns) }}
+                onRow={(record) => ({
+                  style: record.children && record.children.length > 0 ? { cursor: 'pointer' } : undefined,
+                })}
+                locale={{
+                  emptyText: (
+                    <Typography.Text type="secondary">
+                      {t({ id: 'pages.finance.balanceSheets.detail.aggregation.empty' })}
+                    </Typography.Text>
+                  ),
+                }}
+              />
+            </div>
+          </>
+        ) : isPieEmpty ? (
           <Typography.Text type="secondary">{emptyPieMsg}</Typography.Text>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -443,49 +557,6 @@ export function BalanceSheetDetailPage() {
           </div>
         )}
       </Card>
-
-      {/* Aggregation View — PageTable with sticky Group column, row-click expand, caret icons */}
-      <div style={{ marginBottom: 24 }}>
-        <PageTable<AggTreeNode>
-          pageTitle={t({ id: 'pages.finance.balanceSheets.detail.aggregation.title' })}
-          headerTitle={dimensionSelector}
-          rowKey="key"
-          columns={aggTableColumns}
-          dataSource={treeWithRoot}
-          expandable={{
-            defaultExpandAllRows: true,
-            expandRowByClick: true,
-            expandIcon: ({ expanded, onExpand, record }) => {
-              const hasChildren = record.children && record.children.length > 0;
-              if (!hasChildren) return <span style={{ display: 'inline-block', width: 16, marginRight: 4 }} />;
-              return expanded ? (
-                <CaretDownFilled
-                  onClick={(e) => { e.stopPropagation(); onExpand(record, e); }}
-                  style={{ cursor: 'pointer', marginRight: 4, fontSize: 10, color: '#8c8c8c' }}
-                />
-              ) : (
-                <CaretRightFilled
-                  onClick={(e) => { e.stopPropagation(); onExpand(record, e); }}
-                  style={{ cursor: 'pointer', marginRight: 4, fontSize: 10, color: '#8c8c8c' }}
-                />
-              );
-            },
-          }}
-          childrenColumnName="children"
-          size="small"
-          scroll={{ x: computeScrollX(aggTableColumns) }}
-          onRow={(record) => ({
-            style: record.children && record.children.length > 0 ? { cursor: 'pointer' } : undefined,
-          })}
-          locale={{
-            emptyText: (
-              <Typography.Text type="secondary">
-                {t({ id: 'pages.finance.balanceSheets.detail.aggregation.empty' })}
-              </Typography.Text>
-            ),
-          }}
-        />
-      </div>
 
       <PageTable<Balance>
         pageTitle={t({ id: 'pages.finance.balanceSheets.detail.title' })}

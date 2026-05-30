@@ -199,6 +199,8 @@ export function buildAggTree(
       amount: rawAmount.abs(),
       rawAmount,
       netWorthInBase,
+      // Currency-dimension nodes group a single currency: expose it so renders can prefix the symbol.
+      currency: dim === 'currency' ? k : undefined,
       children,
       isLeaf: false,
     });

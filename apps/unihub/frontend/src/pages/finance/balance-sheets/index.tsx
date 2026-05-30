@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Checkbox, Modal, Select, Segmented, Space, Spin, Typography, message } from 'antd';
+import { Button, Card, Checkbox, Modal, Select, Space, Spin, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
@@ -24,7 +24,6 @@ import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 
 type BalanceListChartType = 'net-worth-trend' | 'stacked-breakdown';
 
-const CARD_TITLE_STYLE: React.CSSProperties = { margin: 0 };
 
 // ECharts v6 default color palette — must match what the chart instance uses
 // so custom legend dots show the correct colors.
@@ -471,7 +470,13 @@ export function BalanceSheetsPage() {
 
       {/* Visualization card */}
       <Card
-        title={<Typography.Title level={4} style={CARD_TITLE_STYLE}>{t({ id: 'pages.finance.balanceSheets.visualization.title' })}</Typography.Title>}
+        title={t({ id: 'pages.finance.balanceSheets.visualization.title' })}
+        tabList={[
+          { key: 'net-worth-trend',    label: t({ id: 'pages.finance.balanceSheets.visualization.netWorthTrend' }) },
+          { key: 'stacked-breakdown',  label: t({ id: 'pages.finance.balanceSheets.visualization.stackedBreakdown' }) },
+        ]}
+        activeTabKey={chartType}
+        onTabChange={(key) => setChartType(key as BalanceListChartType)}
         style={{ marginBottom: 24 }}
       >
         {sheets.length === 0 ? (
@@ -480,15 +485,6 @@ export function BalanceSheetsPage() {
           </Typography.Text>
         ) : (
           <>
-            <Segmented
-              value={chartType}
-              onChange={(v) => setChartType(v as BalanceListChartType)}
-              options={[
-                { label: t({ id: 'pages.finance.balanceSheets.visualization.netWorthTrend' }), value: 'net-worth-trend' },
-                { label: t({ id: 'pages.finance.balanceSheets.visualization.stackedBreakdown' }), value: 'stacked-breakdown' },
-              ]}
-              style={{ marginBottom: 16 }}
-            />
             {allBalancesLoading ? (
               <Spin />
             ) : chartType === 'net-worth-trend' ? (

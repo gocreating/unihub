@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Breadcrumb, Button, Card, Checkbox, Dropdown,
-  Segmented, Select, Spin, Tag, Typography, message,
+  Select, Spin, Tag, Typography, message,
 } from 'antd';
 import { CaretDownFilled, CaretRightFilled, EditOutlined, HolderOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
@@ -35,7 +35,6 @@ import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 type BalanceDetailChartType = 'asset-vs-debt' | 'assets-only' | 'debts-only';
 
 const DIMENSION_OPTIONS: GroupingDimension[] = ['type', 'currency'];
-const CARD_TITLE_STYLE: React.CSSProperties = { margin: 0 };
 // Extra width budget for tree expand icon + up to 2 indentation levels (15px each).
 const TREE_INDENT_BUDGET = 64;
 
@@ -427,19 +426,16 @@ export function BalanceSheetDetailPage() {
 
       {/* Visualization card */}
       <Card
-        title={<Typography.Title level={4} style={CARD_TITLE_STYLE}>{t({ id: 'pages.finance.balanceSheets.detail.visualization.title' })}</Typography.Title>}
+        title={t({ id: 'pages.finance.balanceSheets.detail.visualization.title' })}
+        tabList={[
+          { key: 'asset-vs-debt', label: t({ id: 'pages.finance.balanceSheets.detail.visualization.assetVsDebt' }) },
+          { key: 'assets-only',   label: t({ id: 'pages.finance.balanceSheets.detail.visualization.assetsOnly' }) },
+          { key: 'debts-only',    label: t({ id: 'pages.finance.balanceSheets.detail.visualization.debtsOnly' }) },
+        ]}
+        activeTabKey={chartType}
+        onTabChange={(key) => setChartType(key as BalanceDetailChartType)}
         style={{ marginBottom: 24 }}
       >
-        <Segmented
-          value={chartType}
-          onChange={(v) => setChartType(v as BalanceDetailChartType)}
-          options={[
-            { label: t({ id: 'pages.finance.balanceSheets.detail.visualization.assetVsDebt' }), value: 'asset-vs-debt' },
-            { label: t({ id: 'pages.finance.balanceSheets.detail.visualization.assetsOnly' }), value: 'assets-only' },
-            { label: t({ id: 'pages.finance.balanceSheets.detail.visualization.debtsOnly' }), value: 'debts-only' },
-          ]}
-          style={{ marginBottom: 16 }}
-        />
         {isPieEmpty ? (
           <Typography.Text type="secondary">{emptyPieMsg}</Typography.Text>
         ) : (

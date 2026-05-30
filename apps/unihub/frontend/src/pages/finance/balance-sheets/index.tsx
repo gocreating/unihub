@@ -495,13 +495,12 @@ export function BalanceSheetsPage() {
                       setExcludedFromNetWorth(e.target.checked ? new Set() : new Set(stackedAccounts))
                     }
                   >
-                    {excludedFromNetWorth.size === 0 ? 'All selected' : `${stackedAccounts.length - excludedFromNetWorth.size} / ${stackedAccounts.length}`}
+                    Select All
                   </Checkbox>
                 </div>
-                {/* Per-account legend — click to exclude/include an account from the net worth total */}
+                {/* Per-account legend — neutral colors (account colors are meaningless in the trend view) */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, paddingInline: 4 }}>
-                  {stackedAccounts.map((acc, i) => {
-                    const color = ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
+                  {stackedAccounts.map((acc) => {
                     const excluded = excludedFromNetWorth.has(acc);
                     return (
                       <button
@@ -516,14 +515,14 @@ export function BalanceSheetsPage() {
                         style={{
                           display: 'flex', alignItems: 'center', gap: 5,
                           padding: '3px 10px',
-                          border: `1px solid ${excluded ? '#e0e0e0' : color}`,
+                          border: '1px solid #d9d9d9',
                           borderRadius: 12, cursor: 'pointer',
-                          background: excluded ? '#fff' : `${color}1a`,
-                          fontSize: 12, color: excluded ? '#bfbfbf' : 'inherit',
+                          background: excluded ? '#fff' : '#f5f5f5',
+                          fontSize: 12, color: excluded ? '#bfbfbf' : '#595959',
                           transition: 'all 0.2s',
                         }}
                       >
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: excluded ? '#d9d9d9' : color }} />
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: excluded ? '#d9d9d9' : '#8c8c8c' }} />
                         {excluded ? <s>{acc}</s> : acc}
                       </button>
                     );
@@ -550,7 +549,7 @@ export function BalanceSheetsPage() {
                       setHiddenSeries(e.target.checked ? new Set() : new Set(stackedAccounts))
                     }
                   >
-                    {hiddenSeries.size === 0 ? 'All visible' : `${stackedAccounts.length - hiddenSeries.size} / ${stackedAccounts.length}`}
+                    Select All
                   </Checkbox>
                 </div>
                 {/* Per-account legend — click to toggle, hover to highlight area in chart */}

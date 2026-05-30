@@ -215,7 +215,10 @@ export function BalanceSheetsPage() {
       tooltip: {
         trigger: 'axis',
         appendToBody: true,
-        axisPointer: { animation: false },
+        axisPointer: {
+          animation: false,
+          lineStyle: { color: '#555', width: 2, type: 'solid' },
+        },
         position: (point, _p, _dom, _rect, size) => {
           const [x, y] = point as [number, number];
           const [tw = 0, th = 0] = (size as { contentSize: number[] }).contentSize;
@@ -308,7 +311,10 @@ export function BalanceSheetsPage() {
         // pointer-events:none on the tooltip and scroll events pass through to
         // the chart — making the scrollbar inaccessible.
         enterable: true,
-        axisPointer: { animation: false },
+        axisPointer: {
+          animation: false,
+          lineStyle: { color: '#555', width: 2, type: 'solid' },
+        },
         position: (point, _p, _dom, _rect, size) => {
           const [x, y] = point as [number, number];
           const [tw = 0, th = 0] = (size as { contentSize: number[] }).contentSize;

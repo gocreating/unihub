@@ -6,6 +6,58 @@
  */
 
 /**
+ * Builds two time-series (positive/negative) for a net worth trend chart by
+ * interpolating the exact zero-crossing timestamp between consecutive data
+ * points with different signs.
+ *
+ * Both series share a single [crossingTimestamp, 0] data point at each sign
+ * change, so they visually join at y=0 with NO overlapping x-ranges. This
+ * is the correct approach for per-segment green/red coloring on a time axis.
+ *
+ * @returns positiveData / negativeData — arrays of [timestamp, value] pairs
+ *   sorted by timestamp, ready for ECharts `xAxis.type: 'time'`.
+ */
+export function buildNetWorthWithCrossings(
+  netWorthData: { date: string; netWorth: number }[],
+): {
+  positiveData: [number, number][];
+  negativeData: [number, number][];
+} {
+  const positiveData: [number, number][] = [];
+  const negativeData: [number, number][] = [];
+
+  for (let i = 0; i < netWorthData.length; i++) {
+    const d = netWorthData[i]!;
+    const ts = new Date(d.date).getTime();
+
+    if (d.netWorth >= 0) {
+      positiveData.push([ts, d.netWorth]);
+    } else {
+      negativeData.push([ts, d.netWorth]);
+    }
+
+    // Interpolate zero-crossing point between this data point and the next.
+    if (i < netWorthData.length - 1) {
+      const next = netWorthData[i + 1]!;
+      const differentSign = d.netWorth >= 0 !== next.netWorth >= 0;
+      if (differentSign) {
+        const nextTs = new Date(next.date).getTime();
+        // Linear interpolation: fraction of the way from d to next where y=0.
+        const frac = Math.abs(d.netWorth) / (Math.abs(d.netWorth) + Math.abs(next.netWorth));
+        const crossTs = Math.round(ts + (nextTs - ts) * frac);
+        positiveData.push([crossTs, 0]);
+        negativeData.push([crossTs, 0]);
+      }
+    }
+  }
+
+  positiveData.sort((a, b) => a[0] - b[0]);
+  negativeData.sort((a, b) => a[0] - b[0]);
+
+  return { positiveData, negativeData };
+}
+
+/**
  * Splits a net worth value series into a green (≥0) subseries and a red (<0)
  * subseries for two-series line chart coloring.
  *

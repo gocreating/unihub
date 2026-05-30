@@ -19,7 +19,7 @@ import {
   listExchangeRates,
 } from '@/services/unihub-backend/finance';
 import { computeNetWorthInBase, formatAmount, getCurrencySymbol } from '@/utils/finance';
-import { classifyAccountStacks, computeGreenRedSeries } from '@/utils/chartData';
+import { classifyAccountStacks } from '@/utils/chartData';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 
 type BalanceListChartType = 'net-worth-trend' | 'stacked-breakdown';
@@ -176,30 +176,34 @@ export function BalanceSheetsPage() {
 
   const lineOption = useMemo((): EChartsOption => {
     const nwLabel = t({ id: 'pages.finance.balanceSheets.visualization.netWorth' });
-    const nwNegKey = `${nwLabel}__neg`;
     const sym = getCurrencySymbol(baseCurrency ?? '');
     const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
 
-    // Two-series approach gives per-segment line + area coloring (green ≥ 0, red < 0).
-    //
-    // How it works:
-    //   greenVals: actual value where v ≥ 0, boundary 0 at the adjacent x of a sign
-    //              change, null everywhere else.
-    //   redVals:   actual value where v < 0, boundary 0 at the adjacent x of a sign
-    //              change, null everywhere else.
-    //
-    // Both series share a 0 at sign-change boundaries so they join at (x, 0) and
-    // together render as ONE continuous line that changes color at the crossing.
-    //
-    // Dot fix: boundary zeros get symbol:'none' so only ONE visible dot appears per x.
-    //
-    // Tooltip fix: formatter reduces both series into a single row by picking the
-    // value with the largest absolute magnitude.
-    const values = netWorthData.map((d) => d.netWorth);
-    const { greenVals, redVals } = computeGreenRedSeries(values);
+    // Use time axis with [timestamp, value] 2-D data so that visualMap.piecewise
+    // can safely access dimension:1 (y-value).  The previous categorical-axis
+    // approach stored data as 1-D scalars — dimension:1 did not exist there,
+    // causing a 'coord' crash inside the visualMap renderer.
+    const timeData: [number, number][] = netWorthData.map((d) => [
+      new Date(d.date).getTime(),
+      d.netWorth,
+    ]);
 
     return {
       legend: { show: false },
+      // piecewise visualMap colors BOTH the line stroke and the area fill
+      // based on the y-value of each data point:
+      //   green (#52c41a) when net worth ≥ 0 (asset)
+      //   red   (#ff4d4f) when net worth < 0  (debt)
+      visualMap: [{
+        show: false,
+        type: 'piecewise',
+        dimension: 1,      // y-value (index 1 of [timestamp, value])
+        seriesIndex: 0,
+        pieces: [
+          { lt: 0,  color: '#ff4d4f' },
+          { gte: 0, color: '#52c41a' },
+        ],
+      }],
       tooltip: {
         trigger: 'axis',
         appendToBody: true,
@@ -212,61 +216,37 @@ export function BalanceSheetsPage() {
           const ty = Math.max(10, Math.min(y - th / 2, window.innerHeight - th - 10));
           return [tx, ty];
         },
-        // Merge both series into one tooltip row — pick the value with the highest
-        // absolute magnitude (boundary zeros are overridden by the real value).
         formatter: (raw) => {
-          const params = raw as unknown as { axisValueLabel: string; value: number | null }[];
-          if (!params.length || !params[0]) return '';
-          const date = params[0].axisValueLabel;
-          const actual = params.reduce((best, p) => {
-            const v = (p.value as number | null) ?? 0;
-            return Math.abs(v) > Math.abs(best) ? v : best;
-          }, 0);
-          const dot = `<span style="display:inline-block;margin-right:4px;border-radius:50%;width:10px;height:10px;background:${actual >= 0 ? '#52c41a' : '#ff4d4f'}"></span>`;
-          return `<b>${date}</b><table style="margin-top:6px;border-spacing:0">${tooltipRow(dot, nwLabel, fmtVal(actual))}</table>`;
+          const params = raw as unknown as { value: [number, number] }[];
+          const p = params[0];
+          if (!p) return '';
+          const [ts, v] = p.value;
+          const date = dayjs(ts).format('YYYY-MM-DD');
+          const dot = `<span style="display:inline-block;margin-right:4px;border-radius:50%;width:10px;height:10px;background:${v >= 0 ? '#52c41a' : '#ff4d4f'}"></span>`;
+          return `<b>${date}</b><table style="margin-top:6px;border-spacing:0">${tooltipRow(dot, nwLabel, fmtVal(v))}</table>`;
         },
       },
       grid: { left: '3%', right: '4%', bottom: '4%', containLabel: true },
       xAxis: {
-        type: 'category',
-        data: netWorthData.map((d) => d.date),
-        axisLabel: { rotate: netWorthData.length > 6 ? 30 : 0 },
+        type: 'time',
+        axisLabel: {
+          formatter: (val: number) => dayjs(val).format('YYYY-MM-DD'),
+          rotate: 30,
+        },
       },
       yAxis: { type: 'value', axisLabel: { formatter: (v: number) => sym ? `${sym} ${formatTick(v)}` : formatTick(v) } },
-      series: [
-        {
-          name: nwLabel,
-          type: 'line',
-          // Boundary zeros: symbol:'none' → only real positive values get a visible dot.
-          data: greenVals.map((v) => ({
-            value: v,
-            symbol: v !== null && v > 0 ? 'circle' : 'none',
-            symbolSize: 6,
-            itemStyle: { color: '#52c41a' },
-          })),
-          lineStyle: { color: '#52c41a' },
-          itemStyle: { color: '#52c41a' },
-          areaStyle: { color: 'rgba(82,196,26,0.18)' },
-          connectNulls: false,
-          smooth: 0.3,
-        },
-        {
-          name: nwNegKey,
-          type: 'line',
-          // Boundary zeros: symbol:'none' → only real negative values get a visible dot.
-          data: redVals.map((v) => ({
-            value: v,
-            symbol: v !== null && v < 0 ? 'circle' : 'none',
-            symbolSize: 6,
-            itemStyle: { color: '#ff4d4f' },
-          })),
-          lineStyle: { color: '#ff4d4f' },
-          itemStyle: { color: '#ff4d4f' },
-          areaStyle: { color: 'rgba(255,77,79,0.18)' },
-          connectNulls: false,
-          smooth: 0.3,
-        },
-      ],
+      series: [{
+        name: nwLabel,
+        type: 'line',
+        data: timeData,
+        // areaStyle activates the fill; visualMap controls its color per segment.
+        // opacity here sets how transparent the fill is (line stays fully opaque).
+        areaStyle: { opacity: 0.18 },
+        smooth: 0.3,
+        // Hide the dot at exactly y=0 (natural zero crossings) to keep the line clean.
+        symbol: (rawVal: unknown) => ((rawVal as [number, number])[1] !== 0 ? 'circle' : 'none'),
+        symbolSize: 6,
+      }],
     };
   }, [netWorthData, baseCurrency, t]);
 

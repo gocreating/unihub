@@ -443,7 +443,9 @@ export function BalanceSheetDetailPage() {
         {isPieEmpty ? (
           <Typography.Text type="secondary">{emptyPieMsg}</Typography.Text>
         ) : (
-          <ReactECharts option={pieOption} style={{ height: 300 }} opts={{ renderer: 'svg' }} notMerge />
+          <div style={{ overflowX: 'auto' }}>
+            <ReactECharts option={pieOption} style={{ height: 300, width: '100%', minWidth: 480 }} opts={{ renderer: 'svg' }} notMerge />
+          </div>
         )}
       </Card>
 

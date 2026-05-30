@@ -408,12 +408,14 @@ export function BalanceSheetsPage() {
               <Spin />
             ) : chartType === 'net-worth-trend' ? (
               <>
-                <ReactECharts
-                  ref={lineChartRef}
-                  option={lineOption}
-                  style={{ height: 720, width: '100%' }}
-                  opts={{ renderer: 'svg' }}
-                />
+                <div style={{ overflowX: 'auto' }}>
+                  <ReactECharts
+                    ref={lineChartRef}
+                    option={lineOption}
+                    style={{ height: 720, width: '100%', minWidth: 600 }}
+                    opts={{ renderer: 'svg' }}
+                  />
+                </div>
                 {/* Custom legend */}
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
                   <button
@@ -435,12 +437,14 @@ export function BalanceSheetsPage() {
               </>
             ) : (
               <>
-                <ReactECharts
-                  ref={stackedChartRef}
-                  option={stackedOption}
-                  style={{ height: 720, width: '100%' }}
-                  opts={{ renderer: 'svg' }}
-                />
+                <div style={{ overflowX: 'auto' }}>
+                  <ReactECharts
+                    ref={stackedChartRef}
+                    option={stackedOption}
+                    style={{ height: 720, width: '100%', minWidth: 600 }}
+                    opts={{ renderer: 'svg' }}
+                  />
+                </div>
                 {/* Custom legend — one pill per account, click to toggle */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingInline: 4 }}>
                   {stackedAccounts.map((acc, i) => {

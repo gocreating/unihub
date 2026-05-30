@@ -1,13 +1,12 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.9.0 → 1.10.0 (minor — added Principle IX: Base Currency Net
-  Worth Valuation, governing the is_base_currency flag on the Currency model and
-  the requirement to show converted net worth valuations alongside original amounts
-  when a base currency is selected.)
+Version change: 1.10.0 → 1.11.0 (minor — added Principle X: Chart Rendering,
+  governing minimum chart width and horizontal-scroll container requirements so
+  charts remain usable and undistorted on narrow screens.)
 Modified principles: none
 Added sections:
-  - Principle IX: Base Currency Net Worth Valuation
+  - Principle X: Chart Rendering
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check
@@ -354,6 +353,41 @@ rates prevents silent data loss and maintains UI consistency with Principle VI.
 Persisting the base currency selection in `localStorage` eliminates repetitive
 user interaction across page navigations.
 
+### X. Chart Rendering
+
+Every chart rendered in the application MUST be protected against layout distortion
+on narrow screens. This applies to all chart components regardless of the charting
+library in use.
+
+**Minimum width rule**:
+- Every chart MUST have a minimum intrinsic width of at least **600 px** (or a
+  domain-appropriate wider value when the chart contains many series or axis
+  labels). The minimum width MUST be enforced via inline style or a CSS class on
+  the chart element — not by the parent container.
+
+**Horizontal-scroll container rule**:
+- The immediate container wrapping a chart MUST apply
+  `overflow-x: auto` (or equivalent) so that when the viewport is narrower than
+  the chart's minimum width, the chart remains fully accessible via horizontal
+  scrolling rather than being clipped or squashed.
+- The container MUST NOT apply `overflow: hidden` or any style that clips
+  horizontal content.
+
+**Implementation**:
+- Wrap each chart in a `<div style={{ overflowX: 'auto' }}>` (or equivalent).
+- On the chart element itself, apply `style={{ minWidth: N, width: '100%' }}`
+  where `N` is the minimum width in pixels.
+- The `width: '100%'` allows the chart to expand to fill available space when
+  the container is wider than the minimum.
+
+**Rationale**: Desktop-first layout (Constraint: mobile out of scope for v1) does
+not mean narrow-screen resilience can be ignored. Sidebars, split panes, and
+embedded panels can reduce effective chart width significantly. Without a minimum
+width + scroll container, charts become unreadable — axis labels overlap, pie
+segments shrink to invisible, and line charts collapse to meaningless blobs. A
+horizontal scrollbar is a zero-cost, universally understood fallback that keeps
+all chart information accessible.
+
 ## Development Constraints
 
 - **Package managers**: `pnpm` for frontend, `uv` for backend. Never use `npm`,
@@ -413,4 +447,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.10.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-30
+**Version**: 1.11.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-30

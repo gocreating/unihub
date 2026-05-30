@@ -220,8 +220,15 @@ export function BalanceSheetsPage() {
           const [x, y] = point as [number, number];
           const [tw = 0, th = 0] = (size as { contentSize: number[] }).contentSize;
           const OFFSET = 20;
-          const tx = x + OFFSET + tw > window.innerWidth - 10 ? x - OFFSET - tw : x + OFFSET;
-          const ty = Math.max(10, Math.min(y - th / 2, window.innerHeight - th - 10));
+          // Use actual size when available; fall back to generous estimates so the
+          // flip-to-left logic fires correctly even before contentSize is computed
+          // (e.g. on first hover or with enterable:true).
+          const estW = tw > 0 ? tw : 500;
+          const estH = Math.min(th > 0 ? th : 300, window.innerHeight * 0.85);
+          const tx = x + OFFSET + estW > window.innerWidth - 20
+            ? Math.max(10, x - OFFSET - estW)
+            : x + OFFSET;
+          const ty = Math.max(10, Math.min(y - estH / 2, window.innerHeight - estH - 10));
           return [tx, ty];
         },
         formatter: (raw) => {
@@ -306,8 +313,15 @@ export function BalanceSheetsPage() {
           const [x, y] = point as [number, number];
           const [tw = 0, th = 0] = (size as { contentSize: number[] }).contentSize;
           const OFFSET = 20;
-          const tx = x + OFFSET + tw > window.innerWidth - 10 ? x - OFFSET - tw : x + OFFSET;
-          const ty = Math.max(10, Math.min(y - th / 2, window.innerHeight - th - 10));
+          // Use actual size when available; fall back to generous estimates so the
+          // flip-to-left logic fires correctly even before contentSize is computed
+          // (e.g. on first hover or with enterable:true).
+          const estW = tw > 0 ? tw : 500;
+          const estH = Math.min(th > 0 ? th : 300, window.innerHeight * 0.85);
+          const tx = x + OFFSET + estW > window.innerWidth - 20
+            ? Math.max(10, x - OFFSET - estW)
+            : x + OFFSET;
+          const ty = Math.max(10, Math.min(y - estH / 2, window.innerHeight - estH - 10));
           return [tx, ty];
         },
         // All non-zero items, sorted by |value| desc, in a scrollable panel.

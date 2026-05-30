@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Modal, Space, Typography, message } from 'antd';
+import { Button, Form, Input, Modal, Space, Switch, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useIntl } from 'react-intl';
@@ -13,12 +13,19 @@ import {
   updateCurrency,
 } from '@/services/unihub-backend/finance';
 
+interface CurrencyFormValues {
+  code: string;
+  name: string;
+  symbol: string;
+  is_base_currency: boolean;
+}
+
 export function CurrenciesPage() {
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<CurrencyFormValues>();
 
   const { data: currencies = [], isLoading, isError } = useQuery({
     queryKey: ['finance', 'currencies'],
@@ -64,6 +71,7 @@ export function CurrenciesPage() {
   const openCreate = () => {
     setEditingCurrency(null);
     form.resetFields();
+    form.setFieldsValue({ is_base_currency: false });
     setModalOpen(true);
   };
 
@@ -73,9 +81,12 @@ export function CurrenciesPage() {
     setModalOpen(true);
   };
 
-  const onFinish = (values: Currency) => {
+  const onFinish = (values: CurrencyFormValues) => {
     if (editingCurrency) {
-      updateMutation.mutate({ code: editingCurrency.code, data: { name: values.name, symbol: values.symbol } });
+      updateMutation.mutate({
+        code: editingCurrency.code,
+        data: { name: values.name, symbol: values.symbol, is_base_currency: values.is_base_currency },
+      });
     } else {
       createMutation.mutate({ ...values, code: values.code.toUpperCase() });
     }
@@ -103,6 +114,14 @@ export function CurrenciesPage() {
         ...widthForHeader('Symbol', dataWidths.symbol),
         render: (val) =>
           val ? String(val) : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
+      },
+      {
+        title: t({ id: 'pages.finance.currencies.col.isBaseCurrency' }),
+        dataIndex: 'is_base_currency',
+        width: 130,
+        render: (_, record) => (
+          <Switch checked={record.is_base_currency} disabled size="small" />
+        ),
       },
       {
         title: t({ id: 'common.actions' }),
@@ -183,6 +202,16 @@ export function CurrenciesPage() {
           <Form.Item name="symbol" label={t({ id: 'pages.finance.currencies.col.symbol' })}>
             <Input placeholder={t({ id: 'pages.finance.currencies.form.symbolPlaceholder' })} maxLength={10} />
           </Form.Item>
+          <Form.Item
+            name="is_base_currency"
+            label={t({ id: 'pages.finance.currencies.col.isBaseCurrency' })}
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+          <Typography.Text type="secondary" style={{ display: 'block', marginTop: -16, marginBottom: 8 }}>
+            {t({ id: 'pages.finance.currencies.form.isBaseCurrency' })}
+          </Typography.Text>
         </Form>
       </Modal>
     </>

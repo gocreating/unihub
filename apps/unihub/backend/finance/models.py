@@ -7,6 +7,7 @@ class Currency(models.Model):
     code = models.CharField(max_length=3, primary_key=True)
     name = models.CharField(max_length=100)
     symbol = models.CharField(max_length=10, blank=True)
+    is_base_currency = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["code"]
@@ -20,6 +21,7 @@ class Account(models.Model):
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     name = models.CharField(max_length=200)
     currency = models.CharField(max_length=3)
+    color = models.CharField(max_length=25, blank=True, default="")  # hex e.g. '#4caf50' (7) or css rgb() (up to 20)
     open_datetime = models.DateTimeField(null=True, blank=True)
     close_datetime = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

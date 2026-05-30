@@ -1,19 +1,21 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.8.0 → 1.9.0 (minor — Principle VII updated to: (1) fix
-  ProTable→PageTable naming inconsistency in the ASCII diagram and rules,
-  (2) explicitly state that ALL tabular views including IO/system pages must
-  use PageTable, not domain pages only, (3) prohibit ProTable's built-in
-  search form — all filter/search controls must be custom and external to the
-  table component.)
-Modified principles:
-  - Principle VII: PageTable Layout — fixed naming, added IO/system scope,
-    added no-built-in-search rule
-Added sections: none
+Version change: 1.11.0 → 1.12.0 (minor — added Principle XI: Chart Library &
+  Visualization Standards, encoding the ECharts library choice, SVG renderer
+  requirement, account color system, visualization card tab pattern, and
+  ProTable ghost rule for embedded tables. Reflects Finance domain implementation
+  completed 2026-05-31.)
+Version change: 1.10.0 → 1.11.0 (minor — added Principle X: Chart Rendering,
+  governing minimum chart width and horizontal-scroll container requirements so
+  charts remain usable and undistorted on narrow screens.)
+Modified principles: none
+Added sections:
+  - Principle X: Chart Rendering
 Removed sections: none
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ No changes needed
+  - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check
+    section is generic and reads live from this file)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
 Follow-up TODOs: None.
@@ -305,6 +307,127 @@ building it in from the start. The `react-intl` library is already wired into
 the app; the cost of using `formatMessage` over a hardcoded string is zero —
 the benefit is a fully localisable product.
 
+### IX. Base Currency Net Worth Valuation
+
+In the Finance domain, individual currencies MAY be designated as eligible base
+currencies for net worth valuation. When a base currency is selected in the
+application context, all Finance pages that display monetary amounts MUST show
+each amount's equivalent valuation in the selected base currency alongside the
+original amount.
+
+**Data model rule**:
+- The `Currency` model MUST include a boolean field `is_base_currency` (default
+  `False`). Only currencies with `is_base_currency=True` appear in the base
+  currency selector. Backend serializers MUST expose this field; it MUST be
+  included in the generated OpenAPI schema and frontend types.
+
+**Selector rule**:
+- Every Finance page that displays monetary amounts MUST render a base currency
+  selector at the top of the page. The selector lists only currencies where
+  `is_base_currency=True`. If no such currencies exist, the selector MUST be
+  hidden and no net worth valuation column MUST be rendered.
+- The selected base currency SHOULD persist across page navigations via
+  `localStorage` (key: `finance.baseCurrency`) so the user does not need to
+  reselect it on every visit.
+
+**Valuation display rules**:
+- When a base currency is selected, every table and card that shows a monetary
+  amount MUST include an additional net worth valuation column/field showing the
+  converted amount in the base currency.
+- Conversion MUST use the most recent `ExchangeRate` record available for the
+  currency pair (account currency → base currency). Rate lookup: find the record
+  with `base_currency = account_currency` and `quote_currency = base_currency`
+  (or the inverse and divide). Use the latest `date` among matching records.
+- When no `ExchangeRate` record covers a given pair, the net worth valuation cell
+  MUST display the standard empty-cell placeholder
+  (`<Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>`)
+  rather than crashing, hiding the column, or displaying a raw error.
+- In tree-aggregated views, the tree root node MUST display the total net worth as
+  the sum of all leaf-level converted amounts. Leaves with missing exchange rates
+  contribute `0` to the root total; a note or tooltip SHOULD indicate that the
+  total is partial when any rates are missing.
+- Net worth valuation amounts MUST be formatted using `formatAmount()` (Principle V
+  quality loop) and displayed with the base currency symbol prefix (via
+  `getCurrencySymbol()`).
+
+**Rationale**: The ability to view all balances through a single currency lens is
+the core analytical value of a multi-currency personal finance tracker. Requiring
+the valuation to appear alongside the original amount — rather than replacing it
+— preserves full transparency. The empty-placeholder rule for missing exchange
+rates prevents silent data loss and maintains UI consistency with Principle VI.
+Persisting the base currency selection in `localStorage` eliminates repetitive
+user interaction across page navigations.
+
+### X. Chart Rendering
+
+Every chart rendered in the application MUST be protected against layout distortion
+on narrow screens. This applies to all chart components regardless of the charting
+library in use.
+
+**Minimum width rule**:
+- Every chart MUST have a minimum intrinsic width of at least **600 px** (or a
+  domain-appropriate wider value when the chart contains many series or axis
+  labels). The minimum width MUST be enforced via inline style or a CSS class on
+  the chart element — not by the parent container.
+
+**Horizontal-scroll container rule**:
+- The immediate container wrapping a chart MUST apply
+  `overflow-x: auto` (or equivalent) so that when the viewport is narrower than
+  the chart's minimum width, the chart remains fully accessible via horizontal
+  scrolling rather than being clipped or squashed.
+- The container MUST NOT apply `overflow: hidden` or any style that clips
+  horizontal content.
+
+**Implementation**:
+- Wrap each chart in a `<div style={{ overflowX: 'auto' }}>` (or equivalent).
+- On the chart element itself, apply `style={{ minWidth: N, width: '100%' }}`
+  where `N` is the minimum width in pixels.
+- The `width: '100%'` allows the chart to expand to fill available space when
+  the container is wider than the minimum.
+
+**Rationale**: Desktop-first layout (Constraint: mobile out of scope for v1) does
+not mean narrow-screen resilience can be ignored. Sidebars, split panes, and
+embedded panels can reduce effective chart width significantly. Without a minimum
+width + scroll container, charts become unreadable — axis labels overlap, pie
+segments shrink to invisible, and line charts collapse to meaningless blobs. A
+horizontal scrollbar is a zero-cost, universally understood fallback that keeps
+all chart information accessible.
+
+### XI. Chart Library & Visualization Standards
+
+All interactive charts in UniHub MUST use **ECharts** (via `echarts-for-react`) with the **SVG renderer**. No alternative charting library may be introduced.
+
+**Library rule**:
+- The installed packages are `echarts` and `echarts-for-react`. No `@ant-design/plots`, `recharts`, `victory`, or any other charting library is permitted.
+- Charts MUST be rendered with `opts={{ renderer: 'svg' }}` on `<ReactECharts>`. The canvas renderer is prohibited.
+- `notMerge={true}` MUST be used on charts that switch between different datasets or color schemes (e.g., tab switches). This prevents previous option state from bleeding into the new render.
+
+**Visualization card layout rule**:
+- Any page that includes both a chart section and a tabular data section MUST use AntD `Card` with `tabList` + `activeTabKey` + `onTabChange` for the chart card. The `Segmented` control inside a titled Card is deprecated.
+- When a visualization card embeds a table (e.g., a Statistics / aggregation tab), the table MUST use `ProTable ghost` directly — NOT `PageTable`. Embedding `PageTable` inside an AntD `Card` body causes the inner ProCard's CSS to interfere with the parent card's tab-bar `border-bottom`. `ProTable ghost` removes the ProCard wrapper and eliminates this interference.
+
+**Account color rule**:
+- The `Account` model MUST expose an optional `color` field storing a `#rrggbb` hex value (empty string = unset).
+- All chart series that represent accounts MUST resolve their display color via `resolveAccountColor(accountName, customColor?)` from `src/utils/chartData.ts`. Direct use of a color palette index or `ECHARTS_COLORS[i]` without going through this function is a violation.
+- `resolveAccountColor` guarantees determinism: the same account name always resolves to the same color regardless of query result ordering, preventing color flicker on re-renders.
+- Custom colors (`Account.color`) take precedence over the hash-based fallback.
+
+**Color assignment rule**:
+- Charts with multiple series MUST set colors via the option-level `color` array (not per-item `itemStyle.color`). ECharts applies `color` before `itemStyle.color` in the rendering pipeline; option-level color is reliable across tab switches with `notMerge: true`, whereas per-item colors can fail to apply after a previous option set a global palette.
+
+**Tooltip positioning rule**:
+- Chart tooltips MUST NOT follow the mouse cursor. The tooltip MUST be pinned to the active x-axis value (for axis-trigger charts) or the data point (for item-trigger charts).
+- When using a custom `position` callback, coordinates from `point[0]` are chart-container-relative, NOT viewport-relative. Compare against `size.viewSize[0]` (chart container width) — NOT `window.innerWidth` — when deciding left/right placement.
+- Tooltips MUST include `confine: true` OR a custom `position` function that guarantees the tooltip stays within the chart container.
+
+**Legend rule**:
+- ECharts' built-in legend (`legend: { show: true }`) is prohibited for Finance domain charts. All legends MUST be custom React pill buttons rendered below the chart.
+- Each legend pill: `border-radius: 12px`, colored background matching the series color, white text, small circle dot (or icon for "All" toggles).
+- Asset-majority accounts (net total ≥ 0) use green (`#52c41a`) as background in the Equity Curve legend. Debt-majority accounts use red (`#ff4d4f`).
+- The "All" toggle pill MUST use `CheckOutlined` (all active), `MinusOutlined` (partial or all-inactive) icon states.
+
+**Rationale**: ECharts provides native `roseType` for Nightingale charts, `visualMap.continuous` for per-segment line coloring, a `position` callback with `size.viewSize` for tooltip overflow prevention, and option-level `color` arrays for reliable tab-switch color assignment — all without workarounds. Standardizing on one library with the SVG renderer eliminates cross-library compatibility issues and keeps the bundle size predictable. The account color system with `resolveAccountColor` prevents the most common chart UX defect (colors changing position as data reloads). Custom React legends give precise control over toggle behavior, styling, and interaction (hover-to-highlight) that the ECharts built-in legend cannot match.
+
 ## Development Constraints
 
 - **Package managers**: `pnpm` for frontend, `uv` for backend. Never use `npm`,
@@ -364,4 +487,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.9.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-29
+**Version**: 1.12.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-31

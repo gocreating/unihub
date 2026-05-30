@@ -6,12 +6,14 @@ export interface Currency {
   code: string;
   name: string;
   symbol: string;
+  is_base_currency: boolean;
 }
 
 export interface Account {
   id: string;
   name: string;
   currency: string;
+  color: string;  // hex e.g. '#2196f3', empty string = no custom color
   open_datetime: string | null;
   close_datetime: string | null;
   created_at: string;
@@ -30,7 +32,8 @@ export interface Balance {
   account_id: string;
   account_name: string;
   currency: string;
-  amount: string; // decimal string
+  color: string;  // account's custom color (may be empty string)
+  amount: string; // decimal string, e.g. "1234.5678"
 }
 
 export interface PerCurrencyEntry {

@@ -19,6 +19,8 @@ export default {
   'pages.dashboard.music.description': '整理您的音樂收藏。',
 
   // Common
+  'common.yes': '是',
+  'common.no': '否',
   'common.actions': '操作',
   'common.edit': '編輯',
   'common.delete': '刪除',
@@ -46,6 +48,8 @@ export default {
   'pages.finance.currencies.deleteError': '刪除貨幣失敗。',
   'pages.finance.currencies.col.code': '代碼',
   'pages.finance.currencies.col.symbol': '符號',
+  'pages.finance.currencies.col.isBaseCurrency': '基準貨幣',
+  'pages.finance.currencies.form.isBaseCurrency': '可作為淨值估算的基準貨幣',
   'pages.finance.currencies.form.code': '代碼（ISO 4217）',
   'pages.finance.currencies.form.codePattern': '必須是 3 個英文字母（例如：USD、TWD）',
   'pages.finance.currencies.form.codePlaceholder': '例如：USD',
@@ -67,6 +71,8 @@ export default {
   'pages.finance.accounts.createError': '建立帳戶失敗。',
   'pages.finance.accounts.updateError': '更新帳戶失敗。',
   'pages.finance.accounts.deleteError': '刪除帳戶失敗。',
+  'pages.finance.accounts.col.color': '顏色',
+  'pages.finance.accounts.form.color': '帳戶顏色',
   'pages.finance.accounts.col.openDatetime': '開設時間',
   'pages.finance.accounts.col.closeDatetime': '關閉時間',
   'pages.finance.accounts.form.currencyPlaceholder': '選擇貨幣',
@@ -90,6 +96,37 @@ export default {
   'pages.finance.balanceSheets.deleteError': '刪除資產負債表失敗。',
   'pages.finance.balanceSheets.form.dateTime': '時間',
 
+  // Finance — Balance Sheet — Base currency
+  'pages.finance.balanceSheets.baseCurrency.label': '基準貨幣',
+  'pages.finance.balanceSheets.baseCurrency.none': '無 — 尚未設定基準貨幣',
+
+  // Finance — Balance Sheet List — net worth column
+  'pages.finance.balanceSheets.col.netWorth': '淨值（{currency}）',
+
+  // Finance — Balance Sheet Detail — Visualization (US2)
+  'pages.finance.balanceSheets.detail.visualization.title': '視覺化',
+  'pages.finance.balanceSheets.detail.visualization.assetVsDebt': '資產 vs 負債',
+  'pages.finance.balanceSheets.detail.visualization.assetsOnly': '僅資產',
+  'pages.finance.balanceSheets.detail.visualization.debtsOnly': '僅負債',
+  'pages.finance.balanceSheets.detail.visualization.noAssets': '無資產帳戶',
+  'pages.finance.balanceSheets.detail.visualization.noDebts': '無負債帳戶',
+
+  // Finance — Balance Sheet Detail — Aggregation (US3)
+  'pages.finance.balanceSheets.detail.aggregation.title': '彙總視圖',
+  'pages.finance.balanceSheets.detail.aggregation.groupBy': '分組方式',
+  'pages.finance.balanceSheets.detail.aggregation.dimType': '資/負類型',
+  'pages.finance.balanceSheets.detail.aggregation.dimCurrency': '幣別',
+  'pages.finance.balanceSheets.detail.aggregation.empty': '請選擇至少一個分組維度以查看明細',
+  'pages.finance.balanceSheets.detail.aggregation.col.group': '群組',
+  'pages.finance.balanceSheets.detail.aggregation.col.amount': '金額',
+  'pages.finance.balanceSheets.detail.aggregation.label.asset': '資產',
+  'pages.finance.balanceSheets.detail.aggregation.label.debt': '負債',
+
+  // Finance — Balance Sheet Detail — net worth column
+  'pages.finance.balanceSheets.detail.col.netWorth': '淨值（{currency}）',
+  'pages.finance.balanceSheets.detail.col.amountWithSymbol': '金額',
+  'pages.finance.balanceSheets.detail.aggregation.total': '淨值合計',
+
   // Finance — Balance Sheet Detail
   'pages.finance.balanceSheets.detail.back': '返回資產負債表',
   'pages.finance.balanceSheets.detail.title': '帳戶餘額',
@@ -105,6 +142,13 @@ export default {
   'pages.finance.balanceSheets.detail.amountRequired': '請輸入有效數字',
   'pages.finance.balanceSheets.detail.netWorth': '淨值（{currency}）',
   'pages.finance.balanceSheets.detail.footer.netWorth': '淨資產',
+
+  // Finance — Balance Sheets list — Visualization (US4)
+  'pages.finance.balanceSheets.visualization.title': '趨勢圖',
+  'pages.finance.balanceSheets.visualization.netWorthTrend': '淨資產趨勢',
+  'pages.finance.balanceSheets.visualization.stackedBreakdown': '餘額分析',
+  'pages.finance.balanceSheets.visualization.netWorth': '淨資產',
+  'pages.finance.balanceSheets.visualization.empty': '尚無資產負債表',
 
   // Finance — Exchange Rates
   'pages.finance.exchangeRates.filterBase': '依基準貨幣篩選…',

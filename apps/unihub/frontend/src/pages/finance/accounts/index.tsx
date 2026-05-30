@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, DatePicker, Form, Input, Modal, Select, Space, Tag, Tooltip, Typography, message } from 'antd';
+import { Button, ColorPicker, DatePicker, Form, Input, Modal, Select, Space, Tag, Tooltip, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -15,9 +15,38 @@ import {
   updateAccount,
 } from '@/services/unihub-backend/finance';
 
+// 20 preset colors covering the full hue spectrum — Material Design palette.
+const ACCOUNT_PRESET_COLORS = [
+  '#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5',
+  '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50',
+  '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800',
+  '#ff5722', '#795548', '#9e9e9e', '#607d8b', '#000000',
+];
+
+/**
+ * Normalize any CSS color representation to a 7-char hex string.
+ * Browsers sometimes return computed backgroundColor as rgb() even when the
+ * original value was a hex string. This ensures we always store #rrggbb.
+ */
+function toHexColor(raw?: string): string {
+  if (!raw) return '';
+  // Already a hex color — return as-is (trimmed to 7 chars)
+  if (raw.startsWith('#')) return raw.slice(0, 7);
+  // CSS rgb(r,g,b) or rgb(r, g, b) — convert to hex
+  const m = raw.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  if (m) {
+    return '#' + [m[1]!, m[2]!, m[3]!]
+      .map((n) => parseInt(n).toString(16).padStart(2, '0'))
+      .join('');
+  }
+  return '';
+}
+
+
 interface AccountFormValues {
   name: string;
   currency: string;
+  color: string;
   open_datetime: dayjs.Dayjs;
   close_datetime?: dayjs.Dayjs | null;
 }
@@ -112,6 +141,7 @@ export function AccountsPage() {
     form.setFieldsValue({
       name: account.name,
       currency: account.currency,
+      color: account.color || '',
       open_datetime: account.open_datetime ? dayjs(account.open_datetime) : undefined,
       close_datetime: account.close_datetime ? dayjs(account.close_datetime) : null,
     });
@@ -122,6 +152,7 @@ export function AccountsPage() {
     const data = {
       name: values.name,
       currency: values.currency,
+      color: toHexColor(values.color),
       open_datetime: values.open_datetime.toISOString(),
       close_datetime: values.close_datetime ? values.close_datetime.toISOString() : null,
     };
@@ -149,6 +180,14 @@ export function AccountsPage() {
     () => [
       { title: t({ id: 'common.name' }), dataIndex: 'name', ...widthForHeader('Name', dataWidths.name), sorter: true },
       { title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency', dataWidths.currency), sorter: true, render: (val) => <Tag>{val as string}</Tag> },
+      {
+        title: t({ id: 'pages.finance.accounts.col.color' }),
+        dataIndex: 'color',
+        width: 72,
+        render: (_dom, record) => record.color
+          ? <span style={{ display: 'inline-block', width: 20, height: 20, borderRadius: '50%', background: record.color, border: '1px solid rgba(0,0,0,0.12)', verticalAlign: 'middle' }} />
+          : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
+      },
       {
         title: t({ id: 'pages.finance.accounts.col.openDatetime' }),
         dataIndex: 'open_datetime',
@@ -230,6 +269,28 @@ export function AccountsPage() {
               placeholder={t({ id: 'pages.finance.accounts.form.currencyPlaceholder' })}
               optionFilterProp="label"
               options={currencyOptions}
+            />
+          </Form.Item>
+          <Form.Item
+            name="color"
+            label={t({ id: 'pages.finance.accounts.form.color' })}
+            // ColorPicker.onChange(color, hex) — extract hex string for Form.Item storage.
+            getValueFromEvent={(_color: unknown, hex: string) => hex ?? ''}
+          >
+            <ColorPicker
+              format="hex"
+              allowClear
+              showText
+              // Open upward so the picker never overflows the modal's bottom edge.
+              placement="topLeft"
+              presets={[{
+                label: t({ id: 'pages.finance.accounts.form.color' }),
+                colors: ACCOUNT_PRESET_COLORS,
+              }]}
+              // Constrain popup to the modal so it can't escape outside the page.
+              getPopupContainer={(trigger) =>
+                (trigger.closest('.ant-modal-content') as HTMLElement) ?? document.body
+              }
             />
           </Form.Item>
           <Form.Item name="open_datetime" label={t({ id: 'pages.finance.accounts.form.openDatetime' })} rules={[{ required: true }]}>

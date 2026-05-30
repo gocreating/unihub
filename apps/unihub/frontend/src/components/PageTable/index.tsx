@@ -114,8 +114,9 @@ const useStyles = createStyles(({ token }) => ({
   },
 }));
 
-function useStickyFix(): void {
+function useStickyFix(enabled = true): void {
   useEffect(() => {
+    if (!enabled) return;
     const style = document.createElement('style');
     style.setAttribute('data-sticky-fix', '');
     style.textContent = [
@@ -129,15 +130,16 @@ function useStickyFix(): void {
       document.documentElement.removeAttribute('data-sticky-fix');
       style.remove();
     };
-  }, []);
+  }, [enabled]);
 }
 
-function useStickyHorizontalScrollbar(containerRef: RefObject<HTMLDivElement | null>): void {
+function useStickyHorizontalScrollbar(containerRef: RefObject<HTMLDivElement | null>, enabled = true): void {
   const scrollbarRef = useRef<HTMLDivElement | null>(null);
   const spacerRef = useRef<HTMLDivElement | null>(null);
   const syncingRef = useRef(false);
 
   useEffect(() => {
+    if (!enabled) return;
     const container = containerRef.current;
     if (!container) return;
 
@@ -216,16 +218,18 @@ function useStickyHorizontalScrollbar(containerRef: RefObject<HTMLDivElement | n
       scrollbarRef.current = null;
       spacerRef.current = null;
     };
-  }, [containerRef]);
+  }, [containerRef, enabled]);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface PageTableProps<T extends Record<string, any>>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extends Omit<ProTableProps<T, Record<string, any>>, 'search' | 'options' | 'className'> {
-  pageTitle: ReactNode;
+  pageTitle?: ReactNode;
   action?: ReactNode;
   contentVisibility?: boolean;
+  /** Disable all sticky behaviour (fix, scrollbar, header). Use when PageTable is embedded inside a Card to prevent sticky elements from overlapping the Card header border. */
+  noStickyFix?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -233,6 +237,7 @@ function PageTable<T extends Record<string, any>>({
   pageTitle,
   action,
   contentVisibility: enableContentVisibility = false,
+  noStickyFix = false,
   pagination = false,
   ...proTableProps
 }: PageTableProps<T>) {
@@ -241,8 +246,8 @@ function PageTable<T extends Record<string, any>>({
 
   const hasToolbar = !!proTableProps.headerTitle || !!proTableProps.toolBarRender;
   const { toolbarTop, offsetHeader } = useStickyHeaderOffset(tableContainerRef);
-  useStickyHorizontalScrollbar(tableContainerRef);
-  useStickyFix();
+  useStickyHorizontalScrollbar(tableContainerRef, !noStickyFix);
+  useStickyFix(!noStickyFix);
 
   const className = cx(
     styles.tableWrapper,
@@ -253,12 +258,14 @@ function PageTable<T extends Record<string, any>>({
 
   return (
     <div className={styles.pageCard}>
-      <Flex justify="space-between" align="center" className={styles.titleRow}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          {pageTitle}
-        </Typography.Title>
-        {action}
-      </Flex>
+      {(pageTitle != null || action != null) && (
+        <Flex justify="space-between" align="center" className={styles.titleRow}>
+          <Typography.Title level={4} style={{ margin: 0 }}>
+            {pageTitle}
+          </Typography.Title>
+          {action}
+        </Flex>
+      )}
 
       <div
         ref={tableContainerRef}
@@ -269,7 +276,7 @@ function PageTable<T extends Record<string, any>>({
           search={false}
           options={false}
           pagination={pagination}
-          sticky={{ offsetHeader }}
+          sticky={noStickyFix ? false : { offsetHeader }}
           {...proTableProps}
         />
       </div>

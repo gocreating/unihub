@@ -593,6 +593,25 @@ test.describe('Chart tooltip — position and passthrough', () => {
     expect(distFromCursor).toBeGreaterThan(box.height * 0.5);
   });
 
+  test('chart area cursor is default (not pointer/hand)', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    const chart = page.locator('.echarts-for-react').first();
+    const box = await chart.boundingBox();
+    if (!box) return;
+
+    // Hover over chart area
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(400);
+
+    // The cursor on the chart element should be 'default', not 'pointer' or 'grab'
+    const cursor = await chart.evaluate(
+      (el) => window.getComputedStyle(el).cursor,
+    );
+    expect(cursor).toBe('default');
+  });
+
   test('tooltip near right chart edge does NOT cause horizontal viewport overflow', async ({ page }) => {
     const dataPresent = await hasChart(page);
     test.skip(!dataPresent, 'No data');

@@ -232,11 +232,11 @@ export function BalanceSheetsPage() {
       tooltip: {
         trigger: 'axis',
         appendToBody: true,
+        extraCssText: 'max-width:320px;',
         axisPointer: {
           animation: false,
           lineStyle: { color: '#555', width: 2, type: 'solid' },
         },
-        // Tooltip tracks the focused x-axis data point horizontally but stays at
         // Tooltip tracks the focused x-axis DATA POINT position, not the mouse cursor.
         // point[0] for a time axis is the raw cursor viewport x; we convert the
         // focused data point's timestamp via chart.convertToPixel instead.
@@ -247,11 +247,13 @@ export function BalanceSheetsPage() {
           const ts = Array.isArray(firstValue) ? (firstValue[0] as number) : undefined;
           const [tw = 0] = (size as { contentSize: number[] }).contentSize;
           const OFFSET = 20;
-          // 600px fallback ensures the right-edge flip fires even before contentSize
-          // is computed (tw = 0 on first hover). A smaller estimate would let the
-          // tooltip overflow the viewport right edge on first render near the right.
-          const estW = tw > 0 ? tw : 600;
-          // Default: cursor x; override with the data point's actual screen position.
+          // extraCssText caps the tooltip at MAX_W px via CSS, so the actual
+          // rendered width can never exceed MAX_W. Using MAX_W as the fallback
+          // (when tw is still 0 on first render) guarantees the position math
+          // is always correct regardless of render timing.
+          const MAX_W = 320;
+          const estW = tw > 0 ? Math.min(tw, MAX_W) : MAX_W;
+          const vw = window.innerWidth;
           let snapX = (point as [number, number])[0];
           if (ts !== undefined) {
             const inst = lineChartRef.current?.getEchartsInstance();
@@ -263,11 +265,15 @@ export function BalanceSheetsPage() {
               }
             }
           }
-          const toRight = snapX + OFFSET;
-          const toLeft = Math.max(10, snapX - OFFSET - estW);
-          let tx = toRight + estW > window.innerWidth - 10 ? toLeft : toRight;
-          // Hard clamp: guarantee tooltip never overflows the right viewport edge.
-          tx = Math.max(10, Math.min(tx, window.innerWidth - estW - 10));
+          // 3-case placement: right → left → right-aligned to viewport edge.
+          let tx: number;
+          if (snapX + OFFSET + estW <= vw - 10) {
+            tx = snapX + OFFSET;               // Case 1: fits to the right
+          } else if (snapX - OFFSET - estW >= 10) {
+            tx = snapX - OFFSET - estW;        // Case 2: fits to the left
+          } else {
+            tx = Math.max(10, vw - estW - 10); // Case 3: align to viewport right edge
+          }
           return [tx, 20];
         },
         formatter: (raw) => {
@@ -295,6 +301,7 @@ export function BalanceSheetsPage() {
         data: timeData,
         // areaStyle activates the fill; visualMap controls its color per segment.
         // opacity here sets how transparent the fill is (line stays fully opaque).
+        cursor: 'default',
         areaStyle: { opacity: 0.18 },
         smooth: 0.3,
         // Hide the dot at exactly y=0 (natural zero crossings) to keep the line clean.
@@ -319,6 +326,7 @@ export function BalanceSheetsPage() {
       name: acc,
       type: 'line' as const,
       stack: stackGroups.get(acc) ?? 'assets',
+      cursor: 'default',
       smooth: 0.3,
       symbol: 'none',
       lineStyle: { width: 0 },
@@ -345,19 +353,21 @@ export function BalanceSheetsPage() {
       tooltip: {
         trigger: 'axis',
         appendToBody: true,
+        extraCssText: 'max-width:600px;',
         axisPointer: {
           animation: false,
           lineStyle: { color: '#555', width: 2, type: 'solid' },
         },
-        // Tooltip tracks the focused x-axis data point horizontally but stays at
-        // Same snap-to-data-point logic using stackedChartRef.
+        // Same snap-to-data-point + 3-case logic using stackedChartRef.
         position: (point, params, _dom, _rect, size) => {
           const rawParams = params as unknown as Array<{ value?: unknown }>;
           const firstValue = rawParams[0]?.value;
           const ts = Array.isArray(firstValue) ? (firstValue[0] as number) : undefined;
           const [tw = 0] = (size as { contentSize: number[] }).contentSize;
           const OFFSET = 20;
-          const estW = tw > 0 ? tw : 600;
+          const MAX_W = 600;
+          const estW = tw > 0 ? Math.min(tw, MAX_W) : MAX_W;
+          const vw = window.innerWidth;
           let snapX = (point as [number, number])[0];
           if (ts !== undefined) {
             const inst = stackedChartRef.current?.getEchartsInstance();
@@ -369,10 +379,14 @@ export function BalanceSheetsPage() {
               }
             }
           }
-          const toRight = snapX + OFFSET;
-          const toLeft = Math.max(10, snapX - OFFSET - estW);
-          let tx = toRight + estW > window.innerWidth - 10 ? toLeft : toRight;
-          tx = Math.max(10, Math.min(tx, window.innerWidth - estW - 10));
+          let tx: number;
+          if (snapX + OFFSET + estW <= vw - 10) {
+            tx = snapX + OFFSET;
+          } else if (snapX - OFFSET - estW >= 10) {
+            tx = snapX - OFFSET - estW;
+          } else {
+            tx = Math.max(10, vw - estW - 10);
+          }
           return [tx, 20];
         },
         formatter: (raw) => {

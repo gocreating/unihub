@@ -21,3 +21,11 @@ body {
 .amount-input .ant-input {
   text-align: right;
 }
+
+/* Charts are read-only — no interactive cursor on hover */
+.echarts-for-react,
+.echarts-for-react canvas,
+.echarts-for-react svg,
+.echarts-for-react svg * {
+  cursor: default !important;
+}

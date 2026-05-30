@@ -1,260 +1,354 @@
 # Data Model: Finance App Enhancement
 
-**Phase**: 1 — Design
-**Date**: 2026-05-29
+**Phase**: 1 — Design  
+**Date**: 2026-05-29 | **Updated**: 2026-05-31 (reflects delivered implementation)  
 **Branch**: `006-finance-app-enhancement`
 
 ---
 
-## Existing Types (from generated openapi types — do not modify)
+## Backend Model Changes
+
+### Currency (modified)
+
+```python
+class Currency(models.Model):
+    code = models.CharField(max_length=3, primary_key=True)
+    name = models.CharField(max_length=100)
+    symbol = models.CharField(max_length=10, blank=True)
+    is_base_currency = models.BooleanField(default=False)  # NEW
+```
+
+`is_base_currency=True` currencies appear in the base currency selector on all Finance pages. No uniqueness constraint enforced at the DB level.
+
+### Account (modified)
+
+```python
+class Account(models.Model):
+    id = models.CharField(max_length=12, primary_key=True, ...)
+    name = models.CharField(max_length=200)
+    currency = models.CharField(max_length=3)
+    color = models.CharField(max_length=25, blank=True, default="")  # NEW — '#rrggbb'
+    open_datetime = models.DateTimeField(null=True, blank=True)
+    close_datetime = models.DateTimeField(null=True, blank=True)
+```
+
+`color` stores a `#rrggbb` hex string (7 chars). `max_length=25` accommodates the `rgb(...)` CSS format that browsers sometimes return; values are normalized to hex before storage. Empty string means "no custom color assigned."
+
+---
+
+## Frontend API Types (as delivered)
+
+File: `apps/unihub/frontend/src/services/unihub-backend/finance.ts`
 
 ```typescript
-// Already available via src/services/unihub-backend/finance.ts
+interface Currency {
+  code: string
+  name: string
+  symbol: string
+  is_base_currency: boolean  // NEW
+}
+
+interface Account {
+  id: string
+  name: string
+  currency: string
+  color: string              // NEW — '#rrggbb' hex or '' (empty = unset)
+  open_datetime: string | null
+  close_datetime: string | null
+}
 
 interface Balance {
   id: string
   account_id: string
   account_name: string
-  currency: string       // e.g., "TWD", "USD"
-  amount: string         // decimal string, e.g., "1234.50"
+  currency: string        // e.g., "TWD", "USD"
+  amount: string          // signed decimal string; ≥0 = asset, <0 = debt
+  color: string           // denormalized from account; '' if unset
 }
 
 interface BalanceSheet {
   id: string
-  date: string           // ISO date, e.g., "2026-05-01"
+  date: string
   created_at: string
   updated_at: string
 }
 
-interface NetWorthResult {
-  balance_sheet_id: string
+interface ExchangeRate {
+  id: string
+  base_currency: string
+  quote_currency: string
+  rate: string
   date: string
-  per_currency: Array<{ currency: string; net_worth: string }>
 }
 ```
 
 ---
 
-## New Frontend Types
+## Frontend Utility Types
 
-File: `apps/unihub/frontend/src/utils/finance.ts`
+### `apps/unihub/frontend/src/utils/finance.ts`
 
 ```typescript
-// Grouping dimensions available for tree aggregation (extensible in future)
 export type GroupingDimension = 'type' | 'currency'
 
-// Node in the aggregated tree table
 export interface AggTreeNode {
-  key: string            // stable composite key, e.g. "type:asset" or "type:asset/currency:TWD"
-  label: string          // display label, e.g. "Asset", "TWD"
-  amount: Decimal        // sum of direct children's amounts (absolute for debt nodes)
-  rawAmount: Decimal     // signed sum (negative for debt groups)
-  currency?: string      // set only on leaf nodes or currency-grouped nodes
+  key: string          // composite path, e.g. "type:asset/currency:TWD"
+  label: string        // display label: "Asset", "TWD", or account name
+  amount: Decimal      // absolute value (always ≥ 0; for display and sort)
+  rawAmount: Decimal   // signed value (negative for debt groups)
+  /** Net worth in base currency. undefined = no base currency selected;
+   *  null = base currency selected but rate unavailable for this node. */
+  netWorthInBase?: Decimal | null
+  currency?: string    // set on currency-dimension nodes AND leaf nodes;
+                       // undefined on type-dimension nodes (spans multiple currencies)
   children?: AggTreeNode[]
-  // leaf-only fields:
-  accountId?: string
-  accountName?: string
+  accountId?: string   // leaf nodes only
+  accountName?: string // leaf nodes only
   isLeaf: boolean
 }
 ```
 
-File: `apps/unihub/frontend/src/pages/finance/balance-sheets/detail.tsx` (inline types)
+### `apps/unihub/frontend/src/pages/finance/balance-sheets/detail.tsx` (inline)
 
 ```typescript
-// Chart selector for the detail visualization card
-type BalanceDetailChartType = 'asset-vs-debt' | 'assets-only' | 'debts-only'
-
-// Pie chart data point for @ant-design/plots Pie
-interface PieDataPoint {
-  label: string    // e.g., "Asset", "TWD — Savings Account"
-  value: number    // absolute amount (always positive for pie charts)
-}
+// Four tabs in the visualization card
+type BalanceDetailChartType = 'asset-vs-debt' | 'assets-only' | 'debts-only' | 'aggregation'
 ```
 
-File: `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` (inline types)
+### `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` (inline)
 
 ```typescript
-// Chart selector for the list visualization card
 type BalanceListChartType = 'net-worth-trend' | 'stacked-breakdown'
 
-// Net worth trend chart data point for @ant-design/plots Line
 interface NetWorthDataPoint {
   date: string      // YYYY-MM-DD
-  netWorth: number  // signed sum of all balance amounts for this sheet
+  netWorth: number  // signed net worth (base currency when selected, raw sum otherwise)
 }
 
-// Stacked breakdown data point for @ant-design/plots Column (isStack: true)
 interface StackedDataPoint {
-  date: string         // YYYY-MM-DD (x-axis)
-  accountName: string  // series label (color field)
-  amount: number       // balance amount on this date
+  date: string
+  accountName: string
+  amount: number
+  color: string     // account's custom color (may be '')
 }
 ```
 
 ---
 
-## Utility Functions
+## Frontend Utility Functions
 
-File: `apps/unihub/frontend/src/utils/finance.ts`
+### `apps/unihub/frontend/src/utils/finance.ts`
 
-### `formatAmount(value: string | number): string`
+#### `formatAmount(value: string | number | Decimal): string`
 
-Formats a balance amount for display.
+Formats a balance amount for display. Output: comma-separated, exactly 2 decimal places (`"1,234,567.50"`, `"-1,234.50"`). Uses `Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })`.
 
-- Input: raw decimal string from API (`"1234567.50"`) or number
-- Output: formatted string with comma separators and exactly 2 decimal places (`"1,234,567.50"`)
-- Handles negative values: `"-1,234.50"`
-- Uses `Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })`
+#### `getCurrencySymbol(code: string): string`
 
-### `getCurrencySymbol(code: string): string`
+Maps currency code to display symbol. Fallback: returns the code itself.
 
-Maps a currency code to its display symbol.
+| Code | Symbol | Code | Symbol |
+|------|--------|------|--------|
+| TWD  | NT$    | JPY  | ¥      |
+| USD  | $      | GBP  | £      |
+| EUR  | €      | HKD  | HK$    |
+| CNY  | ¥      | SGD  | S$     |
 
-- Input: ISO 4217 currency code (`"TWD"`, `"USD"`)
-- Output: symbol string (`"NT$"`, `"$"`)
-- Fallback: returns the code itself for unmapped currencies
+#### `computeNetWorthInBase(amount, currency, baseCurrency, rates, targetDate?): Decimal | null`
 
-**Lookup table** (v1):
-| Code | Symbol |
-|------|--------|
-| TWD  | NT$    |
-| USD  | $      |
-| EUR  | €      |
-| JPY  | ¥      |
-| GBP  | £      |
-| CNY  | ¥      |
-| HKD  | HK$    |
-| SGD  | S$     |
+Converts `amount` in `currency` to `baseCurrency` using the most recent exchange rate on or before `targetDate`.
 
-### `buildAggTree(balances: Balance[], dimensions: GroupingDimension[]): AggTreeNode[]`
+- Direct rate: `base_currency = currency`, `quote_currency = baseCurrency` → `amount × rate`
+- Inverse rate: `base_currency = baseCurrency`, `quote_currency = currency` → `amount / rate`
+- Returns `null` when no applicable rate exists.
 
-Recursively partitions a flat list of balances into a nested tree.
+#### `buildAggTree(balances, dimensions, labels, parentKey?, computeNw?): AggTreeNode[]`
 
-- Input: flat balance array + ordered list of grouping dimensions
-- Output: top-level tree nodes; each node has `children` recursively
-- Leaf nodes represent individual account balances
-- Each non-leaf node's `amount` = `Decimal.sum` of all descendant leaf amounts
-- `rawAmount` preserves sign; `amount` is absolute value (for display/sort purposes)
-- Sort order: descending by `rawAmount` (largest positive asset first, largest absolute debt first within debt group)
-- Node `key` is a `/`-delimited path: `"type:asset/currency:TWD"`
+Recursively partitions a flat balance list into a nested tree.
 
-**Algorithm sketch**:
-```
-buildAggTree(balances, [dim, ...rest]):
-  groups = groupBy(balances, balance => groupKey(balance, dim))
-  return groups.map(([groupValue, groupBalances]) => {
-    children = rest.length > 0
-      ? buildAggTree(groupBalances, rest)   // recurse with remaining dims
-      : groupBalances.map(toLeafNode)        // base case: leaf nodes
-    return {
-      key: `${dim}:${groupValue}`,
-      label: groupLabel(dim, groupValue),
-      rawAmount: sum(children.map(c => c.rawAmount)),
-      amount: abs(sum(children.map(c => c.rawAmount))),
-      children,
-      isLeaf: false,
-    }
-  }).sort(byRawAmountDesc)
-```
+- `dimensions`: ordered list of grouping dimensions (first = outer group)
+- `labels`: `{ asset: string; debt: string }` — localized labels for type nodes
+- `computeNw`: optional FX conversion function; each node accumulates `netWorthInBase` when provided
+- Leaf nodes: `amount = raw.abs()`, `rawAmount = raw`; non-leaf nodes sum children
+- Sort: descending by `rawAmount` at each level
+- `currency` field: set to the currency code on currency-dimension nodes; `undefined` on type-dimension nodes
 
-**`groupKey` logic**:
-- `dim = 'type'`: `balance.amount >= 0 ? 'asset' : 'debt'`
+**groupKey logic**:
+- `dim = 'type'`: `amount.gte(0) ? 'asset' : 'debt'`
 - `dim = 'currency'`: `balance.currency`
+
+#### `buildTreeWithRoot(treeData, totalNwInBase, rootLabel): AggTreeNode[]`
+
+Wraps a tree in a root node (key: `'root'`) displaying the total net worth. When `treeData` is empty, root is a leaf showing the total only. Root label is `'All'` in the current implementation.
+
+#### `reorderDimension(dims, dragging, target): GroupingDimension[]`
+
+Moves `dragging` dimension to the position of `target` in the ordered list. Used by the drag-and-drop dimension reorder control.
+
+---
+
+### `apps/unihub/frontend/src/utils/chartData.ts`
+
+#### `resolveAccountColor(accountName: string, customColor?: string): string`
+
+Returns the account's display color for charts:
+1. If `customColor` is a non-empty string → returns it (the account's custom `#rrggbb`)
+2. Otherwise → djb2 hash of `accountName` → index into `ECHARTS_COLORS[Math.abs(h) % 36]`
+
+The same name always resolves to the same color regardless of list order.
+
+#### `ECHARTS_COLORS: readonly string[]`
+
+36-color palette of maximally distinct hues at varying lightness and saturation. Used as the ECharts fallback palette and by `resolveAccountColor`.
+
+#### `classifyAccountStacks(stackedData, accounts): Map<string, 'assets' | 'debts'>`
+
+Classifies each account as `'assets'` (net total ≥ 0) or `'debts'` (net total < 0) across all balance sheet dates. Used to:
+- Assign separate ECharts `stack` groups so assets stack upward and debts stack downward
+- Color Equity Curve legend pills (green = assets, red = debts)
+
+#### `buildNetWorthWithCrossings(netWorthData): { positiveData, negativeData }`
+
+Splits a net worth time series into two subseries (positive and negative) with interpolated zero-crossing points. Both subseries share an `[x, 0]` data point at each sign change, so ECharts renders them as a continuous line that changes color exactly at y=0.
+
+#### `computeGreenRedSeries(values): { greenVals, redVals }`
+
+Alternative splitter for the single-series + visualMap approach: returns green (≥0) and red (<0) value arrays where adjacent values get `0` as a bridge to maintain line continuity. Used internally for reference; the delivered implementation uses `visualMap.continuous` with a 100-stop bicolor array for a sharper transition.
+
+---
+
+## Tree Expansion Helpers (detail.tsx)
+
+```typescript
+/**
+ * Default expanded state: expand all non-leaf parent nodes EXCEPT those
+ * whose children are all leaves (the level directly above accounts).
+ * Those stay collapsed so accounts are hidden until the user explicitly opens them.
+ */
+function collectDefaultExpandedKeys(nodes: AggTreeNode[]): React.Key[] {
+  // For each node with children:
+  //   allChildrenAreLeaves = node.children.every(c => !c.children || !c.children.length)
+  //   if allChildrenAreLeaves → skip (don't expand; user expands manually)
+  //   else → push node.key, recurse into children
+}
+
+/**
+ * Returns all nodes reachable through currently-expanded keys.
+ * Used to compute aggDataWidths from only the visible row labels.
+ */
+function collectVisibleNodes(nodes: AggTreeNode[], expandedKeySet: Set<React.Key>): AggTreeNode[] {
+  // Push node. If node.key ∈ expandedKeySet AND has children → recurse.
+}
+```
 
 ---
 
 ## Page-Level Component Contracts
 
-### Balance Sheet Detail Page — Visualization Card
+### Balance Sheet Detail — Visualization Card
 
 ```
-Props: { balances: Balance[] }
-State: { chartType: BalanceDetailChartType }  — local useState
-
-Derived data:
-  assetBalances  = balances.filter(b => Decimal(b.amount) >= 0)
-  debtBalances   = balances.filter(b => Decimal(b.amount) < 0)
-  assetTotal     = sum(assetBalances.map(b => Decimal(b.amount)))
-  debtTotal      = abs(sum(debtBalances.map(b => Decimal(b.amount))))
-
-Charts:
-  'asset-vs-debt' → Pie([{ label: 'Asset', value: assetTotal }, { label: 'Debt', value: debtTotal }])
-  'assets-only'   → Pie(assetBalances.map(b => ({ label: b.account_name, value: Decimal(b.amount) })))
-  'debts-only'    → Pie(debtBalances.map(b => ({ label: b.account_name, value: abs(Decimal(b.amount)) })))
-```
-
-### Balance Sheet Detail Page — Tree Aggregation Section
-
-```
-Props: { balances: Balance[] }
 State:
-  selectedDimensions: GroupingDimension[]  — ordered list of selected dims
-  
-Derived:
-  treeData = buildAggTree(balances, selectedDimensions)
-
-UI:
-  - Select (mode="multiple") for dimension selection
-  - Up/down reorder buttons for each selected dimension
-  - Table with childrenColumnName="children", columns: [label, currency (leaf only), amount]
-```
-
-### Balance Sheet List Page — Visualization Card
-
-```
-Props: { balanceSheets: BalanceSheet[] }
-State: { chartType: BalanceListChartType }
-
-Data fetching:
-  useQueries({ queries: balanceSheets.map(sheet => ({
-    queryKey: ['finance', 'balances', sheet.id],
-    queryFn: () => listBalances(sheet.id),
-  })) })
+  chartType: BalanceDetailChartType     default: 'asset-vs-debt'
+  expandedKeys: React.Key[]             default: collectDefaultExpandedKeys(treeWithRoot)
+  baseCurrency: string | undefined      from useBaseCurrency(baseCurrencies) hook
 
 Derived:
-  'net-worth-trend' → [{ date: sheet.date, netWorth: sum(balances.map(b => Decimal(b.amount))) }]
-  'stacked-breakdown' → balances.flatMap(b => ({ date: sheet.date, accountName: b.account_name, amount: Number(b.amount) }))
+  assetBalances = balances.filter(b => Decimal(b.amount) >= 0)
+  debtBalances  = balances.filter(b => Decimal(b.amount) < 0)
+  computeNw     = baseCurrency ? (amount, currency) => computeNetWorthInBase(...) : undefined
+  treeData      = buildAggTree(balances, activeGrouping, aggLabels, '', computeNw)
+  treeWithRoot  = baseCurrency ? buildTreeWithRoot(treeData, totalNwInBase, 'All') : treeData
+  aggDataWidths = widths measured from collectVisibleNodes(treeWithRoot, expandedKeySet)
 
-Loading: Spin overlay while any query is loading
-Error: message.error() per Principle VII
+ECharts pie series (roseType: 'area'):
+  'asset-vs-debt': color: ['#52c41a', '#ff4d4f']
+                   data:  [{ name: 'Asset', value: assetTotal }, { name: 'Debt', value: debtTotal }]
+  'assets-only':   color: [resolveAccountColor(acc, color) per item, sorted by nwv desc]
+  'debts-only':    same as assets-only but for debtBalances
+
+Statistics tab:
+  ProTable ghost (no nested ProCard) + controlled expandedRowKeys
+  Dimension selector: drag-reorderable checkboxes (Checkbox + Dropdown + HolderOutlined)
+```
+
+### Balance Sheet List — Visualization Card
+
+```
+State:
+  chartType: BalanceListChartType         default: 'net-worth-trend'
+  hiddenSeries: Set<string>               Account Trend toggle (clear on tab switch)
+  excludedFromNetWorth: Set<string>       Equity Curve exclusion (clear on tab switch)
+  baseCurrency: string | undefined
+
+Data:
+  useQueries — one query per balance sheet, fetches balances in parallel
+
+Equity Curve (ECharts line, type: 'time'):
+  data:       [[timestamp, netWorth], ...]
+  visualMap:  continuous, type, min: -maxAbs, max: maxAbs
+              inRange.color: [...50×'#ff4d4f', ...50×'#52c41a']
+  Legend pills: green if classifyAccountStacks → 'assets', red if 'debts'
+  "All" pill: CheckOutlined (all active) | MinusOutlined (partial or none)
+
+Account Trend (ECharts stacked area, type: 'time'):
+  stack: classifyAccountStacks result per account
+  areaStyle.color: resolveAccountColor(acc, accountColors.get(acc))
+  lineStyle.width: 0 (area only, no outline stroke)
+  "All" pill: same icon pattern
 ```
 
 ---
 
-## i18n Key Plan
+## i18n Keys (as delivered)
 
 All keys added to both `locales/en-US/pages.ts` and `locales/zh-TW/pages.ts`.
 
-### New keys under `pages.finance.balanceSheets.detail`
+### `pages.finance.balanceSheets.detail`
 
-| Key | en-US | zh-TW |
-|-----|-------|-------|
-| `pages.finance.balanceSheets.detail.visualization.title` | Visualization | 視覺化 |
-| `pages.finance.balanceSheets.detail.visualization.assetVsDebt` | Asset vs Debt | 資產 vs 負債 |
-| `pages.finance.balanceSheets.detail.visualization.assetsOnly` | Assets Only | 僅資產 |
-| `pages.finance.balanceSheets.detail.visualization.debtsOnly` | Debts Only | 僅負債 |
-| `pages.finance.balanceSheets.detail.visualization.noAssets` | No asset accounts | 無資產帳戶 |
-| `pages.finance.balanceSheets.detail.visualization.noDebts` | No debt accounts | 無負債帳戶 |
-| `pages.finance.balanceSheets.detail.aggregation.title` | Breakdown | 分組明細 |
-| `pages.finance.balanceSheets.detail.aggregation.groupBy` | Group by | 分組方式 |
-| `pages.finance.balanceSheets.detail.aggregation.dimType` | Type | 類型 |
-| `pages.finance.balanceSheets.detail.aggregation.dimCurrency` | Currency | 幣別 |
-| `pages.finance.balanceSheets.detail.aggregation.empty` | Select at least one grouping dimension | 請選擇至少一個分組維度 |
-| `pages.finance.balanceSheets.detail.aggregation.col.group` | Group | 群組 |
-| `pages.finance.balanceSheets.detail.aggregation.col.amount` | Amount | 金額 |
-| `pages.finance.balanceSheets.detail.aggregation.label.asset` | Asset | 資產 |
-| `pages.finance.balanceSheets.detail.aggregation.label.debt` | Debt | 負債 |
+| Suffix | en-US | zh-TW |
+|--------|-------|-------|
+| `visualization.assetVsDebt` | Asset vs Debt | 資產 vs 負債 |
+| `visualization.assetsOnly` | Assets Only | 僅資產 |
+| `visualization.debtsOnly` | Debts Only | 僅負債 |
+| `visualization.noAssets` | No asset accounts | 無資產帳戶 |
+| `visualization.noDebts` | No debt accounts | 無負債帳戶 |
+| `aggregation.title` | Aggregation View | 彙總視圖 |
+| `aggregation.groupBy` | Group by | 分組方式 |
+| `aggregation.dimType` | A/L Type | 資產/負債類型 |
+| `aggregation.dimCurrency` | Currency | 幣別 |
+| `aggregation.empty` | Select at least one grouping dimension | 請選擇至少一個分組維度 |
+| `aggregation.total` | Total Net Worth | 總淨值 |
+| `aggregation.col.group` | Group | 群組 |
+| `aggregation.col.amount` | Amount | 金額 |
+| `aggregation.label.asset` | Asset | 資產 |
+| `aggregation.label.debt` | Debt | 負債 |
+| `col.account` | Account | 帳戶 |
+| `col.amountWithSymbol` | Amount | 金額 |
+| `col.netWorth` | Net Worth ({currency}) | 淨資產 ({currency}) |
 
-### New keys under `pages.finance.balanceSheets` (list)
+### `pages.finance.balanceSheets` (list)
 
-| Key | en-US | zh-TW |
-|-----|-------|-------|
-| `pages.finance.balanceSheets.visualization.title` | Trend | 趨勢圖 |
-| `pages.finance.balanceSheets.visualization.netWorthTrend` | Net Worth Trend | 淨資產趨勢 |
-| `pages.finance.balanceSheets.visualization.stackedBreakdown` | Balance Breakdown | 餘額分析 |
-| `pages.finance.balanceSheets.visualization.netWorth` | Net Worth | 淨資產 |
-| `pages.finance.balanceSheets.visualization.empty` | No balance sheets yet | 尚無資產負債表 |
+| Suffix | en-US | zh-TW |
+|--------|-------|-------|
+| `visualization.netWorthTrend` | Net Worth Trend | 淨資產趨勢 |
+| `visualization.stackedBreakdown` | Balance Breakdown | 餘額分析 |
+| `visualization.netWorth` | Net Worth | 淨資產 |
+| `visualization.empty` | No balance sheets yet | 尚無資產負債表 |
+| `baseCurrency.label` | Base Currency | 基準幣別 |
+| `baseCurrency.none` | No base currency | 無基準幣別 |
+| `col.netWorth` | Net Worth ({currency}) | 淨資產 ({currency}) |
 
-### Modified keys (terminology clarification)
+### `pages.finance.accounts`
 
-Review any existing use of "asset" / "debt" labels in the locale files against the canonical definition (amount ≥ 0 = asset, amount < 0 = debt) and update wording if inconsistent.
+| Suffix | en-US | zh-TW |
+|--------|-------|-------|
+| `col.color` | Color | 顏色 |
+| `form.color` | Color | 顏色 |
+
+### `pages.finance.currencies`
+
+| Suffix | en-US | zh-TW |
+|--------|-------|-------|
+| `col.isBaseCurrency` | Base Currency | 基準幣別 |
+| `col.symbol` | Symbol | 符號 |

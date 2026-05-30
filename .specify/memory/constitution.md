@@ -1,6 +1,11 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.11.0 → 1.12.0 (minor — added Principle XI: Chart Library &
+  Visualization Standards, encoding the ECharts library choice, SVG renderer
+  requirement, account color system, visualization card tab pattern, and
+  ProTable ghost rule for embedded tables. Reflects Finance domain implementation
+  completed 2026-05-31.)
 Version change: 1.10.0 → 1.11.0 (minor — added Principle X: Chart Rendering,
   governing minimum chart width and horizontal-scroll container requirements so
   charts remain usable and undistorted on narrow screens.)
@@ -388,6 +393,41 @@ segments shrink to invisible, and line charts collapse to meaningless blobs. A
 horizontal scrollbar is a zero-cost, universally understood fallback that keeps
 all chart information accessible.
 
+### XI. Chart Library & Visualization Standards
+
+All interactive charts in UniHub MUST use **ECharts** (via `echarts-for-react`) with the **SVG renderer**. No alternative charting library may be introduced.
+
+**Library rule**:
+- The installed packages are `echarts` and `echarts-for-react`. No `@ant-design/plots`, `recharts`, `victory`, or any other charting library is permitted.
+- Charts MUST be rendered with `opts={{ renderer: 'svg' }}` on `<ReactECharts>`. The canvas renderer is prohibited.
+- `notMerge={true}` MUST be used on charts that switch between different datasets or color schemes (e.g., tab switches). This prevents previous option state from bleeding into the new render.
+
+**Visualization card layout rule**:
+- Any page that includes both a chart section and a tabular data section MUST use AntD `Card` with `tabList` + `activeTabKey` + `onTabChange` for the chart card. The `Segmented` control inside a titled Card is deprecated.
+- When a visualization card embeds a table (e.g., a Statistics / aggregation tab), the table MUST use `ProTable ghost` directly — NOT `PageTable`. Embedding `PageTable` inside an AntD `Card` body causes the inner ProCard's CSS to interfere with the parent card's tab-bar `border-bottom`. `ProTable ghost` removes the ProCard wrapper and eliminates this interference.
+
+**Account color rule**:
+- The `Account` model MUST expose an optional `color` field storing a `#rrggbb` hex value (empty string = unset).
+- All chart series that represent accounts MUST resolve their display color via `resolveAccountColor(accountName, customColor?)` from `src/utils/chartData.ts`. Direct use of a color palette index or `ECHARTS_COLORS[i]` without going through this function is a violation.
+- `resolveAccountColor` guarantees determinism: the same account name always resolves to the same color regardless of query result ordering, preventing color flicker on re-renders.
+- Custom colors (`Account.color`) take precedence over the hash-based fallback.
+
+**Color assignment rule**:
+- Charts with multiple series MUST set colors via the option-level `color` array (not per-item `itemStyle.color`). ECharts applies `color` before `itemStyle.color` in the rendering pipeline; option-level color is reliable across tab switches with `notMerge: true`, whereas per-item colors can fail to apply after a previous option set a global palette.
+
+**Tooltip positioning rule**:
+- Chart tooltips MUST NOT follow the mouse cursor. The tooltip MUST be pinned to the active x-axis value (for axis-trigger charts) or the data point (for item-trigger charts).
+- When using a custom `position` callback, coordinates from `point[0]` are chart-container-relative, NOT viewport-relative. Compare against `size.viewSize[0]` (chart container width) — NOT `window.innerWidth` — when deciding left/right placement.
+- Tooltips MUST include `confine: true` OR a custom `position` function that guarantees the tooltip stays within the chart container.
+
+**Legend rule**:
+- ECharts' built-in legend (`legend: { show: true }`) is prohibited for Finance domain charts. All legends MUST be custom React pill buttons rendered below the chart.
+- Each legend pill: `border-radius: 12px`, colored background matching the series color, white text, small circle dot (or icon for "All" toggles).
+- Asset-majority accounts (net total ≥ 0) use green (`#52c41a`) as background in the Equity Curve legend. Debt-majority accounts use red (`#ff4d4f`).
+- The "All" toggle pill MUST use `CheckOutlined` (all active), `MinusOutlined` (partial or all-inactive) icon states.
+
+**Rationale**: ECharts provides native `roseType` for Nightingale charts, `visualMap.continuous` for per-segment line coloring, a `position` callback with `size.viewSize` for tooltip overflow prevention, and option-level `color` arrays for reliable tab-switch color assignment — all without workarounds. Standardizing on one library with the SVG renderer eliminates cross-library compatibility issues and keeps the bundle size predictable. The account color system with `resolveAccountColor` prevents the most common chart UX defect (colors changing position as data reloads). Custom React legends give precise control over toggle behavior, styling, and interaction (hover-to-highlight) that the ECharts built-in legend cannot match.
+
 ## Development Constraints
 
 - **Package managers**: `pnpm` for frontend, `uv` for backend. Never use `npm`,
@@ -447,4 +487,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.11.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-30
+**Version**: 1.12.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-31

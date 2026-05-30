@@ -4,7 +4,27 @@
 
 **Prerequisites**: plan.md ✅, spec.md ✅, research.md ✅, data-model.md ✅
 
-**Tests**: No test tasks generated — this is a pure-frontend display/UX feature with no new business logic endpoints. The quality loop (`pnpm lint && pnpm typecheck && pnpm test`) validates TypeScript correctness after each story.
+**Status**: All tasks completed 2026-05-31.
+
+---
+
+> **Scope expansion note (2026-05-31)**: The original task list assumed a frontend-only implementation using `@ant-design/plots`. Actual implementation diverged significantly. Unplanned work completed:
+>
+> - **Backend model changes**: `Currency.is_base_currency`, `Account.color`, three migrations, updated serializers, 98 new backend test assertions
+> - **Chart library replacement**: Migrated from `@ant-design/plots` to `echarts` + `echarts-for-react` v6.1.0 (SVG renderer) due to superior control over custom legends, tooltip positioning, `roseType`, and `visualMap` for green/red coloring
+> - **Account Color attribute (US6)**: Color picker in Account edit modal, color swatch column in Accounts table, color propagation through all chart series and legend pills
+> - **Base currency valuation (Principle IX)**: `useBaseCurrency` hook, net worth columns across all Finance tables, `computeNetWorthInBase` utility, `is_base_currency` on Currency
+> - **Visualization card redesign**: AntD `Card tabList` pattern (replacing Segmented inside a titled Card); Statistics is the 4th tab inside the visualization card (not a separate below-card section)
+> - **Nightingale rose charts**: `roseType: 'area'` replaces simple donut pies
+> - **Custom legend system**: Per-account legend pills with color backgrounds, hover highlight, toggle behavior, "All" pill with icon states
+> - **Statistics tab border fix**: `ProTable ghost` instead of `PageTable` to avoid nested ProCard CSS border interference
+> - **Dynamic column widths**: Group column recalculates from visible row labels on each expand/collapse
+> - **PageTable enhancements**: `pageTitle` optional, `noStickyFix` prop
+> - **E2E tests**: 41 chart behavior tests in `charts.spec.ts`
+
+---
+
+**Original test note (updated)**: Unit tests written for all utility functions (`finance.ts`, `chartData.ts`). E2E tests written for chart behaviors. Backend integration tests for new model fields.
 
 **Organization**: Tasks grouped by user story; stories can proceed in priority order after Phase 1.
 

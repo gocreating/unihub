@@ -2,11 +2,17 @@
 
 **Feature Branch**: `006-finance-app-enhancement`
 
-**Created**: 2026-05-29
-
-**Status**: Draft
+**Created**: 2026-05-29  
+**Implemented**: 2026-05-31  
+**Status**: Implemented
 
 **Input**: User description: "Finance app enhancement (GitHub issue #11)"
+
+---
+
+> **Reflection note (2026-05-31)**: This spec was written before implementation began. Significant scope was added during development. The original assumption that this was a "frontend-only" feature proved incorrect — backend model changes, new migrations, and backend tests were required. The chart library was replaced (ECharts instead of @ant-design/plots). A major unplanned feature (Account Color Attribute) was added. Tab/chart names diverged from the original spec. This document has been updated to reflect the actual delivered implementation.
+
+---
 
 ## Clarifications
 
@@ -21,135 +27,169 @@
 
 ### User Story 1 - Consistent Numeric Display (Priority: P1)
 
-When reviewing any financial data — balances, totals, amounts — the user sees numbers formatted with comma separators (e.g., 1,234,567.89) and right-aligned, making it easy to compare magnitudes at a glance. In tabular views, decimal points are vertically aligned across rows.
+When reviewing any financial data — balances, totals, amounts — the user sees numbers formatted with comma separators (e.g., 1,234,567.89) and right-aligned, making it easy to compare magnitudes at a glance. In tabular views, decimal points are vertically aligned across rows. When a base currency is selected, a net worth valuation column appears alongside the original amount column, showing the FX-converted equivalent.
 
-**Why this priority**: Numeric readability is foundational — it affects every finance page that shows amounts. Poor formatting makes values hard to compare; fixing this first delivers immediate, broad value.
-
-**Independent Test**: Open any finance table with multiple rows of balance amounts and verify: comma separators appear, values are right-aligned, and decimal points align vertically across rows.
+**Status**: ✅ Implemented. `formatAmount()` + `getCurrencySymbol()` applied across all finance tables. `computeNetWorthInBase()` powers per-row valuation columns.
 
 **Acceptance Scenarios**:
 
 1. **Given** a finance table with multiple rows, **When** the user views balance amounts, **Then** all amounts display with comma separators (e.g., "1,234,567.89"), are right-aligned, and decimal points are vertically aligned
 2. **Given** a single numeric amount outside a table, **When** the user views it, **Then** it displays with comma separators and right-alignment
 3. **Given** a negative amount (debt), **When** the user views it, **Then** it displays with comma separators and right-alignment, with the minus sign included
+4. **Given** a base currency is selected, **When** an exchange rate exists for an account's currency, **Then** a net worth column shows the converted amount prefixed with the base currency symbol
+5. **Given** a base currency is selected but no exchange rate exists for an account, **Then** the net worth cell shows the standard `—` placeholder
 
 ---
 
-### User Story 2 - Balance Sheet Detail Pie Chart Visualizations (Priority: P2)
+### User Story 2 - Balance Sheet Detail Chart Visualizations (Priority: P2)
 
-When reviewing a specific balance sheet, the user sees a persistent two-card layout: a visualization card above containing pie charts, and an account table card below always showing the account entries. The visualization card contains three pie charts: overall asset-vs-debt ratio, asset-only account breakdown, and debt-only account breakdown.
+When reviewing a specific balance sheet, the user sees a persistent two-card layout: a visualization card above containing rose charts, and an account table card below always showing the account entries. The visualization card has four tabs: **A/L** (asset vs. debt ratio), **Assets Breakdown**, **Debts Breakdown**, and **Statistics** (tree aggregation — see US3).
 
-**Why this priority**: Pie charts on the detail page reveal financial composition in a way tabular data cannot, directly answering "where is my money?" for a given snapshot. The always-visible table ensures the user never loses access to the raw data.
+All three chart tabs render **Nightingale rose charts** (`roseType: 'area'`) where each slice's area is proportional to its value. The A/L tab uses green for assets and red for debts. The per-account breakdown tabs use each account's custom color (falling back to a deterministic hash-based palette).
 
-**Independent Test**: Open a balance sheet detail page with at least one asset account and one debt account; confirm a visualization card renders above the account table card, and that three pie charts are accessible in the visualization card.
+**Status**: ✅ Implemented. Chart library is ECharts v6.1.0 via `echarts-for-react`. Charts use option-level `color` arrays for reliable tab-switch color assignment.
 
 **Acceptance Scenarios**:
 
-1. **Given** a balance sheet detail page, **When** the user views the page, **Then** a visualization card is displayed above a persistent account table card, both always visible
-2. **Given** the visualization card on the balance sheet detail page, **When** the user views it, **Then** a chart selector control is visible with three options: (1) asset vs. debt ratio, (2) asset-only account breakdown, (3) debt-only account breakdown — and exactly one pie chart is displayed at a time
-3. **Given** the visualization card, **When** the user selects a different chart option, **Then** the displayed pie chart switches to the selected type
-4. **Given** a balance sheet with no debt accounts, **When** the user views the debt-only pie chart, **Then** the chart shows an empty/zero state with a clear message
+1. **Given** a balance sheet detail page, **When** the user views the page, **Then** a four-tab visualization card is displayed above a persistent account table card, both always visible
+2. **Given** the visualization card, **When** the user views the "A/L" tab, **Then** a nightingale rose chart renders with a green sector for total assets and a red sector for total debts
+3. **Given** the "Assets Breakdown" tab, **When** rendered, **Then** each asset account is a differently-colored sector, sorted by net worth value descending, with the base currency symbol in the tooltip when a base currency is selected
+4. **Given** the "Debts Breakdown" tab, **Then** same as above but for debt accounts (amounts shown as absolute values)
+5. **Given** a balance sheet with no debt accounts, **When** the user views the Debts Breakdown tab, **Then** the chart shows a clear empty-state message
+6. **Given** switching between tabs, **When** a previous tab used green/red colors, **Then** the next tab's per-account colors apply correctly (no bleed-through from previous option)
 
 ---
 
-### User Story 3 - Balance Sheet Detail Tree Aggregation (Priority: P3)
+### User Story 3 - Balance Sheet Detail Statistics View (Priority: P3)
 
-When reviewing a balance sheet detail, the user can select one or more grouping dimensions simultaneously — account type (asset/debt), currency (TWD, USD, etc.) — and customize their order to define the nesting hierarchy of the resulting tree. Within each group, accounts are sorted by balance amount descending, and each group node shows the sum of its children.
+When reviewing a balance sheet detail, the user clicks the **Statistics** tab in the visualization card and sees a tree aggregation table. The user can select one or more grouping dimensions — **A/L Type** (asset/debt) and **Currency** (TWD, USD, etc.) — and reorder them via drag to define the nesting hierarchy.
 
-**Why this priority**: Multi-dimensional tree aggregation lets users view their financial position from multiple angles simultaneously (e.g., by type then currency) without manual calculation, revealing structure invisible in a flat list.
+Default state: all parent nodes expanded, account-level (leaf) rows collapsed. Group column width updates dynamically as rows are expanded or collapsed. Amount cells show `—` for nodes that aggregate across multiple currencies (summing TWD + USD is meaningless without FX conversion); currency-homogeneous nodes show the amount with the currency symbol prefix.
 
-**Independent Test**: Open a balance sheet detail page; select both "type" and "currency" grouping dimensions, set type as the outer group, and verify a nested tree appears with type nodes containing currency subnodes, each with correct subtotals and descending sort.
+**Status**: ✅ Implemented. Statistics is the 4th tab in the visualization card. Uses `ProTable ghost` to avoid nested ProCard CSS interference with the card tab-bar border. Controlled `expandedRowKeys` drives both the tree state and the dynamic column width measurement.
 
 **Acceptance Scenarios**:
 
-1. **Given** a balance sheet detail page, **When** the user selects the "type" grouping dimension only, **Then** accounts are grouped into "Asset" and "Debt" nodes, each showing the sum of child balances, with children sorted by amount descending
-2. **Given** a balance sheet detail page, **When** the user selects both "type" and "currency" grouping dimensions with "type" as the outer group, **Then** a nested tree appears with type nodes (Asset, Debt) each containing currency subnodes, all with correct subtotals and descending sort at each level
-3. **Given** two grouping dimensions are selected, **When** the user reorders the dimensions (e.g., swapping type and currency), **Then** the tree re-renders with the new nesting hierarchy applied
-4. **Given** a group node in the tree, **When** the user views the node's total, **Then** it equals the sum of all its direct children's balance amounts
+1. **Given** the Statistics tab is selected with default grouping (A/L Type → Currency), **When** the tree renders, **Then** Asset and Debt parent nodes are expanded showing currency sub-nodes, but currency nodes are collapsed (accounts not visible by default)
+2. **Given** a currency node (e.g., TWD), **When** the user clicks to expand it, **Then** individual accounts appear and the Group column widens to accommodate account names
+3. **Given** the user drags to reorder dimensions to Currency → A/L Type, **Then** the tree re-renders with currency as outer groups
+4. **Given** a node spanning multiple currencies (e.g., the "Asset" type node), **When** viewed, **Then** the Amount column shows `—` (cross-currency sum is meaningless)
+5. **Given** a currency-homogeneous node (e.g., "TWD" under Asset), **When** viewed, **Then** Amount shows "NT$ 3,800,000.00" (currency symbol + value)
+6. **Given** a base currency is selected, **When** any node is viewed, **Then** a Net Worth column shows the FX-converted total; root node shows total net worth across all accounts
 
 ---
 
 ### User Story 4 - Balance Sheet List Time-Series Visualizations (Priority: P4)
 
-When viewing the list of all balance sheets, the user sees a persistent two-card layout: a visualization card above containing time-series charts, and the balance sheet list card below always showing all entries. Two chart types are available within the visualization card: a net worth trend line and a stacked account balance breakdown.
+When viewing the list of all balance sheets, the user sees a persistent two-card layout: a visualization card above containing time-series charts, and the balance sheet list card below. Two chart types are available: **Equity Curve** and **Account Trend**.
 
-**Why this priority**: Time-series charts reveal trends across snapshots — whether net worth is improving or declining — without needing to open individual balance sheets. The always-visible list ensures the user retains full navigation access.
+**Equity Curve**: Single green/red line chart where the line and area fill are green when net worth ≥ 0 and red when < 0. Custom legend pills below the chart are **green for asset-majority accounts** and **red for debt-majority accounts**. Clicking a pill excludes that account from the net worth calculation, allowing what-if analysis.
 
-**Independent Test**: Open the balance sheet list with at least three entries on different dates; confirm a visualization card renders above the list card, and that both time-series chart types are accessible in the visualization card.
+**Account Trend**: Stacked area chart showing each account's balance contribution over time. Time axis is proportional to actual elapsed time (not categorical slots). Custom legend pills use each account's custom color. Clicking a pill hides/shows that account's area.
+
+Both charts: custom "All" pill button with `CheckOutlined` / `MinusOutlined` / faded-`MinusOutlined` icons for checked/indeterminate/unchecked states.
+
+**Status**: ✅ Implemented. Chart library is ECharts v6.1.0. ECharts `visualMap.continuous` with a 100-stop bicolor array achieves the sharp green/red line transition at y=0.
 
 **Acceptance Scenarios**:
 
-1. **Given** the balance sheet list page, **When** the user views the page, **Then** a visualization card is displayed above a persistent balance sheet list card, both always visible
-2. **Given** the visualization card on the balance sheet list page, **When** the user views it, **Then** a chart selector control is visible with two options: (1) net worth trend, (2) stacked balance breakdown — and exactly one chart is displayed at a time
-3. **Given** the chart selector is on "net worth trend", **When** the user views the chart, **Then** it displays each balance sheet date on the x-axis and net worth on the y-axis
-4. **Given** the chart selector is on "stacked balance breakdown", **When** the user views the chart, **Then** it shows each account's balance contribution stacked for each balance sheet date
-5. **Given** the user selects a different chart option, **When** the selection changes, **Then** the visualization card switches to display the newly selected chart
-6. **Given** only one balance sheet exists, **When** the user views the visualization card, **Then** charts render with a single data point and no error
+1. **Given** the balance sheet list page, **When** viewed, **Then** a two-tab visualization card renders above the balance sheet list table, both always visible
+2. **Given** the Equity Curve tab, **When** net worth is positive throughout all dates, **Then** the entire line and fill area are green
+3. **Given** the Equity Curve tab, **When** net worth crosses zero between dates, **Then** the line switches color at the crossing and the fill area reflects the sign
+4. **Given** an asset-majority account's legend pill, **When** viewed, **Then** the pill background is green; for a debt-majority account it is red
+5. **Given** the Account Trend tab, **When** viewed, **Then** each account's stacked area uses the account's custom color (or hash-based fallback)
+6. **Given** a single balance sheet exists, **When** charts render, **Then** a single data point shows without error on both chart types
 
 ---
 
 ### User Story 5 - Balance Sheet Form Currency Input (Priority: P5)
 
-When creating a new balance sheet entry, monetary input fields display the relevant currency symbol as a prefix and align the entered value to the right, matching standard financial input conventions.
+When creating a new balance sheet entry, monetary input fields display the relevant currency symbol as a prefix.
 
-**Why this priority**: Form input clarity reduces data entry errors and aligns the creation experience with the display conventions established in other parts of the app.
-
-**Independent Test**: Open the new balance sheet creation form; verify currency symbol appears as a prefix on monetary fields and typed values are right-aligned.
+**Status**: ✅ Implemented. `InputNumber` with `addonBefore={getCurrencySymbol(account.currency)}`.
 
 **Acceptance Scenarios**:
 
-1. **Given** the balance sheet creation form, **When** the user views a monetary input field, **Then** the currency symbol (e.g., "NT$", "$") appears as a prefix and the input value is right-aligned
+1. **Given** the balance sheet creation form, **When** the user views a monetary input field, **Then** the currency symbol (e.g., "NT$", "$") appears as a prefix
 2. **Given** a monetary input with a selected currency, **When** the user changes the currency, **Then** the prefix symbol updates to match the new currency
+
+---
+
+### User Story 6 - Account Color Attribute (Priority: added during implementation)
+
+Each account carries an optional custom color, stored as a `#rrggbb` hex string. Users can assign a color from a 20-color Material Design preset palette or choose any custom hex color. In visualization contexts (charts, legend pills), the account's custom color is used; when no custom color is set, a deterministic hash-based color is assigned automatically so the same account always gets the same color.
+
+In the Accounts table, a Color column shows a filled circle swatch (custom color) or `—` (unset). In charts, custom colors propagate through all series, area fills, and legend pills without requiring any user action after assignment.
+
+**Status**: ✅ Implemented. `Account.color` field (backend). `resolveAccountColor(name, customColor?)` utility (frontend). ColorPicker with `placement="topLeft"` and `getPopupContainer` for modal containment.
+
+**Acceptance Scenarios**:
+
+1. **Given** an account with no color, **When** viewed in the Accounts table, **Then** the Color column shows `—`
+2. **Given** the user clicks Edit on an account and opens the color picker, **When** they select a preset color and save, **Then** the Accounts table shows a colored circle in the Color column
+3. **Given** an account with a custom color, **When** viewed in any chart (Equity Curve, Account Trend, Assets/Debts Breakdown), **Then** that account's chart series and legend pill use the custom color
+4. **Given** an account with no custom color, **When** viewed in a chart, **Then** a consistent automatic color is shown (same account always gets the same auto-color regardless of list order)
 
 ---
 
 ### Edge Cases
 
-- What happens when a balance sheet has no accounts — do charts show a clear empty state?
-- How are negative debt amounts handled in pie chart percentage calculations (absolute value)?
-- What if a balance sheet contains accounts in multiple currencies — how does the tree aggregation node display the subtotal when a single-dimension group contains mixed currencies?
-- What if only one balance sheet exists — do the list-page time-series charts still render meaningfully with a single data point?
-- What if net worth is negative — does the net worth trend chart handle negative y-axis values correctly?
-- What if the user selects all available grouping dimensions — does the tree render correctly with maximum nesting depth?
+- What happens when a balance sheet has no accounts — charts show empty state messages
+- Negative debt amounts in pie/rose chart percentage calculations use absolute values
+- Multi-currency aggregation nodes show `—` in Amount column (meaningless to add TWD + USD without FX); net worth column always shows the FX-converted total when a base currency is set
+- Single balance sheet: time-series charts render with a single data point and no error
+- Negative net worth: equity curve line/fill turn red below zero with a smooth color transition
+- Maximum nesting depth: with two dimensions selected, tree has 4 levels (root → type → currency → accounts); renders correctly with all levels
+- ColorPicker in modal: opens upward (`placement="topLeft"`) and is scoped to the modal (`getPopupContainer`) to prevent overflow
+- Account color is stored as `#rrggbb` hex; the API must receive this format — `rgb(...)` returned by the browser's computed style is normalized to hex before the PATCH request
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: All numeric financial amounts MUST display with comma separators (e.g., 1,234,567.89)
+- **FR-001**: All numeric financial amounts MUST display with comma separators and exactly 2 decimal places (e.g., `1,234,567.89`)
 - **FR-002**: All numeric financial amounts in tabular views MUST be right-aligned
 - **FR-003**: In tabular views, decimal points of numeric amounts MUST be vertically aligned across rows
-- **FR-004**: The term "asset" in the finance domain MUST consistently refer to accounts with balance amount ≥ 0; "debt" MUST consistently refer to accounts with balance amount < 0
-- **FR-005**: Monetary input fields on the balance sheet creation form MUST display the relevant currency symbol as a prefix
-- **FR-006**: Monetary input fields on the balance sheet creation form MUST align entered values to the right
-- **FR-007**: The balance sheet detail page MUST display a persistent two-card layout: a visualization card above (always visible) and an account table card below (always visible)
-- **FR-008**: The visualization card on the balance sheet detail page MUST provide a chart selector control offering three options — (1) asset vs. debt ratio, (2) asset-only account breakdown by account, (3) debt-only account breakdown by account — displaying exactly one pie chart at a time
-- **FR-009**: The balance sheet detail page MUST support flexible tree aggregation where the user can select one or more grouping dimensions simultaneously (at minimum: account type and currency) and customize the order of selected dimensions to define the nesting hierarchy
-- **FR-010**: Within each aggregation group, accounts MUST be sorted by balance amount in descending order
-- **FR-011**: Each aggregation group node MUST display the sum of its direct children's balance amounts
-- **FR-012**: The balance sheet list page MUST display a persistent two-card layout: a visualization card above (always visible) and a balance sheet list card below (always visible)
-- **FR-013**: The visualization card on the balance sheet list page MUST provide a chart selector control offering two options — (1) net worth trend (time on x-axis, net worth on y-axis) and (2) stacked balance breakdown (each account's balance contribution over time) — displaying exactly one chart at a time
+- **FR-004**: "Asset" in the Finance domain MUST consistently refer to accounts with balance amount ≥ 0; "Debt" MUST consistently refer to accounts with balance amount < 0
+- **FR-005**: Monetary input fields on balance sheet create/edit forms MUST display the relevant currency symbol as a prefix
+- **FR-006**: The `Currency` model MUST include `is_base_currency: boolean`; only currencies with `is_base_currency=True` appear in the base currency selector
+- **FR-007**: The `Account` model MUST include an optional `color: string` field storing a `#rrggbb` hex value; stored as empty string when unset
+- **FR-008**: The balance sheet detail page MUST display a four-tab visualization card (A/L, Assets Breakdown, Debts Breakdown, Statistics) above the account table; both always visible
+- **FR-009**: The A/L chart MUST use green (`#52c41a`) for the asset sector and red (`#ff4d4f`) for the debt sector
+- **FR-010**: The Assets Breakdown and Debts Breakdown charts MUST use each account's custom color (via `resolveAccountColor()`), sort slices by net worth value descending, and prefix the base currency symbol in tooltip amounts when a base currency is selected
+- **FR-011**: The Statistics tab MUST render a tree aggregation table with at minimum two grouping dimensions: A/L Type and Currency; dimensions are selectable and reorderable via drag
+- **FR-012**: The Statistics tree MUST default to all parent nodes expanded and all account-level (leaf) nodes collapsed
+- **FR-013**: The Statistics tree Group column width MUST recalculate from currently-visible row labels whenever rows are expanded or collapsed
+- **FR-014**: Statistics Amount cells for nodes spanning multiple currencies MUST display `—`; currency-homogeneous nodes MUST display the amount with currency symbol prefix
+- **FR-015**: The balance sheet list page MUST display a two-tab visualization card (Equity Curve, Account Trend) above the balance sheet list table; both always visible
+- **FR-016**: The Equity Curve chart MUST render green when net worth ≥ 0 and red when net worth < 0, with the color transition at y=0
+- **FR-017**: The Equity Curve legend pills MUST be colored green (asset-majority accounts) or red (debt-majority accounts); clicking a pill excludes/includes that account from the net worth calculation
+- **FR-018**: The Account Trend chart MUST use each account's custom color; time axis MUST be proportional to actual elapsed time (not categorical)
+- **FR-019**: Both charts' "All" pill button MUST use `CheckOutlined` (all active), `MinusOutlined` (partial/none) icon states and match the legend pill visual style
+- **FR-020**: Account color assignment in charts MUST be deterministic: the same account name always resolves to the same color via `resolveAccountColor()` regardless of list ordering
 
 ### Key Entities
 
-- **Balance Sheet**: A dated snapshot of all account balances representing the user's financial position at a point in time
-- **Account Entry**: A single account within a balance sheet, carrying a currency, a balance amount, and a derived type ("asset" if amount ≥ 0, "debt" if amount < 0)
-- **Currency**: The denomination of an account's balance (e.g., TWD, USD), which determines the display symbol used in inputs and labels
+- **Currency**: Code (primary key), name, symbol, `is_base_currency` flag. Base currencies are eligible for net worth valuation selection.
+- **Account**: ID, name, currency code, optional `color` (#rrggbb hex). Custom color propagates to all chart visualizations.
+- **Balance Sheet**: Dated snapshot. Each sheet has zero or more Balance records.
+- **Balance**: Links account + balance sheet + decimal amount. Sign convention: ≥ 0 = asset, < 0 = debt.
+- **Exchange Rate**: Base/quote currency pair + decimal rate + date. Used for FX net worth conversion.
 
 ## Success Criteria *(mandatory)*
 
-### Measurable Outcomes
+- **SC-001**: Users can scan any finance table and compare amounts without mental parsing — comma separators, right-alignment, decimal alignment across all finance tables
+- **SC-002**: Users can determine their asset/debt composition and per-account breakdown from the balance sheet detail visualization card without any manual calculation
+- **SC-003**: Users can explore their financial position through multiple aggregation dimensions from the Statistics tab and see correct subtotals; dynamic column widths keep the view uncluttered at all times
+- **SC-004**: Users can identify their net worth trend direction from the Equity Curve (green = growing, red = declining) and understand per-account contributions from the Account Trend
+- **SC-005**: Users entering amounts in balance sheet forms can identify the input currency from the prefix symbol without consulting a separate label
+- **SC-006**: Users can assign a recognizable color to each account and see that color consistently across all chart views without any extra configuration
 
-- **SC-001**: Users can scan any finance table and compare balance amounts without mental parsing — all amounts consistently show comma separators, are right-aligned, and decimal points are vertically aligned
-- **SC-002**: Users can determine their overall asset-vs-debt ratio and the breakdown of their largest assets and debts from the balance sheet detail visualization card without performing any manual calculations
-- **SC-003**: Users can view their financial position grouped by multiple dimensions simultaneously from the balance sheet detail tree aggregation view and immediately see correct subtotals without leaving the page
-- **SC-004**: Users can identify their net worth trend direction and understand how individual account balances have contributed to it over time, directly from the balance sheet list visualization card
-- **SC-005**: Users entering amounts in the balance sheet creation form can identify the currency of each input field from the prefix symbol without consulting a separate label
+## Assumptions (as delivered)
 
-## Assumptions
-
-- Currency symbols are derivable from each account's currency code (e.g., TWD → "NT$", USD → "$") using standard mappings already available or trivially addable
-- Multi-currency subtotals in tree aggregation nodes display the raw sum within each group in its own currency; cross-currency conversion is out of scope for this feature
-- The balance sheet list and detail pages already render tabular data; visualization cards and tree aggregation are additive components displayed alongside existing tables
-- All enhancements are display/frontend changes; no new backend API endpoints are required — existing data endpoints supply sufficient information for all visualizations and aggregations
-- "Asset" and "debt" terminology clarification is a labeling/copy change; no data model changes are needed
+- Currency symbols are derived from a hardcoded lookup table (`getCurrencySymbol()`) with a code-as-fallback for unknown currencies
+- Backend model changes were required: `Currency.is_base_currency` and `Account.color` fields + migrations
+- Cross-currency subtotals in aggregation nodes show `—` when the node spans multiple currencies; the Net Worth column (base currency) always shows a meaningful converted total when exchange rates are available
+- All chart library work uses ECharts v6.1.0 (via `echarts-for-react`) with the SVG renderer; `@ant-design/plots` was evaluated but replaced due to ECharts being a better fit for custom legend, tooltip, and color requirements
+- Account color is stored as `#rrggbb` hex (7 characters); the ColorPicker returns hex values which are normalized before API submission
+- "Asset" and "Debt" terminology is enforced by sign convention in the data (not a separate boolean field)

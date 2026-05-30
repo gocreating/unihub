@@ -276,6 +276,9 @@ export function BalanceSheetsPage() {
     // Classify each account into 'assets' or 'debts' stacking group.
     const stackGroups = classifyAccountStacks(stackedData, stackedAccounts);
 
+    // Use [timestamp, value] format so the time axis spaces dates by actual
+    // elapsed time rather than categorical equal-width slots. This prevents
+    // balance sheets that are months apart from appearing as adjacent slots.
     const series = stackedAccounts.map((acc) => ({
       name: acc,
       type: 'line' as const,
@@ -284,13 +287,12 @@ export function BalanceSheetsPage() {
       symbol: 'none',
       areaStyle: { opacity: 0.55 },
       emphasis: { focus: 'series' as const },
-      data: dates.map((date) => {
+      data: dates.map((date): [number, number] => {
         const entry = stackedData.find((d) => d.date === date && d.accountName === acc);
         const v = entry?.amount ?? 0;
-        // Clip to the account's assigned stack direction to prevent artifacts
-        // when a value temporarily crosses zero (e.g. a debt account going
-        // positive for one period would otherwise spike into the asset area).
-        return stackGroups.get(acc) === 'assets' ? Math.max(v, 0) : Math.min(v, 0);
+        // Clip to prevent cross-sign artifacts when an account temporarily switches sign.
+        const clipped = stackGroups.get(acc) === 'assets' ? Math.max(v, 0) : Math.min(v, 0);
+        return [new Date(date).getTime(), clipped];
       }),
     }));
 
@@ -333,12 +335,13 @@ export function BalanceSheetsPage() {
         // All non-zero items, sorted by |value| desc, in a scrollable panel.
         extraCssText: 'max-height:85vh;overflow-y:auto;',
         formatter: (raw) => {
-          const params = raw as unknown as { axisValueLabel: string; seriesName: string; value: number; marker: string }[];
-          const date = params[0]?.axisValueLabel ?? '';
+          const params = raw as unknown as { value: [number, number]; seriesName: string; marker: string }[];
+          const ts = params[0]?.value?.[0];
+          const date = ts ? dayjs(ts).format('YYYY-MM-DD') : '';
           const rows = [...params]
-            .filter((p) => p.value !== 0)
-            .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
-            .map((p) => tooltipRow(p.marker, p.seriesName, fmtVal(p.value)))
+            .filter((p) => p.value[1] !== 0)
+            .sort((a, b) => Math.abs(b.value[1]) - Math.abs(a.value[1]))
+            .map((p) => tooltipRow(p.marker, p.seriesName, fmtVal(p.value[1])))
             .join('');
           return rows
             ? `<b>${date}</b><table style="margin-top:6px;border-spacing:0">${rows}</table>`
@@ -347,9 +350,11 @@ export function BalanceSheetsPage() {
       },
       grid: { left: '3%', right: '4%', bottom: '4%', containLabel: true },
       xAxis: {
-        type: 'category',
-        data: dates,
-        axisLabel: { rotate: dates.length > 6 ? 30 : 0 },
+        type: 'time',
+        axisLabel: {
+          formatter: (val: number) => dayjs(val).format('YYYY-MM-DD'),
+          rotate: 30,
+        },
       },
       yAxis: {
         type: 'value',

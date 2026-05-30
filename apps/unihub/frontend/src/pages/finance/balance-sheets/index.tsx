@@ -247,7 +247,10 @@ export function BalanceSheetsPage() {
           const ts = Array.isArray(firstValue) ? (firstValue[0] as number) : undefined;
           const [tw = 0] = (size as { contentSize: number[] }).contentSize;
           const OFFSET = 20;
-          const estW = tw > 0 ? tw : 300;
+          // 600px fallback ensures the right-edge flip fires even before contentSize
+          // is computed (tw = 0 on first hover). A smaller estimate would let the
+          // tooltip overflow the viewport right edge on first render near the right.
+          const estW = tw > 0 ? tw : 600;
           // Default: cursor x; override with the data point's actual screen position.
           let snapX = (point as [number, number])[0];
           if (ts !== undefined) {
@@ -260,9 +263,11 @@ export function BalanceSheetsPage() {
               }
             }
           }
-          const tx = snapX + OFFSET + estW > window.innerWidth - 20
-            ? Math.max(10, snapX - OFFSET - estW)
-            : snapX + OFFSET;
+          const toRight = snapX + OFFSET;
+          const toLeft = Math.max(10, snapX - OFFSET - estW);
+          let tx = toRight + estW > window.innerWidth - 10 ? toLeft : toRight;
+          // Hard clamp: guarantee tooltip never overflows the right viewport edge.
+          tx = Math.max(10, Math.min(tx, window.innerWidth - estW - 10));
           return [tx, 20];
         },
         formatter: (raw) => {
@@ -352,7 +357,7 @@ export function BalanceSheetsPage() {
           const ts = Array.isArray(firstValue) ? (firstValue[0] as number) : undefined;
           const [tw = 0] = (size as { contentSize: number[] }).contentSize;
           const OFFSET = 20;
-          const estW = tw > 0 ? tw : 500;
+          const estW = tw > 0 ? tw : 600;
           let snapX = (point as [number, number])[0];
           if (ts !== undefined) {
             const inst = stackedChartRef.current?.getEchartsInstance();
@@ -364,9 +369,10 @@ export function BalanceSheetsPage() {
               }
             }
           }
-          const tx = snapX + OFFSET + estW > window.innerWidth - 20
-            ? Math.max(10, snapX - OFFSET - estW)
-            : snapX + OFFSET;
+          const toRight = snapX + OFFSET;
+          const toLeft = Math.max(10, snapX - OFFSET - estW);
+          let tx = toRight + estW > window.innerWidth - 10 ? toLeft : toRight;
+          tx = Math.max(10, Math.min(tx, window.innerWidth - estW - 10));
           return [tx, 20];
         },
         formatter: (raw) => {

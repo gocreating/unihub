@@ -593,6 +593,56 @@ test.describe('Chart tooltip — position and passthrough', () => {
     expect(distFromCursor).toBeGreaterThan(box.height * 0.5);
   });
 
+  test('tooltip near right chart edge does NOT cause horizontal viewport overflow', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    const chart = page.locator('.echarts-for-react').first();
+    const box = await chart.boundingBox();
+    if (!box) return;
+
+    // Hover over the rightmost 10% of the chart — the data point closest to the right edge.
+    await page.mouse.move(box.x + box.width * 0.92, box.y + box.height / 2);
+    await page.waitForTimeout(600);
+
+    // No horizontal scrollbar should appear on the page.
+    const hasHorizontalOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > window.innerWidth;
+    });
+    expect(hasHorizontalOverflow).toBe(false);
+
+    // Also verify the tooltip (if visible) is fully within the viewport.
+    const tooltip = page.locator('body > div[style*="position"]').last();
+    if (await tooltip.isVisible()) {
+      const tooltipBox = await tooltip.boundingBox();
+      if (tooltipBox) {
+        const viewportWidth = await page.evaluate(() => window.innerWidth);
+        expect(tooltipBox.x + tooltipBox.width).toBeLessThanOrEqual(viewportWidth + 2); // +2px rounding
+      }
+    }
+  });
+
+  test('tooltip near right edge of balance breakdown chart does NOT overflow viewport', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    await page.getByText('Balance Breakdown').click();
+    await page.waitForTimeout(600);
+
+    const chart = page.locator('.echarts-for-react').first();
+    const box = await chart.boundingBox();
+    if (!box) return;
+
+    // Hover near right edge
+    await page.mouse.move(box.x + box.width * 0.95, box.y + box.height / 2);
+    await page.waitForTimeout(600);
+
+    const hasHorizontalOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > window.innerWidth;
+    });
+    expect(hasHorizontalOverflow).toBe(false);
+  });
+
   test('chart axis pointer remains visible while mouse is over tooltip area', async ({ page }) => {
     const dataPresent = await hasChart(page);
     test.skip(!dataPresent, 'No data');

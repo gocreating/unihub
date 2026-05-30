@@ -237,18 +237,23 @@ export function BalanceSheetsPage() {
         // With appendToBody:true ECharts provides point[0] in viewport coordinates.
         // Simple rule: place RIGHT if space allows, otherwise LEFT. No convertToPixel
         // needed — point[0] is already the snapped axis position in viewport coords.
+        // point[0] and the returned [tx, ty] are both in CHART-CONTAINER-RELATIVE
+        // coordinates. ECharts auto-adds the chart's viewport offset when
+        // appendToBody:true, so we must compare against size.viewSize[0]
+        // (chart container width) — NOT window.innerWidth (viewport width).
+        // Using window.innerWidth was the root cause of persistent overflow.
         position: (point, _params, _dom, _rect, size) => {
           const [x] = point as [number, number];
-          const [tw = 0] = (size as { contentSize: number[] }).contentSize;
-          const MAX_W = 320; // must match extraCssText max-width
+          const sz = size as { contentSize: number[]; viewSize: number[] };
+          const [tw = 0] = sz.contentSize;
+          const [chartW = 1000] = sz.viewSize; // chart container width, same coords as x
+          const MAX_W = 320;
           const w = tw > 0 ? Math.min(tw, MAX_W) : MAX_W;
-          const GAP = 8;     // gap between active line and tooltip edge
-          const vw = window.innerWidth;
-          // If tooltip fits to the right → place right; otherwise → place left.
-          if (x + GAP + w < vw - 5) {
-            return [x + GAP, 20];
+          const GAP = 8;
+          if (x + GAP + w < chartW - 5) {
+            return [x + GAP, 20];        // fits right within chart container
           }
-          return [Math.max(5, x - GAP - w), 20];
+          return [Math.max(5, x - GAP - w), 20]; // flip left — guaranteed no overflow
         },
         formatter: (raw) => {
           const params = raw as unknown as { value: [number, number] }[];
@@ -329,15 +334,16 @@ export function BalanceSheetsPage() {
         appendToBody: true,
         extraCssText: 'max-width:600px;',
         axisPointer: { animation: false },
-        // Same simple right/left rule as the line chart.
+        // Same container-relative coordinate fix as the line chart.
         position: (point, _params, _dom, _rect, size) => {
           const [x] = point as [number, number];
-          const [tw = 0] = (size as { contentSize: number[] }).contentSize;
+          const sz = size as { contentSize: number[]; viewSize: number[] };
+          const [tw = 0] = sz.contentSize;
+          const [chartW = 1000] = sz.viewSize;
           const MAX_W = 600;
           const w = tw > 0 ? Math.min(tw, MAX_W) : MAX_W;
           const GAP = 8;
-          const vw = window.innerWidth;
-          if (x + GAP + w < vw - 5) {
+          if (x + GAP + w < chartW - 5) {
             return [x + GAP, 20];
           }
           return [Math.max(5, x - GAP - w), 20];

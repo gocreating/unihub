@@ -612,36 +612,51 @@ test.describe('Chart tooltip — position and passthrough', () => {
     expect(cursor).toBe('default');
   });
 
-  test('tooltip near right chart edge does NOT cause horizontal viewport overflow', async ({ page }) => {
+  // ── Tooltip overflow — root-cause regression tests ───────────────────────
+  // Root cause: point[0] is chart-container-relative but code compared it
+  // against window.innerWidth (viewport). Fix: use size.viewSize[0] instead.
+
+  async function assertNoOverflowAtX(page: Page, chart: ReturnType<Page['locator']>, xPct: number) {
+    const box = await chart.boundingBox();
+    if (!box) return;
+    await page.mouse.move(box.x + box.width * xPct, box.y + box.height / 2);
+    await page.waitForTimeout(400);
+
+    // 1. No horizontal viewport scrollbar.
+    const scrollOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    );
+    expect(scrollOverflow, `Horizontal overflow at x=${Math.round(xPct * 100)}%`).toBe(false);
+
+    // 2. Any visible tooltip element stays within the viewport.
+    // ECharts appendToBody tooltips use position:fixed — check their right edge.
+    const vw = await page.evaluate(() => window.innerWidth);
+    const tooltips = await page.locator('body > div[style*="position"]').all();
+    for (const tip of tooltips) {
+      if (!await tip.isVisible()) continue;
+      const tb = await tip.boundingBox();
+      if (!tb) continue;
+      expect(
+        tb.x + tb.width,
+        `Tooltip right edge (${Math.round(tb.x + tb.width)}) exceeds viewport (${vw}) at x=${Math.round(xPct * 100)}%`,
+      ).toBeLessThanOrEqual(vw + 2); // 2px rounding tolerance
+      expect(tb.x, `Tooltip left edge (${Math.round(tb.x)}) is negative at x=${Math.round(xPct * 100)}%`).toBeGreaterThanOrEqual(0);
+    }
+  }
+
+  test('net worth trend — tooltip does NOT overflow at 10 positions across chart width', async ({ page }) => {
     const dataPresent = await hasChart(page);
     test.skip(!dataPresent, 'No data');
 
     const chart = page.locator('.echarts-for-react').first();
-    const box = await chart.boundingBox();
-    if (!box) return;
-
-    // Hover over the rightmost 10% of the chart — the data point closest to the right edge.
-    await page.mouse.move(box.x + box.width * 0.92, box.y + box.height / 2);
-    await page.waitForTimeout(600);
-
-    // No horizontal scrollbar should appear on the page.
-    const hasHorizontalOverflow = await page.evaluate(() => {
-      return document.documentElement.scrollWidth > window.innerWidth;
-    });
-    expect(hasHorizontalOverflow).toBe(false);
-
-    // Also verify the tooltip (if visible) is fully within the viewport.
-    const tooltip = page.locator('body > div[style*="position"]').last();
-    if (await tooltip.isVisible()) {
-      const tooltipBox = await tooltip.boundingBox();
-      if (tooltipBox) {
-        const viewportWidth = await page.evaluate(() => window.innerWidth);
-        expect(tooltipBox.x + tooltipBox.width).toBeLessThanOrEqual(viewportWidth + 2); // +2px rounding
-      }
+    // Test at 10%, 20%, ..., 90%, 95% of chart width.
+    // The right-most positions (70–95%) are where overflow was observed.
+    for (const pct of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]) {
+      await assertNoOverflowAtX(page, chart, pct);
     }
   });
 
-  test('tooltip near right edge of balance breakdown chart does NOT overflow viewport', async ({ page }) => {
+  test('balance breakdown — tooltip does NOT overflow at 10 positions across chart width', async ({ page }) => {
     const dataPresent = await hasChart(page);
     test.skip(!dataPresent, 'No data');
 
@@ -649,17 +664,36 @@ test.describe('Chart tooltip — position and passthrough', () => {
     await page.waitForTimeout(600);
 
     const chart = page.locator('.echarts-for-react').first();
+    for (const pct of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]) {
+      await assertNoOverflowAtX(page, chart, pct);
+    }
+  });
+
+  test('tooltip flips to LEFT when hovered at rightmost data point', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    const chart = page.locator('.echarts-for-react').first();
     const box = await chart.boundingBox();
     if (!box) return;
 
-    // Hover near right edge
+    // Hover at the very right edge (95%)
     await page.mouse.move(box.x + box.width * 0.95, box.y + box.height / 2);
-    await page.waitForTimeout(600);
+    await page.waitForTimeout(500);
 
-    const hasHorizontalOverflow = await page.evaluate(() => {
-      return document.documentElement.scrollWidth > window.innerWidth;
-    });
-    expect(hasHorizontalOverflow).toBe(false);
+    const tooltips = await page.locator('body > div[style*="position"]').all();
+    for (const tip of tooltips) {
+      if (!await tip.isVisible()) continue;
+      const tb = await tip.boundingBox();
+      if (!tb) continue;
+      // When near right edge, tooltip must be to the LEFT of the hovered point.
+      // The tooltip's right edge must be ≤ the hovered viewport x.
+      const hoveredViewportX = box.x + box.width * 0.95;
+      expect(
+        tb.x + tb.width,
+        `Tooltip should be LEFT of hovered point at right edge`,
+      ).toBeLessThanOrEqual(hoveredViewportX + 30); // 30px for axis line width
+    }
   });
 
   test('chart axis pointer remains visible while mouse is over tooltip area', async ({ page }) => {

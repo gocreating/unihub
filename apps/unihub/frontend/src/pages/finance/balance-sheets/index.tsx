@@ -28,34 +28,51 @@ const CARD_TITLE_STYLE: React.CSSProperties = { margin: 0 };
 
 // ECharts v6 default color palette — must match what the chart instance uses
 // so custom legend dots show the correct colors.
-// 24 maximally distinct colors drawn from D3 Tableau20 + hand-picked additions.
-// Hues are spread across the full color wheel and vary in lightness/saturation
-// so that adjacent items remain easily distinguishable even in small legend pills.
+// 36-color palette: enough to cover 35+ accounts without repeating.
+// Chosen to maximise perceptual distance — hue jumps ~40° between adjacent
+// entries, with alternating dark/medium lightness so similar-hued neighbours
+// are still distinguishable by brightness.
 const ECHARTS_COLORS = [
-  '#4e79a7', // steel blue
-  '#f28e2b', // tangerine
-  '#e15759', // brick red
-  '#76b7b2', // sage teal
-  '#59a14f', // forest green
-  '#edc948', // golden yellow
-  '#b07aa1', // dusty purple
-  '#ff9da7', // salmon pink
-  '#9c755f', // warm brown
-  '#d62728', // crimson
-  '#1f77b4', // cobalt blue
-  '#2ca02c', // kelly green
-  '#9467bd', // medium purple
-  '#8c564b', // dark brown
-  '#e377c2', // orchid
-  '#17becf', // cerulean
-  '#bcbd22', // olive yellow-green
-  '#7f7f7f', // neutral gray
-  '#ff7f0e', // vivid orange
-  '#aec7e8', // light blue
-  '#98df8a', // light green
-  '#ffbb78', // peach
-  '#c5b0d5', // lavender
-  '#ad494a', // deep red
+  // ── Core 12: primary + secondary + tertiary, highly saturated ──────────
+  '#e6194b', // red           0°
+  '#f58231', // orange        30°
+  '#ffe119', // yellow        60°
+  '#3cb44b', // green        120°
+  '#42d4f4', // cyan         185°
+  '#4363d8', // blue         225°
+  '#911eb4', // purple       280°
+  '#f032e6', // magenta      305°
+  '#ff8c00', // dark orange   40°
+  '#00b300', // vivid green  120° alt
+  '#0099cc', // teal-blue    200°
+  '#cc00cc', // dark magenta  300°
+  // ── Dark variants: same hue wheel but deeper, offset by ~20° ──────────
+  '#800000', // maroon          0° dark
+  '#9a6324', // ochre brown     30° dark
+  '#808000', // olive           60° dark
+  '#006400', // dark green     120° dark
+  '#008080', // teal           180° dark
+  '#000080', // navy           240° dark
+  '#4b0082', // indigo         260° dark
+  '#800080', // dark purple    300° dark
+  // ── Medium variants: different lightness, wider hue spread ────────────
+  '#ff6347', // tomato          10°
+  '#ffd700', // gold            50°
+  '#7fff00', // chartreuse      90°
+  '#20b2aa', // light sea green 175°
+  '#1e90ff', // dodger blue    210°
+  '#6a5acd', // slate blue     248°
+  '#ff69b4', // hot pink       330°
+  '#dc143c', // crimson        348°
+  // ── Earthy / neutral fills ─────────────────────────────────────────────
+  '#8b4513', // saddle brown
+  '#d2691e', // chocolate
+  '#a0522d', // sienna
+  '#556b2f', // dark olive
+  '#2e8b57', // sea green
+  '#4682b4', // steel blue
+  '#708090', // slate gray
+  '#b8860b', // dark goldenrod
 ];
 
 interface NetWorthDataPoint {

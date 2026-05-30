@@ -237,20 +237,33 @@ export function BalanceSheetsPage() {
           lineStyle: { color: '#555', width: 2, type: 'solid' },
         },
         // Tooltip tracks the focused x-axis data point horizontally but stays at
-        // a fixed vertical position (top of viewport). This keeps the tooltip
-        // stable — it does not drift with the mouse cursor vertically — and
-        // appendToBody + pointer-events:none (enterable:false default) lets
-        // mouse events pass through to the chart so axis-pointer + series
-        // highlight remain active even when the cursor is over the tooltip area.
-        position: (point, _p, _dom, _rect, size) => {
-          const [x] = point as [number, number];
+        // Tooltip tracks the focused x-axis DATA POINT position, not the mouse cursor.
+        // point[0] for a time axis is the raw cursor viewport x; we convert the
+        // focused data point's timestamp via chart.convertToPixel instead.
+        // Fixed y keeps the tooltip stable regardless of vertical mouse movement.
+        position: (point, params, _dom, _rect, size) => {
+          const rawParams = params as unknown as Array<{ value?: unknown }>;
+          const firstValue = rawParams[0]?.value;
+          const ts = Array.isArray(firstValue) ? (firstValue[0] as number) : undefined;
           const [tw = 0] = (size as { contentSize: number[] }).contentSize;
           const OFFSET = 20;
-          const estW = tw > 0 ? tw : 500;
-          const tx = x + OFFSET + estW > window.innerWidth - 20
-            ? Math.max(10, x - OFFSET - estW)
-            : x + OFFSET;
-          return [tx, 20]; // fixed y = 20px from viewport top
+          const estW = tw > 0 ? tw : 300;
+          // Default: cursor x; override with the data point's actual screen position.
+          let snapX = (point as [number, number])[0];
+          if (ts !== undefined) {
+            const inst = lineChartRef.current?.getEchartsInstance();
+            if (inst) {
+              const px = inst.convertToPixel({ xAxisIndex: 0 }, ts);
+              if (typeof px === 'number') {
+                const domRect = inst.getDom()?.getBoundingClientRect();
+                if (domRect) snapX = domRect.left + px;
+              }
+            }
+          }
+          const tx = snapX + OFFSET + estW > window.innerWidth - 20
+            ? Math.max(10, snapX - OFFSET - estW)
+            : snapX + OFFSET;
+          return [tx, 20];
         },
         formatter: (raw) => {
           const params = raw as unknown as { value: [number, number] }[];
@@ -332,20 +345,29 @@ export function BalanceSheetsPage() {
           lineStyle: { color: '#555', width: 2, type: 'solid' },
         },
         // Tooltip tracks the focused x-axis data point horizontally but stays at
-        // a fixed vertical position (top of viewport). This keeps the tooltip
-        // stable — it does not drift with the mouse cursor vertically — and
-        // appendToBody + pointer-events:none (enterable:false default) lets
-        // mouse events pass through to the chart so axis-pointer + series
-        // highlight remain active even when the cursor is over the tooltip area.
-        position: (point, _p, _dom, _rect, size) => {
-          const [x] = point as [number, number];
+        // Same snap-to-data-point logic using stackedChartRef.
+        position: (point, params, _dom, _rect, size) => {
+          const rawParams = params as unknown as Array<{ value?: unknown }>;
+          const firstValue = rawParams[0]?.value;
+          const ts = Array.isArray(firstValue) ? (firstValue[0] as number) : undefined;
           const [tw = 0] = (size as { contentSize: number[] }).contentSize;
           const OFFSET = 20;
           const estW = tw > 0 ? tw : 500;
-          const tx = x + OFFSET + estW > window.innerWidth - 20
-            ? Math.max(10, x - OFFSET - estW)
-            : x + OFFSET;
-          return [tx, 20]; // fixed y = 20px from viewport top
+          let snapX = (point as [number, number])[0];
+          if (ts !== undefined) {
+            const inst = stackedChartRef.current?.getEchartsInstance();
+            if (inst) {
+              const px = inst.convertToPixel({ xAxisIndex: 0 }, ts);
+              if (typeof px === 'number') {
+                const domRect = inst.getDom()?.getBoundingClientRect();
+                if (domRect) snapX = domRect.left + px;
+              }
+            }
+          }
+          const tx = snapX + OFFSET + estW > window.innerWidth - 20
+            ? Math.max(10, snapX - OFFSET - estW)
+            : snapX + OFFSET;
+          return [tx, 20];
         },
         formatter: (raw) => {
           const params = raw as unknown as { value: [number, number]; seriesName: string; marker: string }[];

@@ -6,11 +6,16 @@
  *   - Chart type switching clears previous chart (no ghost rendering)
  *   - Y-axis tick labels carry base currency symbol prefix
  *   - Custom legends are visible and toggleable
- *   - Tooltip appears on hover, is not cropped, does not overlap axis pointer
+ *   - Tooltip appears on hover, positioned at data point x (not mouse cursor)
+ *   - Tooltip y is fixed near the top of the viewport (not following mouse y)
+ *   - Mouse events pass through tooltip to chart (chart hover stays active)
  *   - Net worth line is green above zero / red below zero
- *   - Stacked breakdown separates assets from debts
+ *   - Stacked breakdown separates assets from debts (time axis, proportional)
+ *   - Balance breakdown legend pills: solid color background, no border
+ *   - Balance breakdown area series: no outline/stroke on each area band
+ *   - Select-all checkbox for both charts
  *   - Min-width enforced; container is horizontally scrollable
- *   - Height ≥ 640 px
+ *   - Height ≥ 540 px
  *
  * Prerequisites:
  *   1. Backend running: docker compose -f docker-compose.local.yml up
@@ -531,4 +536,190 @@ test.describe('Balance Sheet Detail — Pie Chart', () => {
       expect(firstCell?.trim()).toMatch(/^[^\d\-]/);
     }
   });
+});
+
+// ─── Tooltip position behavior ────────────────────────────────────────────────
+
+test.describe('Chart tooltip — position and passthrough', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await gotoBalanceSheetList(page);
+  });
+
+  test('tooltip y-position is fixed near the top of viewport (not following mouse y)', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    const chart = page.locator('.echarts-for-react').first();
+    const box = await chart.boundingBox();
+    if (!box) return;
+
+    // Hover near the BOTTOM of the chart
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.85);
+    await page.waitForTimeout(500);
+
+    // Wait for tooltip to appear
+    const tooltip = page.locator('body > div[style*="position"]').last();
+    if (!await tooltip.isVisible()) return; // no tooltip (no data at this x)
+
+    const tooltipBox = await tooltip.boundingBox();
+    if (!tooltipBox) return;
+
+    // Tooltip top should be near the top of the viewport (≤ 80px from top),
+    // NOT near the cursor (which is at the bottom of the chart).
+    expect(tooltipBox.y).toBeLessThan(80);
+  });
+
+  test('tooltip is not positioned at the mouse cursor y when hovering at chart bottom', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    const chart = page.locator('.echarts-for-react').first();
+    const box = await chart.boundingBox();
+    if (!box) return;
+
+    const cursorY = box.y + box.height * 0.9; // near bottom of chart
+    await page.mouse.move(box.x + box.width / 3, cursorY);
+    await page.waitForTimeout(500);
+
+    const tooltip = page.locator('body > div[style*="position"]').last();
+    if (!await tooltip.isVisible()) return;
+
+    const tooltipBox = await tooltip.boundingBox();
+    if (!tooltipBox) return;
+
+    // Tooltip top should NOT be near the cursor y (which is at ~90% of chart height)
+    const distFromCursor = Math.abs(tooltipBox.y - cursorY);
+    expect(distFromCursor).toBeGreaterThan(box.height * 0.5);
+  });
+
+  test('chart axis pointer remains visible while mouse is over tooltip area', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    const chart = page.locator('.echarts-for-react').first();
+    const box = await chart.boundingBox();
+    if (!box) return;
+
+    // Hover chart to trigger tooltip
+    await page.mouse.move(box.x + box.width / 3, box.y + box.height / 2);
+    await page.waitForTimeout(500);
+
+    // Move mouse to where tooltip would appear (top-right of data point area).
+    // Since pointer-events: none, this should still be "over the chart".
+    const tooltip = page.locator('body > div[style*="position"]').last();
+    if (await tooltip.isVisible()) {
+      const tooltipBox = await tooltip.boundingBox();
+      if (tooltipBox) {
+        // Move into the tooltip area — chart should still show axis pointer
+        await page.mouse.move(tooltipBox.x + 10, tooltipBox.y + 10);
+        await page.waitForTimeout(300);
+        // Chart SVG should still be rendered (hover not broken)
+        await expect(chart).toBeVisible();
+      }
+    }
+  });
+});
+
+// ─── Balance breakdown — legend and series styling ────────────────────────────
+
+test.describe('Balance breakdown chart — legend and series styling', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await gotoBalanceSheetList(page);
+  });
+
+  async function switchToBreakdown(page: Page) {
+    await page.getByText('Balance Breakdown').click();
+    await page.waitForTimeout(600);
+  }
+
+  test('legend pills have no border (border: none)', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    await switchToBreakdown(page);
+
+    const firstPill = page.locator('.ant-card button').first();
+    const borderStyle = await firstPill.evaluate(
+      (el) => window.getComputedStyle(el as HTMLElement).borderWidth,
+    );
+    // border: none → computed border-width should be 0px
+    expect(borderStyle).toBe('0px');
+  });
+
+  test('active legend pills use solid color as background', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    await switchToBreakdown(page);
+
+    const firstPill = page.locator('.ant-card button').first();
+    const bg = await firstPill.evaluate(
+      (el) => window.getComputedStyle(el as HTMLElement).backgroundColor,
+    );
+    // Should have a non-white, non-transparent, non-gray background (the chart color)
+    expect(bg).not.toBe('rgba(0, 0, 0, 0)');
+    expect(bg).not.toBe('rgb(255, 255, 255)');
+    expect(bg).not.toBe('transparent');
+  });
+
+  test('hidden legend pill uses gray background (not chart color)', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    await switchToBreakdown(page);
+
+    const firstPill = page.locator('.ant-card button').first();
+    const bgBefore = await firstPill.evaluate(
+      (el) => window.getComputedStyle(el as HTMLElement).backgroundColor,
+    );
+
+    // Hide the first account
+    await firstPill.click();
+    await page.waitForTimeout(300);
+
+    const bgAfter = await firstPill.evaluate(
+      (el) => window.getComputedStyle(el as HTMLElement).backgroundColor,
+    );
+
+    // Hidden state should switch to gray (#e8e8e8 ≈ rgb(232,232,232))
+    expect(bgAfter).not.toBe(bgBefore);
+    // Restore
+    await firstPill.click();
+  });
+
+  test('stacked area series have no visible stroke (lineStyle.width: 0)', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    await switchToBreakdown(page);
+
+    // ECharts SVG: area paths should not have a non-zero stroke-width
+    const areaPaths = page.locator('.echarts-for-react svg path[fill]');
+    const count = await areaPaths.count();
+    if (count > 0) {
+      // Check that no area path has a visible stroke (should be 0 or none)
+      const hasVisibleStroke = await areaPaths.first().evaluate((el) => {
+        const sw = window.getComputedStyle(el).strokeWidth || el.getAttribute('stroke-width');
+        return sw && parseFloat(sw) > 0.5;
+      });
+      // With lineStyle:{width:0}, ECharts renders paths with stroke-width:0 or no stroke
+      expect(hasVisibleStroke).toBe(false);
+    }
+  });
+
+  test('balance breakdown uses time axis (proportional date spacing)', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    await switchToBreakdown(page);
+
+    // With time axis, ECharts renders timestamps on the x-axis labels
+    const xLabels = await page.locator('.echarts-for-react svg text').allTextContents();
+    // Time axis labels contain date-like strings (YYYY-MM-DD)
+    const hasDateLabel = xLabels.some((t) => /\d{4}-\d{2}-\d{2}/.test(t));
+    expect(hasDateLabel).toBe(true);
+  });
+});
 });

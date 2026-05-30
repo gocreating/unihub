@@ -23,6 +23,25 @@ const ACCOUNT_PRESET_COLORS = [
   '#ff5722', '#795548', '#9e9e9e', '#607d8b', '#000000',
 ];
 
+/**
+ * Normalize any CSS color representation to a 7-char hex string.
+ * Browsers sometimes return computed backgroundColor as rgb() even when the
+ * original value was a hex string. This ensures we always store #rrggbb.
+ */
+function toHexColor(raw?: string): string {
+  if (!raw) return '';
+  // Already a hex color — return as-is (trimmed to 7 chars)
+  if (raw.startsWith('#')) return raw.slice(0, 7);
+  // CSS rgb(r,g,b) or rgb(r, g, b) — convert to hex
+  const m = raw.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  if (m) {
+    return '#' + [m[1]!, m[2]!, m[3]!]
+      .map((n) => parseInt(n).toString(16).padStart(2, '0'))
+      .join('');
+  }
+  return '';
+}
+
 /** Inline 20-swatch color picker — no popup, no overflow. */
 function ColorSwatchPicker({ value, onChange }: { value?: string; onChange?: (v: string) => void }) {
   return (
@@ -175,7 +194,7 @@ export function AccountsPage() {
     const data = {
       name: values.name,
       currency: values.currency,
-      color: values.color || '',
+      color: toHexColor(values.color),
       open_datetime: values.open_datetime.toISOString(),
       close_datetime: values.close_datetime ? values.close_datetime.toISOString() : null,
     };

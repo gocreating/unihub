@@ -91,14 +91,14 @@ test.describe('Balance Sheet List — Visualization Card', () => {
     await expect(svg).toBeVisible();
   });
 
-  test('chart height is at least 640 px', async ({ page }) => {
+  test('chart height is at least 540 px', async ({ page }) => {
     const dataPresent = await hasChart(page);
     test.skip(!dataPresent, 'No balance sheet data — skipping height check');
 
     const height = await page.locator('.echarts-for-react').first().evaluate(
       (el) => el.getBoundingClientRect().height,
     );
-    expect(height).toBeGreaterThanOrEqual(640);
+    expect(height).toBeGreaterThanOrEqual(540);
   });
 
   test('chart container enforces minimum width (≥ 600 px)', async ({ page }) => {
@@ -154,6 +154,73 @@ test.describe('Balance Sheet List — Visualization Card', () => {
     expect(chartCount).toBe(1);
   });
 
+  // ── Select all / Unselect all ─────────────────────────────────────────────
+
+  test('net worth trend has a select-all checkbox', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    // The checkbox label "All selected" or "N / M" should appear above the pills
+    const checkbox = page.locator('.ant-checkbox-wrapper').first();
+    await expect(checkbox).toBeVisible();
+  });
+
+  test('unselect-all checkbox excludes all accounts from net worth', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    const checkbox = page.locator('.ant-checkbox-wrapper').first();
+    // Click to unselect all — checkbox goes from checked → unchecked state
+    const wasChecked = await checkbox.locator('.ant-checkbox-checked').count() > 0;
+    if (wasChecked) {
+      await checkbox.click();
+      await page.waitForTimeout(400);
+      // All pills should now be strikethrough (excluded)
+      const pills = page.locator('.ant-card button');
+      if (await pills.count() > 0) {
+        const firstPillBg = await pills.first().evaluate(
+          (el) => window.getComputedStyle(el as HTMLElement).background,
+        );
+        // White background = excluded
+        expect(firstPillBg).toContain('255, 255, 255');
+      }
+      // Click again to restore all
+      await checkbox.click();
+      await page.waitForTimeout(300);
+    }
+  });
+
+  test('balance breakdown has a select-all checkbox', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    await page.getByText('Balance Breakdown').click();
+    await page.waitForTimeout(600);
+
+    const checkbox = page.locator('.ant-checkbox-wrapper').first();
+    await expect(checkbox).toBeVisible();
+  });
+
+  test('unselect-all checkbox in balance breakdown hides all series', async ({ page }) => {
+    const dataPresent = await hasChart(page);
+    test.skip(!dataPresent, 'No data');
+
+    await page.getByText('Balance Breakdown').click();
+    await page.waitForTimeout(600);
+
+    const checkbox = page.locator('.ant-checkbox-wrapper').first();
+    const wasChecked = await checkbox.locator('.ant-checkbox-checked').count() > 0;
+    if (wasChecked) {
+      await checkbox.click();
+      await page.waitForTimeout(400);
+      // After unselect-all, checkbox should be unchecked
+      expect(await checkbox.locator('.ant-checkbox-checked').count()).toBe(0);
+      // Restore
+      await checkbox.click();
+      await page.waitForTimeout(300);
+    }
+  });
+
   // ── Y-axis labels ──────────────────────────────────────────────────────────
 
   test('y-axis tick labels include base currency symbol when base currency is set', async ({ page }) => {
@@ -192,7 +259,7 @@ test.describe('Balance Sheet List — Visualization Card', () => {
     expect(count).toBeGreaterThan(0);
   });
 
-  test('net worth legend pills use 40-color palette (no repeat for ≤40 accounts)', async ({ page }) => {
+  test('net worth legend pills use 24-color palette (no repeat for ≤24 accounts)', async ({ page }) => {
     const dataPresent = await hasChart(page);
     test.skip(!dataPresent, 'No data');
 

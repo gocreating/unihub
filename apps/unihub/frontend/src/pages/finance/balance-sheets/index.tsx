@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Modal, Select, Segmented, Space, Spin, Typography, message } from 'antd';
+import { Button, Card, Checkbox, Modal, Select, Segmented, Space, Spin, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
@@ -28,16 +28,34 @@ const CARD_TITLE_STYLE: React.CSSProperties = { margin: 0 };
 
 // ECharts v6 default color palette — must match what the chart instance uses
 // so custom legend dots show the correct colors.
-// 40-color palette covering the full hue wheel — enough for large account lists.
+// 24 maximally distinct colors drawn from D3 Tableau20 + hand-picked additions.
+// Hues are spread across the full color wheel and vary in lightness/saturation
+// so that adjacent items remain easily distinguishable even in small legend pills.
 const ECHARTS_COLORS = [
-  '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
-  '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#48cae4',
-  '#06d6a0', '#ef233c', '#4cc9f0', '#b5179e', '#f77f00',
-  '#023e8a', '#2dc653', '#ff4d6d', '#118ab2', '#e9c46a',
-  '#264653', '#2a9d8f', '#e76f51', '#457b9d', '#e63946',
-  '#52b788', '#d62828', '#ffb703', '#fb8500', '#219ebc',
-  '#00b4d8', '#126782', '#8ecae6', '#ffca3a', '#6d28d9',
-  '#ff595e', '#1982c4', '#8ac926', '#c77dff', '#f4a261',
+  '#4e79a7', // steel blue
+  '#f28e2b', // tangerine
+  '#e15759', // brick red
+  '#76b7b2', // sage teal
+  '#59a14f', // forest green
+  '#edc948', // golden yellow
+  '#b07aa1', // dusty purple
+  '#ff9da7', // salmon pink
+  '#9c755f', // warm brown
+  '#d62728', // crimson
+  '#1f77b4', // cobalt blue
+  '#2ca02c', // kelly green
+  '#9467bd', // medium purple
+  '#8c564b', // dark brown
+  '#e377c2', // orchid
+  '#17becf', // cerulean
+  '#bcbd22', // olive yellow-green
+  '#7f7f7f', // neutral gray
+  '#ff7f0e', // vivid orange
+  '#aec7e8', // light blue
+  '#98df8a', // light green
+  '#ffbb78', // peach
+  '#c5b0d5', // lavender
+  '#ad494a', // deep red
 ];
 
 interface NetWorthDataPoint {
@@ -265,7 +283,13 @@ export function BalanceSheetsPage() {
 
     return {
       color: ECHARTS_COLORS,
-      legend: { show: false },
+      // legend.selected drives which series are visible — kept in sync with React
+      // hiddenSeries state so individual toggles and select-all both work without
+      // needing separate dispatchAction calls.
+      legend: {
+        show: false,
+        selected: Object.fromEntries(stackedAccounts.map((acc) => [acc, !hiddenSeries.has(acc)])),
+      },
       tooltip: {
         trigger: 'axis',
         appendToBody: true,
@@ -303,11 +327,11 @@ export function BalanceSheetsPage() {
       },
       yAxis: {
         type: 'value',
-        axisLabel: { formatter: formatTick },
+        axisLabel: { formatter: (v: number) => sym ? `${sym} ${formatTick(v)}` : formatTick(v) },
       },
       series,
     };
-  }, [stackedData, stackedAccounts, baseCurrency]);
+  }, [stackedData, stackedAccounts, baseCurrency, hiddenSeries]);
 
   const sheetNetWorths = useMemo<Record<string, Decimal | null>>(() => {
     if (!baseCurrency) return {};
@@ -459,12 +483,24 @@ export function BalanceSheetsPage() {
                     key="net-worth-trend"
                     ref={lineChartRef}
                     option={lineOption}
-                    style={{ height: 640, width: '100%', minWidth: 600 }}
+                    style={{ height: 540, width: '100%', minWidth: 600 }}
                     opts={{ renderer: 'svg' }}
                   />
                 </div>
+                {/* Select-all / Unselect-all for net worth trend */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, paddingInline: 4 }}>
+                  <Checkbox
+                    indeterminate={excludedFromNetWorth.size > 0 && excludedFromNetWorth.size < stackedAccounts.length}
+                    checked={excludedFromNetWorth.size === 0}
+                    onChange={(e) =>
+                      setExcludedFromNetWorth(e.target.checked ? new Set() : new Set(stackedAccounts))
+                    }
+                  >
+                    {excludedFromNetWorth.size === 0 ? 'All selected' : `${stackedAccounts.length - excludedFromNetWorth.size} / ${stackedAccounts.length}`}
+                  </Checkbox>
+                </div>
                 {/* Per-account legend — click to exclude/include an account from the net worth total */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingInline: 4 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, paddingInline: 4 }}>
                   {stackedAccounts.map((acc, i) => {
                     const color = ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
                     const excluded = excludedFromNetWorth.has(acc);
@@ -502,29 +538,37 @@ export function BalanceSheetsPage() {
                     key="stacked-breakdown"
                     ref={stackedChartRef}
                     option={stackedOption}
-                    style={{ height: 640, width: '100%', minWidth: 600 }}
+                    style={{ height: 540, width: '100%', minWidth: 600 }}
                     opts={{ renderer: 'svg' }}
                   />
                 </div>
+                {/* Select-all / Unselect-all for balance breakdown */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, paddingInline: 4 }}>
+                  <Checkbox
+                    indeterminate={hiddenSeries.size > 0 && hiddenSeries.size < stackedAccounts.length}
+                    checked={hiddenSeries.size === 0}
+                    onChange={(e) =>
+                      setHiddenSeries(e.target.checked ? new Set() : new Set(stackedAccounts))
+                    }
+                  >
+                    {hiddenSeries.size === 0 ? 'All visible' : `${stackedAccounts.length - hiddenSeries.size} / ${stackedAccounts.length}`}
+                  </Checkbox>
+                </div>
                 {/* Per-account legend — click to toggle, hover to highlight area in chart */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingInline: 4 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, paddingInline: 4 }}>
                   {stackedAccounts.map((acc, i) => {
                     const color = ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
                     const hidden = hiddenSeries.has(acc);
                     return (
                       <button
                         key={acc}
-                        onClick={() => {
-                          stackedChartRef.current?.getEchartsInstance().dispatchAction({
-                            type: 'legendToggleSelect',
-                            name: acc,
-                          });
+                        onClick={() =>
                           setHiddenSeries((prev) => {
                             const next = new Set(prev);
                             if (next.has(acc)) next.delete(acc); else next.add(acc);
                             return next;
-                          });
-                        }}
+                          })
+                        }
                         onMouseEnter={() =>
                           stackedChartRef.current?.getEchartsInstance().dispatchAction({
                             type: 'highlight',

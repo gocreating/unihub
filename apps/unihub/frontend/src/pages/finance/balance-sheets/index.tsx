@@ -144,22 +144,20 @@ export function BalanceSheetsPage() {
     const sym = getCurrencySymbol(baseCurrency ?? '');
     const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
 
-    // piecewise visualMap: green ≥0, red <0.
-    // Omit `dimension` — ECharts v6 treats 1-D series data as dim-0 by default;
-    // setting dimension:1 on 1-D data makes it try to read a nonexistent coord → crash.
-    const hasData = netWorthData.length > 0;
+    // Green/red without visualMap (piecewise visualMap crashes ECharts v6 on 1-D data).
+    // Strategy: per-point dot colors via itemStyle.color callback + gradient area fill
+    // that transitions from green (positive region) to red (negative region) at y=0.
+    const values = netWorthData.map((d) => d.netWorth);
+    const maxNW = values.length > 0 ? Math.max(...values, 0) : 1;
+    const minNW = values.length > 0 ? Math.min(...values, 0) : -1;
+    const totalRange = maxNW - minNW;
+    // Fraction (0 = top of chart, 1 = bottom) where y=0 sits in the rendered axis range.
+    const zeroFrac = totalRange > 0
+      ? Math.max(0.001, Math.min(0.999, maxNW / totalRange))
+      : 0.5;
+    const currentColor = (values.at(-1) ?? 0) >= 0 ? '#52c41a' : '#ff4d4f';
+
     return {
-      ...(hasData ? {
-        visualMap: [{
-          show: false,
-          type: 'piecewise',
-          seriesIndex: 0,
-          pieces: [
-            { lt: 0, color: '#ff4d4f' },
-            { gte: 0, color: '#52c41a' },
-          ],
-        }],
-      } : {}),
       legend: { show: false },
       tooltip: {
         trigger: 'axis',
@@ -188,11 +186,28 @@ export function BalanceSheetsPage() {
       series: [{
         name: nwLabel,
         type: 'line',
-        data: netWorthData.map((d) => d.netWorth),
+        // Per-point dot colors (works without visualMap).
+        data: netWorthData.map((d) => ({
+          value: d.netWorth,
+          itemStyle: { color: d.netWorth >= 0 ? '#52c41a' : '#ff4d4f' },
+        })),
+        lineStyle: { color: currentColor },
+        // Gradient area: green in positive region, red in negative region.
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0,        color: 'rgba(82,196,26,0.25)' },
+              { offset: zeroFrac, color: 'rgba(82,196,26,0.04)' },
+              { offset: zeroFrac, color: 'rgba(255,77,79,0.04)' },
+              { offset: 1,        color: 'rgba(255,77,79,0.20)' },
+            ],
+          },
+        },
         smooth: 0.3,
         symbol: 'circle',
         symbolSize: 6,
-        areaStyle: { opacity: 0.08 },
       }],
     };
   }, [netWorthData, baseCurrency, t]);

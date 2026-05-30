@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, DatePicker, Form, Input, Modal, Select, Space, Tag, Tooltip, Typography, message } from 'antd';
+import { Button, ColorPicker, DatePicker, Form, Input, Modal, Select, Space, Tag, Tooltip, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -42,48 +42,6 @@ function toHexColor(raw?: string): string {
   return '';
 }
 
-/** Inline 20-swatch color picker — no popup, no overflow. */
-function ColorSwatchPicker({ value, onChange }: { value?: string; onChange?: (v: string) => void }) {
-  return (
-    <div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: value ? 8 : 0 }}>
-        {ACCOUNT_PRESET_COLORS.map((c) => (
-          <button
-            key={c}
-            type="button"
-            title={c}
-            onClick={() => onChange?.(value === c ? '' : c)}
-            style={{
-              width: 28, height: 28, borderRadius: '50%', padding: 0,
-              background: c, cursor: 'pointer', outline: 'none',
-              border: value === c
-                ? '3px solid #1677ff'
-                : '2px solid rgba(0,0,0,0.1)',
-              boxShadow: value === c ? `0 0 0 2px #fff inset` : 'none',
-              transition: 'border 0.15s, box-shadow 0.15s',
-            }}
-          />
-        ))}
-      </div>
-      {value && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{
-            width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-            background: value, border: '1px solid rgba(0,0,0,0.12)', display: 'inline-block',
-          }} />
-          <Typography.Text style={{ fontSize: 12 }}>{value}</Typography.Text>
-          <button
-            type="button"
-            onClick={() => onChange?.('')}
-            style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ff4d4f', fontSize: 12, padding: '0 4px' }}
-          >
-            ✕ Clear
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 interface AccountFormValues {
   name: string;
@@ -313,8 +271,28 @@ export function AccountsPage() {
               options={currencyOptions}
             />
           </Form.Item>
-          <Form.Item name="color" label={t({ id: 'pages.finance.accounts.form.color' })}>
-            <ColorSwatchPicker />
+          <Form.Item
+            name="color"
+            label={t({ id: 'pages.finance.accounts.form.color' })}
+            // ColorPicker.onChange(color, hex) — extract hex string
+            getValueFromEvent={(_color: unknown, hex: string) => hex ?? ''}
+          >
+            <ColorPicker
+              format="hex"
+              allowClear
+              showText
+              presets={[{
+                label: t({ id: 'pages.finance.accounts.form.color' }),
+                colors: ACCOUNT_PRESET_COLORS,
+              }]}
+              // Show only the preset swatches — hides the gradient + sliders panel.
+              // This keeps the popup compact so it fits inside the modal.
+              panelRender={(_panel, { components: { Presets } }) => <Presets />}
+              // Mount the popup inside the modal so it can't overflow the page.
+              getPopupContainer={(trigger) =>
+                (trigger.closest('.ant-modal-content') as HTMLElement) ?? document.body
+              }
+            />
           </Form.Item>
           <Form.Item name="open_datetime" label={t({ id: 'pages.finance.accounts.form.openDatetime' })} rules={[{ required: true }]}>
             <DatePicker showTime style={{ width: '100%' }} />

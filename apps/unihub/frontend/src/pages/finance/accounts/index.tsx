@@ -5,7 +5,6 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
-import { resolveAccountColor } from '@/utils/chartData';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
 import type { Account } from '@/services/unihub-backend/finance';
 import {
@@ -185,20 +184,9 @@ export function AccountsPage() {
         title: t({ id: 'pages.finance.accounts.col.color' }),
         dataIndex: 'color',
         width: 72,
-        render: (_dom, record) => {
-          const auto = !record.color;
-          const c = resolveAccountColor(record.name, record.color || undefined);
-          return (
-            <span
-              title={auto ? `Auto: ${c}` : c}
-              style={{
-                display: 'inline-block', width: 20, height: 20, borderRadius: '50%',
-                background: c, verticalAlign: 'middle',
-                border: auto ? '2px dashed rgba(0,0,0,0.2)' : '2px solid rgba(0,0,0,0.12)',
-              }}
-            />
-          );
-        },
+        render: (_dom, record) => record.color
+          ? <span style={{ display: 'inline-block', width: 20, height: 20, borderRadius: '50%', background: record.color, border: '1px solid rgba(0,0,0,0.12)', verticalAlign: 'middle' }} />
+          : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
       },
       {
         title: t({ id: 'pages.finance.accounts.col.openDatetime' }),

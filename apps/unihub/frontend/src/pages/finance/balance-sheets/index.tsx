@@ -276,7 +276,11 @@ export function BalanceSheetsPage() {
       emphasis: { focus: 'series' as const },
       data: dates.map((date) => {
         const entry = stackedData.find((d) => d.date === date && d.accountName === acc);
-        return entry?.amount ?? 0;
+        const v = entry?.amount ?? 0;
+        // Clip to the account's assigned stack direction to prevent artifacts
+        // when a value temporarily crosses zero (e.g. a debt account going
+        // positive for one period would otherwise spike into the asset area).
+        return stackGroups.get(acc) === 'assets' ? Math.max(v, 0) : Math.min(v, 0);
       }),
     }));
 

@@ -53,6 +53,9 @@ export function BalanceSheetsPage() {
   const lineChartRef = useRef<ReactECharts>(null);
   const stackedChartRef = useRef<ReactECharts>(null);
 
+  // Reset hidden series and clear ghost rendering when switching chart types.
+  useEffect(() => { setHiddenSeries(new Set()); }, [chartType]);
+
   const { data: sheets = [], isLoading } = useQuery({
     queryKey: ['finance', 'balance-sheets'],
     queryFn: () => listBalanceSheets(),
@@ -141,36 +144,50 @@ export function BalanceSheetsPage() {
 
   const lineOption = useMemo((): EChartsOption => {
     const nwLabel = t({ id: 'pages.finance.balanceSheets.visualization.netWorth' });
+    const nwNegKey = `${nwLabel}__neg`; // internal key for the red series
     const sym = getCurrencySymbol(baseCurrency ?? '');
     const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
 
-    // Green/red without visualMap (piecewise visualMap crashes ECharts v6 on 1-D data).
-    // Strategy: per-point dot colors via itemStyle.color callback + gradient area fill
-    // that transitions from green (positive region) to red (negative region) at y=0.
+    // Two-series approach: green series for values ≥ 0, red series for values < 0.
+    // At sign-change boundaries both series share a `0` so the line appears continuous.
     const values = netWorthData.map((d) => d.netWorth);
-    const maxNW = values.length > 0 ? Math.max(...values, 0) : 1;
-    const minNW = values.length > 0 ? Math.min(...values, 0) : -1;
-    const totalRange = maxNW - minNW;
-    // Fraction (0 = top of chart, 1 = bottom) where y=0 sits in the rendered axis range.
-    const zeroFrac = totalRange > 0
-      ? Math.max(0.001, Math.min(0.999, maxNW / totalRange))
-      : 0.5;
-    const currentColor = (values.at(-1) ?? 0) >= 0 ? '#52c41a' : '#ff4d4f';
+    const greenVals = values.map((v, i) => {
+      if (v >= 0) return v;
+      const adj = [values[i - 1], values[i + 1]];
+      return adj.some((a) => a !== undefined && a >= 0) ? 0 : null;
+    });
+    const redVals = values.map((v, i) => {
+      if (v < 0) return v;
+      const adj = [values[i - 1], values[i + 1]];
+      return adj.some((a) => a !== undefined && a < 0) ? 0 : null;
+    });
 
     return {
       legend: { show: false },
       tooltip: {
         trigger: 'axis',
-        confine: true,
+        // appendToBody escapes overflow-x:auto containers that clip the tooltip vertically.
+        appendToBody: true,
         axisPointer: { animation: false },
+        // Position right (or left) of cursor so tooltip never overlaps the axis pointer.
+        position: (point, _p, _dom, _rect, size) => {
+          const [x, y] = point as [number, number];
+          const [tw = 0, th = 0] = (size as { contentSize: number[] }).contentSize;
+          const OFFSET = 20;
+          const tx = x + OFFSET + tw > window.innerWidth - 10 ? x - OFFSET - tw : x + OFFSET;
+          const ty = Math.max(10, Math.min(y - th / 2, window.innerHeight - th - 10));
+          return [tx, ty];
+        },
         formatter: (raw) => {
-          const params = raw as unknown as { axisValueLabel: string; seriesName: string; value: number; marker: string }[];
-          const p = params[0];
-          if (!p) return '';
-          return `<b>${p.axisValueLabel}</b>` +
-            `<table style="margin-top:6px;border-spacing:0">` +
-            tooltipRow(p.marker, p.seriesName, fmtVal(p.value)) +
-            `</table>`;
+          const params = raw as unknown as { axisValueLabel: string; value: number | null; marker: string }[];
+          if (!params.length || !params[0]) return '';
+          const date = params[0].axisValueLabel;
+          const actual = params.reduce((best, p) => {
+            const v = (p.value as number | null) ?? 0;
+            return Math.abs(v) > Math.abs(best) ? v : best;
+          }, 0);
+          const dot = `<span style="display:inline-block;margin-right:4px;border-radius:50%;width:10px;height:10px;background:${actual >= 0 ? '#52c41a' : '#ff4d4f'}"></span>`;
+          return `<b>${date}</b><table style="margin-top:6px;border-spacing:0">${tooltipRow(dot, nwLabel, fmtVal(actual))}</table>`;
         },
       },
       grid: { left: '3%', right: '4%', bottom: '4%', containLabel: true },
@@ -179,36 +196,33 @@ export function BalanceSheetsPage() {
         data: netWorthData.map((d) => d.date),
         axisLabel: { rotate: netWorthData.length > 6 ? 30 : 0 },
       },
-      yAxis: {
-        type: 'value',
-        axisLabel: { formatter: formatTick },
-      },
-      series: [{
-        name: nwLabel,
-        type: 'line',
-        // Per-point dot colors (works without visualMap).
-        data: netWorthData.map((d) => ({
-          value: d.netWorth,
-          itemStyle: { color: d.netWorth >= 0 ? '#52c41a' : '#ff4d4f' },
-        })),
-        lineStyle: { color: currentColor },
-        // Gradient area: green in positive region, red in negative region.
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              { offset: 0,        color: 'rgba(82,196,26,0.25)' },
-              { offset: zeroFrac, color: 'rgba(82,196,26,0.04)' },
-              { offset: zeroFrac, color: 'rgba(255,77,79,0.04)' },
-              { offset: 1,        color: 'rgba(255,77,79,0.20)' },
-            ],
-          },
+      yAxis: { type: 'value', axisLabel: { formatter: formatTick } },
+      series: [
+        {
+          name: nwLabel,
+          type: 'line',
+          data: greenVals,
+          lineStyle: { color: '#52c41a' },
+          itemStyle: { color: '#52c41a' },
+          areaStyle: { color: 'rgba(82,196,26,0.18)' },
+          connectNulls: false,
+          smooth: 0.3,
+          symbol: 'circle',
+          symbolSize: 6,
         },
-        smooth: 0.3,
-        symbol: 'circle',
-        symbolSize: 6,
-      }],
+        {
+          name: nwNegKey,
+          type: 'line',
+          data: redVals,
+          lineStyle: { color: '#ff4d4f' },
+          itemStyle: { color: '#ff4d4f' },
+          areaStyle: { color: 'rgba(255,77,79,0.18)' },
+          connectNulls: false,
+          smooth: 0.3,
+          symbol: 'circle',
+          symbolSize: 6,
+        },
+      ],
     };
   }, [netWorthData, baseCurrency, t]);
 
@@ -246,9 +260,17 @@ export function BalanceSheetsPage() {
       legend: { show: false },
       tooltip: {
         trigger: 'axis',
-        confine: true,
-        // Limit items shown to avoid overflowing the viewport; sort by |value| desc.
+        appendToBody: true,
         axisPointer: { animation: false },
+        position: (point, _p, _dom, _rect, size) => {
+          const [x, y] = point as [number, number];
+          const [tw = 0, th = 0] = (size as { contentSize: number[] }).contentSize;
+          const OFFSET = 20;
+          const tx = x + OFFSET + tw > window.innerWidth - 10 ? x - OFFSET - tw : x + OFFSET;
+          const ty = Math.max(10, Math.min(y - th / 2, window.innerHeight - th - 10));
+          return [tx, ty];
+        },
+        // Limit items to avoid overflowing the viewport; sort by |value| desc.
         formatter: (raw) => {
           const params = raw as unknown as { axisValueLabel: string; seriesName: string; value: number; marker: string }[];
           const date = params[0]?.axisValueLabel ?? '';
@@ -423,44 +445,67 @@ export function BalanceSheetsPage() {
               <Spin />
             ) : chartType === 'net-worth-trend' ? (
               <>
+                {/* key forces fresh mount/unmount when switching, clearing ghost renders */}
                 <div style={{ overflowX: 'auto' }}>
                   <ReactECharts
+                    key="net-worth-trend"
                     ref={lineChartRef}
                     option={lineOption}
-                    style={{ height: 720, width: '100%', minWidth: 600 }}
+                    style={{ height: 640, width: '100%', minWidth: 600 }}
                     opts={{ renderer: 'svg' }}
                   />
                 </div>
-                {/* Custom legend */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
-                  <button
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, padding: '2px 8px' }}
-                    onClick={() => {
-                      lineChartRef.current?.getEchartsInstance().dispatchAction({
-                        type: 'legendToggleSelect',
-                        name: t({ id: 'pages.finance.balanceSheets.visualization.netWorth' }),
-                      });
-                    }}
-                  >
-                    <span style={{ display: 'flex', gap: 2 }}>
-                      <span style={{ width: 14, height: 3, background: '#52c41a', display: 'inline-block', borderRadius: 2 }} />
-                      <span style={{ width: 14, height: 3, background: '#ff4d4f', display: 'inline-block', borderRadius: 2 }} />
-                    </span>
-                    {t({ id: 'pages.finance.balanceSheets.visualization.netWorth' })}
-                  </button>
-                </div>
+                {/* Custom legend — toggle both green + red series together */}
+                {(() => {
+                  const nwLabel = t({ id: 'pages.finance.balanceSheets.visualization.netWorth' });
+                  const nwNegKey = `${nwLabel}__neg`;
+                  const hidden = hiddenSeries.has(nwLabel);
+                  return (
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
+                      <button
+                        onClick={() => {
+                          const inst = lineChartRef.current?.getEchartsInstance();
+                          inst?.dispatchAction({ type: 'legendToggleSelect', name: nwLabel });
+                          inst?.dispatchAction({ type: 'legendToggleSelect', name: nwNegKey });
+                          setHiddenSeries((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(nwLabel)) next.delete(nwLabel); else next.add(nwLabel);
+                            return next;
+                          });
+                        }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '4px 14px',
+                          borderRadius: 16,
+                          border: '1px solid #d9d9d9',
+                          background: hidden ? '#fff' : 'rgba(0,0,0,0.03)',
+                          cursor: 'pointer', fontSize: 12,
+                          color: hidden ? '#bfbfbf' : 'inherit',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <span style={{ display: 'flex', gap: 2, opacity: hidden ? 0.3 : 1 }}>
+                          <span style={{ width: 14, height: 3, background: '#52c41a', display: 'inline-block', borderRadius: 2 }} />
+                          <span style={{ width: 14, height: 3, background: '#ff4d4f', display: 'inline-block', borderRadius: 2 }} />
+                        </span>
+                        {hidden ? <s>{nwLabel}</s> : nwLabel}
+                      </button>
+                    </div>
+                  );
+                })()}
               </>
             ) : (
               <>
                 <div style={{ overflowX: 'auto' }}>
                   <ReactECharts
+                    key="stacked-breakdown"
                     ref={stackedChartRef}
                     option={stackedOption}
-                    style={{ height: 720, width: '100%', minWidth: 600 }}
+                    style={{ height: 640, width: '100%', minWidth: 600 }}
                     opts={{ renderer: 'svg' }}
                   />
                 </div>
-                {/* Custom legend — one pill per account, click to toggle */}
+                {/* Custom legend — filled background = active, white = hidden */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingInline: 4 }}>
                   {stackedAccounts.map((acc, i) => {
                     const color = ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
@@ -481,14 +526,22 @@ export function BalanceSheetsPage() {
                         }}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 5,
-                          padding: '2px 10px', border: `1px solid ${color}`,
-                          borderRadius: 12, cursor: 'pointer', background: 'transparent',
-                          fontSize: 12, opacity: hidden ? 0.35 : 1,
-                          color: hidden ? '#8c8c8c' : undefined,
+                          padding: '3px 10px',
+                          // Active: colored fill; Hidden: white background
+                          border: `1px solid ${hidden ? '#e0e0e0' : color}`,
+                          borderRadius: 12,
+                          cursor: 'pointer',
+                          background: hidden ? '#fff' : `${color}1a`,
+                          fontSize: 12,
+                          color: hidden ? '#bfbfbf' : 'inherit',
+                          transition: 'all 0.2s',
                         }}
                       >
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                        {acc}
+                        <span style={{
+                          width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                          background: hidden ? '#d9d9d9' : color,
+                        }} />
+                        {hidden ? <s>{acc}</s> : acc}
                       </button>
                     );
                   })}

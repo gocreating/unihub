@@ -28,9 +28,16 @@ const CARD_TITLE_STYLE: React.CSSProperties = { margin: 0 };
 
 // ECharts v6 default color palette — must match what the chart instance uses
 // so custom legend dots show the correct colors.
+// 40-color palette covering the full hue wheel — enough for large account lists.
 const ECHARTS_COLORS = [
   '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
-  '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc',
+  '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#48cae4',
+  '#06d6a0', '#ef233c', '#4cc9f0', '#b5179e', '#f77f00',
+  '#023e8a', '#2dc653', '#ff4d6d', '#118ab2', '#e9c46a',
+  '#264653', '#2a9d8f', '#e76f51', '#457b9d', '#e63946',
+  '#52b788', '#d62828', '#ffb703', '#fb8500', '#219ebc',
+  '#00b4d8', '#126782', '#8ecae6', '#ffca3a', '#6d28d9',
+  '#ff595e', '#1982c4', '#8ac926', '#c77dff', '#f4a261',
 ];
 
 interface NetWorthDataPoint {
@@ -51,11 +58,16 @@ export function BalanceSheetsPage() {
 
   const [chartType, setChartType] = useState<BalanceListChartType>('net-worth-trend');
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
+  // Accounts excluded from the net worth calculation in the trend chart.
+  const [excludedFromNetWorth, setExcludedFromNetWorth] = useState<Set<string>>(new Set());
   const lineChartRef = useRef<ReactECharts>(null);
   const stackedChartRef = useRef<ReactECharts>(null);
 
-  // Reset hidden series and clear ghost rendering when switching chart types.
-  useEffect(() => { setHiddenSeries(new Set()); }, [chartType]);
+  // Reset legend state and clear ghost rendering when switching chart types.
+  useEffect(() => {
+    setHiddenSeries(new Set());
+    setExcludedFromNetWorth(new Set());
+  }, [chartType]);
 
   const { data: sheets = [], isLoading } = useQuery({
     queryKey: ['finance', 'balance-sheets'],
@@ -92,8 +104,9 @@ export function BalanceSheetsPage() {
   const netWorthData = useMemo<NetWorthDataPoint[]>(() => {
     return sheets
       .map((sheet, i) => {
-        const sheetBalances = balanceQueries[i]?.data ?? [];
-        // Use the same FX-conversion formula as the table column so values match.
+        // Filter accounts excluded from the net worth calculation via the legend pills.
+        const sheetBalances = (balanceQueries[i]?.data ?? [])
+          .filter((b) => !excludedFromNetWorth.has(b.account_name));
         const netWorth = baseCurrency
           ? sheetBalances.reduce((sum, b) => {
               const nwv = computeNetWorthInBase(b.amount, b.currency, baseCurrency, rates, sheet.date);
@@ -103,7 +116,7 @@ export function BalanceSheetsPage() {
         return { date: dayjs(sheet.date).format('YYYY-MM-DD'), netWorth };
       })
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [sheets, balanceQueries, baseCurrency, rates]);
+  }, [sheets, balanceQueries, baseCurrency, rates, excludedFromNetWorth]);
 
   const stackedData = useMemo<StackedDataPoint[]>(() => {
     return sheets
@@ -193,26 +206,36 @@ export function BalanceSheetsPage() {
         {
           name: nwLabel,
           type: 'line',
-          data: greenVals,
+          // Per-item symbol: show a circle only at real positive values (> 0).
+          // Boundary zeros shared with the red series get symbol:'none' so there
+          // is exactly ONE visible dot per x position — no overlapping dots.
+          data: greenVals.map((v) => ({
+            value: v,
+            symbol: v !== null && v > 0 ? 'circle' : 'none',
+            symbolSize: 6,
+            itemStyle: { color: '#52c41a' },
+          })),
           lineStyle: { color: '#52c41a' },
           itemStyle: { color: '#52c41a' },
           areaStyle: { color: 'rgba(82,196,26,0.18)' },
           connectNulls: false,
           smooth: 0.3,
-          symbol: 'circle',
-          symbolSize: 6,
         },
         {
           name: nwNegKey,
           type: 'line',
-          data: redVals,
+          // Boundary zeros shared with green series get symbol:'none'.
+          data: redVals.map((v) => ({
+            value: v,
+            symbol: v !== null && v < 0 ? 'circle' : 'none',
+            symbolSize: 6,
+            itemStyle: { color: '#ff4d4f' },
+          })),
           lineStyle: { color: '#ff4d4f' },
           itemStyle: { color: '#ff4d4f' },
           areaStyle: { color: 'rgba(255,77,79,0.18)' },
           connectNulls: false,
           smooth: 0.3,
-          symbol: 'circle',
-          symbolSize: 6,
         },
       ],
     };
@@ -440,44 +463,37 @@ export function BalanceSheetsPage() {
                     opts={{ renderer: 'svg' }}
                   />
                 </div>
-                {/* Custom legend — toggle both green + red series together */}
-                {(() => {
-                  const nwLabel = t({ id: 'pages.finance.balanceSheets.visualization.netWorth' });
-                  const nwNegKey = `${nwLabel}__neg`;
-                  const hidden = hiddenSeries.has(nwLabel);
-                  return (
-                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
+                {/* Per-account legend — click to exclude/include an account from the net worth total */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingInline: 4 }}>
+                  {stackedAccounts.map((acc, i) => {
+                    const color = ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
+                    const excluded = excludedFromNetWorth.has(acc);
+                    return (
                       <button
-                        onClick={() => {
-                          const inst = lineChartRef.current?.getEchartsInstance();
-                          inst?.dispatchAction({ type: 'legendToggleSelect', name: nwLabel });
-                          inst?.dispatchAction({ type: 'legendToggleSelect', name: nwNegKey });
-                          setHiddenSeries((prev) => {
+                        key={acc}
+                        onClick={() =>
+                          setExcludedFromNetWorth((prev) => {
                             const next = new Set(prev);
-                            if (next.has(nwLabel)) next.delete(nwLabel); else next.add(nwLabel);
+                            if (next.has(acc)) next.delete(acc); else next.add(acc);
                             return next;
-                          });
-                        }}
+                          })
+                        }
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          padding: '4px 14px',
-                          borderRadius: 16,
-                          border: '1px solid #d9d9d9',
-                          background: hidden ? '#fff' : 'rgba(0,0,0,0.03)',
-                          cursor: 'pointer', fontSize: 12,
-                          color: hidden ? '#bfbfbf' : 'inherit',
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '3px 10px',
+                          border: `1px solid ${excluded ? '#e0e0e0' : color}`,
+                          borderRadius: 12, cursor: 'pointer',
+                          background: excluded ? '#fff' : `${color}1a`,
+                          fontSize: 12, color: excluded ? '#bfbfbf' : 'inherit',
                           transition: 'all 0.2s',
                         }}
                       >
-                        <span style={{ display: 'flex', gap: 2, opacity: hidden ? 0.3 : 1 }}>
-                          <span style={{ width: 14, height: 3, background: '#52c41a', display: 'inline-block', borderRadius: 2 }} />
-                          <span style={{ width: 14, height: 3, background: '#ff4d4f', display: 'inline-block', borderRadius: 2 }} />
-                        </span>
-                        {hidden ? <s>{nwLabel}</s> : nwLabel}
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: excluded ? '#d9d9d9' : color }} />
+                        {excluded ? <s>{acc}</s> : acc}
                       </button>
-                    </div>
-                  );
-                })()}
+                    );
+                  })}
+                </div>
               </>
             ) : (
               <>
@@ -490,7 +506,7 @@ export function BalanceSheetsPage() {
                     opts={{ renderer: 'svg' }}
                   />
                 </div>
-                {/* Custom legend — filled background = active, white = hidden */}
+                {/* Per-account legend — click to toggle, hover to highlight area in chart */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingInline: 4 }}>
                   {stackedAccounts.map((acc, i) => {
                     const color = ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
@@ -509,6 +525,18 @@ export function BalanceSheetsPage() {
                             return next;
                           });
                         }}
+                        onMouseEnter={() =>
+                          stackedChartRef.current?.getEchartsInstance().dispatchAction({
+                            type: 'highlight',
+                            seriesName: acc,
+                          })
+                        }
+                        onMouseLeave={() =>
+                          stackedChartRef.current?.getEchartsInstance().dispatchAction({
+                            type: 'downplay',
+                            seriesName: acc,
+                          })
+                        }
                         style={{
                           display: 'flex', alignItems: 'center', gap: 5,
                           padding: '3px 10px',

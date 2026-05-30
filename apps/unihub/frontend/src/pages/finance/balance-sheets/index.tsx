@@ -236,20 +236,21 @@ export function BalanceSheetsPage() {
           animation: false,
           lineStyle: { color: '#555', width: 2, type: 'solid' },
         },
+        // Tooltip tracks the focused x-axis data point horizontally but stays at
+        // a fixed vertical position (top of viewport). This keeps the tooltip
+        // stable — it does not drift with the mouse cursor vertically — and
+        // appendToBody + pointer-events:none (enterable:false default) lets
+        // mouse events pass through to the chart so axis-pointer + series
+        // highlight remain active even when the cursor is over the tooltip area.
         position: (point, _p, _dom, _rect, size) => {
-          const [x, y] = point as [number, number];
-          const [tw = 0, th = 0] = (size as { contentSize: number[] }).contentSize;
+          const [x] = point as [number, number];
+          const [tw = 0] = (size as { contentSize: number[] }).contentSize;
           const OFFSET = 20;
-          // Use actual size when available; fall back to generous estimates so the
-          // flip-to-left logic fires correctly even before contentSize is computed
-          // (e.g. on first hover or with enterable:true).
           const estW = tw > 0 ? tw : 500;
-          const estH = Math.min(th > 0 ? th : 300, window.innerHeight * 0.85);
           const tx = x + OFFSET + estW > window.innerWidth - 20
             ? Math.max(10, x - OFFSET - estW)
             : x + OFFSET;
-          const ty = Math.max(10, Math.min(y - estH / 2, window.innerHeight - estH - 10));
-          return [tx, ty];
+          return [tx, 20]; // fixed y = 20px from viewport top
         },
         formatter: (raw) => {
           const params = raw as unknown as { value: [number, number] }[];
@@ -302,6 +303,7 @@ export function BalanceSheetsPage() {
       stack: stackGroups.get(acc) ?? 'assets',
       smooth: 0.3,
       symbol: 'none',
+      lineStyle: { width: 0 },
       areaStyle: { opacity: 0.55 },
       emphasis: { focus: 'series' as const },
       data: dates.map((date): [number, number] => {
@@ -325,32 +327,26 @@ export function BalanceSheetsPage() {
       tooltip: {
         trigger: 'axis',
         appendToBody: true,
-        // enterable: true allows the mouse pointer to enter the tooltip so the
-        // user can scroll through all accounts. Without this, ECharts sets
-        // pointer-events:none on the tooltip and scroll events pass through to
-        // the chart — making the scrollbar inaccessible.
-        enterable: true,
         axisPointer: {
           animation: false,
           lineStyle: { color: '#555', width: 2, type: 'solid' },
         },
+        // Tooltip tracks the focused x-axis data point horizontally but stays at
+        // a fixed vertical position (top of viewport). This keeps the tooltip
+        // stable — it does not drift with the mouse cursor vertically — and
+        // appendToBody + pointer-events:none (enterable:false default) lets
+        // mouse events pass through to the chart so axis-pointer + series
+        // highlight remain active even when the cursor is over the tooltip area.
         position: (point, _p, _dom, _rect, size) => {
-          const [x, y] = point as [number, number];
-          const [tw = 0, th = 0] = (size as { contentSize: number[] }).contentSize;
+          const [x] = point as [number, number];
+          const [tw = 0] = (size as { contentSize: number[] }).contentSize;
           const OFFSET = 20;
-          // Use actual size when available; fall back to generous estimates so the
-          // flip-to-left logic fires correctly even before contentSize is computed
-          // (e.g. on first hover or with enterable:true).
           const estW = tw > 0 ? tw : 500;
-          const estH = Math.min(th > 0 ? th : 300, window.innerHeight * 0.85);
           const tx = x + OFFSET + estW > window.innerWidth - 20
             ? Math.max(10, x - OFFSET - estW)
             : x + OFFSET;
-          const ty = Math.max(10, Math.min(y - estH / 2, window.innerHeight - estH - 10));
-          return [tx, ty];
+          return [tx, 20]; // fixed y = 20px from viewport top
         },
-        // All non-zero items, sorted by |value| desc, in a scrollable panel.
-        extraCssText: 'max-height:85vh;overflow-y:auto;',
         formatter: (raw) => {
           const params = raw as unknown as { value: [number, number]; seriesName: string; marker: string }[];
           const ts = params[0]?.value?.[0];
@@ -631,19 +627,20 @@ export function BalanceSheetsPage() {
                         style={{
                           display: 'flex', alignItems: 'center', gap: 5,
                           padding: '3px 10px',
-                          // Active: colored fill; Hidden: white background
-                          border: `1px solid ${hidden ? '#e0e0e0' : color}`,
+                          border: 'none',
                           borderRadius: 12,
                           cursor: 'pointer',
-                          background: hidden ? '#fff' : `${color}1a`,
+                          // Active: solid chart color as background with white text
+                          // Hidden: light gray — removed from both chart and legend
+                          background: hidden ? '#e8e8e8' : color,
                           fontSize: 12,
-                          color: hidden ? '#bfbfbf' : 'inherit',
+                          color: hidden ? '#bfbfbf' : '#fff',
                           transition: 'all 0.2s',
                         }}
                       >
                         <span style={{
                           width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                          background: hidden ? '#d9d9d9' : color,
+                          background: hidden ? '#bfbfbf' : 'rgba(255,255,255,0.6)',
                         }} />
                         {hidden ? <s>{acc}</s> : acc}
                       </button>

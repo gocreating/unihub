@@ -19,6 +19,7 @@ import {
   listExchangeRates,
 } from '@/services/unihub-backend/finance';
 import { computeNetWorthInBase, formatAmount, getCurrencySymbol } from '@/utils/finance';
+import { classifyAccountStacks, computeGreenRedSeries } from '@/utils/chartData';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 
 type BalanceListChartType = 'net-worth-trend' | 'stacked-breakdown';
@@ -151,16 +152,7 @@ export function BalanceSheetsPage() {
     // Two-series approach: green series for values ≥ 0, red series for values < 0.
     // At sign-change boundaries both series share a `0` so the line appears continuous.
     const values = netWorthData.map((d) => d.netWorth);
-    const greenVals = values.map((v, i) => {
-      if (v >= 0) return v;
-      const adj = [values[i - 1], values[i + 1]];
-      return adj.some((a) => a !== undefined && a >= 0) ? 0 : null;
-    });
-    const redVals = values.map((v, i) => {
-      if (v < 0) return v;
-      const adj = [values[i - 1], values[i + 1]];
-      return adj.some((a) => a !== undefined && a < 0) ? 0 : null;
-    });
+    const { greenVals, redVals } = computeGreenRedSeries(values);
 
     return {
       legend: { show: false },
@@ -196,7 +188,7 @@ export function BalanceSheetsPage() {
         data: netWorthData.map((d) => d.date),
         axisLabel: { rotate: netWorthData.length > 6 ? 30 : 0 },
       },
-      yAxis: { type: 'value', axisLabel: { formatter: formatTick } },
+      yAxis: { type: 'value', axisLabel: { formatter: (v: number) => sym ? `${sym} ${formatTick(v)}` : formatTick(v) } },
       series: [
         {
           name: nwLabel,
@@ -231,29 +223,22 @@ export function BalanceSheetsPage() {
     const sym = getCurrencySymbol(baseCurrency ?? '');
     const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
 
-    // Classify each account by the sign of its total across all dates so that
-    // assets and debts stack into separate groups (no visual overlap).
-    const accountTotals = new Map<string, number>();
-    for (const d of stackedData) {
-      accountTotals.set(d.accountName, (accountTotals.get(d.accountName) ?? 0) + d.amount);
-    }
+    // Classify each account into 'assets' or 'debts' stacking group.
+    const stackGroups = classifyAccountStacks(stackedData, stackedAccounts);
 
-    const series = stackedAccounts.map((acc) => {
-      const total = accountTotals.get(acc) ?? 0;
-      return {
-        name: acc,
-        type: 'line' as const,
-        stack: total >= 0 ? 'assets' : 'debts',
-        smooth: 0.3,
-        symbol: 'none',
-        areaStyle: { opacity: 0.55 },
-        emphasis: { focus: 'series' as const },
-        data: dates.map((date) => {
-          const entry = stackedData.find((d) => d.date === date && d.accountName === acc);
-          return entry?.amount ?? 0;
-        }),
-      };
-    });
+    const series = stackedAccounts.map((acc) => ({
+      name: acc,
+      type: 'line' as const,
+      stack: stackGroups.get(acc) ?? 'assets',
+      smooth: 0.3,
+      symbol: 'none',
+      areaStyle: { opacity: 0.55 },
+      emphasis: { focus: 'series' as const },
+      data: dates.map((date) => {
+        const entry = stackedData.find((d) => d.date === date && d.accountName === acc);
+        return entry?.amount ?? 0;
+      }),
+    }));
 
     return {
       color: ECHARTS_COLORS,

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, Modal, Select, Segmented, Space, Spin, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
-import { Column, Line } from '@ant-design/plots';
+import ReactECharts from 'echarts-for-react';
+import type { EChartsOption } from 'echarts';
 import type { ProColumns } from '@ant-design/pro-components';
 import Decimal from 'decimal.js';
 import dayjs from 'dayjs';
@@ -102,6 +103,87 @@ export function BalanceSheetsPage() {
       })
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [sheets, balanceQueries]);
+
+  // ── ECharts options ───────────────────────────────────────────────────────
+
+  const lineOption = useMemo((): EChartsOption => {
+    const nwLabel = t({ id: 'pages.finance.balanceSheets.visualization.netWorth' });
+    return {
+      tooltip: {
+        trigger: 'axis',
+        confine: true,
+        axisPointer: { animation: false },
+        formatter: (raw) => {
+          const params = raw as unknown as { axisValueLabel: string; seriesName: string; value: number; marker: string }[];
+          const p = params[0];
+          if (!p) return '';
+          return `${p.axisValueLabel}<br/>${p.marker}${p.seriesName}: ${formatAmount(String(p.value))}`;
+        },
+      },
+      grid: { left: '3%', right: '4%', bottom: '8%', containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: netWorthData.map((d) => d.date),
+        axisLabel: { rotate: netWorthData.length > 6 ? 30 : 0 },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { formatter: (v: number) => formatAmount(String(v)) },
+      },
+      series: [{
+        name: nwLabel,
+        type: 'line',
+        data: netWorthData.map((d) => d.netWorth),
+        smooth: 0.3,
+        symbol: 'circle',
+        symbolSize: 6,
+        areaStyle: { opacity: 0.08 },
+      }],
+    };
+  }, [netWorthData, t]);
+
+  const stackedOption = useMemo((): EChartsOption => {
+    const dates = [...new Set(stackedData.map((d) => d.date))].sort();
+    const accounts = [...new Set(stackedData.map((d) => d.accountName))];
+    const series = accounts.map((acc) => ({
+      name: acc,
+      type: 'bar' as const,
+      stack: 'total',
+      emphasis: { focus: 'series' as const },
+      data: dates.map((date) => {
+        const entry = stackedData.find((d) => d.date === date && d.accountName === acc);
+        return entry?.amount ?? 0;
+      }),
+    }));
+    return {
+      tooltip: {
+        trigger: 'axis',
+        confine: true,
+        axisPointer: { type: 'shadow', animation: false },
+        formatter: (raw) => {
+          const params = raw as unknown as { axisValueLabel: string; seriesName: string; value: number; marker: string }[];
+          const date = params[0]?.axisValueLabel ?? '';
+          const lines = params
+            .filter((p) => p.value !== 0)
+            .map((p) => `${p.marker}${p.seriesName}: ${formatAmount(String(p.value))}`)
+            .join('<br/>');
+          return lines ? `${date}<br/>${lines}` : date;
+        },
+      },
+      legend: { show: false },
+      grid: { left: '3%', right: '4%', bottom: '8%', containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        axisLabel: { rotate: dates.length > 6 ? 30 : 0 },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { formatter: (v: number) => formatAmount(String(v)) },
+      },
+      series,
+    };
+  }, [stackedData]);
 
   const sheetNetWorths = useMemo<Record<string, Decimal | null>>(() => {
     if (!baseCurrency) return {};
@@ -246,21 +328,9 @@ export function BalanceSheetsPage() {
             {allBalancesLoading ? (
               <Spin />
             ) : chartType === 'net-worth-trend' ? (
-              <Line
-                data={netWorthData}
-                xField="date"
-                yField="netWorth"
-                height={280}
-              />
+              <ReactECharts option={lineOption} style={{ height: 280 }} opts={{ renderer: 'svg' }} notMerge />
             ) : (
-              <Column
-                data={stackedData}
-                xField="date"
-                yField="amount"
-                colorField="accountName"
-                stack
-                height={280}
-              />
+              <ReactECharts option={stackedOption} style={{ height: 280 }} opts={{ renderer: 'svg' }} notMerge />
             )}
           </>
         )}

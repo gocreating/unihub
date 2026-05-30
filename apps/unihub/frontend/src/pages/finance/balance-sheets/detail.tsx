@@ -5,7 +5,8 @@ import {
   Segmented, Select, Spin, Tag, Typography, message,
 } from 'antd';
 import { CaretDownFilled, CaretRightFilled, EditOutlined, HolderOutlined } from '@ant-design/icons';
-import { Pie } from '@ant-design/plots';
+import ReactECharts from 'echarts-for-react';
+import type { EChartsOption } from 'echarts';
 import type { ProColumns } from '@ant-design/pro-components';
 import Decimal from 'decimal.js';
 import dayjs from 'dayjs';
@@ -114,6 +115,28 @@ export function BalanceSheetDetailPage() {
     }
     return debtBalances.map((b) => ({ type: b.account_name, value: new Decimal(b.amount).abs().toNumber() }));
   }, [chartType, assetBalances, debtBalances, t]);
+
+  const pieOption = useMemo((): EChartsOption => ({
+    tooltip: {
+      trigger: 'item',
+      confine: true,
+      formatter: (params) => {
+        const p = params as { name: string; value: number; percent: number; marker: string };
+        return `${p.marker}${p.name}<br/>${formatAmount(String(p.value))} (${p.percent.toFixed(1)}%)`;
+      },
+    },
+    legend: { show: false },
+    series: [
+      {
+        type: 'pie',
+        radius: ['38%', '65%'],
+        data: pieData.map((d) => ({ name: d.type, value: d.value })),
+        label: { formatter: '{b}: {d}%', overflow: 'truncate' },
+        labelLayout: { hideOverlap: true },
+        emphasis: { label: { fontSize: 14, fontWeight: 'bold' } },
+      },
+    ],
+  }), [pieData]);
 
   const aggLabels = useMemo(
     () => ({
@@ -420,7 +443,7 @@ export function BalanceSheetDetailPage() {
         {isPieEmpty ? (
           <Typography.Text type="secondary">{emptyPieMsg}</Typography.Text>
         ) : (
-          <Pie data={pieData} angleField="value" colorField="type" height={300} label={{ text: 'type' }} />
+          <ReactECharts option={pieOption} style={{ height: 300 }} opts={{ renderer: 'svg' }} notMerge />
         )}
       </Card>
 

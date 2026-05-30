@@ -94,21 +94,51 @@ export function BalanceSheetsPage() {
   const stackedData = useMemo<StackedDataPoint[]>(() => {
     return sheets
       .flatMap((sheet, i) => {
-        const balances = balanceQueries[i]?.data ?? [];
-        return balances.map((b) => ({
-          date: dayjs(sheet.date).format('YYYY-MM-DD'),
-          accountName: b.account_name,
-          amount: parseFloat(b.amount),
-        }));
+        const sheetBalances = balanceQueries[i]?.data ?? [];
+        return sheetBalances.flatMap((b) => {
+          let amount: number;
+          if (baseCurrency) {
+            const nwv = computeNetWorthInBase(b.amount, b.currency, baseCurrency, rates, sheet.date);
+            if (nwv === null) return []; // no rate available — exclude from stacking
+            amount = nwv.toNumber();
+          } else {
+            amount = parseFloat(b.amount);
+          }
+          return [{ date: dayjs(sheet.date).format('YYYY-MM-DD'), accountName: b.account_name, amount }];
+        });
       })
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [sheets, balanceQueries]);
+  }, [sheets, balanceQueries, baseCurrency, rates]);
 
   // ── ECharts options ───────────────────────────────────────────────────────
+
+  /** Integer tick formatter — no decimal places. */
+  const formatTick = (v: number): string =>
+    new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(v);
+
+  /** Single right-aligned tooltip row. */
+  const tooltipRow = (marker: string, name: string, value: number): string =>
+    `<tr><td style="padding:1px 16px 1px 0">${marker}${name}</td>` +
+    `<td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${formatAmount(String(value))}</td></tr>`;
 
   const lineOption = useMemo((): EChartsOption => {
     const nwLabel = t({ id: 'pages.finance.balanceSheets.visualization.netWorth' });
     return {
+      // Green for positive net worth, red for negative.
+      visualMap: {
+        show: false,
+        seriesIndex: 0,
+        dimension: 1,
+        pieces: [
+          { lt: 0, color: '#ff4d4f' },
+          { gte: 0, color: '#52c41a' },
+        ],
+      },
+      legend: {
+        show: true,
+        data: [nwLabel],
+        bottom: 0,
+      },
       tooltip: {
         trigger: 'axis',
         confine: true,
@@ -117,10 +147,13 @@ export function BalanceSheetsPage() {
           const params = raw as unknown as { axisValueLabel: string; seriesName: string; value: number; marker: string }[];
           const p = params[0];
           if (!p) return '';
-          return `${p.axisValueLabel}<br/>${p.marker}${p.seriesName}: ${formatAmount(String(p.value))}`;
+          return `<b>${p.axisValueLabel}</b>` +
+            `<table style="margin-top:4px;border-spacing:0">` +
+            tooltipRow(p.marker, p.seriesName, p.value) +
+            `</table>`;
         },
       },
-      grid: { left: '3%', right: '4%', bottom: '8%', containLabel: true },
+      grid: { left: '3%', right: '4%', bottom: '12%', containLabel: true },
       xAxis: {
         type: 'category',
         data: netWorthData.map((d) => d.date),
@@ -128,7 +161,7 @@ export function BalanceSheetsPage() {
       },
       yAxis: {
         type: 'value',
-        axisLabel: { formatter: (v: number) => formatAmount(String(v)) },
+        axisLabel: { formatter: formatTick },
       },
       series: [{
         name: nwLabel,
@@ -159,22 +192,33 @@ export function BalanceSheetsPage() {
       }),
     }));
     return {
+      legend: {
+        type: 'scroll',
+        bottom: 0,
+        icon: 'circle',
+        itemWidth: 10,
+        itemHeight: 10,
+      },
       tooltip: {
         trigger: 'axis',
         confine: true,
+        // Scrollable when many accounts overflow the chart height.
+        extraCssText: 'max-height:320px;overflow-y:auto;',
         axisPointer: { animation: false },
         formatter: (raw) => {
           const params = raw as unknown as { axisValueLabel: string; seriesName: string; value: number; marker: string }[];
           const date = params[0]?.axisValueLabel ?? '';
-          const lines = params
+          const rows = [...params]
             .filter((p) => p.value !== 0)
-            .map((p) => `${p.marker}${p.seriesName}: ${formatAmount(String(p.value))}`)
-            .join('<br/>');
-          return lines ? `${date}<br/>${lines}` : date;
+            .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+            .map((p) => tooltipRow(p.marker, p.seriesName, p.value))
+            .join('');
+          return rows
+            ? `<b>${date}</b><table style="margin-top:4px;border-spacing:0">${rows}</table>`
+            : `<b>${date}</b>`;
         },
       },
-      legend: { show: false },
-      grid: { left: '3%', right: '4%', bottom: '8%', containLabel: true },
+      grid: { left: '3%', right: '4%', bottom: '18%', containLabel: true },
       xAxis: {
         type: 'category',
         data: dates,
@@ -182,7 +226,7 @@ export function BalanceSheetsPage() {
       },
       yAxis: {
         type: 'value',
-        axisLabel: { formatter: (v: number) => formatAmount(String(v)) },
+        axisLabel: { formatter: formatTick },
       },
       series,
     };
@@ -331,9 +375,9 @@ export function BalanceSheetsPage() {
             {allBalancesLoading ? (
               <Spin />
             ) : chartType === 'net-worth-trend' ? (
-              <ReactECharts option={lineOption} style={{ height: 280 }} opts={{ renderer: 'svg' }} notMerge />
+              <ReactECharts option={lineOption} style={{ height: 420 }} opts={{ renderer: 'svg' }} notMerge />
             ) : (
-              <ReactECharts option={stackedOption} style={{ height: 280 }} opts={{ renderer: 'svg' }} notMerge />
+              <ReactECharts option={stackedOption} style={{ height: 420 }} opts={{ renderer: 'svg' }} notMerge />
             )}
           </>
         )}

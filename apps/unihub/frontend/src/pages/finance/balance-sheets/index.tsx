@@ -470,7 +470,6 @@ export function BalanceSheetsPage() {
 
       {/* Visualization card */}
       <Card
-        title={t({ id: 'pages.finance.balanceSheets.visualization.title' })}
         tabList={[
           { key: 'net-worth-trend',    label: t({ id: 'pages.finance.balanceSheets.visualization.netWorthTrend' }) },
           { key: 'stacked-breakdown',  label: t({ id: 'pages.finance.balanceSheets.visualization.stackedBreakdown' }) },

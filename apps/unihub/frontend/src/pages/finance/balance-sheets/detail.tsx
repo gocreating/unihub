@@ -426,7 +426,6 @@ export function BalanceSheetDetailPage() {
 
       {/* Visualization card */}
       <Card
-        title={t({ id: 'pages.finance.balanceSheets.detail.visualization.title' })}
         tabList={[
           { key: 'asset-vs-debt', label: t({ id: 'pages.finance.balanceSheets.detail.visualization.assetVsDebt' }) },
           { key: 'assets-only',   label: t({ id: 'pages.finance.balanceSheets.detail.visualization.assetsOnly' }) },

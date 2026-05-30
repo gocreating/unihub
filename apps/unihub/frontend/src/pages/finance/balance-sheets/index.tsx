@@ -179,10 +179,23 @@ export function BalanceSheetsPage() {
     const sym = getCurrencySymbol(baseCurrency ?? '');
     const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
 
-    // Use time axis with [timestamp, value] 2-D data so that visualMap.piecewise
-    // can safely access dimension:1 (y-value).  The previous categorical-axis
-    // approach stored data as 1-D scalars — dimension:1 did not exist there,
-    // causing a 'coord' crash inside the visualMap renderer.
+    // ECharts v6.1.0 bug: visualMap.piecewise crashes (reads .coord off an
+    // undefined object) regardless of axis type.  Use visualMap.continuous
+    // instead — it uses a different rendering path without the bug.
+    //
+    // Sharp bicolor trick: 50 identical reds + 50 identical greens = 100 stops.
+    // With a symmetric axis range [−maxAbs, +maxAbs] the midpoint is exactly
+    // y = 0.  100 stops make the red→green transition imperceptibly thin, so
+    // the line and area fill visually change color right at y = 0.
+    const values = netWorthData.map((d) => d.netWorth);
+    const maxAbs = values.length > 0 ? Math.max(...values.map(Math.abs), 1) : 1;
+    const SHARP_BICOLOR = [
+      ...Array(50).fill('#ff4d4f'),  // red  — net worth < 0 (debt)
+      ...Array(50).fill('#52c41a'),  // green — net worth ≥ 0 (asset)
+    ];
+
+    // [timestamp, value] format required for time axis (also ensures dimension:1
+    // is always valid — not strictly needed for continuous, but kept for clarity).
     const timeData: [number, number][] = netWorthData.map((d) => [
       new Date(d.date).getTime(),
       d.netWorth,
@@ -190,19 +203,14 @@ export function BalanceSheetsPage() {
 
     return {
       legend: { show: false },
-      // piecewise visualMap colors BOTH the line stroke and the area fill
-      // based on the y-value of each data point:
-      //   green (#52c41a) when net worth ≥ 0 (asset)
-      //   red   (#ff4d4f) when net worth < 0  (debt)
       visualMap: [{
         show: false,
-        type: 'piecewise',
-        dimension: 1,      // y-value (index 1 of [timestamp, value])
+        type: 'continuous',
+        dimension: 1,
         seriesIndex: 0,
-        pieces: [
-          { lt: 0,  color: '#ff4d4f' },
-          { gte: 0, color: '#52c41a' },
-        ],
+        min: -maxAbs,
+        max: maxAbs,
+        inRange: { color: SHARP_BICOLOR },
       }],
       tooltip: {
         trigger: 'axis',

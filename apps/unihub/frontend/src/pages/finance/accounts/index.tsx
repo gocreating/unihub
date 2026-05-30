@@ -5,6 +5,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
+import { resolveAccountColor } from '@/utils/chartData';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
 import type { Account } from '@/services/unihub-backend/finance';
 import {
@@ -184,9 +185,20 @@ export function AccountsPage() {
         title: t({ id: 'pages.finance.accounts.col.color' }),
         dataIndex: 'color',
         width: 72,
-        render: (_dom, record) => record.color
-          ? <span style={{ display: 'inline-block', width: 20, height: 20, borderRadius: '50%', background: record.color, border: '1px solid rgba(0,0,0,0.12)', verticalAlign: 'middle' }} />
-          : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
+        render: (_dom, record) => {
+          const auto = !record.color;
+          const c = resolveAccountColor(record.name, record.color || undefined);
+          return (
+            <span
+              title={auto ? `Auto: ${c}` : c}
+              style={{
+                display: 'inline-block', width: 20, height: 20, borderRadius: '50%',
+                background: c, verticalAlign: 'middle',
+                border: auto ? '2px dashed rgba(0,0,0,0.2)' : '2px solid rgba(0,0,0,0.12)',
+              }}
+            />
+          );
+        },
       },
       {
         title: t({ id: 'pages.finance.accounts.col.openDatetime' }),
@@ -274,21 +286,20 @@ export function AccountsPage() {
           <Form.Item
             name="color"
             label={t({ id: 'pages.finance.accounts.form.color' })}
-            // ColorPicker.onChange(color, hex) — extract hex string
+            // ColorPicker.onChange(color, hex) — extract hex string for Form.Item storage.
             getValueFromEvent={(_color: unknown, hex: string) => hex ?? ''}
           >
             <ColorPicker
               format="hex"
               allowClear
               showText
+              // Open upward so the picker never overflows the modal's bottom edge.
+              placement="topLeft"
               presets={[{
                 label: t({ id: 'pages.finance.accounts.form.color' }),
                 colors: ACCOUNT_PRESET_COLORS,
               }]}
-              // Show only the preset swatches — hides the gradient + sliders panel.
-              // This keeps the popup compact so it fits inside the modal.
-              panelRender={(_panel, { components: { Presets } }) => <Presets />}
-              // Mount the popup inside the modal so it can't overflow the page.
+              // Constrain popup to the modal so it can't escape outside the page.
               getPopupContainer={(trigger) =>
                 (trigger.closest('.ant-modal-content') as HTMLElement) ?? document.body
               }

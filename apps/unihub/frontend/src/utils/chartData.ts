@@ -5,6 +5,36 @@
  * independently of the ECharts rendering layer.
  */
 
+// 36-color palette: maximally distinct hues at varying lightness/saturation.
+// Shared between the balance-breakdown chart series and the auto-assign fallback.
+export const ECHARTS_COLORS = [
+  '#e6194b', '#f58231', '#ffe119', '#3cb44b', '#42d4f4',
+  '#4363d8', '#911eb4', '#f032e6', '#ff8c00', '#00b300',
+  '#0099cc', '#cc00cc', '#800000', '#9a6324', '#808000',
+  '#006400', '#008080', '#000080', '#4b0082', '#800080',
+  '#ff6347', '#ffd700', '#7fff00', '#20b2aa', '#1e90ff',
+  '#6a5acd', '#ff69b4', '#dc143c', '#8b4513', '#d2691e',
+  '#a0522d', '#556b2f', '#2e8b57', '#4682b4', '#708090',
+  '#b8860b',
+] as const;
+
+/**
+ * Deterministic color resolver for accounts.
+ *
+ * Returns the account's custom color when set; otherwise selects a color from
+ * ECHARTS_COLORS by hashing the account name. The same name always resolves to
+ * the same color regardless of list ordering — avoids flicker when accounts
+ * are added, removed, or reordered.
+ */
+export function resolveAccountColor(accountName: string, customColor?: string): string {
+  if (customColor) return customColor;
+  let h = 0;
+  for (let i = 0; i < accountName.length; i++) {
+    h = (Math.imul(31, h) + accountName.charCodeAt(i)) | 0;
+  }
+  return ECHARTS_COLORS[Math.abs(h) % ECHARTS_COLORS.length]!;
+}
+
 /**
  * Builds two time-series (positive/negative) for a net worth trend chart by
  * interpolating the exact zero-crossing timestamp between consecutive data

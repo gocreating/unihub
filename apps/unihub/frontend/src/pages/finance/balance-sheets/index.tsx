@@ -19,7 +19,7 @@ import {
   listExchangeRates,
 } from '@/services/unihub-backend/finance';
 import { computeNetWorthInBase, formatAmount, getCurrencySymbol } from '@/utils/finance';
-import { classifyAccountStacks } from '@/utils/chartData';
+import { classifyAccountStacks, ECHARTS_COLORS, resolveAccountColor } from '@/utils/chartData';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 
 type BalanceListChartType = 'net-worth-trend' | 'stacked-breakdown';
@@ -29,51 +29,7 @@ const CARD_TITLE_STYLE: React.CSSProperties = { margin: 0 };
 // ECharts v6 default color palette — must match what the chart instance uses
 // so custom legend dots show the correct colors.
 // 36-color palette: enough to cover 35+ accounts without repeating.
-// Chosen to maximise perceptual distance — hue jumps ~40° between adjacent
-// entries, with alternating dark/medium lightness so similar-hued neighbours
-// are still distinguishable by brightness.
-const ECHARTS_COLORS = [
-  // ── Core 12: primary + secondary + tertiary, highly saturated ──────────
-  '#e6194b', // red           0°
-  '#f58231', // orange        30°
-  '#ffe119', // yellow        60°
-  '#3cb44b', // green        120°
-  '#42d4f4', // cyan         185°
-  '#4363d8', // blue         225°
-  '#911eb4', // purple       280°
-  '#f032e6', // magenta      305°
-  '#ff8c00', // dark orange   40°
-  '#00b300', // vivid green  120° alt
-  '#0099cc', // teal-blue    200°
-  '#cc00cc', // dark magenta  300°
-  // ── Dark variants: same hue wheel but deeper, offset by ~20° ──────────
-  '#800000', // maroon          0° dark
-  '#9a6324', // ochre brown     30° dark
-  '#808000', // olive           60° dark
-  '#006400', // dark green     120° dark
-  '#008080', // teal           180° dark
-  '#000080', // navy           240° dark
-  '#4b0082', // indigo         260° dark
-  '#800080', // dark purple    300° dark
-  // ── Medium variants: different lightness, wider hue spread ────────────
-  '#ff6347', // tomato          10°
-  '#ffd700', // gold            50°
-  '#7fff00', // chartreuse      90°
-  '#20b2aa', // light sea green 175°
-  '#1e90ff', // dodger blue    210°
-  '#6a5acd', // slate blue     248°
-  '#ff69b4', // hot pink       330°
-  '#dc143c', // crimson        348°
-  // ── Earthy / neutral fills ─────────────────────────────────────────────
-  '#8b4513', // saddle brown
-  '#d2691e', // chocolate
-  '#a0522d', // sienna
-  '#556b2f', // dark olive
-  '#2e8b57', // sea green
-  '#4682b4', // steel blue
-  '#708090', // slate gray
-  '#b8860b', // dark goldenrod
-];
+// ECHARTS_COLORS is now exported from @/utils/chartData (shared with resolveAccountColor).
 
 interface NetWorthDataPoint {
   date: string;
@@ -311,9 +267,8 @@ export function BalanceSheetsPage() {
     // Use [timestamp, value] format so the time axis spaces dates by actual
     // elapsed time rather than categorical equal-width slots. This prevents
     // balance sheets that are months apart from appearing as adjacent slots.
-    const series = stackedAccounts.map((acc, i) => {
-      const customColor = accountColors.get(acc);
-      const seriesColor = customColor || ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
+    const series = stackedAccounts.map((acc) => {
+      const seriesColor = resolveAccountColor(acc, accountColors.get(acc));
       return {
         name: acc,
         type: 'line' as const,
@@ -337,7 +292,7 @@ export function BalanceSheetsPage() {
     });
 
     return {
-      color: ECHARTS_COLORS,
+      color: [...ECHARTS_COLORS],
       // legend.selected drives which series are visible — kept in sync with React
       // hiddenSeries state so individual toggles and select-all both work without
       // needing separate dispatchAction calls.
@@ -562,8 +517,8 @@ export function BalanceSheetsPage() {
                 </div>
                 {/* Per-account legend — dot uses the account's custom color; pill stays neutral */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, paddingInline: 4 }}>
-                  {stackedAccounts.map((acc, i) => {
-                    const accentColor = accountColors.get(acc) || ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
+                  {stackedAccounts.map((acc) => {
+                    const accentColor = resolveAccountColor(acc, accountColors.get(acc));
                     const excluded = excludedFromNetWorth.has(acc);
                     return (
                       <button
@@ -617,8 +572,8 @@ export function BalanceSheetsPage() {
                 </div>
                 {/* Per-account legend — click to toggle, hover to highlight area in chart */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, paddingInline: 4 }}>
-                  {stackedAccounts.map((acc, i) => {
-                    const color = accountColors.get(acc) || ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
+                  {stackedAccounts.map((acc) => {
+                    const color = resolveAccountColor(acc, accountColors.get(acc));
                     const hidden = hiddenSeries.has(acc);
                     return (
                       <button

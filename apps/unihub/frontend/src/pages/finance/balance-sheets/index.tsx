@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, Modal, Select, Segmented, Space, Spin, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
@@ -25,6 +25,13 @@ type BalanceListChartType = 'net-worth-trend' | 'stacked-breakdown';
 
 const CARD_TITLE_STYLE: React.CSSProperties = { margin: 0 };
 
+// ECharts v6 default color palette — must match what the chart instance uses
+// so custom legend dots show the correct colors.
+const ECHARTS_COLORS = [
+  '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
+  '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc',
+];
+
 interface NetWorthDataPoint {
   date: string;
   netWorth: number;
@@ -42,6 +49,9 @@ export function BalanceSheetsPage() {
   const { formatMessage: t } = useIntl();
 
   const [chartType, setChartType] = useState<BalanceListChartType>('net-worth-trend');
+  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
+  const lineChartRef = useRef<ReactECharts>(null);
+  const stackedChartRef = useRef<ReactECharts>(null);
 
   const { data: sheets = [], isLoading } = useQuery({
     queryKey: ['finance', 'balance-sheets'],
@@ -110,35 +120,47 @@ export function BalanceSheetsPage() {
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [sheets, balanceQueries, baseCurrency, rates]);
 
+  // Stable account list for custom legend (derived from stackedData).
+  const stackedAccounts = useMemo(
+    () => [...new Set(stackedData.map((d) => d.accountName))],
+    [stackedData],
+  );
+
   // ── ECharts options ───────────────────────────────────────────────────────
 
   /** Integer tick formatter — no decimal places. */
   const formatTick = (v: number): string =>
     new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(v);
 
-  /** Single right-aligned tooltip row. */
-  const tooltipRow = (marker: string, name: string, value: number): string =>
-    `<tr><td style="padding:1px 16px 1px 0">${marker}${name}</td>` +
-    `<td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${formatAmount(String(value))}</td></tr>`;
+  /** Right-aligned tooltip row (pre-formatted value string). */
+  const tooltipRow = (marker: string, name: string, formattedValue: string): string =>
+    `<tr>` +
+    `<td style="padding:2px 20px 2px 0;white-space:nowrap">${marker}${name}</td>` +
+    `<td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${formattedValue}</td>` +
+    `</tr>`;
 
   const lineOption = useMemo((): EChartsOption => {
     const nwLabel = t({ id: 'pages.finance.balanceSheets.visualization.netWorth' });
+    const sym = getCurrencySymbol(baseCurrency ?? '');
+    const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
+
+    // piecewise visualMap: green ≥0, red <0.
+    // Omit `dimension` — ECharts v6 treats 1-D series data as dim-0 by default;
+    // setting dimension:1 on 1-D data makes it try to read a nonexistent coord → crash.
+    const hasData = netWorthData.length > 0;
     return {
-      // Green for positive net worth, red for negative.
-      visualMap: {
-        show: false,
-        seriesIndex: 0,
-        dimension: 1,
-        pieces: [
-          { lt: 0, color: '#ff4d4f' },
-          { gte: 0, color: '#52c41a' },
-        ],
-      },
-      legend: {
-        show: true,
-        data: [nwLabel],
-        bottom: 0,
-      },
+      ...(hasData ? {
+        visualMap: [{
+          show: false,
+          type: 'piecewise',
+          seriesIndex: 0,
+          pieces: [
+            { lt: 0, color: '#ff4d4f' },
+            { gte: 0, color: '#52c41a' },
+          ],
+        }],
+      } : {}),
+      legend: { show: false },
       tooltip: {
         trigger: 'axis',
         confine: true,
@@ -148,12 +170,12 @@ export function BalanceSheetsPage() {
           const p = params[0];
           if (!p) return '';
           return `<b>${p.axisValueLabel}</b>` +
-            `<table style="margin-top:4px;border-spacing:0">` +
-            tooltipRow(p.marker, p.seriesName, p.value) +
+            `<table style="margin-top:6px;border-spacing:0">` +
+            tooltipRow(p.marker, p.seriesName, fmtVal(p.value)) +
             `</table>`;
         },
       },
-      grid: { left: '3%', right: '4%', bottom: '12%', containLabel: true },
+      grid: { left: '3%', right: '4%', bottom: '4%', containLabel: true },
       xAxis: {
         type: 'category',
         data: netWorthData.map((d) => d.date),
@@ -173,52 +195,62 @@ export function BalanceSheetsPage() {
         areaStyle: { opacity: 0.08 },
       }],
     };
-  }, [netWorthData, t]);
+  }, [netWorthData, baseCurrency, t]);
 
   const stackedOption = useMemo((): EChartsOption => {
     const dates = [...new Set(stackedData.map((d) => d.date))].sort();
-    const accounts = [...new Set(stackedData.map((d) => d.accountName))];
-    const series = accounts.map((acc) => ({
-      name: acc,
-      type: 'line' as const,
-      stack: 'total',
-      smooth: 0.3,
-      symbol: 'none',
-      areaStyle: { opacity: 0.6 },
-      emphasis: { focus: 'series' as const },
-      data: dates.map((date) => {
-        const entry = stackedData.find((d) => d.date === date && d.accountName === acc);
-        return entry?.amount ?? 0;
-      }),
-    }));
+    const sym = getCurrencySymbol(baseCurrency ?? '');
+    const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
+
+    // Classify each account by the sign of its total across all dates so that
+    // assets and debts stack into separate groups (no visual overlap).
+    const accountTotals = new Map<string, number>();
+    for (const d of stackedData) {
+      accountTotals.set(d.accountName, (accountTotals.get(d.accountName) ?? 0) + d.amount);
+    }
+
+    const series = stackedAccounts.map((acc) => {
+      const total = accountTotals.get(acc) ?? 0;
+      return {
+        name: acc,
+        type: 'line' as const,
+        stack: total >= 0 ? 'assets' : 'debts',
+        smooth: 0.3,
+        symbol: 'none',
+        areaStyle: { opacity: 0.55 },
+        emphasis: { focus: 'series' as const },
+        data: dates.map((date) => {
+          const entry = stackedData.find((d) => d.date === date && d.accountName === acc);
+          return entry?.amount ?? 0;
+        }),
+      };
+    });
+
     return {
-      legend: {
-        type: 'scroll',
-        bottom: 0,
-        icon: 'circle',
-        itemWidth: 10,
-        itemHeight: 10,
-      },
+      color: ECHARTS_COLORS,
+      legend: { show: false },
       tooltip: {
         trigger: 'axis',
         confine: true,
-        // Scrollable when many accounts overflow the chart height.
-        extraCssText: 'max-height:320px;overflow-y:auto;',
+        // Limit items shown to avoid overflowing the viewport; sort by |value| desc.
         axisPointer: { animation: false },
         formatter: (raw) => {
           const params = raw as unknown as { axisValueLabel: string; seriesName: string; value: number; marker: string }[];
           const date = params[0]?.axisValueLabel ?? '';
-          const rows = [...params]
+          const nonZero = [...params]
             .filter((p) => p.value !== 0)
-            .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
-            .map((p) => tooltipRow(p.marker, p.seriesName, p.value))
-            .join('');
-          return rows
-            ? `<b>${date}</b><table style="margin-top:4px;border-spacing:0">${rows}</table>`
-            : `<b>${date}</b>`;
+            .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+          const MAX_ROWS = 8;
+          const shown = nonZero.slice(0, MAX_ROWS);
+          const rest = nonZero.length - shown.length;
+          const rows = shown.map((p) => tooltipRow(p.marker, p.seriesName, fmtVal(p.value))).join('');
+          const footer = rest > 0
+            ? `<tr><td colspan="2" style="color:#8c8c8c;padding-top:4px;font-size:11px">…and ${rest} more</td></tr>`
+            : '';
+          return `<b>${date}</b><table style="margin-top:6px;border-spacing:0">${rows}${footer}</table>`;
         },
       },
-      grid: { left: '3%', right: '4%', bottom: '18%', containLabel: true },
+      grid: { left: '3%', right: '4%', bottom: '4%', containLabel: true },
       xAxis: {
         type: 'category',
         data: dates,
@@ -230,7 +262,7 @@ export function BalanceSheetsPage() {
       },
       series,
     };
-  }, [stackedData]);
+  }, [stackedData, stackedAccounts, baseCurrency]);
 
   const sheetNetWorths = useMemo<Record<string, Decimal | null>>(() => {
     if (!baseCurrency) return {};
@@ -375,9 +407,74 @@ export function BalanceSheetsPage() {
             {allBalancesLoading ? (
               <Spin />
             ) : chartType === 'net-worth-trend' ? (
-              <ReactECharts option={lineOption} style={{ height: 420 }} opts={{ renderer: 'svg' }} notMerge />
+              <>
+                <ReactECharts
+                  ref={lineChartRef}
+                  option={lineOption}
+                  style={{ height: 720, width: '100%' }}
+                  opts={{ renderer: 'svg' }}
+                />
+                {/* Custom legend */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+                  <button
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, padding: '2px 8px' }}
+                    onClick={() => {
+                      lineChartRef.current?.getEchartsInstance().dispatchAction({
+                        type: 'legendToggleSelect',
+                        name: t({ id: 'pages.finance.balanceSheets.visualization.netWorth' }),
+                      });
+                    }}
+                  >
+                    <span style={{ display: 'flex', gap: 2 }}>
+                      <span style={{ width: 14, height: 3, background: '#52c41a', display: 'inline-block', borderRadius: 2 }} />
+                      <span style={{ width: 14, height: 3, background: '#ff4d4f', display: 'inline-block', borderRadius: 2 }} />
+                    </span>
+                    {t({ id: 'pages.finance.balanceSheets.visualization.netWorth' })}
+                  </button>
+                </div>
+              </>
             ) : (
-              <ReactECharts option={stackedOption} style={{ height: 420 }} opts={{ renderer: 'svg' }} notMerge />
+              <>
+                <ReactECharts
+                  ref={stackedChartRef}
+                  option={stackedOption}
+                  style={{ height: 720, width: '100%' }}
+                  opts={{ renderer: 'svg' }}
+                />
+                {/* Custom legend — one pill per account, click to toggle */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingInline: 4 }}>
+                  {stackedAccounts.map((acc, i) => {
+                    const color = ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
+                    const hidden = hiddenSeries.has(acc);
+                    return (
+                      <button
+                        key={acc}
+                        onClick={() => {
+                          stackedChartRef.current?.getEchartsInstance().dispatchAction({
+                            type: 'legendToggleSelect',
+                            name: acc,
+                          });
+                          setHiddenSeries((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(acc)) next.delete(acc); else next.add(acc);
+                            return next;
+                          });
+                        }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '2px 10px', border: `1px solid ${color}`,
+                          borderRadius: 12, cursor: 'pointer', background: 'transparent',
+                          fontSize: 12, opacity: hidden ? 0.35 : 1,
+                          color: hidden ? '#8c8c8c' : undefined,
+                        }}
+                      >
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                        {acc}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </>
         )}

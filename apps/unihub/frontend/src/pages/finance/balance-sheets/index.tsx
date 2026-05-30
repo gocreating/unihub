@@ -301,21 +301,20 @@ export function BalanceSheetsPage() {
           const ty = Math.max(10, Math.min(y - th / 2, window.innerHeight - th - 10));
           return [tx, ty];
         },
-        // Limit items to avoid overflowing the viewport; sort by |value| desc.
+        // Show ALL non-zero items sorted by |value| desc. The tooltip is
+        // scrollable (max-height: 85vh) so it never gets clipped vertically.
+        extraCssText: 'max-height:85vh;overflow-y:auto;',
         formatter: (raw) => {
           const params = raw as unknown as { axisValueLabel: string; seriesName: string; value: number; marker: string }[];
           const date = params[0]?.axisValueLabel ?? '';
-          const nonZero = [...params]
+          const rows = [...params]
             .filter((p) => p.value !== 0)
-            .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
-          const MAX_ROWS = 8;
-          const shown = nonZero.slice(0, MAX_ROWS);
-          const rest = nonZero.length - shown.length;
-          const rows = shown.map((p) => tooltipRow(p.marker, p.seriesName, fmtVal(p.value))).join('');
-          const footer = rest > 0
-            ? `<tr><td colspan="2" style="color:#8c8c8c;padding-top:4px;font-size:11px">…and ${rest} more</td></tr>`
-            : '';
-          return `<b>${date}</b><table style="margin-top:6px;border-spacing:0">${rows}${footer}</table>`;
+            .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+            .map((p) => tooltipRow(p.marker, p.seriesName, fmtVal(p.value)))
+            .join('');
+          return rows
+            ? `<b>${date}</b><table style="margin-top:6px;border-spacing:0">${rows}</table>`
+            : `<b>${date}</b>`;
         },
       },
       grid: { left: '3%', right: '4%', bottom: '4%', containLabel: true },

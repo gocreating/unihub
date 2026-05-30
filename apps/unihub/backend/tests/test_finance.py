@@ -91,6 +91,58 @@ class TestCurrencies:
 
 @pytest.mark.django_db
 class TestAccounts:
+    def test_account_color_defaults_to_empty_string(self, auth_client, usd):
+        resp = auth_client.post(
+            "/api/v1/finance/accounts/",
+            {"name": "Savings", "currency": "USD", "open_datetime": "2020-01-01T00:00:00Z"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 201
+        assert resp.json()["color"] == ""
+
+    def test_create_account_with_custom_color(self, auth_client, usd):
+        resp = auth_client.post(
+            "/api/v1/finance/accounts/",
+            {"name": "Savings", "currency": "USD", "open_datetime": "2020-01-01T00:00:00Z", "color": "#2196f3"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 201
+        assert resp.json()["color"] == "#2196f3"
+
+    def test_update_account_color(self, auth_client, usd):
+        acc = auth_client.post(
+            "/api/v1/finance/accounts/",
+            {"name": "Savings", "currency": "USD", "open_datetime": "2020-01-01T00:00:00Z"},
+            content_type="application/json",
+        ).json()
+        resp = auth_client.patch(
+            f"/api/v1/finance/accounts/{acc['id']}/",
+            {"color": "#4caf50"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert resp.json()["color"] == "#4caf50"
+
+    def test_balance_includes_account_color(self, auth_client, usd):
+        acc = auth_client.post(
+            "/api/v1/finance/accounts/",
+            {"name": "Savings", "currency": "USD", "open_datetime": "2020-01-01T00:00:00Z", "color": "#e91e63"},
+            content_type="application/json",
+        ).json()
+        sheet = auth_client.post(
+            "/api/v1/finance/balance-sheets/",
+            {"date": "2026-01-01T00:00:00Z"},
+            content_type="application/json",
+        ).json()
+        auth_client.put(
+            f"/api/v1/finance/balance-sheets/{sheet['id']}/balances/{acc['id']}/",
+            {"amount": "1000"},
+            content_type="application/json",
+        )
+        balances = auth_client.get(f"/api/v1/finance/balance-sheets/{sheet['id']}/balances/").json()
+        assert len(balances) == 1
+        assert balances[0]["color"] == "#e91e63"
+
     def test_create_account(self, auth_client, usd):
         resp = auth_client.post(
             "/api/v1/finance/accounts/",

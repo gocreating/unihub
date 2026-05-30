@@ -84,6 +84,7 @@ interface StackedDataPoint {
   date: string;
   accountName: string;
   amount: number;
+  color: string;  // account's custom color (may be empty string)
 }
 
 export function BalanceSheetsPage() {
@@ -166,7 +167,7 @@ export function BalanceSheetsPage() {
           } else {
             amount = parseFloat(b.amount);
           }
-          return [{ date: dayjs(sheet.date).format('YYYY-MM-DD'), accountName: b.account_name, amount }];
+          return [{ date: dayjs(sheet.date).format('YYYY-MM-DD'), accountName: b.account_name, amount, color: b.color || '' }];
         });
       })
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -177,6 +178,15 @@ export function BalanceSheetsPage() {
     () => [...new Set(stackedData.map((d) => d.accountName))],
     [stackedData],
   );
+
+  // Account name → custom color map. Falls back to ECHARTS_COLORS by index when empty.
+  const accountColors = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const d of stackedData) {
+      if (d.color && !map.has(d.accountName)) map.set(d.accountName, d.color);
+    }
+    return map;
+  }, [stackedData]);
 
   // ── ECharts options ───────────────────────────────────────────────────────
 
@@ -301,24 +311,30 @@ export function BalanceSheetsPage() {
     // Use [timestamp, value] format so the time axis spaces dates by actual
     // elapsed time rather than categorical equal-width slots. This prevents
     // balance sheets that are months apart from appearing as adjacent slots.
-    const series = stackedAccounts.map((acc) => ({
-      name: acc,
-      type: 'line' as const,
-      stack: stackGroups.get(acc) ?? 'assets',
-      cursor: 'default',
-      smooth: 0.3,
-      symbol: 'none',
-      lineStyle: { width: 0 },
-      areaStyle: { opacity: 0.55 },
-      emphasis: { focus: 'series' as const },
-      data: dates.map((date): [number, number] => {
-        const entry = stackedData.find((d) => d.date === date && d.accountName === acc);
-        const v = entry?.amount ?? 0;
-        // Clip to prevent cross-sign artifacts when an account temporarily switches sign.
-        const clipped = stackGroups.get(acc) === 'assets' ? Math.max(v, 0) : Math.min(v, 0);
-        return [new Date(date).getTime(), clipped];
-      }),
-    }));
+    const series = stackedAccounts.map((acc, i) => {
+      const customColor = accountColors.get(acc);
+      const seriesColor = customColor || ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
+      return {
+        name: acc,
+        type: 'line' as const,
+        stack: stackGroups.get(acc) ?? 'assets',
+        cursor: 'default',
+        smooth: 0.3,
+        symbol: 'none',
+        lineStyle: { width: 0 },
+        // Use the account's custom color (or palette fallback) for the area fill.
+        areaStyle: { opacity: 0.55, color: seriesColor },
+        itemStyle: { color: seriesColor },
+        emphasis: { focus: 'series' as const },
+        data: dates.map((date): [number, number] => {
+          const entry = stackedData.find((d) => d.date === date && d.accountName === acc);
+          const v = entry?.amount ?? 0;
+          // Clip to prevent cross-sign artifacts when an account temporarily switches sign.
+          const clipped = stackGroups.get(acc) === 'assets' ? Math.max(v, 0) : Math.min(v, 0);
+          return [new Date(date).getTime(), clipped];
+        }),
+      };
+    });
 
     return {
       color: ECHARTS_COLORS,
@@ -376,7 +392,7 @@ export function BalanceSheetsPage() {
       },
       series,
     };
-  }, [stackedData, stackedAccounts, baseCurrency, hiddenSeries]);
+  }, [stackedData, stackedAccounts, baseCurrency, hiddenSeries, accountColors]);
 
   const sheetNetWorths = useMemo<Record<string, Decimal | null>>(() => {
     if (!baseCurrency) return {};
@@ -544,9 +560,10 @@ export function BalanceSheetsPage() {
                     Select All
                   </Checkbox>
                 </div>
-                {/* Per-account legend — neutral colors (account colors are meaningless in the trend view) */}
+                {/* Per-account legend — dot uses the account's custom color; pill stays neutral */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, paddingInline: 4 }}>
-                  {stackedAccounts.map((acc) => {
+                  {stackedAccounts.map((acc, i) => {
+                    const accentColor = accountColors.get(acc) || ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
                     const excluded = excludedFromNetWorth.has(acc);
                     return (
                       <button
@@ -568,7 +585,7 @@ export function BalanceSheetsPage() {
                           transition: 'all 0.2s',
                         }}
                       >
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: excluded ? '#d9d9d9' : '#8c8c8c' }} />
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: excluded ? '#d9d9d9' : accentColor }} />
                         {excluded ? <s>{acc}</s> : acc}
                       </button>
                     );
@@ -601,7 +618,7 @@ export function BalanceSheetsPage() {
                 {/* Per-account legend — click to toggle, hover to highlight area in chart */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, paddingInline: 4 }}>
                   {stackedAccounts.map((acc, i) => {
-                    const color = ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
+                    const color = accountColors.get(acc) || ECHARTS_COLORS[i % ECHARTS_COLORS.length]!;
                     const hidden = hiddenSeries.has(acc);
                     return (
                       <button

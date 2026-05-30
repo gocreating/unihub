@@ -71,6 +71,8 @@ export default {
   'pages.finance.accounts.createError': 'Failed to create account.',
   'pages.finance.accounts.updateError': 'Failed to update account.',
   'pages.finance.accounts.deleteError': 'Failed to delete account.',
+  'pages.finance.accounts.col.color': 'Color',
+  'pages.finance.accounts.form.color': 'Account Color',
   'pages.finance.accounts.col.openDatetime': 'Open Time',
   'pages.finance.accounts.col.closeDatetime': 'Close Time',
   'pages.finance.accounts.form.currencyPlaceholder': 'Select currency',

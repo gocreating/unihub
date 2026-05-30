@@ -159,11 +159,12 @@ describe('computeNetWorthInBase', () => {
 
 // ── buildAggTree ──────────────────────────────────────────────────────────────
 
-const makeBalance = (id: string, accountId: string, name: string, currency: string, amount: string): Balance => ({
+const makeBalance = (id: string, accountId: string, name: string, currency: string, amount: string, color = ''): Balance => ({
   id,
   account_id: accountId,
   account_name: name,
   currency,
+  color,
   amount,
 });
 

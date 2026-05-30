@@ -21,6 +21,7 @@ class Account(models.Model):
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     name = models.CharField(max_length=200)
     currency = models.CharField(max_length=3)
+    color = models.CharField(max_length=7, blank=True, default="")
     open_datetime = models.DateTimeField(null=True, blank=True)
     close_datetime = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

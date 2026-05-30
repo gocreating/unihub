@@ -71,6 +71,8 @@ export default {
   'pages.finance.accounts.createError': '建立帳戶失敗。',
   'pages.finance.accounts.updateError': '更新帳戶失敗。',
   'pages.finance.accounts.deleteError': '刪除帳戶失敗。',
+  'pages.finance.accounts.col.color': '顏色',
+  'pages.finance.accounts.form.color': '帳戶顏色',
   'pages.finance.accounts.col.openDatetime': '開設時間',
   'pages.finance.accounts.col.closeDatetime': '關閉時間',
   'pages.finance.accounts.form.currencyPlaceholder': '選擇貨幣',

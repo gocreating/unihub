@@ -20,6 +20,7 @@ class AccountSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "currency",
+            "color",
             "open_datetime",
             "close_datetime",
             "created_at",
@@ -47,12 +48,13 @@ class BalanceSerializer(serializers.ModelSerializer):
     account_id = serializers.CharField(source="account.id", read_only=True)
     account_name = serializers.CharField(source="account.name", read_only=True)
     currency = serializers.CharField(source="account.currency", read_only=True)
+    color = serializers.CharField(source="account.color", read_only=True)
     amount = serializers.DecimalField(max_digits=20, decimal_places=4, coerce_to_string=True)
 
     class Meta:
         model = Balance
-        fields = ["id", "account_id", "account_name", "currency", "amount"]
-        read_only_fields = ["id", "account_id", "account_name", "currency"]
+        fields = ["id", "account_id", "account_name", "currency", "color", "amount"]
+        read_only_fields = ["id", "account_id", "account_name", "currency", "color"]
 
 
 class BalanceUpsertSerializer(serializers.Serializer):

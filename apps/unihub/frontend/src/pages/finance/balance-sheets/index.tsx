@@ -233,48 +233,22 @@ export function BalanceSheetsPage() {
         trigger: 'axis',
         appendToBody: true,
         extraCssText: 'max-width:320px;',
-        axisPointer: {
-          animation: false,
-          lineStyle: { color: '#555', width: 2, type: 'solid' },
-        },
-        // Tooltip tracks the focused x-axis DATA POINT position, not the mouse cursor.
-        // point[0] for a time axis is the raw cursor viewport x; we convert the
-        // focused data point's timestamp via chart.convertToPixel instead.
-        // Fixed y keeps the tooltip stable regardless of vertical mouse movement.
-        position: (point, params, _dom, _rect, size) => {
-          const rawParams = params as unknown as Array<{ value?: unknown }>;
-          const firstValue = rawParams[0]?.value;
-          const ts = Array.isArray(firstValue) ? (firstValue[0] as number) : undefined;
+        axisPointer: { animation: false },
+        // With appendToBody:true ECharts provides point[0] in viewport coordinates.
+        // Simple rule: place RIGHT if space allows, otherwise LEFT. No convertToPixel
+        // needed — point[0] is already the snapped axis position in viewport coords.
+        position: (point, _params, _dom, _rect, size) => {
+          const [x] = point as [number, number];
           const [tw = 0] = (size as { contentSize: number[] }).contentSize;
-          const OFFSET = 20;
-          // extraCssText caps the tooltip at MAX_W px via CSS, so the actual
-          // rendered width can never exceed MAX_W. Using MAX_W as the fallback
-          // (when tw is still 0 on first render) guarantees the position math
-          // is always correct regardless of render timing.
-          const MAX_W = 320;
-          const estW = tw > 0 ? Math.min(tw, MAX_W) : MAX_W;
+          const MAX_W = 320; // must match extraCssText max-width
+          const w = tw > 0 ? Math.min(tw, MAX_W) : MAX_W;
+          const GAP = 8;     // gap between active line and tooltip edge
           const vw = window.innerWidth;
-          let snapX = (point as [number, number])[0];
-          if (ts !== undefined) {
-            const inst = lineChartRef.current?.getEchartsInstance();
-            if (inst) {
-              const px = inst.convertToPixel({ xAxisIndex: 0 }, ts);
-              if (typeof px === 'number') {
-                const domRect = inst.getDom()?.getBoundingClientRect();
-                if (domRect) snapX = domRect.left + px;
-              }
-            }
+          // If tooltip fits to the right → place right; otherwise → place left.
+          if (x + GAP + w < vw - 5) {
+            return [x + GAP, 20];
           }
-          // 3-case placement: right → left → right-aligned to viewport edge.
-          let tx: number;
-          if (snapX + OFFSET + estW <= vw - 10) {
-            tx = snapX + OFFSET;               // Case 1: fits to the right
-          } else if (snapX - OFFSET - estW >= 10) {
-            tx = snapX - OFFSET - estW;        // Case 2: fits to the left
-          } else {
-            tx = Math.max(10, vw - estW - 10); // Case 3: align to viewport right edge
-          }
-          return [tx, 20];
+          return [Math.max(5, x - GAP - w), 20];
         },
         formatter: (raw) => {
           const params = raw as unknown as { value: [number, number] }[];
@@ -354,40 +328,19 @@ export function BalanceSheetsPage() {
         trigger: 'axis',
         appendToBody: true,
         extraCssText: 'max-width:600px;',
-        axisPointer: {
-          animation: false,
-          lineStyle: { color: '#555', width: 2, type: 'solid' },
-        },
-        // Same snap-to-data-point + 3-case logic using stackedChartRef.
-        position: (point, params, _dom, _rect, size) => {
-          const rawParams = params as unknown as Array<{ value?: unknown }>;
-          const firstValue = rawParams[0]?.value;
-          const ts = Array.isArray(firstValue) ? (firstValue[0] as number) : undefined;
+        axisPointer: { animation: false },
+        // Same simple right/left rule as the line chart.
+        position: (point, _params, _dom, _rect, size) => {
+          const [x] = point as [number, number];
           const [tw = 0] = (size as { contentSize: number[] }).contentSize;
-          const OFFSET = 20;
           const MAX_W = 600;
-          const estW = tw > 0 ? Math.min(tw, MAX_W) : MAX_W;
+          const w = tw > 0 ? Math.min(tw, MAX_W) : MAX_W;
+          const GAP = 8;
           const vw = window.innerWidth;
-          let snapX = (point as [number, number])[0];
-          if (ts !== undefined) {
-            const inst = stackedChartRef.current?.getEchartsInstance();
-            if (inst) {
-              const px = inst.convertToPixel({ xAxisIndex: 0 }, ts);
-              if (typeof px === 'number') {
-                const domRect = inst.getDom()?.getBoundingClientRect();
-                if (domRect) snapX = domRect.left + px;
-              }
-            }
+          if (x + GAP + w < vw - 5) {
+            return [x + GAP, 20];
           }
-          let tx: number;
-          if (snapX + OFFSET + estW <= vw - 10) {
-            tx = snapX + OFFSET;
-          } else if (snapX - OFFSET - estW >= 10) {
-            tx = snapX - OFFSET - estW;
-          } else {
-            tx = Math.max(10, vw - estW - 10);
-          }
-          return [tx, 20];
+          return [Math.max(5, x - GAP - w), 20];
         },
         formatter: (raw) => {
           const params = raw as unknown as { value: [number, number]; seriesName: string; marker: string }[];

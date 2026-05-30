@@ -546,7 +546,7 @@ test.describe('Chart tooltip — position and passthrough', () => {
     await gotoBalanceSheetList(page);
   });
 
-  test('tooltip y-position is fixed near the top of viewport (not following mouse y)', async ({ page }) => {
+  test('tooltip position is fixed near top of viewport (y≈20) regardless of cursor y', async ({ page }) => {
     const dataPresent = await hasChart(page);
     test.skip(!dataPresent, 'No data');
 

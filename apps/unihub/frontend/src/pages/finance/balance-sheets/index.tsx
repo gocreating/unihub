@@ -292,6 +292,11 @@ export function BalanceSheetsPage() {
       tooltip: {
         trigger: 'axis',
         appendToBody: true,
+        // enterable: true allows the mouse pointer to enter the tooltip so the
+        // user can scroll through all accounts. Without this, ECharts sets
+        // pointer-events:none on the tooltip and scroll events pass through to
+        // the chart — making the scrollbar inaccessible.
+        enterable: true,
         axisPointer: { animation: false },
         position: (point, _p, _dom, _rect, size) => {
           const [x, y] = point as [number, number];
@@ -301,8 +306,7 @@ export function BalanceSheetsPage() {
           const ty = Math.max(10, Math.min(y - th / 2, window.innerHeight - th - 10));
           return [tx, ty];
         },
-        // Show ALL non-zero items sorted by |value| desc. The tooltip is
-        // scrollable (max-height: 85vh) so it never gets clipped vertically.
+        // All non-zero items, sorted by |value| desc, in a scrollable panel.
         extraCssText: 'max-height:85vh;overflow-y:auto;',
         formatter: (raw) => {
           const params = raw as unknown as { axisValueLabel: string; seriesName: string; value: number; marker: string }[];

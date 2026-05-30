@@ -19,7 +19,7 @@ import {
   listExchangeRates,
 } from '@/services/unihub-backend/finance';
 import { computeNetWorthInBase, formatAmount, getCurrencySymbol } from '@/utils/finance';
-import { classifyAccountStacks, computeGreenRedSeries } from '@/utils/chartData';
+import { classifyAccountStacks } from '@/utils/chartData';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 
 type BalanceListChartType = 'net-worth-trend' | 'stacked-breakdown';
@@ -176,23 +176,28 @@ export function BalanceSheetsPage() {
 
   const lineOption = useMemo((): EChartsOption => {
     const nwLabel = t({ id: 'pages.finance.balanceSheets.visualization.netWorth' });
-    const nwNegKey = `${nwLabel}__neg`; // internal key for the red series
     const sym = getCurrencySymbol(baseCurrency ?? '');
     const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
 
-    // Two-series approach: green series for values ≥ 0, red series for values < 0.
-    // At sign-change boundaries both series share a `0` so the line appears continuous.
+    // Single series — one y value per x, one continuous equity trend line.
+    // Dot color varies per point (green ≥ 0, red < 0) via itemStyle.color.
+    // Area fill uses a computed linear gradient that is green above zero and red below.
     const values = netWorthData.map((d) => d.netWorth);
-    const { greenVals, redVals } = computeGreenRedSeries(values);
+    const maxNW = values.length > 0 ? Math.max(...values, 0) : 1;
+    const minNW = values.length > 0 ? Math.min(...values, 0) : -1;
+    const totalRange = maxNW - minNW;
+    // Fraction (0 = chart top, 1 = chart bottom) where y = 0 sits in the axis range.
+    const zeroFrac = totalRange > 0
+      ? Math.max(0.001, Math.min(0.999, maxNW / totalRange))
+      : 0.5;
+    const lastColor = (values.at(-1) ?? 0) >= 0 ? '#52c41a' : '#ff4d4f';
 
     return {
       legend: { show: false },
       tooltip: {
         trigger: 'axis',
-        // appendToBody escapes overflow-x:auto containers that clip the tooltip vertically.
         appendToBody: true,
         axisPointer: { animation: false },
-        // Position right (or left) of cursor so tooltip never overlaps the axis pointer.
         position: (point, _p, _dom, _rect, size) => {
           const [x, y] = point as [number, number];
           const [tw = 0, th = 0] = (size as { contentSize: number[] }).contentSize;
@@ -201,16 +206,14 @@ export function BalanceSheetsPage() {
           const ty = Math.max(10, Math.min(y - th / 2, window.innerHeight - th - 10));
           return [tx, ty];
         },
+        // Single series → params always has exactly one entry → one row in tooltip.
         formatter: (raw) => {
-          const params = raw as unknown as { axisValueLabel: string; value: number | null; marker: string }[];
-          if (!params.length || !params[0]) return '';
-          const date = params[0].axisValueLabel;
-          const actual = params.reduce((best, p) => {
-            const v = (p.value as number | null) ?? 0;
-            return Math.abs(v) > Math.abs(best) ? v : best;
-          }, 0);
-          const dot = `<span style="display:inline-block;margin-right:4px;border-radius:50%;width:10px;height:10px;background:${actual >= 0 ? '#52c41a' : '#ff4d4f'}"></span>`;
-          return `<b>${date}</b><table style="margin-top:6px;border-spacing:0">${tooltipRow(dot, nwLabel, fmtVal(actual))}</table>`;
+          const params = raw as unknown as { axisValueLabel: string; value: number }[];
+          const p = params[0];
+          if (!p) return '';
+          const v = p.value;
+          const dot = `<span style="display:inline-block;margin-right:4px;border-radius:50%;width:10px;height:10px;background:${v >= 0 ? '#52c41a' : '#ff4d4f'}"></span>`;
+          return `<b>${p.axisValueLabel}</b><table style="margin-top:6px;border-spacing:0">${tooltipRow(dot, nwLabel, fmtVal(v))}</table>`;
         },
       },
       grid: { left: '3%', right: '4%', bottom: '4%', containLabel: true },
@@ -220,42 +223,30 @@ export function BalanceSheetsPage() {
         axisLabel: { rotate: netWorthData.length > 6 ? 30 : 0 },
       },
       yAxis: { type: 'value', axisLabel: { formatter: (v: number) => sym ? `${sym} ${formatTick(v)}` : formatTick(v) } },
-      series: [
-        {
-          name: nwLabel,
-          type: 'line',
-          // Per-item symbol: show a circle only at real positive values (> 0).
-          // Boundary zeros shared with the red series get symbol:'none' so there
-          // is exactly ONE visible dot per x position — no overlapping dots.
-          data: greenVals.map((v) => ({
-            value: v,
-            symbol: v !== null && v > 0 ? 'circle' : 'none',
-            symbolSize: 6,
-            itemStyle: { color: '#52c41a' },
-          })),
-          lineStyle: { color: '#52c41a' },
-          itemStyle: { color: '#52c41a' },
-          areaStyle: { color: 'rgba(82,196,26,0.18)' },
-          connectNulls: false,
-          smooth: 0.3,
+      series: [{
+        name: nwLabel,
+        type: 'line',
+        data: netWorthData.map((d) => ({
+          value: d.netWorth,
+          itemStyle: { color: d.netWorth >= 0 ? '#52c41a' : '#ff4d4f' },
+        })),
+        lineStyle: { color: lastColor },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0,        color: 'rgba(82,196,26,0.25)' },
+              { offset: zeroFrac, color: 'rgba(82,196,26,0.04)' },
+              { offset: zeroFrac, color: 'rgba(255,77,79,0.04)' },
+              { offset: 1,        color: 'rgba(255,77,79,0.20)' },
+            ],
+          },
         },
-        {
-          name: nwNegKey,
-          type: 'line',
-          // Boundary zeros shared with green series get symbol:'none'.
-          data: redVals.map((v) => ({
-            value: v,
-            symbol: v !== null && v < 0 ? 'circle' : 'none',
-            symbolSize: 6,
-            itemStyle: { color: '#ff4d4f' },
-          })),
-          lineStyle: { color: '#ff4d4f' },
-          itemStyle: { color: '#ff4d4f' },
-          areaStyle: { color: 'rgba(255,77,79,0.18)' },
-          connectNulls: false,
-          smooth: 0.3,
-        },
-      ],
+        smooth: 0.3,
+        symbol: 'circle',
+        symbolSize: 6,
+      }],
     };
   }, [netWorthData, baseCurrency, t]);
 

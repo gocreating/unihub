@@ -12,7 +12,7 @@ from sync.serializers import (
     SyncStatusSerializer,
 )
 from sync.services.crypto import decrypt_pat
-from sync.services.git_service import DivergedException, GitSyncService
+from sync.services.git_service import DivergedException, GitError, GitSyncService
 
 
 def _get_git_service(config: SyncConfig) -> GitSyncService:
@@ -86,6 +86,7 @@ class SyncPublishView(APIView):
             return Response({"status": "up_to_date"})
 
         from datetime import datetime, timezone
+
         SyncConfig.objects.filter(pk=config.pk).update(
             last_published_at=datetime.now(timezone.utc),
             last_published_commit=result.commit_sha,
@@ -113,6 +114,7 @@ class SyncForcePublishView(APIView):
             return Response({"status": "up_to_date"})
 
         from datetime import datetime, timezone
+
         SyncConfig.objects.filter(pk=config.pk).update(
             last_published_at=datetime.now(timezone.utc),
             last_published_commit=result.commit_sha,
@@ -124,6 +126,27 @@ class SyncForcePublishView(APIView):
                 "tables_exported": result.tables_exported,
             }
         )
+
+
+class SyncPublishPreviewView(APIView):
+    """GET /api/v1/sync/publish/preview/ — compute per-table publish diff."""
+
+    def get(self, request: Request) -> Response:
+        config = SyncConfig.objects.first()
+        if config is None:
+            return Response({"error": "not_configured"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            changes = _get_git_service(config).publish_preview()
+        except GitError as exc:
+            return Response(
+                {"error": "git_error", "message": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        if changes is None:
+            return Response({"status": "up_to_date"})
+        return Response({"status": "has_changes", "changes": changes})
 
 
 class SyncApplyPreviewView(APIView):
@@ -151,6 +174,7 @@ class SyncApplyConfirmView(APIView):
         results = _get_git_service(config).apply_confirm()
 
         from datetime import datetime, timezone
+
         SyncConfig.objects.filter(pk=config.pk).update(
             last_applied_at=datetime.now(timezone.utc),
         )

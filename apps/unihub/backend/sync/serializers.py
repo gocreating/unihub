@@ -31,6 +31,7 @@ class SyncConfigReadSerializer(serializers.ModelSerializer):
 
     def get_pat(self, obj: SyncConfig) -> str:
         from sync.services.crypto import decrypt_pat
+
         return decrypt_pat(obj.pat_encrypted)
 
 
@@ -47,15 +48,16 @@ class SyncConfigWriteSerializer(serializers.Serializer):
     def validate_repo_url(self, value: str) -> str:
         if not _GITHUB_HTTPS_RE.match(value):
             raise serializers.ValidationError(
-                "Must be a valid GitHub HTTPS repository URL "
-                "(e.g. https://github.com/user/repo)."
+                "Must be a valid GitHub HTTPS repository URL (e.g. https://github.com/user/repo)."
             )
         return value.rstrip("/")
 
     def validate(self, attrs: dict) -> dict:
         pat = attrs.get("pat", "").strip()
         if not pat and not SyncConfig.objects.exists():
-            raise serializers.ValidationError({"pat": "PAT is required for the initial configuration."})
+            raise serializers.ValidationError(
+                {"pat": "PAT is required for the initial configuration."}
+            )
         return attrs
 
     def save(self) -> SyncConfig:

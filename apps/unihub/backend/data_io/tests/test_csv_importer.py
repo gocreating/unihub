@@ -2,7 +2,13 @@
 
 import pytest
 
-from data_io.registry import FieldDescriptor, TableDescriptor, _restore_registry, _save_registry, register
+from data_io.registry import (
+    FieldDescriptor,
+    TableDescriptor,
+    _restore_registry,
+    _save_registry,
+    register,
+)
 from data_io.services.csv_importer import parse_csv
 
 
@@ -10,6 +16,7 @@ from data_io.services.csv_importer import parse_csv
 def isolate_registry():
     saved = _save_registry()
     from data_io.registry import _clear_registry
+
     _clear_registry()
     yield
     _restore_registry(saved)
@@ -24,9 +31,13 @@ def currency_descriptor():
         display_name="Currencies",
         model_class=Currency,
         system_fields=[
-            FieldDescriptor(column_name="code", csv_header="code:string", data_type="string", is_pk=True),
+            FieldDescriptor(
+                column_name="code", csv_header="code:string", data_type="string", is_pk=True
+            ),
             FieldDescriptor(column_name="name", csv_header="name:text", data_type="text"),
-            FieldDescriptor(column_name="symbol", csv_header="symbol:text", data_type="text", nullable=True),
+            FieldDescriptor(
+                column_name="symbol", csv_header="symbol:text", data_type="text", nullable=True
+            ),
         ],
         has_user_attributes=False,
         import_order=1,
@@ -86,9 +97,13 @@ class TestParseCsvFkValidation:
             display_name="Accounts",
             model_class=Account,
             system_fields=[
-                FieldDescriptor(column_name="id", csv_header="id:string", data_type="string", is_pk=True),
+                FieldDescriptor(
+                    column_name="id", csv_header="id:string", data_type="string", is_pk=True
+                ),
                 FieldDescriptor(column_name="name", csv_header="name:text", data_type="text"),
-                FieldDescriptor(column_name="currency", csv_header="currency:string", data_type="string"),
+                FieldDescriptor(
+                    column_name="currency", csv_header="currency:string", data_type="string"
+                ),
             ],
             has_user_attributes=False,
             import_order=3,
@@ -104,10 +119,26 @@ class TestParseCsvFkValidation:
             display_name="Balances",
             model_class=Balance,
             system_fields=[
-                FieldDescriptor(column_name="id", csv_header="id:string", data_type="string", is_pk=True),
-                FieldDescriptor(column_name="account_id", csv_header="account_id:string", data_type="string", is_fk=True, fk_content_type_label="finance.account"),
-                FieldDescriptor(column_name="balance_sheet_id", csv_header="balance_sheet_id:string", data_type="string", is_fk=True, fk_content_type_label="finance.balancesheet"),
-                FieldDescriptor(column_name="amount", csv_header="amount:decimal", data_type="decimal"),
+                FieldDescriptor(
+                    column_name="id", csv_header="id:string", data_type="string", is_pk=True
+                ),
+                FieldDescriptor(
+                    column_name="account_id",
+                    csv_header="account_id:string",
+                    data_type="string",
+                    is_fk=True,
+                    fk_content_type_label="finance.account",
+                ),
+                FieldDescriptor(
+                    column_name="balance_sheet_id",
+                    csv_header="balance_sheet_id:string",
+                    data_type="string",
+                    is_fk=True,
+                    fk_content_type_label="finance.balancesheet",
+                ),
+                FieldDescriptor(
+                    column_name="amount", csv_header="amount:decimal", data_type="decimal"
+                ),
             ],
             has_user_attributes=False,
             import_order=6,

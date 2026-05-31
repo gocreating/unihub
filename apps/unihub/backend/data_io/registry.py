@@ -31,11 +31,21 @@ class TableDescriptor:
 
     @property
     def depends_on(self) -> list[str]:
-        """Unique FK content_type_labels this table directly depends on, in field order."""
+        """Unique FK content_type_labels this table directly depends on, in field order.
+
+        FKs resolved via natural key (use_natural_key=True) are excluded — they
+        reference Django system tables (e.g. contenttypes.contenttype) that are
+        always present and are never part of a user import batch.
+        """
         seen: set[str] = set()
         result: list[str] = []
         for fd in self.system_fields:
-            if fd.is_fk and fd.fk_content_type_label and fd.fk_content_type_label not in seen:
+            if (
+                fd.is_fk
+                and fd.fk_content_type_label
+                and not fd.use_natural_key
+                and fd.fk_content_type_label not in seen
+            ):
                 seen.add(fd.fk_content_type_label)
                 result.append(fd.fk_content_type_label)
         return result
@@ -61,9 +71,7 @@ def get_registry() -> dict[str, TableDescriptor]:
 def get_table(content_type_label: str) -> TableDescriptor:
     """Return the descriptor for a registered table. Raises KeyError if not found."""
     if content_type_label not in _registry:
-        raise KeyError(
-            f"Table '{content_type_label}' is not registered in the io registry."
-        )
+        raise KeyError(f"Table '{content_type_label}' is not registered in the io registry.")
     return _registry[content_type_label]
 
 

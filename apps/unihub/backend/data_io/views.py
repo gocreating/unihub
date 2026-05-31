@@ -146,7 +146,9 @@ class ImportPreviewView(APIView):
                 "creates": [],
                 "updates": [],
                 "deletes": [],
-                "errors": [{"row": e.row, "column": e.column, "message": e.message} for e in errors],
+                "errors": [
+                    {"row": e.row, "column": e.column, "message": e.message} for e in errors
+                ],
             }
             return Response(ImportPreviewResponseSerializer(response_data).data)
 
@@ -197,7 +199,11 @@ class ImportConfirmView(APIView):
 
         if errors:
             return Response(
-                {"errors": [{"row": e.row, "column": e.column, "message": e.message} for e in errors]},
+                {
+                    "errors": [
+                        {"row": e.row, "column": e.column, "message": e.message} for e in errors
+                    ]
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -253,8 +259,7 @@ def _parse_zip_tables(zip_file, mode: str) -> list[dict]:
                         "updates": [],
                         "deletes": [],
                         "errors": [
-                            {"row": e.row, "column": e.column, "message": e.message}
-                            for e in errors
+                            {"row": e.row, "column": e.column, "message": e.message} for e in errors
                         ],
                     }
                 )
@@ -413,8 +418,7 @@ class ImportBatchPreviewView(APIView):
                         "updates": [],
                         "deletes": [],
                         "errors": [
-                            {"row": e.row, "column": e.column, "message": e.message}
-                            for e in errors
+                            {"row": e.row, "column": e.column, "message": e.message} for e in errors
                         ],
                     }
                 )

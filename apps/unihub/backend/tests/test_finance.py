@@ -103,7 +103,12 @@ class TestAccounts:
     def test_create_account_with_custom_color(self, auth_client, usd):
         resp = auth_client.post(
             "/api/v1/finance/accounts/",
-            {"name": "Savings", "currency": "USD", "open_datetime": "2020-01-01T00:00:00Z", "color": "#2196f3"},
+            {
+                "name": "Savings",
+                "currency": "USD",
+                "open_datetime": "2020-01-01T00:00:00Z",
+                "color": "#2196f3",
+            },
             content_type="application/json",
         )
         assert resp.status_code == 201
@@ -126,7 +131,12 @@ class TestAccounts:
     def test_balance_includes_account_color(self, auth_client, usd):
         acc = auth_client.post(
             "/api/v1/finance/accounts/",
-            {"name": "Savings", "currency": "USD", "open_datetime": "2020-01-01T00:00:00Z", "color": "#e91e63"},
+            {
+                "name": "Savings",
+                "currency": "USD",
+                "open_datetime": "2020-01-01T00:00:00Z",
+                "color": "#e91e63",
+            },
             content_type="application/json",
         ).json()
         sheet = auth_client.post(

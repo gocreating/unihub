@@ -26,8 +26,8 @@ description: "Task list for data sync migration fix and publish preview"
 
 **⚠️ CRITICAL**: Complete before any user story work begins.
 
-- [ ] T001 Run backend quality loop from `apps/unihub/backend/`: `uv run ruff check .` and `uv run pytest` — confirm all pass before modifying any files
-- [ ] T002 Run frontend quality loop from `apps/unihub/frontend/`: `pnpm lint && pnpm typecheck && pnpm test` — confirm all pass
+- [X] T001 Run backend quality loop from `apps/unihub/backend/`: `uv run ruff check .` and `uv run pytest` — confirm all pass before modifying any files
+- [X] T002 Run frontend quality loop from `apps/unihub/frontend/`: `pnpm lint && pnpm typecheck && pnpm test` — confirm all pass
 
 **Checkpoint**: Quality loop green — user story work can now begin
 
@@ -41,15 +41,15 @@ description: "Task list for data sync migration fix and publish preview"
 
 ### Tests for User Story 1 (write first — must FAIL before implementation)
 
-- [ ] T003 [US1] Write failing registry completeness test: create `apps/unihub/backend/tests/test_registry.py` asserting that `get_registry()` contains `language.language`, `language.wordcard`, `language.grammarsheet`, `music.song`, `people.person`, `people.relationship` — run `uv run pytest tests/test_registry.py` and confirm FAIL
+- [X] T003 [US1] Write failing registry completeness test: create `apps/unihub/backend/tests/test_registry.py` asserting that `get_registry()` contains `language.language`, `language.wordcard`, `language.grammarsheet`, `music.song`, `people.person`, `people.relationship` — run `uv run pytest tests/test_registry.py` and confirm FAIL
 
 ### Implementation for User Story 1
 
-- [ ] T004 [P] [US1] Create `apps/unihub/backend/language/apps.py` — add `LanguageConfig(AppConfig)` with `ready()` that registers `language.language` (Language model, import_order=10), `language.wordcard` (WordCard model, import_order=11, FK to language.language), and `language.grammarsheet` (GrammarSheet model, import_order=12, FK to language.language) using field schemas from `specs/007-data-sync-migration-fix/data-model.md`
-- [ ] T005 [P] [US1] Create `apps/unihub/backend/music/apps.py` — add `MusicConfig(AppConfig)` with `ready()` that registers `music.song` (Song model, import_order=20) using field schema from `specs/007-data-sync-migration-fix/data-model.md`
-- [ ] T006 [P] [US1] Create `apps/unihub/backend/people/apps.py` — add `PeopleConfig(AppConfig)` with `ready()` that registers `people.person` (Person model, import_order=30) and `people.relationship` (Relationship model, import_order=31, two FKs to people.person) using field schemas from `specs/007-data-sync-migration-fix/data-model.md`
-- [ ] T007 [US1] Run `uv run pytest tests/test_registry.py` — confirm T003 test now passes (registry completeness); then run full `uv run pytest` to confirm no regressions
-- [ ] T008 [US1] Run `uv run ruff format . && uv run ruff check . --fix` from `apps/unihub/backend/` — confirm zero issues on the three new `apps.py` files
+- [X] T004 [P] [US1] Create `apps/unihub/backend/language/apps.py` — add `LanguageConfig(AppConfig)` with `ready()` that registers `language.language` (Language model, import_order=10), `language.wordcard` (WordCard model, import_order=11, FK to language.language), and `language.grammarsheet` (GrammarSheet model, import_order=12, FK to language.language) using field schemas from `specs/007-data-sync-migration-fix/data-model.md`
+- [X] T005 [P] [US1] Create `apps/unihub/backend/music/apps.py` — add `MusicConfig(AppConfig)` with `ready()` that registers `music.song` (Song model, import_order=20) using field schema from `specs/007-data-sync-migration-fix/data-model.md`
+- [X] T006 [P] [US1] Create `apps/unihub/backend/people/apps.py` — add `PeopleConfig(AppConfig)` with `ready()` that registers `people.person` (Person model, import_order=30) and `people.relationship` (Relationship model, import_order=31, two FKs to people.person) using field schemas from `specs/007-data-sync-migration-fix/data-model.md`
+- [X] T007 [US1] Run `uv run pytest tests/test_registry.py` — confirm T003 test now passes (registry completeness); then run full `uv run pytest` to confirm no regressions
+- [X] T008 [US1] Run `uv run ruff format . && uv run ruff check . --fix` from `apps/unihub/backend/` — confirm zero issues on the three new `apps.py` files
 
 **Checkpoint**: User Story 1 complete — six new tables are registered, export/import/sync all include them. Verify independently via IO → Export tab and a test publish.
 
@@ -63,7 +63,7 @@ description: "Task list for data sync migration fix and publish preview"
 
 ### Backend: Tests (write first — must FAIL before implementation)
 
-- [ ] T009 [US2] Write failing tests for `GET /api/v1/sync/publish/preview/` in `apps/unihub/backend/tests/sync/test_views_publish.py` — add three test cases following the existing mock pattern (`patch("sync.views._get_git_service", ...)`):
+- [X] T009 [US2] Write failing tests for `GET /api/v1/sync/publish/preview/` in `apps/unihub/backend/tests/sync/test_views_publish.py` — add three test cases following the existing mock pattern (`patch("sync.views._get_git_service", ...)`):
   1. `test_publish_preview_not_configured` — no SyncConfig → 400 `{"error": "not_configured"}`
   2. `test_publish_preview_has_changes` — mock `svc.publish_preview()` returning `[{"table": "finance.account", "display_name": "Accounts", "added": 1, "modified": 0, "deleted": 0}]` → 200 `{"status": "has_changes", "changes": [...]}`
   3. `test_publish_preview_up_to_date` — mock `svc.publish_preview()` returning `[]` → 200 `{"status": "up_to_date"}`
@@ -71,19 +71,19 @@ description: "Task list for data sync migration fix and publish preview"
 
 ### Backend: Implementation
 
-- [ ] T010 [US2] Implement `preview_publish_against_head(clone_dir: Path) -> list[dict]` in `apps/unihub/backend/sync/services/publish_helper.py` — for each table in `get_registry()`: (1) export current DB via `export_table(descriptor)` → decode bytes → `parse_csv(text, descriptor)` → build PK-keyed dict `local_rows`; (2) run `git show HEAD:{csv_filename(label)}` in clone_dir — if returncode != 0 treat as no_prior_publish (all local records are "added"); otherwise parse → build PK-keyed dict `head_rows`; (3) compute `added = PKs in local_rows not in head_rows`, `deleted = PKs in head_rows not in local_rows`, `modified = PKs in both with at least one differing field value`; (4) skip tables with added + modified + deleted == 0; return list of `{"table": label, "display_name": descriptor.display_name, "added": added, "modified": modified, "deleted": deleted}`
-- [ ] T011 [US2] Add `publish_preview(self) -> list[dict] | None` method to `GitSyncService` in `apps/unihub/backend/sync/services/git_service.py` — call `self.ensure_clone()`, then call `preview_publish_against_head(self.clone_dir)`, return `None` if the result list is empty (nothing changed), otherwise return the list
-- [ ] T012 [US2] Implement `SyncPublishPreviewView(APIView)` in `apps/unihub/backend/sync/views.py` — GET handler: fetch SyncConfig, if None return 400; call `_get_git_service(config).publish_preview()`; if None return `{"status": "up_to_date"}`; otherwise return `{"status": "has_changes", "changes": result}` (handle `GitError` → 500 with sanitised message)
-- [ ] T013 [US2] Add URL route in `apps/unihub/backend/sync/urls.py` — import `SyncPublishPreviewView` and add `path("publish/preview/", SyncPublishPreviewView.as_view())` before the existing `publish/` route
-- [ ] T014 [US2] Run `uv run pytest tests/sync/test_views_publish.py` — confirm all three T009 tests now pass; run full `uv run pytest` to confirm no regressions; run `uv run ruff format . && uv run ruff check .` to confirm zero issues
+- [X] T010 [US2] Implement `preview_publish_against_head(clone_dir: Path) -> list[dict]` in `apps/unihub/backend/sync/services/publish_helper.py` — for each table in `get_registry()`: (1) export current DB via `export_table(descriptor)` → decode bytes → `parse_csv(text, descriptor)` → build PK-keyed dict `local_rows`; (2) run `git show HEAD:{csv_filename(label)}` in clone_dir — if returncode != 0 treat as no_prior_publish (all local records are "added"); otherwise parse → build PK-keyed dict `head_rows`; (3) compute `added = PKs in local_rows not in head_rows`, `deleted = PKs in head_rows not in local_rows`, `modified = PKs in both with at least one differing field value`; (4) skip tables with added + modified + deleted == 0; return list of `{"table": label, "display_name": descriptor.display_name, "added": added, "modified": modified, "deleted": deleted}`
+- [X] T011 [US2] Add `publish_preview(self) -> list[dict] | None` method to `GitSyncService` in `apps/unihub/backend/sync/services/git_service.py` — call `self.ensure_clone()`, then call `preview_publish_against_head(self.clone_dir)`, return `None` if the result list is empty (nothing changed), otherwise return the list
+- [X] T012 [US2] Implement `SyncPublishPreviewView(APIView)` in `apps/unihub/backend/sync/views.py` — GET handler: fetch SyncConfig, if None return 400; call `_get_git_service(config).publish_preview()`; if None return `{"status": "up_to_date"}`; otherwise return `{"status": "has_changes", "changes": result}` (handle `GitError` → 500 with sanitised message)
+- [X] T013 [US2] Add URL route in `apps/unihub/backend/sync/urls.py` — import `SyncPublishPreviewView` and add `path("publish/preview/", SyncPublishPreviewView.as_view())` before the existing `publish/` route
+- [X] T014 [US2] Run `uv run pytest tests/sync/test_views_publish.py` — confirm all three T009 tests now pass; run full `uv run pytest` to confirm no regressions; run `uv run ruff format . && uv run ruff check .` to confirm zero issues
 
 ### Frontend: Types and i18n (all parallelizable)
 
-- [ ] T015 [P] [US2] Add to `apps/unihub/frontend/src/services/unihub-backend/sync.ts`:
+- [X] T015 [P] [US2] Add to `apps/unihub/frontend/src/services/unihub-backend/sync.ts`:
   - `SyncPublishPreviewChange` interface: `{ table: string; display_name: string; added: number; modified: number; deleted: number; }`
   - `SyncPublishPreviewResult` interface: `{ status: 'up_to_date' | 'has_changes' | 'no_prior_publish'; changes?: SyncPublishPreviewChange[]; }`
   - `getPublishPreview()` async function: `GET /api/v1/sync/publish/preview/` → returns `SyncPublishPreviewResult`
-- [ ] T016 [P] [US2] Add publish preview i18n keys to `apps/unihub/frontend/src/locales/en-US/pages.ts` — add under `pages.io.sync.*` namespace:
+- [X] T016 [P] [US2] Add publish preview i18n keys to `apps/unihub/frontend/src/locales/en-US/pages.ts` — add under `pages.io.sync.*` namespace:
   - `pages.io.sync.publishPreview.confirmButton`: `"Confirm & Publish"`
   - `pages.io.sync.publishPreview.cancelButton`: `"Cancel"`
   - `pages.io.sync.publishPreview.upToDate`: `"Nothing to publish — already up to date."`
@@ -91,11 +91,11 @@ description: "Task list for data sync migration fix and publish preview"
   - `pages.io.sync.publishPreview.added`: `"Added"`
   - `pages.io.sync.publishPreview.modified`: `"Modified"`
   - `pages.io.sync.publishPreview.deleted`: `"Deleted"`
-- [ ] T017 [P] [US2] Add the same publish preview i18n keys to `apps/unihub/frontend/src/locales/zh-TW/pages.ts` with Traditional Chinese translations for all 7 keys added in T016 (use the same key names; translate values to zh-TW)
+- [X] T017 [P] [US2] Add the same publish preview i18n keys to `apps/unihub/frontend/src/locales/zh-TW/pages.ts` with Traditional Chinese translations for all 7 keys added in T016 (use the same key names; translate values to zh-TW)
 
 ### Frontend: UI Update
 
-- [ ] T018 [US2] Update `apps/unihub/frontend/src/pages/io/SyncTab/index.tsx` — modify the publish flow in `ActionsCard` (depends on T015, T016, T017):
+- [X] T018 [US2] Update `apps/unihub/frontend/src/pages/io/SyncTab/index.tsx` — modify the publish flow in `ActionsCard` (depends on T015, T016, T017):
   - Add state: `publishPreview: SyncPublishPreviewChange[] | null` (null = not yet fetched; `[]` = no changes), `publishPreviewing: boolean`
   - Change the Publish button's `onClick` to call a new `handlePublishPreview()` function instead of `publish.mutate()`
   - `handlePublishPreview()`: set `publishPreviewing=true`, call `getPublishPreview()`, on `status="up_to_date"` show info toast `pages.io.sync.publishPreview.upToDate`, on `status="has_changes"` or `"no_prior_publish"` set `publishPreview = result.changes ?? []`, on error show `pages.io.sync.publishPreview.error` toast; always set `publishPreviewing=false`
@@ -106,7 +106,7 @@ description: "Task list for data sync migration fix and publish preview"
 
 ### Frontend: Quality Loop
 
-- [ ] T019 [US2] Run frontend quality loop from `apps/unihub/frontend/`: `pnpm lint && pnpm typecheck && pnpm test` — confirm zero errors and zero warnings
+- [X] T019 [US2] Run frontend quality loop from `apps/unihub/frontend/`: `pnpm lint && pnpm typecheck && pnpm test` — confirm zero errors and zero warnings
 
 **Checkpoint**: User Story 2 complete — publish flow shows inline preview before pushing. Verify via quickstart.md Part 2.
 
@@ -116,10 +116,10 @@ description: "Task list for data sync migration fix and publish preview"
 
 **Purpose**: Final validation across all stories before shipping.
 
-- [ ] T020 [P] Run full backend quality loop from `apps/unihub/backend/`: `uv run ruff format . && uv run ruff check . && uv run pytest` — all must pass
-- [ ] T021 [P] Run full frontend quality loop from `apps/unihub/frontend/`: `pnpm lint && pnpm typecheck && pnpm test` — all must pass
-- [ ] T022 Manually verify quickstart.md Part 1 (registry + export/import round-trip for newly registered tables)
-- [ ] T023 Manually verify quickstart.md Part 2 (publish preview: normal flow, up-to-date flow, first-ever publish, diverged history)
+- [X] T020 [P] Run full backend quality loop from `apps/unihub/backend/`: `uv run ruff format . && uv run ruff check . && uv run pytest` — all must pass
+- [X] T021 [P] Run full frontend quality loop from `apps/unihub/frontend/`: `pnpm lint && pnpm typecheck && pnpm test` — all must pass
+- [X] T022 Manually verify quickstart.md Part 1 (registry + export/import round-trip for newly registered tables)
+- [X] T023 Manually verify quickstart.md Part 2 (publish preview: normal flow, up-to-date flow, first-ever publish, diverged history)
 
 ---
 

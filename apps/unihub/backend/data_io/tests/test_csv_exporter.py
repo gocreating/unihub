@@ -8,7 +8,13 @@ import pytest
 from django.contrib.auth.models import User
 from django.test import Client
 
-from data_io.registry import FieldDescriptor, TableDescriptor, _restore_registry, _save_registry, register
+from data_io.registry import (
+    FieldDescriptor,
+    TableDescriptor,
+    _restore_registry,
+    _save_registry,
+    register,
+)
 from data_io.services.csv_exporter import export_table, export_tables
 
 
@@ -16,6 +22,7 @@ from data_io.services.csv_exporter import export_table, export_tables
 def isolate_registry():
     saved = _save_registry()
     from data_io.registry import _clear_registry
+
     _clear_registry()
     yield
     _restore_registry(saved)
@@ -38,9 +45,13 @@ def currency_descriptor():
         display_name="Currencies",
         model_class=Currency,
         system_fields=[
-            FieldDescriptor(column_name="code", csv_header="code:string", data_type="string", is_pk=True),
+            FieldDescriptor(
+                column_name="code", csv_header="code:string", data_type="string", is_pk=True
+            ),
             FieldDescriptor(column_name="name", csv_header="name:text", data_type="text"),
-            FieldDescriptor(column_name="symbol", csv_header="symbol:text", data_type="text", nullable=True),
+            FieldDescriptor(
+                column_name="symbol", csv_header="symbol:text", data_type="text", nullable=True
+            ),
         ],
         has_user_attributes=False,
         import_order=1,
@@ -106,9 +117,13 @@ class TestExportTable:
             display_name="Accounts",
             model_class=Account,
             system_fields=[
-                FieldDescriptor(column_name="id", csv_header="id:string", data_type="string", is_pk=True),
+                FieldDescriptor(
+                    column_name="id", csv_header="id:string", data_type="string", is_pk=True
+                ),
                 FieldDescriptor(column_name="name", csv_header="name:text", data_type="text"),
-                FieldDescriptor(column_name="currency", csv_header="currency:string", data_type="string"),
+                FieldDescriptor(
+                    column_name="currency", csv_header="currency:string", data_type="string"
+                ),
             ],
             has_user_attributes=True,
             import_order=3,
@@ -131,8 +146,12 @@ class TestExportTables:
             display_name="Balance Sheets",
             model_class=BalanceSheet,
             system_fields=[
-                FieldDescriptor(column_name="id", csv_header="id:string", data_type="string", is_pk=True),
-                FieldDescriptor(column_name="date", csv_header="date:datetime", data_type="datetime"),
+                FieldDescriptor(
+                    column_name="id", csv_header="id:string", data_type="string", is_pk=True
+                ),
+                FieldDescriptor(
+                    column_name="date", csv_header="date:datetime", data_type="datetime"
+                ),
             ],
             import_order=2,
         )

@@ -14,17 +14,23 @@ import {
 } from 'antd';
 import {
   CheckCircleOutlined,
+  CloseOutlined,
   CloudDownloadOutlined,
   CloudUploadOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIntl } from 'react-intl';
-import type { SyncApplyChange, SyncConfigWrite } from '@/services/unihub-backend/sync';
+import type {
+  SyncApplyChange,
+  SyncConfigWrite,
+  SyncPublishPreviewChange,
+} from '@/services/unihub-backend/sync';
 import { ChangePreviewTable } from '@/components/ImportExport/ChangePreviewTable';
 import {
   confirmApply,
   forcePublishSync,
   getApplyPreview,
+  getPublishPreview,
   getSyncConfig,
   publishSync,
   saveSyncConfig,
@@ -174,18 +180,62 @@ function ConfigSection({ configured }: { configured: boolean }) {
   );
 }
 
+// ── Shared collapse preview renderer ─────────────────────────────────
+
+type PreviewChange = (SyncApplyChange | SyncPublishPreviewChange) & {
+  is_new_table?: boolean;
+};
+
+function renderPreviewCollapse(changes: PreviewChange[], t: (d: { id: string }) => string) {
+  return (
+    <Collapse
+      defaultActiveKey={changes.map((ch) => ch.table)}
+      items={changes.map((ch) => {
+        const creates = ch.rows.filter((r) => r.operation === 'create');
+        const updates = ch.rows.filter((r) => r.operation === 'update');
+        const deletes = ch.rows.filter((r) => r.operation === 'delete');
+        return {
+          key: ch.table,
+          label: (
+            <span>
+              <Text strong>{ch.display_name}</Text>
+              <Text type="secondary" style={{ fontSize: 11, marginLeft: 8 }}>
+                ({ch.table})
+              </Text>
+              <span style={{ marginLeft: 8 }}>
+                {creates.length > 0 && <Tag color="green">+{creates.length}</Tag>}
+                {updates.length > 0 && <Tag color="orange">~{updates.length}</Tag>}
+                {deletes.length > 0 && <Tag color="red">-{deletes.length}</Tag>}
+                {ch.is_new_table === true && creates.length === 0 && updates.length === 0 && deletes.length === 0 && (
+                  <Tag color="blue">{t({ id: 'pages.io.sync.publishPreview.newTable' })}</Tag>
+                )}
+              </span>
+            </span>
+          ),
+          children: (
+            <ChangePreviewTable creates={creates} updates={updates} deletes={deletes} errors={[]} />
+          ),
+        };
+      })}
+    />
+  );
+}
+
 // ── Actions Card (publish + apply in one place) ───────────────────────
 
 function ActionsCard({ configured }: { configured: boolean }) {
   const { formatMessage: t } = useIntl();
   const queryClient = useQueryClient();
   const [diverged, setDiverged] = useState(false);
-  const [previewResult, setPreviewResult] = useState<SyncApplyChange[] | null>(null);
-  const [previewing, setPreviewing] = useState(false);
+  const [pullPreview, setPullPreview] = useState<SyncApplyChange[] | null>(null);
+  const [pullPreviewing, setPullPreviewing] = useState(false);
+  const [pushPreview, setPushPreview] = useState<SyncPublishPreviewChange[] | null>(null);
+  const [pushPreviewing, setPushPreviewing] = useState(false);
 
   const publish = useMutation({
     mutationFn: publishSync,
     onSuccess: (result) => {
+      setPushPreview(null);
       void queryClient.invalidateQueries({ queryKey: ['sync'] });
       if (result.status === 'up_to_date') {
         void message.info(t({ id: 'pages.io.sync.publish.upToDate' }));
@@ -221,10 +271,10 @@ function ActionsCard({ configured }: { configured: boolean }) {
     },
   });
 
-  const confirm = useMutation({
+  const applyConfirm = useMutation({
     mutationFn: confirmApply,
     onSuccess: () => {
-      setPreviewResult(null);
+      setPullPreview(null);
       void queryClient.invalidateQueries();
       void message.success(t({ id: 'pages.io.sync.apply.success' }));
     },
@@ -233,20 +283,35 @@ function ActionsCard({ configured }: { configured: boolean }) {
     },
   });
 
-  async function handlePreview() {
-    setPreviewing(true);
+  async function handlePushPreview() {
+    setPushPreviewing(true);
+    try {
+      const result = await getPublishPreview();
+      if (result.status === 'up_to_date') {
+        void message.info(t({ id: 'pages.io.sync.publishPreview.upToDate' }));
+      } else {
+        setPushPreview(result.changes ?? []);
+      }
+    } catch {
+      void message.error(t({ id: 'pages.io.sync.publishPreview.error' }));
+    } finally {
+      setPushPreviewing(false);
+    }
+  }
+
+  async function handlePullPreview() {
+    setPullPreviewing(true);
     try {
       const result = await getApplyPreview();
       if (result.status === 'up_to_date') {
-        setPreviewResult(null);
         void message.info(t({ id: 'pages.io.sync.apply.upToDate' }));
       } else {
-        setPreviewResult(result.changes ?? []);
+        setPullPreview(result.changes ?? []);
       }
     } catch {
       void message.error(t({ id: 'pages.io.sync.apply.error' }));
     } finally {
-      setPreviewing(false);
+      setPullPreviewing(false);
     }
   }
 
@@ -255,67 +320,72 @@ function ActionsCard({ configured }: { configured: boolean }) {
   return (
     <>
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        {/* Primary action buttons — always available */}
         <Space wrap>
           <Button
             type="primary"
             icon={<CloudUploadOutlined />}
-            loading={publish.isPending}
-            onClick={() => publish.mutate()}
+            loading={pushPreviewing || publish.isPending}
+            onClick={() => void handlePushPreview()}
             disabled={forcePublish.isPending}
           >
             {t({ id: 'pages.io.sync.publish.button' })}
           </Button>
           <Button
             icon={<CloudDownloadOutlined />}
-            loading={previewing}
-            onClick={() => void handlePreview()}
+            loading={pullPreviewing}
+            onClick={() => void handlePullPreview()}
+            disabled={applyConfirm.isPending}
           >
             {t({ id: 'pages.io.sync.apply.previewButton' })}
           </Button>
         </Space>
 
-        {previewResult !== null && previewResult.length > 0 && (
+        {/* Push preview */}
+        {pushPreview !== null && (
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            <Collapse
-              defaultActiveKey={previewResult.map((ch) => ch.table)}
-              items={previewResult.map((ch) => {
-                const creates = ch.rows.filter((r) => r.operation === 'create');
-                const updates = ch.rows.filter((r) => r.operation === 'update');
-                const deletes = ch.rows.filter((r) => r.operation === 'delete');
-                return {
-                  key: ch.table,
-                  label: (
-                    <span>
-                      <Text strong>{ch.display_name}</Text>
-                      <Text type="secondary" style={{ fontSize: 11, marginLeft: 8 }}>
-                        ({ch.table})
-                      </Text>
-                      <span style={{ marginLeft: 8 }}>
-                        {creates.length > 0 && <Tag color="green">+{creates.length}</Tag>}
-                        {updates.length > 0 && <Tag color="orange">~{updates.length}</Tag>}
-                        {deletes.length > 0 && <Tag color="red">-{deletes.length}</Tag>}
-                      </span>
-                    </span>
-                  ),
-                  children: (
-                    <ChangePreviewTable
-                      creates={creates}
-                      updates={updates}
-                      deletes={deletes}
-                      errors={[]}
-                    />
-                  ),
-                };
-              })}
-            />
-            <Button
-              type="primary"
-              icon={<CheckCircleOutlined />}
-              loading={confirm.isPending}
-              onClick={() => confirm.mutate()}
-            >
-              {t({ id: 'pages.io.sync.apply.confirmButton' })}
-            </Button>
+            {renderPreviewCollapse(pushPreview, t)}
+            <Space>
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                loading={publish.isPending}
+                onClick={() => publish.mutate()}
+              >
+                {t({ id: 'pages.io.sync.publishPreview.confirmButton' })}
+              </Button>
+              <Button
+                icon={<CloseOutlined />}
+                onClick={() => setPushPreview(null)}
+                disabled={publish.isPending}
+              >
+                {t({ id: 'pages.io.sync.publishPreview.cancelButton' })}
+              </Button>
+            </Space>
+          </Space>
+        )}
+
+        {/* Pull preview */}
+        {pullPreview !== null && pullPreview.length > 0 && (
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            {renderPreviewCollapse(pullPreview, t)}
+            <Space>
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                loading={applyConfirm.isPending}
+                onClick={() => applyConfirm.mutate()}
+              >
+                {t({ id: 'pages.io.sync.apply.confirmButton' })}
+              </Button>
+              <Button
+                icon={<CloseOutlined />}
+                onClick={() => setPullPreview(null)}
+                disabled={applyConfirm.isPending}
+              >
+                {t({ id: 'pages.io.sync.publishPreview.cancelButton' })}
+              </Button>
+            </Space>
           </Space>
         )}
       </Space>

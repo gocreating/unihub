@@ -17,7 +17,9 @@ class TableInfoSerializer(serializers.Serializer):
 
 class ExportRequestSerializer(serializers.Serializer):
     tables = serializers.ListField(child=serializers.CharField(), allow_empty=False)
-    format = serializers.ChoiceField(choices=["csv", "zip"], required=False, allow_null=True, default=None)
+    format = serializers.ChoiceField(
+        choices=["csv", "zip"], required=False, allow_null=True, default=None
+    )
 
     def validate(self, attrs: dict) -> dict:
         tables = attrs.get("tables", [])
@@ -39,21 +41,15 @@ class ImportPreviewRequestSerializer(serializers.Serializer):
 
     def validate(self, attrs: dict) -> dict:
         if not attrs.get("csv_text") and attrs.get("csv_file") is None:
-            raise serializers.ValidationError(
-                "Either csv_text or csv_file must be provided."
-            )
+            raise serializers.ValidationError("Either csv_text or csv_file must be provided.")
         return attrs
 
 
 class ChangeRecordSerializer(serializers.Serializer):
     pk = serializers.CharField()
     operation = serializers.ChoiceField(choices=["create", "update", "delete"])
-    before = serializers.DictField(
-        child=serializers.CharField(allow_blank=True), allow_null=True
-    )
-    after = serializers.DictField(
-        child=serializers.CharField(allow_blank=True), allow_null=True
-    )
+    before = serializers.DictField(child=serializers.CharField(allow_blank=True), allow_null=True)
+    after = serializers.DictField(child=serializers.CharField(allow_blank=True), allow_null=True)
     changed_fields = serializers.ListField(child=serializers.CharField())
 
 

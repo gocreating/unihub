@@ -29,7 +29,9 @@ def _make_descriptor(label: str = "fake.model", order: int = 1) -> TableDescript
         display_name="Fake",
         model_class=object,
         system_fields=[
-            FieldDescriptor(column_name="id", csv_header="id:string", data_type="string", is_pk=True)
+            FieldDescriptor(
+                column_name="id", csv_header="id:string", data_type="string", is_pk=True
+            )
         ],
         import_order=order,
     )

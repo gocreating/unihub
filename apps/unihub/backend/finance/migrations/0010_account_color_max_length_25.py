@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('finance', '0009_account_add_color'),
+        ("finance", "0009_account_add_color"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='account',
-            name='color',
-            field=models.CharField(blank=True, default='', max_length=25),
+            model_name="account",
+            name="color",
+            field=models.CharField(blank=True, default="", max_length=25),
         ),
     ]

@@ -46,6 +46,21 @@ export interface SyncApplyPreviewResult {
   changes?: SyncApplyChange[];
 }
 
+export interface SyncPublishPreviewChange {
+  table: string;
+  display_name: string;
+  added: number;
+  modified: number;
+  deleted: number;
+  is_new_table: boolean;
+  rows: import('./io').ChangeRecord[];
+}
+
+export interface SyncPublishPreviewResult {
+  status: 'up_to_date' | 'has_changes' | 'no_prior_publish';
+  changes?: SyncPublishPreviewChange[];
+}
+
 export interface SyncApplyConfirmResult {
   status: 'applied';
   results: Array<{ table: string; display_name: string; applied: number }>;
@@ -124,4 +139,12 @@ export async function confirmApply(): Promise<SyncApplyConfirmResult> {
   });
   if (!res.ok) throw new Error('Apply failed');
   return res.json() as Promise<SyncApplyConfirmResult>;
+}
+
+export async function getPublishPreview(): Promise<SyncPublishPreviewResult> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/sync/publish/preview/`, {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to fetch publish preview');
+  return res.json() as Promise<SyncPublishPreviewResult>;
 }

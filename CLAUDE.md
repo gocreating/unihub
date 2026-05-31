@@ -162,9 +162,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `006-finance-app-enhancement` | **Plan**: [specs/006-finance-app-enhancement/plan.md](specs/006-finance-app-enhancement/plan.md)
+**Branch**: `007-data-sync-migration-fix` | **Plan**: [specs/007-data-sync-migration-fix/plan.md](specs/007-data-sync-migration-fix/plan.md)
 
-Finance domain visual and analytical enhancement. Key deliverables: (1) universal numeric formatting across all finance tables (comma separators, right-alignment, decimal alignment); (2) switchable pie-chart visualization card + multi-dimensional tree aggregation added to balance sheet detail page; (3) switchable time-series chart card added to balance sheet list page; (4) currency-symbol-prefixed monetary inputs on create/edit forms. Frontend-only — no backend changes. See plan for full implementation details and constitution check.
+Data sync migration fix and publish preview. Two deliverables: (1) bug fix — add `apps.py` to `language/`, `music/`, and `people/` backend apps so their models are registered in the `data_io` registry and included in all sync, export, and import operations; (2) new feature — `GET /api/v1/sync/publish/preview/` endpoint that computes per-table added/modified/deleted counts by comparing local DB against last published HEAD commit, with a frontend preview step requiring explicit confirmation before publishing. See plan for full implementation details and constitution check.
 <!-- SPECKIT END -->
 
 ## Active Technologies

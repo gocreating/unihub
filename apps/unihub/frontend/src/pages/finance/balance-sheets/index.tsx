@@ -60,20 +60,31 @@ export function BalanceSheetsPage() {
     setExcludedFromNetWorth(new Set());
   }, [chartType]);
 
-  const { data: sheets = [], isLoading } = useQuery({
-    queryKey: ['finance', 'balance-sheets'],
-    queryFn: () => listBalanceSheets(),
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const { data: sheetsData, isLoading } = useQuery({
+    queryKey: ['finance', 'balance-sheets', cursor],
+    queryFn: () => listBalanceSheets({ cursor, limit: 50, ordering: '-date' }),
   });
+  const sheets = useMemo(() => sheetsData?.results ?? [], [sheetsData]);
+  const nextCursorUrl = sheetsData?.next ?? null;
+  const prevCursorUrl = sheetsData?.previous ?? null;
 
-  const { data: currencies = [] } = useQuery({
+  const extractCursor = (url: string | null): string | undefined => {
+    if (!url) return undefined;
+    try { return new URL(url).searchParams.get('cursor') ?? undefined; } catch { return undefined; }
+  };
+
+  const { data: currenciesData } = useQuery({
     queryKey: ['finance', 'currencies'],
     queryFn: () => listCurrencies(),
   });
+  const currencies = useMemo(() => currenciesData?.results ?? [], [currenciesData]);
 
-  const { data: rates = [] } = useQuery({
+  const { data: ratesData } = useQuery({
     queryKey: ['finance', 'exchange-rates'],
     queryFn: () => listExchangeRates(),
   });
+  const rates = useMemo(() => ratesData?.results ?? [], [ratesData]);
 
   const baseCurrencies = useMemo(() => currencies.filter((c) => c.is_base_currency), [currencies]);
   const [baseCurrency, setBaseCurrency] = useBaseCurrency(baseCurrencies);
@@ -660,9 +671,23 @@ export function BalanceSheetsPage() {
       <PageTable<BalanceSheet>
         pageTitle={t({ id: 'pages.finance.balanceSheets.title' })}
         action={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/finance/balance-sheets/new')}>
-            {t({ id: 'pages.finance.balanceSheets.new' })}
-          </Button>
+          <Space>
+            <Button
+              disabled={!prevCursorUrl}
+              onClick={() => setCursor(extractCursor(prevCursorUrl))}
+            >
+              ← {t({ id: 'common.entityOps.pagination.previous' })}
+            </Button>
+            <Button
+              disabled={!nextCursorUrl}
+              onClick={() => setCursor(extractCursor(nextCursorUrl))}
+            >
+              {t({ id: 'common.entityOps.pagination.next' })} →
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/finance/balance-sheets/new')}>
+              {t({ id: 'pages.finance.balanceSheets.new' })}
+            </Button>
+          </Space>
         }
         rowKey="id"
         columns={columns}

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, ColorPicker, DatePicker, Form, Input, Modal, Select, Space, Tag, Tooltip, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
+import type { SorterResult } from 'antd/es/table/interface';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
@@ -14,6 +15,23 @@ import {
   listCurrencies,
   updateAccount,
 } from '@/services/unihub-backend/finance';
+import { EntityToolbar, useColumnConfig, useEntityFilter, useEntitySort } from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+
+const ACCOUNT_FILTERABLE_ATTRS: FilterableAttribute[] = [
+  { key: 'name', label: 'Name', dataType: 'text' },
+  { key: 'currency', label: 'Currency', dataType: 'single_select' },
+  { key: 'open_datetime', label: 'Open Date', dataType: 'date' },
+  { key: 'close_datetime', label: 'Close Date', dataType: 'date' },
+];
+
+const ACCOUNT_COLUMN_DEFS: ColumnDef[] = [
+  { key: 'name', label: 'Name', dataType: 'text', visible: true, order: 0 },
+  { key: 'currency', label: 'Currency', dataType: 'single_select', visible: true, order: 1 },
+  { key: 'color', label: 'Color', dataType: 'text', visible: true, order: 2 },
+  { key: 'open_datetime', label: 'Open Date', dataType: 'date', visible: true, order: 3 },
+  { key: 'close_datetime', label: 'Close Date', dataType: 'date', visible: true, order: 4 },
+];
 
 // 20 preset colors covering the full hue spectrum — Material Design palette.
 const ACCOUNT_PRESET_COLORS = [
@@ -63,15 +81,27 @@ export function AccountsPage() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [form] = Form.useForm<AccountFormValues>();
 
-  const { data: accounts = [], isLoading, isError } = useQuery({
-    queryKey: ['finance', 'accounts'],
-    queryFn: () => listAccounts(),
-  });
+  // ── Entity operations hooks ─────────────────────────────────────────
+  const filter = useEntityFilter('accounts');
+  const sort = useEntitySort('accounts');
+  const cols = useColumnConfig(ACCOUNT_COLUMN_DEFS);
+  const [limit] = useState(50);
+  const [offset, setOffset] = useState(0);
 
-  const { data: currencies = [] } = useQuery({
+  // Reset offset when filter or sort changes.
+  useEffect(() => { setOffset(0); }, [filter.activeGroups, sort.activeRules]);
+
+  const { data: accountsData, isLoading, isError } = useQuery({
+    queryKey: ['finance', 'accounts', filter.toApiParam(), sort.toOrderingParam(), limit, offset],
+    queryFn: () => listAccounts({ filters: filter.toApiParam(), ordering: sort.toOrderingParam(), limit, offset }),
+  });
+  const accounts = useMemo(() => accountsData?.results ?? [], [accountsData]);
+
+  const { data: currenciesData } = useQuery({
     queryKey: ['finance', 'currencies'],
     queryFn: () => listCurrencies(),
   });
+  const currencies = currenciesData?.results ?? [];
 
   useEffect(() => {
     if (isError) message.error(t({ id: 'pages.finance.accounts.loadError' }));
@@ -176,14 +206,31 @@ export function AccountsPage() {
     return w;
   }, [accounts]);
 
+  const visibleKeys = new Set(cols.visibleColumns.map((c) => c.key));
+  const lastVisKey = cols.visibleColumns.at(-1)?.key;
+
   const columns: ProColumns<Account>[] = useMemo(
     () => [
-      { title: t({ id: 'common.name' }), dataIndex: 'name', ...widthForHeader('Name', dataWidths.name), sorter: true },
-      { title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency', dataWidths.currency), sorter: true, render: (val) => <Tag>{val as string}</Tag> },
+      {
+        title: t({ id: 'common.name' }), dataIndex: 'name', ...widthForHeader('Name', dataWidths.name),
+        sorter: true,
+        sortOrder: sort.sortOrderForField('name') ?? undefined,
+        hidden: !visibleKeys.has('name'),
+        fixed: cols.visibleColumns[0]?.key === 'name' ? cols.firstColumnFixed : lastVisKey === 'name' ? cols.lastColumnFixed : undefined,
+      },
+      {
+        title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency', dataWidths.currency),
+        sorter: true,
+        sortOrder: sort.sortOrderForField('currency') ?? undefined,
+        hidden: !visibleKeys.has('currency'),
+        fixed: cols.visibleColumns[0]?.key === 'currency' ? cols.firstColumnFixed : lastVisKey === 'currency' ? cols.lastColumnFixed : undefined,
+        render: (val) => <Tag>{val as string}</Tag>,
+      },
       {
         title: t({ id: 'pages.finance.accounts.col.color' }),
         dataIndex: 'color',
         width: 72,
+        hidden: !visibleKeys.has('color'),
         render: (_dom, record) => record.color
           ? <span style={{ display: 'inline-block', width: 20, height: 20, borderRadius: '50%', background: record.color, border: '1px solid rgba(0,0,0,0.12)', verticalAlign: 'middle' }} />
           : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
@@ -193,6 +240,8 @@ export function AccountsPage() {
         dataIndex: 'open_datetime',
         ...widthForHeader('Open Date', Math.max(220, dataWidths.open_datetime)),
         sorter: true,
+        sortOrder: sort.sortOrderForField('open_datetime') ?? undefined,
+        hidden: !visibleKeys.has('open_datetime'),
         render: (_, record) => {
           const formatted = formatDateRelative(record.open_datetime);
           return formatted
@@ -205,6 +254,8 @@ export function AccountsPage() {
         dataIndex: 'close_datetime',
         ...widthForHeader('Close Date', Math.max(220, dataWidths.close_datetime)),
         sorter: true,
+        sortOrder: sort.sortOrderForField('close_datetime') ?? undefined,
+        hidden: !visibleKeys.has('close_datetime'),
         render: (_, record) => {
           const formatted = formatDateRelative(record.close_datetime);
           return formatted
@@ -231,10 +282,15 @@ export function AccountsPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth],
+    [t, dataWidths, actionsColWidth, sort.activeRules, cols.activeState, visibleKeys, lastVisKey],
   );
 
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} – ${c.name}` }));
+
+  const handleTableChange = (_: unknown, __: unknown, sorter: SorterResult<Account> | SorterResult<Account>[]) => {
+    const s = Array.isArray(sorter) ? sorter[0] : sorter;
+    if (s?.field) sort.handleHeaderClick(String(s.field));
+  };
 
   return (
     <>
@@ -245,11 +301,27 @@ export function AccountsPage() {
             {t({ id: 'pages.finance.accounts.new' })}
           </Button>
         }
+        headerTitle={
+          <EntityToolbar
+            filterProps={{ attrs: ACCOUNT_FILTERABLE_ATTRS, hook: filter }}
+            sortProps={{ attrs: ACCOUNT_FILTERABLE_ATTRS, hook: sort }}
+            columnProps={{ hook: cols }}
+          />
+        }
         rowKey="id"
         columns={columns}
         dataSource={accounts}
         loading={isLoading}
         scroll={{ x: computeScrollX(columns) }}
+        onChange={handleTableChange as never}
+        pagination={{
+          total: accountsData?.count,
+          pageSize: limit,
+          current: Math.floor(offset / limit) + 1,
+          showTotal: (total) => `${total} records`,
+          onChange: (page) => setOffset((page - 1) * limit),
+          showSizeChanger: false,
+        }}
       />
 
       <Modal

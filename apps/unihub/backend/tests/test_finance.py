@@ -81,7 +81,7 @@ class TestCurrencies:
         )
         resp = auth_client.get("/api/v1/finance/currencies/")
         assert resp.status_code == 200
-        data = {c["code"]: c for c in resp.json()}
+        data = {c["code"]: c for c in resp.json()["results"]}
         assert data["USD"]["is_base_currency"] is True
         assert data["TWD"]["is_base_currency"] is False
 
@@ -208,7 +208,7 @@ class TestAccounts:
         )
         resp = auth_client.get("/api/v1/finance/accounts/")
         assert resp.status_code == 200
-        assert len(resp.json()) >= 1
+        assert len(resp.json()["results"]) >= 1
 
     def test_edit_account(self, auth_client, usd):
         resp = auth_client.post(
@@ -253,7 +253,7 @@ class TestAccounts:
         )
         resp = auth_client.get("/api/v1/finance/accounts/?as_of=2026-05-01T00:00:00Z")
         assert resp.status_code == 200
-        names = [a["name"] for a in resp.json()]
+        names = [a["name"] for a in resp.json()["results"]]
         assert "Open Account" in names
         assert "Future Account" not in names
 
@@ -275,7 +275,7 @@ class TestAccounts:
         )
         resp = auth_client.get("/api/v1/finance/accounts/?as_of=2026-05-01T00:00:00Z")
         assert resp.status_code == 200
-        names = [a["name"] for a in resp.json()]
+        names = [a["name"] for a in resp.json()["results"]]
         assert "Active Account" in names
         assert "Closed Account" not in names
 
@@ -297,7 +297,7 @@ class TestAccounts:
         )
         resp = auth_client.get("/api/v1/finance/accounts/")
         assert resp.status_code == 200
-        assert len(resp.json()) == 2
+        assert len(resp.json()["results"]) == 2
 
     def test_delete_account_without_balances(self, auth_client, usd):
         resp = auth_client.post(
@@ -484,4 +484,4 @@ class TestExchangeRates:
         )
         resp = auth_client.get("/api/v1/finance/exchange-rates/?base_currency=TWD")
         assert resp.status_code == 200
-        assert all(e["base_currency"] == "TWD" for e in resp.json())
+        assert all(e["base_currency"] == "TWD" for e in resp.json()["results"])

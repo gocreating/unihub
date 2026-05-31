@@ -22,10 +22,11 @@ export function BalanceSheetEditPage() {
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
 
-  const { data: sheets = [], isLoading: sheetsLoading } = useQuery({
+  const { data: sheetsData, isLoading: sheetsLoading } = useQuery({
     queryKey: ['finance', 'balance-sheets'],
     queryFn: () => listBalanceSheets(),
   });
+  const sheets = useMemo(() => sheetsData?.results ?? [], [sheetsData]);
   const sheet = sheets.find((s) => s.id === id);
 
   const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs | null>(null);
@@ -38,11 +39,12 @@ export function BalanceSheetEditPage() {
     }
   }, [sheet, selectedDate]);
 
-  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
+  const { data: accountsData, isLoading: accountsLoading } = useQuery({
     queryKey: ['finance', 'accounts', 'as_of', selectedDate?.toISOString()],
     queryFn: () => listAccounts({ as_of: selectedDate!.toISOString() }),
     enabled: !!selectedDate,
   });
+  const accounts = useMemo(() => accountsData?.results ?? [], [accountsData]);
 
   const { data: existingBalances = [] } = useQuery({
     queryKey: ['finance', 'balance-sheets', id, 'balances'],

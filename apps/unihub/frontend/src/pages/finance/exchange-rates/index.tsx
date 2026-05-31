@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, DatePicker, Form, Input, Modal, Select, Space, Tag, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
+import type { SorterResult } from 'antd/es/table/interface';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
@@ -15,6 +16,21 @@ import {
   listExchangeRates,
   updateExchangeRate,
 } from '@/services/unihub-backend/finance';
+import { EntityToolbar, useColumnConfig, useEntityFilter, useEntitySort } from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+
+const EXCHANGE_RATE_FILTERABLE_ATTRS: FilterableAttribute[] = [
+  { key: 'base_currency', label: 'Base Currency', dataType: 'single_select' },
+  { key: 'quote_currency', label: 'Quote Currency', dataType: 'single_select' },
+  { key: 'date', label: 'Date', dataType: 'date' },
+];
+
+const EXCHANGE_RATE_COLUMN_DEFS: ColumnDef[] = [
+  { key: 'base_currency', label: 'Base Currency', dataType: 'single_select', visible: true, order: 0 },
+  { key: 'quote_currency', label: 'Quote Currency', dataType: 'single_select', visible: true, order: 1 },
+  { key: 'rate', label: 'Rate', dataType: 'text', visible: true, order: 2 },
+  { key: 'date', label: 'Date', dataType: 'date', visible: true, order: 3 },
+];
 
 export function ExchangeRatesPage() {
   const queryClient = useQueryClient();
@@ -23,19 +39,31 @@ export function ExchangeRatesPage() {
   const [editingRate, setEditingRate] = useState<ExchangeRate | null>(null);
   const [form] = Form.useForm();
 
-  const { data: rates = [], isLoading, isError } = useQuery({
-    queryKey: ['finance', 'exchange-rates'],
-    queryFn: () => listExchangeRates(),
+  // ── Entity operations hooks ─────────────────────────────────────────
+  const filter = useEntityFilter('exchange-rates');
+  const sort = useEntitySort('exchange-rates');
+  const cols = useColumnConfig(EXCHANGE_RATE_COLUMN_DEFS);
+  const [limit] = useState(50);
+  const [offset, setOffset] = useState(0);
+
+  // Reset offset when filter or sort changes.
+  useEffect(() => { setOffset(0); }, [filter.activeGroups, sort.activeRules]);
+
+  const { data: ratesData, isLoading, isError } = useQuery({
+    queryKey: ['finance', 'exchange-rates', filter.toApiParam(), sort.toOrderingParam(), limit, offset],
+    queryFn: () => listExchangeRates({ filters: filter.toApiParam(), ordering: sort.toOrderingParam(), limit, offset }),
   });
+  const rates = useMemo(() => ratesData?.results ?? [], [ratesData]);
 
   useEffect(() => {
     if (isError) message.error(t({ id: 'pages.finance.exchangeRates.loadError' }));
   }, [isError, t]);
 
-  const { data: currencies = [] } = useQuery({
+  const { data: currenciesData } = useQuery({
     queryKey: ['finance', 'currencies'],
     queryFn: () => listCurrencies(),
   });
+  const currencies = useMemo(() => currenciesData?.results ?? [], [currenciesData]);
 
   const currencyOptions = currencies.map((c) => ({
     value: c.code,
@@ -114,15 +142,38 @@ export function ExchangeRatesPage() {
     return w;
   }, [rates]);
 
+  const visibleKeys = new Set(cols.visibleColumns.map((c) => c.key));
+  const lastVisKey = cols.visibleColumns.at(-1)?.key;
+
   const columns: ProColumns<ExchangeRate>[] = useMemo(
     () => [
-      { title: t({ id: 'pages.finance.exchangeRates.col.base' }), dataIndex: 'base_currency', ...widthForHeader('Base', dataWidths.base_currency), render: (val) => <Tag>{val as string}</Tag> },
-      { title: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataIndex: 'quote_currency', ...widthForHeader('Quote', dataWidths.quote_currency), render: (val) => <Tag>{val as string}</Tag> },
+      {
+        title: t({ id: 'pages.finance.exchangeRates.col.base' }),
+        dataIndex: 'base_currency',
+        ...widthForHeader('Base', dataWidths.base_currency),
+        sorter: true,
+        sortOrder: sort.sortOrderForField('base_currency') ?? undefined,
+        hidden: !visibleKeys.has('base_currency'),
+        fixed: cols.visibleColumns[0]?.key === 'base_currency' ? cols.firstColumnFixed : lastVisKey === 'base_currency' ? cols.lastColumnFixed : undefined,
+        render: (val) => <Tag>{val as string}</Tag>,
+      },
+      {
+        title: t({ id: 'pages.finance.exchangeRates.col.quote' }),
+        dataIndex: 'quote_currency',
+        ...widthForHeader('Quote', dataWidths.quote_currency),
+        sorter: true,
+        sortOrder: sort.sortOrderForField('quote_currency') ?? undefined,
+        hidden: !visibleKeys.has('quote_currency'),
+        fixed: cols.visibleColumns[0]?.key === 'quote_currency' ? cols.firstColumnFixed : lastVisKey === 'quote_currency' ? cols.lastColumnFixed : undefined,
+        render: (val) => <Tag>{val as string}</Tag>,
+      },
       {
         title: t({ id: 'pages.finance.exchangeRates.col.rate' }),
         dataIndex: 'rate',
         ...widthForHeader('Rate', Math.max(120, dataWidths.rate)),
         align: 'right',
+        hidden: !visibleKeys.has('rate'),
+        fixed: cols.visibleColumns[0]?.key === 'rate' ? cols.firstColumnFixed : lastVisKey === 'rate' ? cols.lastColumnFixed : undefined,
         render: (val) => formatAmount(val as string),
       },
       {
@@ -130,6 +181,9 @@ export function ExchangeRatesPage() {
         dataIndex: 'date',
         ...widthForHeader('Date', Math.max(220, dataWidths.date)),
         sorter: true,
+        sortOrder: sort.sortOrderForField('date') ?? undefined,
+        hidden: !visibleKeys.has('date'),
+        fixed: cols.visibleColumns[0]?.key === 'date' ? cols.firstColumnFixed : lastVisKey === 'date' ? cols.lastColumnFixed : undefined,
         render: (val) => {
           const d = dayjs(val as string);
           return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
@@ -166,8 +220,13 @@ export function ExchangeRatesPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth],
+    [t, dataWidths, actionsColWidth, sort.activeRules, cols.activeState, visibleKeys, lastVisKey],
   );
+
+  const handleTableChange = (_: unknown, __: unknown, sorter: SorterResult<ExchangeRate> | SorterResult<ExchangeRate>[]) => {
+    const s = Array.isArray(sorter) ? sorter[0] : sorter;
+    if (s?.field) sort.handleHeaderClick(String(s.field));
+  };
 
   return (
     <>
@@ -178,11 +237,27 @@ export function ExchangeRatesPage() {
             {t({ id: 'pages.finance.exchangeRates.new' })}
           </Button>
         }
+        headerTitle={
+          <EntityToolbar
+            filterProps={{ attrs: EXCHANGE_RATE_FILTERABLE_ATTRS, hook: filter }}
+            sortProps={{ attrs: EXCHANGE_RATE_FILTERABLE_ATTRS, hook: sort }}
+            columnProps={{ hook: cols }}
+          />
+        }
         rowKey="id"
         columns={columns}
         dataSource={rates}
         loading={isLoading}
         scroll={{ x: computeScrollX(columns) }}
+        onChange={handleTableChange as never}
+        pagination={{
+          total: ratesData?.count,
+          pageSize: limit,
+          current: Math.floor(offset / limit) + 1,
+          showTotal: (total) => `${total} records`,
+          onChange: (page) => setOffset((page - 1) * limit),
+          showSizeChanger: false,
+        }}
       />
 
       <Modal

@@ -6,6 +6,8 @@ from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from core.filters import EntityFilterBackend
+from core.pagination import EntityCursorPagination, EntityOffsetPagination
 from finance.models import Account, Balance, BalanceSheet, Currency, ExchangeRate
 from finance.serializers import (
     AccountSerializer,
@@ -20,20 +22,30 @@ from finance.serializers import (
 class CurrencyViewSet(viewsets.ModelViewSet):
     queryset = Currency.objects.all()
     serializer_class = CurrencySerializer
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["code", "name"]
+    filter_backends = [EntityFilterBackend, filters.OrderingFilter]
+    filterable_fields = {
+        "code": {"lookup": "code", "type": "text"},
+        "name": {"lookup": "name", "type": "text"},
+    }
     ordering_fields = ["code", "name"]
     ordering = ["code"]
+    pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
 
 class AccountViewSet(viewsets.ModelViewSet):
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["name"]
-    ordering_fields = ["name", "currency"]
+    filter_backends = [EntityFilterBackend, filters.OrderingFilter]
+    filterable_fields = {
+        "name": {"lookup": "name", "type": "text"},
+        "currency": {"lookup": "currency", "type": "single_select"},
+        "open_datetime": {"lookup": "open_datetime", "type": "date"},
+        "close_datetime": {"lookup": "close_datetime", "type": "date"},
+    }
+    ordering_fields = ["name", "currency", "open_datetime", "close_datetime"]
     ordering = ["name"]
+    pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
@@ -67,9 +79,13 @@ class AccountViewSet(viewsets.ModelViewSet):
 class BalanceSheetViewSet(viewsets.ModelViewSet):
     queryset = BalanceSheet.objects.all()
     serializer_class = BalanceSheetSerializer
-    filter_backends = [filters.OrderingFilter]
+    filter_backends = [EntityFilterBackend, filters.OrderingFilter]
+    filterable_fields = {
+        "date": {"lookup": "date", "type": "date"},
+    }
     ordering_fields = ["date"]
     ordering = ["-date"]
+    pagination_class = EntityCursorPagination
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
 
     @action(detail=True, methods=["get"], url_path="balances")
@@ -137,12 +153,19 @@ class BalanceSheetViewSet(viewsets.ModelViewSet):
 class ExchangeRateViewSet(viewsets.ModelViewSet):
     queryset = ExchangeRate.objects.all()
     serializer_class = ExchangeRateSerializer
-    filter_backends = [filters.OrderingFilter]
+    filter_backends = [EntityFilterBackend, filters.OrderingFilter]
+    filterable_fields = {
+        "base_currency": {"lookup": "base_currency", "type": "single_select"},
+        "quote_currency": {"lookup": "quote_currency", "type": "single_select"},
+        "date": {"lookup": "date", "type": "date"},
+    }
     ordering_fields = ["date", "base_currency", "quote_currency"]
     ordering = ["-date"]
+    pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
+        """Filter by base_currency and quote_currency legacy query params."""
         qs = super().get_queryset()
         base = self.request.query_params.get("base_currency")
         quote = self.request.query_params.get("quote_currency")

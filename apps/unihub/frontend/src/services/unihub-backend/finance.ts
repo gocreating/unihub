@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './index';
+import type { CursorPaginatedResponse, EntityListParams, OffsetPaginatedResponse } from '@/components/EntityToolbar';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -81,11 +82,31 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   return resp.json() as Promise<T>;
 }
 
+// ── Entity list helpers ───────────────────────────────────────────────
+
+function buildEntityListQs(params?: EntityListParams): string {
+  if (!params) return '';
+  const p = new URLSearchParams();
+  if (params.filters) p.set('filters', JSON.stringify(params.filters));
+  if (params.ordering) p.set('ordering', params.ordering);
+  if (params.limit !== undefined) p.set('limit', String(params.limit));
+  if (params.offset !== undefined) p.set('offset', String(params.offset));
+  if (params.cursor) p.set('cursor', params.cursor);
+  // Pass through any extra params (e.g. as_of, base_currency)
+  const knownKeys = new Set(['filters', 'ordering', 'limit', 'offset', 'cursor']);
+  for (const [k, v] of Object.entries(params as Record<string, unknown>)) {
+    if (!knownKeys.has(k) && v !== undefined) {
+      p.set(k, String(v));
+    }
+  }
+  const s = p.toString();
+  return s ? `?${s}` : '';
+}
+
 // ── Currencies ────────────────────────────────────────────────────────
 
-export function listCurrencies(params?: { search?: string; ordering?: string }): Promise<Currency[]> {
-  const qs = new URLSearchParams(params as Record<string, string>).toString();
-  return fetchJson<Currency[]>(`/api/v1/finance/currencies/${qs ? `?${qs}` : ''}`);
+export function listCurrencies(params?: EntityListParams): Promise<OffsetPaginatedResponse<Currency>> {
+  return fetchJson<OffsetPaginatedResponse<Currency>>(`/api/v1/finance/currencies/${buildEntityListQs(params)}`);
 }
 
 export function createCurrency(data: Currency): Promise<Currency> {
@@ -102,9 +123,10 @@ export function deleteCurrency(code: string): Promise<void> {
 
 // ── Accounts ─────────────────────────────────────────────────────────
 
-export function listAccounts(params?: { ordering?: string; search?: string; as_of?: string }): Promise<Account[]> {
-  const qs = new URLSearchParams(params as Record<string, string>).toString();
-  return fetchJson<Account[]>(`/api/v1/finance/accounts/${qs ? `?${qs}` : ''}`);
+export function listAccounts(
+  params?: EntityListParams & { as_of?: string },
+): Promise<OffsetPaginatedResponse<Account>> {
+  return fetchJson<OffsetPaginatedResponse<Account>>(`/api/v1/finance/accounts/${buildEntityListQs(params)}`);
 }
 
 export function getAccount(id: string): Promise<Account> {
@@ -126,9 +148,8 @@ export function deleteAccount(id: string, confirm = false): Promise<void | { aff
 
 // ── Balance Sheets ────────────────────────────────────────────────────
 
-export function listBalanceSheets(params?: { ordering?: string }): Promise<BalanceSheet[]> {
-  const qs = new URLSearchParams(params as Record<string, string>).toString();
-  return fetchJson<BalanceSheet[]>(`/api/v1/finance/balance-sheets/${qs ? `?${qs}` : ''}`);
+export function listBalanceSheets(params?: EntityListParams): Promise<CursorPaginatedResponse<BalanceSheet>> {
+  return fetchJson<CursorPaginatedResponse<BalanceSheet>>(`/api/v1/finance/balance-sheets/${buildEntityListQs(params)}`);
 }
 
 export function createBalanceSheet(data: Pick<BalanceSheet, 'date'>): Promise<BalanceSheet> {
@@ -164,9 +185,10 @@ export function getNetWorth(sheetId: string): Promise<NetWorthResult> {
 
 // ── Exchange Rates ────────────────────────────────────────────────────
 
-export function listExchangeRates(params?: { base_currency?: string; quote_currency?: string; ordering?: string }): Promise<ExchangeRate[]> {
-  const qs = new URLSearchParams(params as Record<string, string>).toString();
-  return fetchJson<ExchangeRate[]>(`/api/v1/finance/exchange-rates/${qs ? `?${qs}` : ''}`);
+export function listExchangeRates(
+  params?: EntityListParams & { base_currency?: string; quote_currency?: string },
+): Promise<OffsetPaginatedResponse<ExchangeRate>> {
+  return fetchJson<OffsetPaginatedResponse<ExchangeRate>>(`/api/v1/finance/exchange-rates/${buildEntityListQs(params)}`);
 }
 
 export function createExchangeRate(data: Pick<ExchangeRate, 'base_currency' | 'quote_currency' | 'rate' | 'date'>): Promise<ExchangeRate> {

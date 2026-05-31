@@ -1,10 +1,13 @@
-import { Button, Card, Divider, Input, Select, Space, Tag, Typography } from 'antd';
+import React from 'react';
+import { Button, Card, Divider, Input, Select, Space } from 'antd';
 import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import { useIntl } from 'react-intl';
 import type { UseEntityFilterReturn } from './hooks/useEntityFilter';
+import type { FilterCondition, FilterGroup, FilterOperator, FilterableAttribute, GroupLogic } from './types';
 
 const uid = () => crypto.randomUUID();
-import type { FilterCondition, FilterGroup, FilterOperator, FilterableAttribute, GroupLogic } from './types';
+
+// ── Operator definitions ──────────────────────────────────────────────────────
 
 const TEXT_OPS: { value: FilterOperator; labelId: string }[] = [
   { value: 'contains', labelId: 'common.entityOps.op.contains' },
@@ -51,23 +54,25 @@ function getOpsForAttr(attr: FilterableAttribute | undefined) {
   }
 }
 
+// ── Condition row ─────────────────────────────────────────────────────────────
+
 interface ConditionRowProps {
   condition: FilterCondition;
   attrs: FilterableAttribute[];
   onUpdate: (updated: FilterCondition) => void;
   onRemove: () => void;
+  canRemove: boolean;
 }
 
-function ConditionRow({ condition, attrs, onUpdate, onRemove }: ConditionRowProps) {
+function ConditionRow({ condition, attrs, onUpdate, onRemove, canRemove }: ConditionRowProps) {
   const { formatMessage: t } = useIntl();
   const selectedAttr = attrs.find((a) => a.key === condition.attr);
   const ops = getOpsForAttr(selectedAttr);
   const noValue = NO_VALUE_OPS.includes(condition.op);
-
   const isValid = condition.attr && condition.op && (noValue || condition.val !== '');
 
   return (
-    <Space.Compact style={{ width: '100%', marginBottom: 6 }}>
+    <Space.Compact style={{ width: '100%' }}>
       <Select
         style={{ width: 140 }}
         placeholder={t({ id: 'common.entityOps.filter.attribute' })}
@@ -105,10 +110,39 @@ function ConditionRow({ condition, attrs, onUpdate, onRemove }: ConditionRowProp
       ) : (
         <div style={{ flex: 1 }} />
       )}
-      <Button icon={<CloseOutlined />} onClick={onRemove} />
+      <Button icon={<CloseOutlined />} onClick={onRemove} disabled={!canRemove} />
     </Space.Compact>
   );
 }
+
+// ── Logic connector between conditions ────────────────────────────────────────
+
+interface LogicConnectorProps {
+  logic: GroupLogic;
+  isFirst: boolean;
+  onChange: (val: GroupLogic) => void;
+}
+
+function LogicConnector({ logic, isFirst, onChange }: LogicConnectorProps) {
+  const { formatMessage: t } = useIntl();
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', margin: '4px 0' }}>
+      <Select
+        size="small"
+        value={logic}
+        disabled={!isFirst}
+        options={[
+          { value: 'and', label: t({ id: 'common.entityOps.filter.and' }) },
+          { value: 'or', label: t({ id: 'common.entityOps.filter.or' }) },
+        ]}
+        onChange={isFirst ? onChange : undefined}
+        style={{ width: 72 }}
+      />
+    </div>
+  );
+}
+
+// ── Condition group ───────────────────────────────────────────────────────────
 
 interface GroupBlockProps {
   group: FilterGroup;
@@ -133,55 +167,66 @@ function GroupBlock({ group, attrs, onUpdate, onRemove, showRemove }: GroupBlock
   const removeCondition = (idx: number) =>
     onUpdate({ ...group, conditions: group.conditions.filter((_, i) => i !== idx) });
 
+  const canRemove = group.conditions.length > 1;
+
   return (
-    <div style={{ border: '1px solid #f0f0f0', borderRadius: 6, padding: 10, marginBottom: 8 }}>
-      <Space style={{ marginBottom: 6 }}>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {t({ id: 'common.entityOps.filter.match' })}
-        </Typography.Text>
-        <Select
-          size="small"
-          value={group.logic}
-          options={[
-            { value: 'and', label: t({ id: 'common.entityOps.filter.and' }) },
-            { value: 'or', label: t({ id: 'common.entityOps.filter.or' }) },
-          ]}
-          onChange={(val) => onUpdate({ ...group, logic: val as GroupLogic })}
-          style={{ width: 80 }}
-        />
-        {showRemove && (
-          <Button size="small" type="text" danger icon={<CloseOutlined />} onClick={onRemove} />
-        )}
-      </Space>
+    <div>
       {group.conditions.map((c, idx) => (
-        <ConditionRow
-          key={c.id}
-          condition={c}
-          attrs={attrs}
-          onUpdate={(updated) => updateCondition(idx, updated)}
-          onRemove={() => removeCondition(idx)}
-        />
+        <React.Fragment key={c.id}>
+          <ConditionRow
+            condition={c}
+            attrs={attrs}
+            onUpdate={(updated) => updateCondition(idx, updated)}
+            onRemove={() => removeCondition(idx)}
+            canRemove={canRemove}
+          />
+          {/* AND/OR connector between conditions; first one interactive, rest disabled */}
+          {idx < group.conditions.length - 1 && (
+            <LogicConnector
+              logic={group.logic}
+              isFirst={idx === 0}
+              onChange={(val) => onUpdate({ ...group, logic: val })}
+            />
+          )}
+        </React.Fragment>
       ))}
-      <Button size="small" icon={<PlusOutlined />} onClick={addCondition} style={{ marginTop: 2 }}>
-        {t({ id: 'common.entityOps.filter.addCondition' })}
-      </Button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+        <Button size="small" icon={<PlusOutlined />} onClick={addCondition}>
+          {t({ id: 'common.entityOps.filter.addCondition' })}
+        </Button>
+        {showRemove && (
+          <Button size="small" type="text" danger icon={<CloseOutlined />} onClick={onRemove}>
+            {t({ id: 'common.entityOps.filter.removeGroup' })}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
 
-interface FilterPanelProps {
+// ── Filter panel ──────────────────────────────────────────────────────────────
+
+export interface FilterPanelProps {
   attrs: FilterableAttribute[];
   hook: UseEntityFilterReturn;
+  onClose: () => void;
 }
 
-export function FilterPanel({ attrs, hook }: FilterPanelProps) {
+export function FilterPanel({ attrs, hook, onClose }: FilterPanelProps) {
   const { formatMessage: t } = useIntl();
-  const { pendingGroups, setPendingGroups, apply, cancel, reset } = hook;
+  const { pendingGroups, setPendingGroups, apply } = hook;
 
   const addGroup = () =>
     setPendingGroups([
       ...pendingGroups,
-      { id: uid(), logic: 'and', conditions: [{ id: uid(), attr: '', op: 'contains', val: '' }] },
+      {
+        id: uid(),
+        logic: 'and',
+        conditions: [
+          { id: uid(), attr: '', op: 'contains', val: '' },
+          { id: uid(), attr: '', op: 'contains', val: '' },
+        ],
+      },
     ]);
 
   const updateGroup = (idx: number, updated: FilterGroup) =>
@@ -197,40 +242,38 @@ export function FilterPanel({ attrs, hook }: FilterPanelProps) {
       styles={{ body: { padding: 12 } }}
     >
       {pendingGroups.map((g, idx) => (
-        <GroupBlock
-          key={g.id}
-          group={g}
-          attrs={attrs}
-          onUpdate={(updated) => updateGroup(idx, updated)}
-          onRemove={() => removeGroup(idx)}
-          showRemove={pendingGroups.length > 1}
-        />
+        <React.Fragment key={g.id}>
+          {idx > 0 && (
+            <Divider plain style={{ margin: '10px 0', fontSize: 12, color: '#8c8c8c' }}>
+              {t({ id: 'common.entityOps.filter.or' })}
+            </Divider>
+          )}
+          <GroupBlock
+            group={g}
+            attrs={attrs}
+            onUpdate={(updated) => updateGroup(idx, updated)}
+            onRemove={() => removeGroup(idx)}
+            showRemove={pendingGroups.length > 1}
+          />
+        </React.Fragment>
       ))}
       <Button
         size="small"
         icon={<PlusOutlined />}
         onClick={addGroup}
-        style={{ marginBottom: 8 }}
+        style={{ marginTop: 10, marginBottom: 4 }}
       >
         {t({ id: 'common.entityOps.filter.addGroup' })}
       </Button>
       <Divider style={{ margin: '8px 0' }} />
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Button size="small" onClick={reset}>
-          {t({ id: 'common.entityOps.reset' })}
+        <Button size="small" onClick={onClose}>
+          {t({ id: 'common.entityOps.cancel' })}
         </Button>
-        <Space>
-          <Button size="small" onClick={cancel}>
-            {t({ id: 'common.entityOps.cancel' })}
-          </Button>
-          <Button size="small" type="primary" onClick={apply}>
-            {t({ id: 'common.entityOps.apply' })}
-          </Button>
-        </Space>
+        <Button size="small" type="primary" onClick={() => { apply(); onClose(); }}>
+          {t({ id: 'common.entityOps.apply' })}
+        </Button>
       </Space>
     </Card>
   );
 }
-
-// Re-export tag helper for toolbar badge usage
-export { Tag };

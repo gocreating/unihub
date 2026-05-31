@@ -312,6 +312,7 @@ export default {
   'common.entityOps.filter.or': '或',
   'common.entityOps.filter.addCondition': '新增條件',
   'common.entityOps.filter.addGroup': '新增條件群組',
+  'common.entityOps.filter.removeGroup': '移除群組',
   'common.entityOps.sort.attribute': '欄位',
   'common.entityOps.sort.direction': '切換排序方向',
   'common.entityOps.sort.moveUp': '提高優先順序',

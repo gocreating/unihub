@@ -17,6 +17,8 @@ export interface UseEntityFilterReturn {
   setPendingGroups: (groups: FilterGroup[]) => void;
   /** True when there is at least one non-empty active condition. */
   isActive: boolean;
+  /** True when pendingGroups differ from activeGroups (panel has unsaved changes). */
+  isDirty: boolean;
   /** Clear all active groups and remove ?filters= from URL. */
   reset: () => void;
   /** Serialise activeGroups for the API filters param, or undefined when empty. */
@@ -127,6 +129,10 @@ export function useEntityFilter(_key: string): UseEntityFilterReturn {
     g.conditions.some((c) => c.attr && c.op && c.val !== ''),
   );
 
+  const isDirty =
+    JSON.stringify(groupsToPayload(pendingGroups) ?? null) !==
+    JSON.stringify(groupsToPayload(activeGroups) ?? null);
+
   return {
     pendingGroups,
     activeGroups,
@@ -134,6 +140,7 @@ export function useEntityFilter(_key: string): UseEntityFilterReturn {
     cancel,
     setPendingGroups,
     isActive,
+    isDirty,
     reset,
     toApiParam,
   };

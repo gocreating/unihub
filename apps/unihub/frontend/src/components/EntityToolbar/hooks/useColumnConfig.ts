@@ -20,6 +20,8 @@ export interface UseColumnConfigReturn {
   lastColumnFixed: 'right' | undefined;
   /** True when the column config differs from the initial default state. */
   isCustomised: boolean;
+  /** True when pendingState differs from activeState (panel has unsaved changes). */
+  isDirty: boolean;
 }
 
 function sortedVisible(state: ColumnState): ColumnDef[] {
@@ -64,5 +66,6 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
     firstColumnFixed: activeState.stickyLeft && visible.length > 0 ? 'left' : undefined,
     lastColumnFixed: activeState.stickyRight && visible.length > 0 ? 'right' : undefined,
     isCustomised: !statesEqual(activeState, initial),
+    isDirty: !statesEqual(pendingState, activeState),
   };
 }

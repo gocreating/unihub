@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { SortRule, SortState } from '../types';
 
+const EMPTY_RULE: SortRule = { field: '', direction: 'asc' };
+
 export interface UseEntitySortReturn {
   /** Rules being edited in the panel (not yet applied). */
   pendingRules: SortRule[];
@@ -25,11 +27,14 @@ export interface UseEntitySortReturn {
   toOrderingParam: () => string | undefined;
   /** True when there is at least one active sort rule. */
   isActive: boolean;
+  /** True when pendingRules differ from activeRules (panel has unsaved changes). */
+  isDirty: boolean;
 }
 
 function rulesToOrdering(rules: SortState): string | undefined {
-  if (rules.length === 0) return undefined;
-  return rules.map((r) => (r.direction === 'desc' ? `-${r.field}` : r.field)).join(',');
+  const filled = rules.filter((r) => r.field);
+  if (filled.length === 0) return undefined;
+  return filled.map((r) => (r.direction === 'desc' ? `-${r.field}` : r.field)).join(',');
 }
 
 function orderingToRules(ordering: string): SortState {
@@ -40,6 +45,11 @@ function orderingToRules(ordering: string): SortState {
       const desc = f.startsWith('-');
       return { field: desc ? f.slice(1) : f, direction: desc ? 'desc' : 'asc' } as SortRule;
     });
+}
+
+/** Initial pending rules: active rules, or one empty placeholder when there are none. */
+function initialPending(active: SortState): SortState {
+  return active.length > 0 ? active : [EMPTY_RULE];
 }
 
 /** Manage sort state, URL sync, and bidirectional header-click handling. */
@@ -53,13 +63,15 @@ export function useEntitySort(_key: string): UseEntitySortReturn {
   }, [searchParams]);
 
   const [activeRules, setActiveRules] = useState<SortState>(() => readFromUrl());
-  const [pendingRules, setPendingRules] = useState<SortState>(() => readFromUrl());
+  const [pendingRules, setPendingRules] = useState<SortState>(() =>
+    initialPending(readFromUrl()),
+  );
 
   // Sync activeRules from URL when URL changes externally.
   useEffect(() => {
     const fromUrl = readFromUrl();
     setActiveRules(fromUrl);
-    setPendingRules(fromUrl);
+    setPendingRules(initialPending(fromUrl));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.get('ordering')]);
 
@@ -84,12 +96,15 @@ export function useEntitySort(_key: string): UseEntitySortReturn {
   );
 
   const apply = useCallback(() => {
-    setActiveRules(pendingRules);
-    writeToUrl(pendingRules);
+    // Filter out empty-field placeholder rules before committing.
+    const filled = pendingRules.filter((r) => r.field);
+    setActiveRules(filled);
+    setPendingRules(filled.length > 0 ? filled : [EMPTY_RULE]);
+    writeToUrl(filled);
   }, [pendingRules, writeToUrl]);
 
   const cancel = useCallback(() => {
-    setPendingRules(activeRules);
+    setPendingRules(initialPending(activeRules));
   }, [activeRules]);
 
   const handleHeaderClick = useCallback(
@@ -98,17 +113,13 @@ export function useEntitySort(_key: string): UseEntitySortReturn {
         const existing = prev.find((r) => r.field === field);
         let next: SortState;
         if (!existing) {
-          // non-sorted → ascending (append at lowest priority)
           next = [...prev, { field, direction: 'asc' }];
         } else if (existing.direction === 'asc') {
-          // ascending → descending (in-place)
           next = prev.map((r) => (r.field === field ? { ...r, direction: 'desc' } : r));
         } else {
-          // descending → remove
           next = prev.filter((r) => r.field !== field);
         }
-        // Sync pendingRules to new activeRules so the panel is up to date.
-        setPendingRules(next);
+        setPendingRules(initialPending(next));
         writeToUrl(next);
         return next;
       });
@@ -130,6 +141,10 @@ export function useEntitySort(_key: string): UseEntitySortReturn {
     [activeRules],
   );
 
+  const isDirty =
+    JSON.stringify(rulesToOrdering(pendingRules.filter((r) => r.field)) ?? null) !==
+    JSON.stringify(rulesToOrdering(activeRules) ?? null);
+
   return {
     pendingRules,
     activeRules,
@@ -140,5 +155,6 @@ export function useEntitySort(_key: string): UseEntitySortReturn {
     sortOrderForField,
     toOrderingParam,
     isActive: activeRules.length > 0,
+    isDirty,
   };
 }

@@ -312,6 +312,7 @@ export default {
   'common.entityOps.filter.or': 'OR',
   'common.entityOps.filter.addCondition': 'Add condition',
   'common.entityOps.filter.addGroup': 'Add group',
+  'common.entityOps.filter.removeGroup': 'Remove group',
   'common.entityOps.sort.attribute': 'Column',
   'common.entityOps.sort.direction': 'Toggle direction',
   'common.entityOps.sort.moveUp': 'Increase priority',

@@ -1,61 +1,25 @@
-import { Button, Card, Checkbox, Divider, Space, Switch, Tooltip, Typography, message } from 'antd';
-import { ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
+import { useMemo, useState } from 'react';
+import { Button, Card, Checkbox, Divider, Space, Switch, Typography, message } from 'antd';
+import { HolderOutlined } from '@ant-design/icons';
 import { useIntl } from 'react-intl';
 import type { UseColumnConfigReturn } from './hooks/useColumnConfig';
-import type { ColumnDef } from './types';
 
-interface ColumnRowProps {
-  col: ColumnDef;
-  index: number;
-  total: number;
-  canHide: boolean;
-  onToggleVisible: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-}
-
-function ColumnRow({ col, index, total, canHide, onToggleVisible, onMoveUp, onMoveDown }: ColumnRowProps) {
-  const { formatMessage: t } = useIntl();
-  return (
-    <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 4 }}>
-      <Checkbox
-        checked={col.visible}
-        onChange={onToggleVisible}
-        disabled={col.visible && !canHide}
-      >
-        {col.label}
-      </Checkbox>
-      <Space size={2}>
-        <Tooltip title={t({ id: 'common.entityOps.columns.moveUp' })}>
-          <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={onMoveUp} />
-        </Tooltip>
-        <Tooltip title={t({ id: 'common.entityOps.columns.moveDown' })}>
-          <Button
-            size="small"
-            icon={<ArrowDownOutlined />}
-            disabled={index === total - 1}
-            onClick={onMoveDown}
-          />
-        </Tooltip>
-      </Space>
-    </Space>
-  );
-}
-
-interface ColumnPanelProps {
+export interface ColumnPanelProps {
   hook: UseColumnConfigReturn;
+  onClose: () => void;
 }
 
-export function ColumnPanel({ hook }: ColumnPanelProps) {
+export function ColumnPanel({ hook, onClose }: ColumnPanelProps) {
   const { formatMessage: t } = useIntl();
-  const { pendingState, setPendingState, apply, cancel } = hook;
+  const { pendingState, setPendingState, apply } = hook;
   const { columns, stickyLeft, stickyRight } = pendingState;
 
-  // Number of visible columns in the pending state.
   const visibleCount = columns.filter((c) => c.visible).length;
+  const sorted = useMemo(() => [...columns].sort((a, b) => a.order - b.order), [columns]);
 
-  // Sorted columns for display (by pending order).
-  const sorted = [...columns].sort((a, b) => a.order - b.order);
+  // Native HTML5 drag state
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
 
   const toggleVisible = (key: string) => {
     const col = columns.find((c) => c.key === key);
@@ -70,19 +34,29 @@ export function ColumnPanel({ hook }: ColumnPanelProps) {
     });
   };
 
-  const moveByOrder = (key: string, delta: -1 | 1) => {
+  const handleDrop = (e: React.DragEvent, targetKey: string) => {
+    e.preventDefault();
+    if (!dragKey || dragKey === targetKey) {
+      setDragKey(null);
+      setOverKey(null);
+      return;
+    }
     const sortedCols = [...columns].sort((a, b) => a.order - b.order);
-    const idx = sortedCols.findIndex((c) => c.key === key);
-    const swapIdx = idx + delta;
-    if (swapIdx < 0 || swapIdx >= sortedCols.length) return;
-    const curr = sortedCols[idx]!;
-    const swap = sortedCols[swapIdx]!;
+    const fromIdx = sortedCols.findIndex((c) => c.key === dragKey);
+    const toIdx = sortedCols.findIndex((c) => c.key === targetKey);
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    // Reassign orders by swapping positions.
+    const reordered = [...sortedCols];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved!);
     const newCols = columns.map((c) => {
-      if (c.key === curr.key) return { ...c, order: swap.order };
-      if (c.key === swap.key) return { ...c, order: curr.order };
-      return c;
+      const newOrder = reordered.findIndex((r) => r.key === c.key);
+      return { ...c, order: newOrder };
     });
     setPendingState({ ...pendingState, columns: newCols });
+    setDragKey(null);
+    setOverKey(null);
   };
 
   return (
@@ -116,26 +90,45 @@ export function ColumnPanel({ hook }: ColumnPanelProps) {
       </Space>
       <Divider style={{ margin: '8px 0' }} />
 
-      {/* Column rows */}
-      {sorted.map((col, idx) => (
-        <ColumnRow
+      {/* Draggable column rows */}
+      {sorted.map((col) => (
+        <div
           key={col.key}
-          col={col}
-          index={idx}
-          total={sorted.length}
-          canHide={visibleCount > 1}
-          onToggleVisible={() => toggleVisible(col.key)}
-          onMoveUp={() => moveByOrder(col.key, -1)}
-          onMoveDown={() => moveByOrder(col.key, 1)}
-        />
+          draggable
+          onDragStart={() => setDragKey(col.key)}
+          onDragEnter={() => setOverKey(col.key)}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => handleDrop(e, col.key)}
+          onDragEnd={() => { setDragKey(null); setOverKey(null); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            marginBottom: 4,
+            padding: '2px 0',
+            opacity: dragKey === col.key ? 0.4 : 1,
+            borderTop: overKey === col.key && dragKey !== col.key ? '2px solid #1677ff' : '2px solid transparent',
+            cursor: 'grab',
+          }}
+        >
+          <HolderOutlined style={{ color: '#bfbfbf', flexShrink: 0 }} />
+          <Checkbox
+            checked={col.visible}
+            onChange={() => toggleVisible(col.key)}
+            disabled={col.visible && visibleCount <= 1}
+            style={{ flex: 1 }}
+          >
+            {col.label}
+          </Checkbox>
+        </div>
       ))}
 
       <Divider style={{ margin: '8px 0' }} />
-      <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-        <Button size="small" onClick={cancel}>
+      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+        <Button size="small" onClick={onClose}>
           {t({ id: 'common.entityOps.cancel' })}
         </Button>
-        <Button size="small" type="primary" onClick={apply}>
+        <Button size="small" type="primary" onClick={() => { apply(); onClose(); }}>
           {t({ id: 'common.entityOps.apply' })}
         </Button>
       </Space>

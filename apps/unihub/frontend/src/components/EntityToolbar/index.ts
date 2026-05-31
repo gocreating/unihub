@@ -1,8 +1,11 @@
 export { EntityToolbar } from './EntityToolbar';
 export type { EntityToolbarProps } from './EntityToolbar';
 export { FilterPanel } from './FilterPanel';
+export type { FilterPanelProps } from './FilterPanel';
 export { SortPanel } from './SortPanel';
+export type { SortPanelProps } from './SortPanel';
 export { ColumnPanel } from './ColumnPanel';
+export type { ColumnPanelProps } from './ColumnPanel';
 export { useEntityFilter } from './hooks/useEntityFilter';
 export type { UseEntityFilterReturn } from './hooks/useEntityFilter';
 export { useEntitySort } from './hooks/useEntitySort';

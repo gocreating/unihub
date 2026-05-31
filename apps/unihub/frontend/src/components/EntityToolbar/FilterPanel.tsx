@@ -189,28 +189,34 @@ function GroupBlock({ group, attrs, totalGroups, onUpdate, onRemove }: GroupBloc
       </div>
 
       {/* Conditions with AND/OR connectors between them */}
-      {group.conditions.map((c, idx) => (
-        <React.Fragment key={c.id}>
-          <ConditionRow
-            condition={c}
-            attrs={attrs}
-            onUpdate={(updated) => updateCondition(idx, updated)}
-            onRemove={() => removeCondition(idx)}
-            canRemove={canRemoveCondition}
-          />
-          {idx < group.conditions.length - 1 && (
-            <LogicConnector
-              logic={group.logic}
-              isFirst={idx === 0}
-              onChange={(val) => onUpdate({ ...group, logic: val })}
-            />
-          )}
-        </React.Fragment>
-      ))}
+      <div style={{ borderLeft: '2px solid #e8e8e8', paddingLeft: 12, marginTop: 8 }}>
+        {group.conditions.map((c, idx) => (
+          <React.Fragment key={c.id}>
+            {idx > 0 && (
+              <div style={{ marginLeft: -20, margin: '4px 0 4px -20px' }}>
+                <LogicConnector
+                  logic={group.logic}
+                  isFirst={idx === 1}
+                  onChange={(val) => onUpdate({ ...group, logic: val })}
+                />
+              </div>
+            )}
+            <div style={{ marginBottom: 6 }}>
+              <ConditionRow
+                condition={c}
+                attrs={attrs}
+                onUpdate={(updated) => updateCondition(idx, updated)}
+                onRemove={() => removeCondition(idx)}
+                canRemove={canRemoveCondition}
+              />
+            </div>
+          </React.Fragment>
+        ))}
 
-      <Button size="small" icon={<PlusOutlined />} onClick={addCondition} style={{ marginTop: 6 }}>
-        {t({ id: 'common.entityOps.filter.addCondition' })}
-      </Button>
+        <Button size="small" icon={<PlusOutlined />} onClick={addCondition} style={{ marginTop: 2 }}>
+          {t({ id: 'common.entityOps.filter.addCondition' })}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -220,10 +226,11 @@ function GroupBlock({ group, attrs, totalGroups, onUpdate, onRemove }: GroupBloc
 export interface FilterPanelProps {
   attrs: FilterableAttribute[];
   hook: UseEntityFilterReturn;
+  onApply: () => void;
   onClose: () => void;
 }
 
-export function FilterPanel({ attrs, hook, onClose }: FilterPanelProps) {
+export function FilterPanel({ attrs, hook, onApply, onClose }: FilterPanelProps) {
   const { formatMessage: t } = useIntl();
   const { pendingGroups, setPendingGroups, apply } = hook;
 
@@ -290,7 +297,7 @@ export function FilterPanel({ attrs, hook, onClose }: FilterPanelProps) {
         <Button size="small" onClick={onClose}>
           {t({ id: 'common.entityOps.cancel' })}
         </Button>
-        <Button size="small" type="primary" onClick={() => { apply(); onClose(); }}>
+        <Button size="small" type="primary" onClick={() => { apply(); onApply(); }}>
           {t({ id: 'common.entityOps.apply' })}
         </Button>
       </Space>

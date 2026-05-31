@@ -6,10 +6,11 @@ import type { UseColumnConfigReturn } from './hooks/useColumnConfig';
 
 export interface ColumnPanelProps {
   hook: UseColumnConfigReturn;
+  onApply: () => void;
   onClose: () => void;
 }
 
-export function ColumnPanel({ hook, onClose }: ColumnPanelProps) {
+export function ColumnPanel({ hook, onApply, onClose }: ColumnPanelProps) {
   const { formatMessage: t } = useIntl();
   const { pendingState, setPendingState, apply } = hook;
   const { columns, stickyLeft, stickyRight } = pendingState;
@@ -128,7 +129,7 @@ export function ColumnPanel({ hook, onClose }: ColumnPanelProps) {
         <Button size="small" onClick={onClose}>
           {t({ id: 'common.entityOps.cancel' })}
         </Button>
-        <Button size="small" type="primary" onClick={() => { apply(); onClose(); }}>
+        <Button size="small" type="primary" onClick={() => { apply(); onApply(); }}>
           {t({ id: 'common.entityOps.apply' })}
         </Button>
       </Space>

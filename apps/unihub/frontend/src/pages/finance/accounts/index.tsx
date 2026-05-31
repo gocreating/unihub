@@ -18,21 +18,7 @@ import {
 import { EntityToolbar, useColumnConfig, useEntityFilter, useEntitySort } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
 
-const ACCOUNT_FILTERABLE_ATTRS: FilterableAttribute[] = [
-  { key: 'name', label: 'Name', dataType: 'text' },
-  { key: 'currency', label: 'Currency', dataType: 'single_select' },
-  { key: 'open_datetime', label: 'Open Date', dataType: 'date' },
-  { key: 'close_datetime', label: 'Close Date', dataType: 'date' },
-];
-
-const ACCOUNT_COLUMN_DEFS: ColumnDef[] = [
-  { key: 'name', label: 'Name', dataType: 'text', visible: true, order: 0 },
-  { key: 'currency', label: 'Currency', dataType: 'single_select', visible: true, order: 1 },
-  { key: 'color', label: 'Color', dataType: 'text', visible: true, order: 2 },
-  { key: 'open_datetime', label: 'Open Date', dataType: 'date', visible: true, order: 3 },
-  { key: 'close_datetime', label: 'Close Date', dataType: 'date', visible: true, order: 4 },
-  { key: 'actions', label: 'Actions', dataType: 'text', visible: true, order: 5 },
-];
+// Moved inside component (see filterableAttrs / columnDefs useMemo) to get localized labels.
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
@@ -84,10 +70,27 @@ export function AccountsPage() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [form] = Form.useForm<AccountFormValues>();
 
+  // Localized attrs/defs must come before hooks that consume them.
+  const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
+    { key: 'name', label: t({ id: 'common.name' }), dataType: 'text' },
+    { key: 'currency', label: t({ id: 'common.currency' }), dataType: 'single_select' },
+    { key: 'open_datetime', label: t({ id: 'pages.finance.accounts.col.openDatetime' }), dataType: 'date' },
+    { key: 'close_datetime', label: t({ id: 'pages.finance.accounts.col.closeDatetime' }), dataType: 'date' },
+  ], [t]);
+
+  const columnDefs = useMemo<ColumnDef[]>(() => [
+    { key: 'name', label: t({ id: 'common.name' }), dataType: 'text', visible: true, order: 0 },
+    { key: 'currency', label: t({ id: 'common.currency' }), dataType: 'single_select', visible: true, order: 1 },
+    { key: 'color', label: t({ id: 'pages.finance.accounts.col.color' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'open_datetime', label: t({ id: 'pages.finance.accounts.col.openDatetime' }), dataType: 'date', visible: true, order: 3 },
+    { key: 'close_datetime', label: t({ id: 'pages.finance.accounts.col.closeDatetime' }), dataType: 'date', visible: true, order: 4 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 5 },
+  ], [t]);
+
   // ── Entity operations hooks ─────────────────────────────────────────
   const filter = useEntityFilter('accounts');
   const sort = useEntitySort('accounts');
-  const cols = useColumnConfig(ACCOUNT_COLUMN_DEFS);
+  const cols = useColumnConfig(columnDefs);
   const [limit, setLimit] = useState(PAGE_SIZE_OPTIONS[0]!);
   const [offset, setOffset] = useState(0);
 
@@ -346,8 +349,8 @@ export function AccountsPage() {
         }
         headerTitle={
           <EntityToolbar
-            filterProps={{ attrs: ACCOUNT_FILTERABLE_ATTRS, hook: filter }}
-            sortProps={{ attrs: ACCOUNT_FILTERABLE_ATTRS, hook: sort }}
+            filterProps={{ attrs: filterableAttrs, hook: filter }}
+            sortProps={{ attrs: filterableAttrs, hook: sort }}
             columnProps={{ hook: cols }}
           />
         }

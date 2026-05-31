@@ -8,10 +8,11 @@ import type { FilterableAttribute, SortRule } from './types';
 export interface SortPanelProps {
   attrs: FilterableAttribute[];
   hook: UseEntitySortReturn;
+  onApply: () => void;
   onClose: () => void;
 }
 
-export function SortPanel({ attrs, hook, onClose }: SortPanelProps) {
+export function SortPanel({ attrs, hook, onApply, onClose }: SortPanelProps) {
   const { formatMessage: t } = useIntl();
   const { pendingRules, setPendingRules, apply } = hook;
 
@@ -111,7 +112,7 @@ export function SortPanel({ attrs, hook, onClose }: SortPanelProps) {
         <Button size="small" onClick={onClose}>
           {t({ id: 'common.entityOps.cancel' })}
         </Button>
-        <Button size="small" type="primary" onClick={() => { apply(); onClose(); }}>
+        <Button size="small" type="primary" onClick={() => { apply(); onApply(); }}>
           {t({ id: 'common.entityOps.apply' })}
         </Button>
       </Space>

@@ -31,7 +31,10 @@ const ACCOUNT_COLUMN_DEFS: ColumnDef[] = [
   { key: 'color', label: 'Color', dataType: 'text', visible: true, order: 2 },
   { key: 'open_datetime', label: 'Open Date', dataType: 'date', visible: true, order: 3 },
   { key: 'close_datetime', label: 'Close Date', dataType: 'date', visible: true, order: 4 },
+  { key: 'actions', label: 'Actions', dataType: 'text', visible: true, order: 5 },
 ];
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 // 20 preset colors covering the full hue spectrum — Material Design palette.
 const ACCOUNT_PRESET_COLORS = [
@@ -85,7 +88,7 @@ export function AccountsPage() {
   const filter = useEntityFilter('accounts');
   const sort = useEntitySort('accounts');
   const cols = useColumnConfig(ACCOUNT_COLUMN_DEFS);
-  const [limit] = useState(50);
+  const [limit, setLimit] = useState(PAGE_SIZE_OPTIONS[0]!);
   const [offset, setOffset] = useState(0);
 
   // Reset offset when filter or sort changes.
@@ -206,83 +209,123 @@ export function AccountsPage() {
     return w;
   }, [accounts]);
 
-  const visibleKeys = new Set(cols.visibleColumns.map((c) => c.key));
-  const lastVisKey = cols.visibleColumns.at(-1)?.key;
-
-  const columns: ProColumns<Account>[] = useMemo(
-    () => [
-      {
-        title: t({ id: 'common.name' }), dataIndex: 'name', ...widthForHeader('Name', dataWidths.name),
+  // All column definitions keyed by column key. Derived order comes from cols.visibleColumns.
+  // Depends on sort.sortOrderForField so sort highlighting updates when active rules change.
+  const colDefMap = useMemo<Record<string, ProColumns<Account>>>(
+    () => ({
+      name: {
+        title: t({ id: 'common.name' }),
+        dataIndex: 'name',
+        ...widthForHeader('Name', dataWidths.name),
         sorter: true,
         sortOrder: sort.sortOrderForField('name') ?? undefined,
-        hidden: !visibleKeys.has('name'),
-        fixed: cols.visibleColumns[0]?.key === 'name' ? cols.firstColumnFixed : lastVisKey === 'name' ? cols.lastColumnFixed : undefined,
+        showSorterTooltip: false,
+        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'name'
+          ? 'left'
+          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'name'
+            ? 'right'
+            : undefined,
       },
-      {
-        title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency', dataWidths.currency),
+      currency: {
+        title: t({ id: 'common.currency' }),
+        dataIndex: 'currency',
+        ...widthForHeader('Currency', dataWidths.currency),
         sorter: true,
         sortOrder: sort.sortOrderForField('currency') ?? undefined,
-        hidden: !visibleKeys.has('currency'),
-        fixed: cols.visibleColumns[0]?.key === 'currency' ? cols.firstColumnFixed : lastVisKey === 'currency' ? cols.lastColumnFixed : undefined,
+        showSorterTooltip: false,
+        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'currency'
+          ? 'left'
+          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'currency'
+            ? 'right'
+            : undefined,
         render: (val) => <Tag>{val as string}</Tag>,
       },
-      {
+      color: {
         title: t({ id: 'pages.finance.accounts.col.color' }),
         dataIndex: 'color',
         width: 72,
-        hidden: !visibleKeys.has('color'),
-        render: (_dom, record) => record.color
-          ? <span style={{ display: 'inline-block', width: 20, height: 20, borderRadius: '50%', background: record.color, border: '1px solid rgba(0,0,0,0.12)', verticalAlign: 'middle' }} />
-          : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
+        render: (_dom, record) =>
+          record.color ? (
+            <span
+              style={{
+                display: 'inline-block',
+                width: 20,
+                height: 20,
+                borderRadius: '50%',
+                background: record.color,
+                border: '1px solid rgba(0,0,0,0.12)',
+                verticalAlign: 'middle',
+              }}
+            />
+          ) : (
+            <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>
+          ),
       },
-      {
+      open_datetime: {
         title: t({ id: 'pages.finance.accounts.col.openDatetime' }),
         dataIndex: 'open_datetime',
         ...widthForHeader('Open Date', Math.max(220, dataWidths.open_datetime)),
         sorter: true,
         sortOrder: sort.sortOrderForField('open_datetime') ?? undefined,
-        hidden: !visibleKeys.has('open_datetime'),
+        showSorterTooltip: false,
         render: (_, record) => {
           const formatted = formatDateRelative(record.open_datetime);
-          return formatted
-            ? <Tooltip title={dayjs(record.open_datetime!).format('YYYY-MM-DD HH:mm:ss')}>{formatted}</Tooltip>
-            : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
+          return formatted ? (
+            <Tooltip title={dayjs(record.open_datetime!).format('YYYY-MM-DD HH:mm:ss')}>
+              {formatted}
+            </Tooltip>
+          ) : (
+            <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>
+          );
         },
       },
-      {
+      close_datetime: {
         title: t({ id: 'pages.finance.accounts.col.closeDatetime' }),
         dataIndex: 'close_datetime',
         ...widthForHeader('Close Date', Math.max(220, dataWidths.close_datetime)),
         sorter: true,
         sortOrder: sort.sortOrderForField('close_datetime') ?? undefined,
-        hidden: !visibleKeys.has('close_datetime'),
+        showSorterTooltip: false,
         render: (_, record) => {
           const formatted = formatDateRelative(record.close_datetime);
-          return formatted
-            ? <Tooltip title={dayjs(record.close_datetime!).format('YYYY-MM-DD HH:mm:ss')}>{formatted}</Tooltip>
-            : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
+          return formatted ? (
+            <Tooltip title={dayjs(record.close_datetime!).format('YYYY-MM-DD HH:mm:ss')}>
+              {formatted}
+            </Tooltip>
+          ) : (
+            <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>
+          );
         },
       },
-      {
+      actions: {
         title: t({ id: 'common.actions' }),
         key: 'actions',
         width: actionsColWidth,
         render: (_, record) => (
           <span data-actions-col>
-          <Space>
-            <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-              {t({ id: 'common.edit' })}
-            </Button>
-            <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-              {t({ id: 'common.delete' })}
-            </Button>
-          </Space>
+            <Space>
+              <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+                {t({ id: 'common.edit' })}
+              </Button>
+              <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+                {t({ id: 'common.delete' })}
+              </Button>
+            </Space>
           </span>
         ),
       },
-    ],
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, sort.activeRules, cols.activeState, visibleKeys, lastVisKey],
+    [t, dataWidths, actionsColWidth, sort.sortOrderForField, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns],
+  );
+
+  // Column array derived from the visible column order — this is what makes reordering work.
+  const columns = useMemo<ProColumns<Account>[]>(
+    () =>
+      cols.visibleColumns
+        .map((c) => colDefMap[c.key])
+        .filter((c): c is ProColumns<Account> => Boolean(c)),
+    [cols.visibleColumns, colDefMap],
   );
 
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} – ${c.name}` }));
@@ -318,9 +361,13 @@ export function AccountsPage() {
           total: accountsData?.count,
           pageSize: limit,
           current: Math.floor(offset / limit) + 1,
-          showTotal: (total) => `${total} records`,
-          onChange: (page) => setOffset((page - 1) * limit),
-          showSizeChanger: false,
+          showTotal: (total) => t({ id: 'common.entityOps.pagination.total' }, { total }),
+          onChange: (page, size) => {
+            setOffset((page - 1) * (size ?? limit));
+            if (size && size !== limit) { setLimit(size); setOffset(0); }
+          },
+          showSizeChanger: true,
+          pageSizeOptions: PAGE_SIZE_OPTIONS,
         }}
       />
 

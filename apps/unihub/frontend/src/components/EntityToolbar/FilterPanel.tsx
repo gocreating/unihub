@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Card, Divider, Input, Select, Space } from 'antd';
+import { Button, Card, Divider, Input, Select, Space, Typography } from 'antd';
 import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import { useIntl } from 'react-intl';
 import type { UseEntityFilterReturn } from './hooks/useEntityFilter';
@@ -115,11 +115,12 @@ function ConditionRow({ condition, attrs, onUpdate, onRemove, canRemove }: Condi
   );
 }
 
-// ── Logic connector between conditions ────────────────────────────────────────
+// ── Logic connector ───────────────────────────────────────────────────────────
+// Shown between conditions inside a group, and as a fixed "OR" between groups.
 
 interface LogicConnectorProps {
   logic: GroupLogic;
-  isFirst: boolean;
+  isFirst: boolean;       // only the first connector is interactive
   onChange: (val: GroupLogic) => void;
 }
 
@@ -142,17 +143,18 @@ function LogicConnector({ logic, isFirst, onChange }: LogicConnectorProps) {
   );
 }
 
-// ── Condition group ───────────────────────────────────────────────────────────
+// ── Condition group block ─────────────────────────────────────────────────────
 
 interface GroupBlockProps {
   group: FilterGroup;
   attrs: FilterableAttribute[];
+  groupIndex: number;
+  totalGroups: number;
   onUpdate: (updated: FilterGroup) => void;
   onRemove: () => void;
-  showRemove: boolean;
 }
 
-function GroupBlock({ group, attrs, onUpdate, onRemove, showRemove }: GroupBlockProps) {
+function GroupBlock({ group, attrs, groupIndex, totalGroups, onUpdate, onRemove }: GroupBlockProps) {
   const { formatMessage: t } = useIntl();
 
   const addCondition = () =>
@@ -167,10 +169,27 @@ function GroupBlock({ group, attrs, onUpdate, onRemove, showRemove }: GroupBlock
   const removeCondition = (idx: number) =>
     onUpdate({ ...group, conditions: group.conditions.filter((_, i) => i !== idx) });
 
-  const canRemove = group.conditions.length > 1;
+  const canRemoveCondition = group.conditions.length > 1;
 
   return (
-    <div>
+    <div
+      style={{
+        border: '1px solid #e8e8e8',
+        borderRadius: 8,
+        padding: '10px 12px',
+      }}
+    >
+      {/* Group header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t({ id: 'common.entityOps.filter.conditionGroup' })}
+        </Typography.Text>
+        {totalGroups > 1 && (
+          <Button size="small" type="text" danger icon={<CloseOutlined />} onClick={onRemove} />
+        )}
+      </div>
+
+      {/* Conditions with AND/OR connectors between them */}
       {group.conditions.map((c, idx) => (
         <React.Fragment key={c.id}>
           <ConditionRow
@@ -178,9 +197,8 @@ function GroupBlock({ group, attrs, onUpdate, onRemove, showRemove }: GroupBlock
             attrs={attrs}
             onUpdate={(updated) => updateCondition(idx, updated)}
             onRemove={() => removeCondition(idx)}
-            canRemove={canRemove}
+            canRemove={canRemoveCondition}
           />
-          {/* AND/OR connector between conditions; first one interactive, rest disabled */}
           {idx < group.conditions.length - 1 && (
             <LogicConnector
               logic={group.logic}
@@ -190,16 +208,10 @@ function GroupBlock({ group, attrs, onUpdate, onRemove, showRemove }: GroupBlock
           )}
         </React.Fragment>
       ))}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-        <Button size="small" icon={<PlusOutlined />} onClick={addCondition}>
-          {t({ id: 'common.entityOps.filter.addCondition' })}
-        </Button>
-        {showRemove && (
-          <Button size="small" type="text" danger icon={<CloseOutlined />} onClick={onRemove}>
-            {t({ id: 'common.entityOps.filter.removeGroup' })}
-          </Button>
-        )}
-      </div>
+
+      <Button size="small" icon={<PlusOutlined />} onClick={addCondition} style={{ marginTop: 6 }}>
+        {t({ id: 'common.entityOps.filter.addCondition' })}
+      </Button>
     </div>
   );
 }
@@ -238,33 +250,43 @@ export function FilterPanel({ attrs, hook, onClose }: FilterPanelProps) {
   return (
     <Card
       size="small"
-      style={{ width: 500, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+      style={{ width: 520, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
       styles={{ body: { padding: 12 } }}
     >
       {pendingGroups.map((g, idx) => (
         <React.Fragment key={g.id}>
+          {/* OR connector between groups — same visual language as AND/OR inside groups */}
           {idx > 0 && (
-            <Divider plain style={{ margin: '10px 0', fontSize: 12, color: '#8c8c8c' }}>
-              {t({ id: 'common.entityOps.filter.or' })}
-            </Divider>
+            <div style={{ display: 'flex', alignItems: 'center', margin: '8px 0' }}>
+              <Select
+                size="small"
+                value="or"
+                disabled
+                options={[{ value: 'or', label: t({ id: 'common.entityOps.filter.or' }) }]}
+                style={{ width: 72 }}
+              />
+            </div>
           )}
           <GroupBlock
             group={g}
             attrs={attrs}
+            groupIndex={idx}
+            totalGroups={pendingGroups.length}
             onUpdate={(updated) => updateGroup(idx, updated)}
             onRemove={() => removeGroup(idx)}
-            showRemove={pendingGroups.length > 1}
           />
         </React.Fragment>
       ))}
+
       <Button
         size="small"
         icon={<PlusOutlined />}
         onClick={addGroup}
         style={{ marginTop: 10, marginBottom: 4 }}
       >
-        {t({ id: 'common.entityOps.filter.addGroup' })}
+        {t({ id: 'common.entityOps.filter.addConditionGroup' })}
       </Button>
+
       <Divider style={{ margin: '8px 0' }} />
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
         <Button size="small" onClick={onClose}>

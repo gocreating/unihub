@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Badge, Button, Dropdown, Space } from 'antd';
+import { Button, Dropdown, Space, Tooltip } from 'antd';
 import { FilterOutlined, SortAscendingOutlined, TableOutlined } from '@ant-design/icons';
 import { useIntl } from 'react-intl';
 import type { UseEntityFilterReturn } from './hooks/useEntityFilter';
@@ -27,12 +27,10 @@ export interface EntityToolbarProps {
 export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToolbarProps) {
   const { formatMessage: t } = useIntl();
 
-  // Controlled open state so we can block closing when a panel is dirty.
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [columnOpen, setColumnOpen] = useState(false);
 
-  // Cancel + close: discard pending changes and hide the dropdown.
   const closeFilter = useCallback(() => {
     filterProps.hook.cancel();
     setFilterOpen(false);
@@ -48,9 +46,6 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
     setColumnOpen(false);
   }, [columnProps.hook]);
 
-  // onOpenChange fires when the user clicks outside or presses Escape.
-  // If the panel has unsaved changes, block the close so the user must
-  // explicitly click the Cancel button.
   const handleFilterOpenChange = (open: boolean) => {
     if (!open && filterProps.hook.isDirty) return;
     setFilterOpen(open);
@@ -69,9 +64,30 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
     if (!open) columnProps.hook.cancel();
   };
 
+  const filterTooltip =
+    filterOpen && filterProps.hook.isDirty
+      ? t({ id: 'common.entityOps.unsavedChanges' })
+      : filterProps.hook.isActive
+        ? t({ id: 'common.entityOps.filter.isActive' })
+        : undefined;
+
+  const sortTooltip =
+    sortOpen && sortProps.hook.isDirty
+      ? t({ id: 'common.entityOps.unsavedChanges' })
+      : sortProps.hook.isActive
+        ? t({ id: 'common.entityOps.sort.isActive' })
+        : undefined;
+
+  const columnTooltip =
+    columnOpen && columnProps.hook.isDirty
+      ? t({ id: 'common.entityOps.unsavedChanges' })
+      : columnProps.hook.isCustomised
+        ? t({ id: 'common.entityOps.columns.isCustomised' })
+        : undefined;
+
   return (
     <Space size="small">
-      {/* Filter dropdown */}
+      {/* Filter */}
       <Dropdown
         open={filterOpen}
         onOpenChange={handleFilterOpenChange}
@@ -80,18 +96,18 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
           <FilterPanel attrs={filterProps.attrs} hook={filterProps.hook} onClose={closeFilter} />
         )}
       >
-        <Badge dot={filterProps.hook.isActive} offset={[-4, 4]}>
+        <Tooltip title={filterTooltip}>
           <Button
             icon={<FilterOutlined />}
-            type={filterProps.hook.isActive ? 'primary' : 'default'}
+            type={filterProps.hook.isActive || filterOpen ? 'primary' : 'default'}
             onClick={() => setFilterOpen((v) => !v)}
           >
             {t({ id: 'common.entityOps.filter' })}
           </Button>
-        </Badge>
+        </Tooltip>
       </Dropdown>
 
-      {/* Sort dropdown */}
+      {/* Sort */}
       <Dropdown
         open={sortOpen}
         onOpenChange={handleSortOpenChange}
@@ -100,18 +116,18 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
           <SortPanel attrs={sortProps.attrs} hook={sortProps.hook} onClose={closeSort} />
         )}
       >
-        <Badge dot={sortProps.hook.isActive} offset={[-4, 4]}>
+        <Tooltip title={sortTooltip}>
           <Button
             icon={<SortAscendingOutlined />}
-            type={sortProps.hook.isActive ? 'primary' : 'default'}
+            type={sortProps.hook.isActive || sortOpen ? 'primary' : 'default'}
             onClick={() => setSortOpen((v) => !v)}
           >
             {t({ id: 'common.entityOps.sort' })}
           </Button>
-        </Badge>
+        </Tooltip>
       </Dropdown>
 
-      {/* Columns dropdown */}
+      {/* Columns */}
       <Dropdown
         open={columnOpen}
         onOpenChange={handleColumnOpenChange}
@@ -120,14 +136,15 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
           <ColumnPanel hook={columnProps.hook} onClose={closeColumn} />
         )}
       >
-        <Badge dot={columnProps.hook.isCustomised} offset={[-4, 4]}>
+        <Tooltip title={columnTooltip}>
           <Button
             icon={<TableOutlined />}
+            type={columnProps.hook.isCustomised || columnOpen ? 'primary' : 'default'}
             onClick={() => setColumnOpen((v) => !v)}
           >
             {t({ id: 'common.entityOps.columns' })}
           </Button>
-        </Badge>
+        </Tooltip>
       </Dropdown>
     </Space>
   );

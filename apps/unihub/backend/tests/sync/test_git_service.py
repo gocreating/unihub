@@ -38,11 +38,10 @@ def test_ensure_clone_is_idempotent(svc: GitSyncService) -> None:
     assert svc.clone_dir.exists()
 
 
-def test_ensure_clone_reclones_on_missing_git_dir(
-    svc: GitSyncService, bare_repo: dict
-) -> None:
+def test_ensure_clone_reclones_on_missing_git_dir(svc: GitSyncService, bare_repo: dict) -> None:
     svc.ensure_clone()
     import shutil
+
     shutil.rmtree(svc.clone_dir / ".git")
     svc.ensure_clone()
     assert (svc.clone_dir / ".git").exists()
@@ -67,11 +66,12 @@ def test_status_behind(svc: GitSyncService, bare_repo: dict) -> None:
     subprocess.run(["git", "add", "."], check=True, capture_output=True, cwd=str(remote_clone))
     subprocess.run(
         ["git", "commit", "-m", "remote commit"],
-        check=True, capture_output=True, cwd=str(remote_clone)
+        check=True,
+        capture_output=True,
+        cwd=str(remote_clone),
     )
     subprocess.run(
-        ["git", "push", "origin", "HEAD"],
-        check=True, capture_output=True, cwd=str(remote_clone)
+        ["git", "push", "origin", "HEAD"], check=True, capture_output=True, cwd=str(remote_clone)
     )
     result = svc.status()
     assert result.status == "behind"
@@ -82,12 +82,12 @@ def test_status_ahead(svc: GitSyncService, bare_repo: dict) -> None:
     svc.ensure_clone()
     # Commit locally without pushing
     (svc.clone_dir / "local.txt").write_text("local")
-    subprocess.run(
-        ["git", "add", "."], check=True, capture_output=True, cwd=str(svc.clone_dir)
-    )
+    subprocess.run(["git", "add", "."], check=True, capture_output=True, cwd=str(svc.clone_dir))
     subprocess.run(
         ["git", "commit", "-m", "local commit"],
-        check=True, capture_output=True, cwd=str(svc.clone_dir)
+        check=True,
+        capture_output=True,
+        cwd=str(svc.clone_dir),
     )
     result = svc.status()
     assert result.status == "ahead"
@@ -103,9 +103,7 @@ def _write_dummy_csv(clone_dir: Path) -> list[str]:
     return ["finance_account"]
 
 
-def test_publish_creates_commit_and_returns_data(
-    svc: GitSyncService, bare_repo: dict
-) -> None:
+def test_publish_creates_commit_and_returns_data(svc: GitSyncService, bare_repo: dict) -> None:
     from unittest.mock import patch
 
     svc.ensure_clone()
@@ -118,9 +116,7 @@ def test_publish_creates_commit_and_returns_data(
     assert result.tables_exported == ["finance_account"]
 
 
-def test_publish_returns_none_when_no_changes(
-    svc: GitSyncService, bare_repo: dict
-) -> None:
+def test_publish_returns_none_when_no_changes(svc: GitSyncService, bare_repo: dict) -> None:
     from unittest.mock import patch
 
     svc.ensure_clone()
@@ -154,12 +150,16 @@ def test_publish_raises_diverged_on_rejected_push(
     subprocess.run(["git", "add", "."], check=True, capture_output=True, cwd=str(other))
     subprocess.run(
         ["git", "commit", "-m", "other commit"],
-        check=True, capture_output=True, cwd=str(other),
+        check=True,
+        capture_output=True,
+        cwd=str(other),
     )
     subprocess.run(
         ["git", "push", bare_repo["repo_url"], "HEAD"],
         env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-        check=True, capture_output=True, cwd=str(other),
+        check=True,
+        capture_output=True,
+        cwd=str(other),
     )
 
     # svc publish should create a local commit and fail to push (non-fast-forward)
@@ -186,12 +186,16 @@ def test_force_publish_pushes_with_force(
     subprocess.run(["git", "add", "."], check=True, capture_output=True, cwd=str(other))
     subprocess.run(
         ["git", "commit", "-m", "other commit 2"],
-        check=True, capture_output=True, cwd=str(other),
+        check=True,
+        capture_output=True,
+        cwd=str(other),
     )
     subprocess.run(
         ["git", "push", bare_repo["repo_url"], "HEAD"],
         env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-        check=True, capture_output=True, cwd=str(other),
+        check=True,
+        capture_output=True,
+        cwd=str(other),
     )
 
     with patch("sync.services.publish_helper.write_csvs_to_clone", side_effect=_write_dummy_csv):

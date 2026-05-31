@@ -143,8 +143,13 @@ def parse_csv(
     pk_header = pk_field.csv_header if pk_field else None
 
     # ── FK fields ─────────────────────────────────────────────────────────────
-    fk_fields = [f for f in descriptor.system_fields if f.is_fk and f.fk_content_type_label and
-                 f.fk_content_type_label != "contenttypes.contenttype"]
+    fk_fields = [
+        f
+        for f in descriptor.system_fields
+        if f.is_fk
+        and f.fk_content_type_label
+        and f.fk_content_type_label != "contenttypes.contenttype"
+    ]
 
     # ── Parse data rows ────────────────────────────────────────────────────────
     rows: list[dict[str, str]] = []

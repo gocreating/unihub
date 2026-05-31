@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('finance', '0007_account_datetime_fields'),
+        ("finance", "0007_account_datetime_fields"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='currency',
-            name='is_base_currency',
+            model_name="currency",
+            name="is_base_currency",
             field=models.BooleanField(default=False),
         ),
     ]

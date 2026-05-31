@@ -24,30 +24,25 @@ def bare_repo(tmp_path: Path) -> dict:
 
     clone = tmp_path / "clone"
     clone.mkdir()
-    subprocess.run(
-        ["git", "clone", str(remote), str(clone)], check=True, capture_output=True
-    )
+    subprocess.run(["git", "clone", str(remote), str(clone)], check=True, capture_output=True)
 
     # Configure git identity in the clone so commits work
     subprocess.run(
         ["git", "config", "user.email", "test@test.com"],
-        check=True, capture_output=True, cwd=str(clone)
+        check=True,
+        capture_output=True,
+        cwd=str(clone),
     )
     subprocess.run(
-        ["git", "config", "user.name", "Test User"],
-        check=True, capture_output=True, cwd=str(clone)
+        ["git", "config", "user.name", "Test User"], check=True, capture_output=True, cwd=str(clone)
     )
 
     # Seed with an initial commit so there is a HEAD
     (clone / "README.md").write_text("init")
     subprocess.run(["git", "add", "."], check=True, capture_output=True, cwd=str(clone))
+    subprocess.run(["git", "commit", "-m", "init"], check=True, capture_output=True, cwd=str(clone))
     subprocess.run(
-        ["git", "commit", "-m", "init"],
-        check=True, capture_output=True, cwd=str(clone)
-    )
-    subprocess.run(
-        ["git", "push", "origin", "HEAD"],
-        check=True, capture_output=True, cwd=str(clone)
+        ["git", "push", "origin", "HEAD"], check=True, capture_output=True, cwd=str(clone)
     )
 
     return {

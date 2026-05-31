@@ -5,6 +5,7 @@ from sync.views import (
     SyncApplyPreviewView,
     SyncConfigView,
     SyncForcePublishView,
+    SyncPublishPreviewView,
     SyncPublishView,
     SyncStatusView,
 )
@@ -12,6 +13,7 @@ from sync.views import (
 urlpatterns = [
     path("config/", SyncConfigView.as_view()),
     path("status/", SyncStatusView.as_view()),
+    path("publish/preview/", SyncPublishPreviewView.as_view()),
     path("publish/", SyncPublishView.as_view()),
     path("force-publish/", SyncForcePublishView.as_view()),
     path("apply/preview/", SyncApplyPreviewView.as_view()),

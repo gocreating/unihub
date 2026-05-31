@@ -174,7 +174,10 @@ def _parse_field_value_for_db(field_desc: FieldDescriptor, raw_value: str) -> An
         return datetime.datetime.fromisoformat(raw)
     if field_desc.data_type in ("date",):
         return datetime.date.fromisoformat(raw_value)
-    if field_desc.use_natural_key and field_desc.fk_content_type_label == "contenttypes.contenttype":
+    if (
+        field_desc.use_natural_key
+        and field_desc.fk_content_type_label == "contenttypes.contenttype"
+    ):
         from django.contrib.contenttypes.models import ContentType
 
         app_label, model_name = raw_value.split(".")
@@ -192,7 +195,10 @@ def _build_model_kwargs(
             continue
         raw = csv_row.get(field_desc.csv_header, "")
         parsed = _parse_field_value_for_db(field_desc, raw)
-        if field_desc.use_natural_key and field_desc.fk_content_type_label == "contenttypes.contenttype":
+        if (
+            field_desc.use_natural_key
+            and field_desc.fk_content_type_label == "contenttypes.contenttype"
+        ):
             kwargs[field_desc.column_name] = parsed
         else:
             kwargs[field_desc.column_name] = parsed
@@ -268,17 +274,15 @@ def apply_diff(
                         update_kwargs[field_desc.column_name] = _parse_field_value_for_db(
                             field_desc, changed_after[field_desc.csv_header]
                         )
-                descriptor.model_class.objects.filter(
-                    **{pk_field.column_name: pk_val}
-                ).update(**update_kwargs)
+                descriptor.model_class.objects.filter(**{pk_field.column_name: pk_val}).update(
+                    **update_kwargs
+                )
                 if descriptor.has_user_attributes:
                     _upsert_attribute_values(descriptor, pk_val, changed_after)
                 updated += 1
 
             elif operation == "delete":
-                descriptor.model_class.objects.filter(
-                    **{pk_field.column_name: pk_val}
-                ).delete()
+                descriptor.model_class.objects.filter(**{pk_field.column_name: pk_val}).delete()
                 deleted += 1
 
     return {"created": created, "updated": updated, "deleted": deleted}

@@ -105,7 +105,9 @@ def import_from_clone(clone_dir: Path) -> list:
                 {
                     "table": label,
                     "display_name": desc.display_name,
-                    "applied": counts.get("created", 0) + counts.get("updated", 0) + counts.get("deleted", 0),
+                    "applied": counts.get("created", 0)
+                    + counts.get("updated", 0)
+                    + counts.get("deleted", 0),
                 }
             )
 

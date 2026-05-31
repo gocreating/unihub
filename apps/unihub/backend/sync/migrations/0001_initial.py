@@ -4,30 +4,33 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='SyncConfig',
+            name="SyncConfig",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('repo_url', models.URLField(max_length=500)),
-                ('pat_encrypted', models.TextField()),
-                ('device_name', models.CharField(max_length=100)),
-                ('last_published_at', models.DateTimeField(blank=True, null=True)),
-                ('last_published_commit', models.CharField(blank=True, max_length=40, null=True)),
-                ('last_applied_at', models.DateTimeField(blank=True, null=True)),
-                ('last_applied_commit', models.CharField(blank=True, max_length=40, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("repo_url", models.URLField(max_length=500)),
+                ("pat_encrypted", models.TextField()),
+                ("device_name", models.CharField(max_length=100)),
+                ("last_published_at", models.DateTimeField(blank=True, null=True)),
+                ("last_published_commit", models.CharField(blank=True, max_length=40, null=True)),
+                ("last_applied_at", models.DateTimeField(blank=True, null=True)),
+                ("last_applied_commit", models.CharField(blank=True, max_length=40, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'verbose_name': 'Sync Config',
-                'verbose_name_plural': 'Sync Configs',
+                "verbose_name": "Sync Config",
+                "verbose_name_plural": "Sync Configs",
             },
         ),
     ]

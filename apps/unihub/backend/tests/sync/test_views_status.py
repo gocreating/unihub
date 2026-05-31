@@ -30,8 +30,7 @@ def test_status_not_configured(auth_client: Client, db: None) -> None:
 def test_status_in_sync(auth_client: Client, db: None) -> None:
     auth_client.put("/api/v1/sync/config/", VALID_CONFIG, content_type="application/json")
     mock_status = MagicMock(
-        status="in_sync", ahead_count=0, behind_count=0,
-        remote_commit="abc123", error_message=None
+        status="in_sync", ahead_count=0, behind_count=0, remote_commit="abc123", error_message=None
     )
     with patch("sync.views.GitSyncService.status", return_value=mock_status):
         resp = auth_client.get(URL)
@@ -42,8 +41,7 @@ def test_status_in_sync(auth_client: Client, db: None) -> None:
 def test_status_behind(auth_client: Client, db: None) -> None:
     auth_client.put("/api/v1/sync/config/", VALID_CONFIG, content_type="application/json")
     mock_status = MagicMock(
-        status="behind", ahead_count=0, behind_count=3,
-        remote_commit="def456", error_message=None
+        status="behind", ahead_count=0, behind_count=3, remote_commit="def456", error_message=None
     )
     with patch("sync.views.GitSyncService.status", return_value=mock_status):
         resp = auth_client.get(URL)
@@ -56,8 +54,11 @@ def test_status_behind(auth_client: Client, db: None) -> None:
 def test_status_error(auth_client: Client, db: None) -> None:
     auth_client.put("/api/v1/sync/config/", VALID_CONFIG, content_type="application/json")
     mock_status = MagicMock(
-        status="error", ahead_count=0, behind_count=0,
-        remote_commit=None, error_message="Connection refused"
+        status="error",
+        ahead_count=0,
+        behind_count=0,
+        remote_commit=None,
+        error_message="Connection refused",
     )
     with patch("sync.views.GitSyncService.status", return_value=mock_status):
         resp = auth_client.get(URL)

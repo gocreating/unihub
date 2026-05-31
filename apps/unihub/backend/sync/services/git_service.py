@@ -90,6 +90,7 @@ class GitSyncService:
             return
         if self.clone_dir.exists():
             import shutil
+
             shutil.rmtree(self.clone_dir)
         self.clone_dir.mkdir(parents=True, exist_ok=True)
         self._run(
@@ -104,9 +105,7 @@ class GitSyncService:
         try:
             self.ensure_clone()
             # Fetch to update remote-tracking refs
-            fetch = self._run(
-                ["git", "fetch", self._authenticated_url(), "--quiet"], check=False
-            )
+            fetch = self._run(["git", "fetch", self._authenticated_url(), "--quiet"], check=False)
             if fetch.returncode != 0:
                 # Empty repo has no HEAD yet — not an error, just no remote commits
                 stderr = fetch.stderr.strip()
@@ -183,6 +182,7 @@ class GitSyncService:
     def _changed_tables(self, all_tables: list[str]) -> list[str]:
         """Return only the tables whose CSV files are staged as changed."""
         from sync.services.publish_helper import _csv_filename
+
         result = self._run(["git", "diff", "--cached", "--name-only"], check=False)
         changed_files = set(result.stdout.splitlines())
         return [t for t in all_tables if _csv_filename(t) in changed_files]
@@ -219,9 +219,7 @@ class GitSyncService:
         changed = self._changed_tables(tables_exported)
         self._run(["git", "commit", "-m", self._commit_message(changed)])
 
-        push = self._run(
-            ["git", "push", self._authenticated_url(), "HEAD"], check=False
-        )
+        push = self._run(["git", "push", self._authenticated_url(), "HEAD"], check=False)
         if push.returncode != 0:
             if "rejected" in push.stderr or "non-fast-forward" in push.stderr:
                 raise DivergedException(self._sanitise(push.stderr))
@@ -247,9 +245,7 @@ class GitSyncService:
         changed = self._changed_tables(tables_exported)
         self._run(["git", "commit", "-m", self._commit_message(changed)])
 
-        push = self._run(
-            ["git", "push", "--force", self._authenticated_url(), "HEAD"], check=False
-        )
+        push = self._run(["git", "push", "--force", self._authenticated_url(), "HEAD"], check=False)
         if push.returncode != 0:
             raise GitError(self._sanitise(push.stderr))
 
@@ -257,6 +253,19 @@ class GitSyncService:
         return SyncPublishData(commit_sha=sha, tables_exported=changed)
 
     # ── Apply ─────────────────────────────────────────────────────────────────
+
+    def publish_preview(self) -> list | None:
+        """Compute per-table change summary without staging or committing.
+
+        Returns:
+            None when nothing has changed since the last publish.
+            A list of per-table change dicts otherwise.
+        """
+        from sync.services.publish_helper import preview_publish_against_head
+
+        self.ensure_clone()
+        changes = preview_publish_against_head(self.clone_dir)
+        return changes if changes else None
 
     def apply_preview(self) -> list | None:
         """Fetch latest remote state, return per-table change preview or None if up-to-date."""
@@ -273,6 +282,7 @@ class GitSyncService:
         # the latest snapshot (e.g. a fresh clone already has HEAD == FETCH_HEAD
         # but the local DB may be empty).
         from sync.services.apply_helper import preview_from_fetch_head
+
         changes = preview_from_fetch_head(self.clone_dir)
         return changes if changes else None
 
@@ -287,6 +297,7 @@ class GitSyncService:
             raise GitError(self._sanitise(pull.stderr))
 
         from sync.services.apply_helper import import_from_clone
+
         return import_from_clone(self.clone_dir)
 
 

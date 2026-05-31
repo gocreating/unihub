@@ -148,13 +148,12 @@ function LogicConnector({ logic, isFirst, onChange }: LogicConnectorProps) {
 interface GroupBlockProps {
   group: FilterGroup;
   attrs: FilterableAttribute[];
-  groupIndex: number;
   totalGroups: number;
   onUpdate: (updated: FilterGroup) => void;
   onRemove: () => void;
 }
 
-function GroupBlock({ group, attrs, groupIndex, totalGroups, onUpdate, onRemove }: GroupBlockProps) {
+function GroupBlock({ group, attrs, totalGroups, onUpdate, onRemove }: GroupBlockProps) {
   const { formatMessage: t } = useIntl();
 
   const addCondition = () =>
@@ -270,7 +269,6 @@ export function FilterPanel({ attrs, hook, onClose }: FilterPanelProps) {
           <GroupBlock
             group={g}
             attrs={attrs}
-            groupIndex={idx}
             totalGroups={pendingGroups.length}
             onUpdate={(updated) => updateGroup(idx, updated)}
             onRemove={() => removeGroup(idx)}

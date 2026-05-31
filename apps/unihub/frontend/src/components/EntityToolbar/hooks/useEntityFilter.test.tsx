@@ -26,9 +26,9 @@ describe('useEntityFilter', () => {
 
     expect(result.current.activeGroups).toHaveLength(0);
     expect(result.current.pendingGroups).toHaveLength(1);
-    expect(result.current.pendingGroups[0].conditions).toHaveLength(1);
-    expect(result.current.pendingGroups[0].conditions[0].attr).toBe('');
-    expect(result.current.pendingGroups[0].conditions[0].val).toBe('');
+    expect(result.current.pendingGroups[0]!.conditions).toHaveLength(1);
+    expect(result.current.pendingGroups[0]!.conditions[0]!.attr).toBe('');
+    expect(result.current.pendingGroups[0]!.conditions[0]!.val).toBe('');
   });
 
   // F-02: isActive is false on init
@@ -69,7 +69,7 @@ describe('useEntityFilter', () => {
     });
 
     expect(result.current.activeGroups).toHaveLength(1);
-    expect(result.current.activeGroups[0].conditions[0].attr).toBe('name');
+    expect(result.current.activeGroups[0]!.conditions[0]!.attr).toBe('name');
     expect(result.current.isActive).toBe(true);
     expect(result.current.isDirty).toBe(false);
   });
@@ -104,7 +104,7 @@ describe('useEntityFilter', () => {
     });
 
     // Pending should reflect the active groups after cancel
-    expect(result.current.pendingGroups[0].conditions[0].attr).toBe('name');
+    expect(result.current.pendingGroups[0]!.conditions[0]!.attr).toBe('name');
     expect(result.current.isDirty).toBe(false);
   });
 
@@ -121,7 +121,7 @@ describe('useEntityFilter', () => {
     });
 
     expect(result.current.pendingGroups).toHaveLength(1);
-    expect(result.current.pendingGroups[0].conditions[0].attr).toBe('');
+    expect(result.current.pendingGroups[0]!.conditions[0]!.attr).toBe('');
   });
 
   // F-08: toApiParam() returns undefined when no active conditions
@@ -144,9 +144,9 @@ describe('useEntityFilter', () => {
     const param = result.current.toApiParam();
     expect(param).toBeDefined();
     expect(param?.groups).toHaveLength(1);
-    expect(param?.groups[0].conditions[0].attr).toBe('name');
-    expect(param?.groups[0].conditions[0].op).toBe('contains');
-    expect(param?.groups[0].conditions[0].val).toBe('Alice');
+    expect(param?.groups[0]!.conditions[0]!.attr).toBe('name');
+    expect(param?.groups[0]!.conditions[0]!.op).toBe('contains');
+    expect(param?.groups[0]!.conditions[0]!.val).toBe('Alice');
   });
 
   // F-10: reset() clears all active groups, isActive becomes false
@@ -170,7 +170,7 @@ describe('useEntityFilter', () => {
     expect(result.current.isActive).toBe(false);
     // Pending should have an empty placeholder
     expect(result.current.pendingGroups).toHaveLength(1);
-    expect(result.current.pendingGroups[0].conditions[0].attr).toBe('');
+    expect(result.current.pendingGroups[0]!.conditions[0]!.attr).toBe('');
   });
 
   // F-11: apply() with empty pending conditions leaves activeGroups unchanged (no real conditions)

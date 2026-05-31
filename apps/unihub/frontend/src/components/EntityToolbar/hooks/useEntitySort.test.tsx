@@ -14,8 +14,8 @@ describe('useEntitySort', () => {
 
     expect(result.current.activeRules).toHaveLength(0);
     expect(result.current.pendingRules).toHaveLength(1);
-    expect(result.current.pendingRules[0].field).toBe('');
-    expect(result.current.pendingRules[0].direction).toBe('asc');
+    expect(result.current.pendingRules[0]!.field).toBe('');
+    expect(result.current.pendingRules[0]!.direction).toBe('asc');
   });
 
   // S-02: isActive is false with no active rules
@@ -66,8 +66,8 @@ describe('useEntitySort', () => {
     });
 
     expect(result.current.activeRules).toHaveLength(1);
-    expect(result.current.activeRules[0].field).toBe('name');
-    expect(result.current.activeRules[0].direction).toBe('asc');
+    expect(result.current.activeRules[0]!.field).toBe('name');
+    expect(result.current.activeRules[0]!.direction).toBe('asc');
     expect(result.current.isActive).toBe(true);
     expect(result.current.isDirty).toBe(false);
   });
@@ -95,8 +95,8 @@ describe('useEntitySort', () => {
       result.current.cancel();
     });
 
-    expect(result.current.pendingRules[0].field).toBe('amount');
-    expect(result.current.pendingRules[0].direction).toBe('desc');
+    expect(result.current.pendingRules[0]!.field).toBe('amount');
+    expect(result.current.pendingRules[0]!.direction).toBe('desc');
     expect(result.current.isDirty).toBe(false);
   });
 
@@ -113,7 +113,7 @@ describe('useEntitySort', () => {
     });
 
     expect(result.current.pendingRules).toHaveLength(1);
-    expect(result.current.pendingRules[0].field).toBe('');
+    expect(result.current.pendingRules[0]!.field).toBe('');
   });
 
   // S-09: handleHeaderClick cycles null → ascend → descend → null
@@ -154,8 +154,8 @@ describe('useEntitySort', () => {
     });
 
     expect(result.current.activeRules).toHaveLength(2);
-    expect(result.current.activeRules[0].field).toBe('name');
-    expect(result.current.activeRules[1].field).toBe('amount');
+    expect(result.current.activeRules[0]!.field).toBe('name');
+    expect(result.current.activeRules[1]!.field).toBe('amount');
   });
 
   // S-11: sortOrderForField returns null for unsorted fields

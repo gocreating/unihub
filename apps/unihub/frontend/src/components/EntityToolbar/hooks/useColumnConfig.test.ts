@@ -19,8 +19,8 @@ describe('useColumnConfig', () => {
     const { result } = renderHook(() => useColumnConfig(cols));
 
     expect(result.current.visibleColumns).toHaveLength(2);
-    expect(result.current.visibleColumns[0].key).toBe('name');
-    expect(result.current.visibleColumns[1].key).toBe('amount');
+    expect(result.current.visibleColumns[0]!.key).toBe('name');
+    expect(result.current.visibleColumns[1]!.key).toBe('amount');
   });
 
   // C-02: isDirty is false on init
@@ -113,8 +113,8 @@ describe('useColumnConfig', () => {
       result.current.apply();
     });
 
-    expect(result.current.visibleColumns[0].key).toBe('amount');
-    expect(result.current.visibleColumns[1].key).toBe('name');
+    expect(result.current.visibleColumns[0]!.key).toBe('amount');
+    expect(result.current.visibleColumns[1]!.key).toBe('name');
   });
 
   // C-07: firstColumnFixed returns 'left' when stickyLeft is active

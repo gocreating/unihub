@@ -162,9 +162,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `007-data-sync-migration-fix` | **Plan**: [specs/007-data-sync-migration-fix/plan.md](specs/007-data-sync-migration-fix/plan.md)
+**Branch**: `009-fix-finance-sync` | **Plan**: [specs/009-fix-finance-sync/plan.md](specs/009-fix-finance-sync/plan.md)
 
-Data sync migration fix and publish preview. Two deliverables: (1) bug fix — add `apps.py` to `language/`, `music/`, and `people/` backend apps so their models are registered in the `data_io` registry and included in all sync, export, and import operations; (2) new feature — `GET /api/v1/sync/publish/preview/` endpoint that computes per-table added/modified/deleted counts by comparing local DB against last published HEAD commit, with a frontend preview step requiring explicit confirmation before publishing. See plan for full implementation details and constitution check.
+Systematic fix for data sync field omissions. Root cause: `finance/apps.py` manually hardcodes field lists; `Currency.is_base_currency` and `Account.color` were added after initial registration and silently omitted. Fix: (1) add missing fields immediately; (2) implement `auto_system_fields(model_class)` in `data_io/registry.py` that derives `FieldDescriptor` objects from `model._meta.concrete_fields` automatically — any future field addition is included in sync without manual updates. Also fixes `Account.created_at`/`updated_at` and `BalanceSheet.created_at`/`updated_at`. Adds regression test `test_sync_field_coverage.py` asserting all model fields are registered. Backend-only; no migrations.
 <!-- SPECKIT END -->
 
 ## Active Technologies

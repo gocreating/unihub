@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, ColorPicker, DatePicker, Form, Input, Modal, Select, Space, Tag, Tooltip, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
-import type { SorterResult } from 'antd/es/table/interface';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
@@ -15,12 +14,8 @@ import {
   listCurrencies,
   updateAccount,
 } from '@/services/unihub-backend/finance';
-import { EntityToolbar, useColumnConfig, useEntityFilter, useEntitySort } from '@/components/EntityToolbar';
+import { EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
-
-// Moved inside component (see filterableAttrs / columnDefs useMemo) to get localized labels.
-
-const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 // 20 preset colors covering the full hue spectrum — Material Design palette.
 const ACCOUNT_PRESET_COLORS = [
@@ -87,19 +82,13 @@ export function AccountsPage() {
     { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 5 },
   ], [t]);
 
-  // ── Entity operations hooks ─────────────────────────────────────────
-  const filter = useEntityFilter('accounts');
-  const sort = useEntitySort('accounts');
-  const cols = useColumnConfig(columnDefs);
-  const [limit, setLimit] = useState(PAGE_SIZE_OPTIONS[0]!);
-  const [offset, setOffset] = useState(0);
-
-  // Reset offset when filter or sort changes.
-  useEffect(() => { setOffset(0); }, [filter.activeGroups, sort.activeRules]);
+  // ── Entity operations — single standardized hook ─────────────────────
+  const table = useEntityTable({ key: 'accounts', filterableAttrs, columnDefs });
+  const { filter, sort, cols } = table;
 
   const { data: accountsData, isLoading, isError } = useQuery({
-    queryKey: ['finance', 'accounts', filter.toApiParam(), sort.toOrderingParam(), limit, offset],
-    queryFn: () => listAccounts({ filters: filter.toApiParam(), ordering: sort.toOrderingParam(), limit, offset }),
+    queryKey: ['finance', 'accounts', table.queryParams],
+    queryFn: () => listAccounts(table.queryParams),
   });
   const accounts = useMemo(() => accountsData?.results ?? [], [accountsData]);
 
@@ -333,11 +322,6 @@ export function AccountsPage() {
 
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} – ${c.name}` }));
 
-  const handleTableChange = (_: unknown, __: unknown, sorter: SorterResult<Account> | SorterResult<Account>[]) => {
-    const s = Array.isArray(sorter) ? sorter[0] : sorter;
-    if (s?.field) sort.handleHeaderClick(String(s.field));
-  };
-
   return (
     <>
       <PageTable<Account>
@@ -359,19 +343,8 @@ export function AccountsPage() {
         dataSource={accounts}
         loading={isLoading}
         scroll={{ x: computeScrollX(columns) }}
-        onChange={handleTableChange as never}
-        pagination={{
-          total: accountsData?.count,
-          pageSize: limit,
-          current: Math.floor(offset / limit) + 1,
-          showTotal: (total) => t({ id: 'common.entityOps.pagination.total' }, { total }),
-          onChange: (page, size) => {
-            setOffset((page - 1) * (size ?? limit));
-            if (size && size !== limit) { setLimit(size); setOffset(0); }
-          },
-          showSizeChanger: true,
-          pageSizeOptions: PAGE_SIZE_OPTIONS,
-        }}
+        onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
+        pagination={table.paginationProps(accountsData?.count) as never}
       />
 
       <Modal

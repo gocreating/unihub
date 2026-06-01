@@ -97,7 +97,6 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
         <Button
           icon={<FilterOutlined />}
           type={filterProps.hook.isActive || filterOpen ? 'primary' : 'default'}
-          onClick={() => setFilterOpen((v) => !v)}
         >
           {t({ id: 'common.entityOps.filter' })}
         </Button>
@@ -120,7 +119,6 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
         <Button
           icon={<SortAscendingOutlined />}
           type={sortProps.hook.isActive ? 'primary' : 'default'}
-          onClick={() => setSortOpen((v) => !v)}
         >
           {t({ id: 'common.entityOps.sort' })}
         </Button>
@@ -142,7 +140,6 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
         <Button
           icon={<TableOutlined />}
           type={columnProps.hook.isCustomised || columnOpen ? 'primary' : 'default'}
-          onClick={() => setColumnOpen((v) => !v)}
         >
           {t({ id: 'common.entityOps.columns' })}
         </Button>

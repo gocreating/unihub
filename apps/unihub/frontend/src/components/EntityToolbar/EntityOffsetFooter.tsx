@@ -37,18 +37,12 @@ export function EntityOffsetFooter({
         ? [{ value: customNum, label: t({ id: 'common.entityOps.pagination.perPage' }, { n: customNum }) }]
         : []),
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pageSizeOptions, isValidCustom, customNum],
+    [pageSizeOptions, isValidCustom, customNum, t],
   );
 
   return (
     <Flex justify="space-between" align="center">
       <Space>
-        {total !== undefined && (
-          <Typography.Text type="secondary">
-            {t({ id: 'common.entityOps.pagination.total' }, { total })}
-          </Typography.Text>
-        )}
         <Select
           value={pageSize}
           options={sizeOptions}
@@ -60,6 +54,11 @@ export function EntityOffsetFooter({
           popupMatchSelectWidth={false}
           style={{ minWidth: 90 }}
         />
+        {total !== undefined && (
+          <Typography.Text type="secondary">
+            {t({ id: 'common.entityOps.pagination.total' }, { total })}
+          </Typography.Text>
+        )}
       </Space>
       <Pagination
         total={total}

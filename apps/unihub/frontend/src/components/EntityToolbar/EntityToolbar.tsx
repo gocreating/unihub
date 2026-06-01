@@ -96,7 +96,7 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
       >
         <Button
           icon={<FilterOutlined />}
-          type={filterProps.hook.isActive || filterOpen ? 'primary' : 'default'}
+          type={filterProps.hook.isActive ? 'primary' : 'default'}
         >
           {t({ id: 'common.entityOps.filter' })}
         </Button>
@@ -139,7 +139,7 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
       >
         <Button
           icon={<TableOutlined />}
-          type={columnProps.hook.isCustomised || columnOpen ? 'primary' : 'default'}
+          type={columnProps.hook.isCustomised ? 'primary' : 'default'}
         >
           {t({ id: 'common.entityOps.columns' })}
         </Button>

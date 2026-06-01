@@ -1,227 +1,420 @@
-import React from 'react';
-import { Button, Card, Divider, Input, Select, Space, Typography } from 'antd';
-import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
+import React, { useState } from 'react';
+import { Button, Divider, Input, InputNumber, Select } from 'antd';
 import { useIntl } from 'react-intl';
+import { emptyRoot, emptyRule } from './hooks/useEntityFilter';
 import type { UseEntityFilterReturn } from './hooks/useEntityFilter';
-import type { FilterCondition, FilterGroup, FilterOperator, FilterableAttribute, GroupLogic } from './types';
+import type {
+  FilterGroupItem,
+  FilterItem,
+  FilterOperator,
+  FilterRuleItem,
+  FilterableAttribute,
+  GroupLogic,
+} from './types';
+import { isFilterGroup } from './types';
 
 const uid = () => crypto.randomUUID();
 
 // ── Operator definitions ──────────────────────────────────────────────────────
 
-const TEXT_OPS: { value: FilterOperator; labelId: string }[] = [
-  { value: 'contains', labelId: 'common.entityOps.op.contains' },
+interface OpDef { value: FilterOperator; labelId: string; noValue?: boolean; }
+
+const TEXT_OPS: OpDef[] = [
+  { value: 'contains',     labelId: 'common.entityOps.op.contains' },
   { value: 'not_contains', labelId: 'common.entityOps.op.notContains' },
-  { value: 'equals', labelId: 'common.entityOps.op.equals' },
-  { value: 'not_equals', labelId: 'common.entityOps.op.notEquals' },
-  { value: 'starts_with', labelId: 'common.entityOps.op.startsWith' },
-  { value: 'ends_with', labelId: 'common.entityOps.op.endsWith' },
-  { value: 'is_empty', labelId: 'common.entityOps.op.isEmpty' },
-  { value: 'is_not_empty', labelId: 'common.entityOps.op.isNotEmpty' },
+  { value: 'equals',       labelId: 'common.entityOps.op.equals' },
+  { value: 'not_equals',   labelId: 'common.entityOps.op.notEquals' },
+  { value: 'starts_with',  labelId: 'common.entityOps.op.startsWith' },
+  { value: 'ends_with',    labelId: 'common.entityOps.op.endsWith' },
+  { value: 'is_empty',     labelId: 'common.entityOps.op.isEmpty',    noValue: true },
+  { value: 'is_not_empty', labelId: 'common.entityOps.op.isNotEmpty', noValue: true },
 ];
-
-const NUMBER_OPS: { value: FilterOperator; labelId: string }[] = [
-  { value: 'eq', labelId: 'common.entityOps.op.eq' },
+const NUMBER_OPS: OpDef[] = [
+  { value: 'eq',  labelId: 'common.entityOps.op.eq' },
   { value: 'neq', labelId: 'common.entityOps.op.neq' },
-  { value: 'gt', labelId: 'common.entityOps.op.gt' },
+  { value: 'gt',  labelId: 'common.entityOps.op.gt' },
   { value: 'gte', labelId: 'common.entityOps.op.gte' },
-  { value: 'lt', labelId: 'common.entityOps.op.lt' },
+  { value: 'lt',  labelId: 'common.entityOps.op.lt' },
   { value: 'lte', labelId: 'common.entityOps.op.lte' },
+  { value: 'is_empty',     labelId: 'common.entityOps.op.isEmpty',    noValue: true },
 ];
-
-const DATE_OPS: { value: FilterOperator; labelId: string }[] = [
-  { value: 'date_before', labelId: 'common.entityOps.op.dateBefore' },
-  { value: 'date_after', labelId: 'common.entityOps.op.dateAfter' },
-  { value: 'is_empty', labelId: 'common.entityOps.op.isEmpty' },
-  { value: 'is_not_empty', labelId: 'common.entityOps.op.isNotEmpty' },
+const DATE_OPS: OpDef[] = [
+  { value: 'date_before',  labelId: 'common.entityOps.op.dateBefore' },
+  { value: 'date_after',   labelId: 'common.entityOps.op.dateAfter' },
+  { value: 'is_empty',     labelId: 'common.entityOps.op.isEmpty',    noValue: true },
+  { value: 'is_not_empty', labelId: 'common.entityOps.op.isNotEmpty', noValue: true },
 ];
-
-const SELECT_OPS: { value: FilterOperator; labelId: string }[] = [
-  { value: 'is', labelId: 'common.entityOps.op.is' },
+const SELECT_OPS: OpDef[] = [
+  { value: 'is',     labelId: 'common.entityOps.op.is' },
   { value: 'is_not', labelId: 'common.entityOps.op.isNot' },
 ];
 
-const NO_VALUE_OPS: FilterOperator[] = ['is_empty', 'is_not_empty'];
-
-function getOpsForAttr(attr: FilterableAttribute | undefined) {
+function getOps(attr: FilterableAttribute | undefined): OpDef[] {
   if (!attr) return TEXT_OPS;
   switch (attr.dataType) {
     case 'number': return NUMBER_OPS;
-    case 'date': return DATE_OPS;
+    case 'date':   return DATE_OPS;
     case 'boolean':
     case 'single_select': return SELECT_OPS;
     default: return TEXT_OPS;
   }
 }
 
-// ── Condition row ─────────────────────────────────────────────────────────────
+// ── Shared inline styles (mirrors the HTML prototype's CSS) ──────────────────
 
-interface ConditionRowProps {
-  condition: FilterCondition;
+const css = {
+  ruleRow: (isDragging: boolean): React.CSSProperties => ({
+    display: 'flex', alignItems: 'center', gap: 6,
+    padding: '6px 8px', borderRadius: 6, flexWrap: 'wrap',
+    border: '1px solid #f0f0f0',
+    background: isDragging ? '#fafafa' : '#ffffff',
+    opacity: isDragging ? 0.35 : 1,
+  }),
+  dropIndicator: {
+    height: 2, background: '#1677ff', borderRadius: 2,
+    margin: '3px 0', boxShadow: '0 0 6px rgba(22,119,255,0.5)',
+  } as React.CSSProperties,
+  dragHandle: (canDrag: boolean): React.CSSProperties => ({
+    color: '#bfbfbf', fontSize: 16, flexShrink: 0,
+    cursor: canDrag ? 'grab' : 'not-allowed',
+    opacity: canDrag ? 1 : 0.2,
+    userSelect: 'none', lineHeight: 1,
+  }),
+  logicBadge: {
+    display: 'inline-flex', alignItems: 'center',
+    padding: '1px 8px', fontSize: 11, fontWeight: 500,
+    borderRadius: 4, border: '1px solid rgba(0,0,0,0.12)',
+    cursor: 'pointer', userSelect: 'none' as const,
+    background: 'rgba(0,0,0,0.04)', color: 'rgba(0,0,0,0.88)',
+    letterSpacing: '0.03em',
+  } as React.CSSProperties,
+  ghostBtn: {
+    border: 'none', background: 'transparent',
+    color: 'rgba(0,0,0,0.45)', fontSize: 12,
+    cursor: 'pointer', padding: '0 4px', fontFamily: 'inherit', lineHeight: 1,
+  } as React.CSSProperties,
+  removeRuleBtn: {
+    border: 'none', background: 'transparent',
+    color: 'rgba(0,0,0,0.25)', cursor: 'pointer',
+    fontSize: 14, padding: '0 2px', lineHeight: 1, flexShrink: 0,
+  } as React.CSSProperties,
+  removeGroupBtn: (depth: number): React.CSSProperties => ({
+    position: 'absolute', top: -9, right: -9, zIndex: 1,
+    width: 18, height: 18, borderRadius: '50%',
+    border: '1px solid #d9d9d9',
+    background: depth === 1 ? '#fafafa' : '#ffffff',
+    color: 'rgba(0,0,0,0.35)', fontSize: 11,
+    cursor: 'pointer', display: 'flex',
+    alignItems: 'center', justifyContent: 'center', padding: 0,
+  }),
+  noValue: {
+    fontSize: 12, color: 'rgba(0,0,0,0.45)',
+    fontStyle: 'italic', flex: 1,
+  } as React.CSSProperties,
+  chip: (active: boolean): React.CSSProperties => ({
+    fontSize: 11, padding: '1px 8px', borderRadius: 12,
+    border: `1px solid ${active ? '#1677ff' : '#d9d9d9'}`,
+    background: active ? '#e6f4ff' : '#f5f5f5',
+    color: active ? '#1677ff' : 'rgba(0,0,0,0.45)',
+    cursor: 'pointer', userSelect: 'none',
+    transition: 'all 0.15s',
+  }),
+};
+
+// ── RuleRow ───────────────────────────────────────────────────────────────────
+
+interface RuleRowProps {
+  rule: FilterRuleItem;
   attrs: FilterableAttribute[];
-  onUpdate: (updated: FilterCondition) => void;
+  onUpdate: (r: FilterRuleItem) => void;
   onRemove: () => void;
-  canRemove: boolean;
+  canDrag: boolean;
+  isDragging: boolean;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
 }
 
-function ConditionRow({ condition, attrs, onUpdate, onRemove, canRemove }: ConditionRowProps) {
+function RuleRow({ rule, attrs, onUpdate, onRemove, canDrag, isDragging, onDragStart, onDragOver, onDrop, onDragEnd }: RuleRowProps) {
   const { formatMessage: t } = useIntl();
-  const selectedAttr = attrs.find((a) => a.key === condition.attr);
-  const ops = getOpsForAttr(selectedAttr);
-  const noValue = NO_VALUE_OPS.includes(condition.op);
-  const isValid = condition.attr && condition.op && (noValue || condition.val !== '');
+  const attr = attrs.find((a) => a.key === rule.attr);
+  const ops = getOps(attr);
+  const opDef = ops.find((o) => o.value === rule.op);
+  const noValue = opDef?.noValue ?? false;
 
-  return (
-    <Space.Compact style={{ width: '100%' }}>
-      <Select
-        style={{ width: 140 }}
-        placeholder={t({ id: 'common.entityOps.filter.attribute' })}
-        value={condition.attr || undefined}
-        options={attrs.map((a) => ({ value: a.key, label: a.label }))}
-        onChange={(val) => {
-          const defaultOp = getOpsForAttr(attrs.find((a) => a.key === val))[0]?.value ?? 'contains';
-          onUpdate({ ...condition, attr: val, op: defaultOp, val: '' });
-        }}
-        status={!condition.attr ? 'warning' : undefined}
-      />
-      <Select
-        style={{ width: 140 }}
-        value={condition.op}
-        options={ops.map((o) => ({ value: o.value, label: t({ id: o.labelId }) }))}
-        onChange={(val) => onUpdate({ ...condition, op: val as FilterOperator, val: '' })}
-      />
-      {!noValue && selectedAttr?.dataType === 'single_select' ? (
-        <Select
-          style={{ flex: 1 }}
-          placeholder={t({ id: 'common.entityOps.filter.value' })}
-          value={condition.val || undefined}
-          options={(selectedAttr.options ?? []).map((o) => ({ value: o, label: o }))}
-          onChange={(val) => onUpdate({ ...condition, val })}
-          status={!isValid ? 'warning' : undefined}
-        />
-      ) : !noValue ? (
-        <Input
-          style={{ flex: 1 }}
-          placeholder={t({ id: 'common.entityOps.filter.value' })}
-          value={condition.val}
-          onChange={(e) => onUpdate({ ...condition, val: e.target.value })}
-          status={!isValid ? 'warning' : undefined}
-        />
-      ) : (
-        <div style={{ flex: 1 }} />
-      )}
-      <Button icon={<CloseOutlined />} onClick={onRemove} disabled={!canRemove} />
-    </Space.Compact>
-  );
-}
-
-// ── Logic connector ───────────────────────────────────────────────────────────
-// Shown between conditions inside a group, and as a fixed "OR" between groups.
-
-interface LogicConnectorProps {
-  logic: GroupLogic;
-  isFirst: boolean;       // only the first connector is interactive
-  onChange: (val: GroupLogic) => void;
-}
-
-function LogicConnector({ logic, isFirst, onChange }: LogicConnectorProps) {
-  const { formatMessage: t } = useIntl();
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', margin: '4px 0' }}>
-      <Select
-        size="small"
-        value={logic}
-        disabled={!isFirst}
-        options={[
-          { value: 'and', label: t({ id: 'common.entityOps.filter.and' }) },
-          { value: 'or', label: t({ id: 'common.entityOps.filter.or' }) },
-        ]}
-        onChange={isFirst ? onChange : undefined}
-        style={{ width: 72 }}
-      />
-    </div>
-  );
-}
-
-// ── Condition group block ─────────────────────────────────────────────────────
-
-interface GroupBlockProps {
-  group: FilterGroup;
-  attrs: FilterableAttribute[];
-  totalGroups: number;
-  onUpdate: (updated: FilterGroup) => void;
-  onRemove: () => void;
-}
-
-function GroupBlock({ group, attrs, totalGroups, onUpdate, onRemove }: GroupBlockProps) {
-  const { formatMessage: t } = useIntl();
-
-  const addCondition = () =>
-    onUpdate({
-      ...group,
-      conditions: [...group.conditions, { id: uid(), attr: '', op: 'contains', val: '' }],
-    });
-
-  const updateCondition = (idx: number, updated: FilterCondition) =>
-    onUpdate({ ...group, conditions: group.conditions.map((c, i) => (i === idx ? updated : c)) });
-
-  const removeCondition = (idx: number) =>
-    onUpdate({ ...group, conditions: group.conditions.filter((_, i) => i !== idx) });
-
-  const canRemoveCondition = group.conditions.length > 1;
+  const changeField = (val: string) => {
+    const newOp = getOps(attrs.find((a) => a.key === val))?.[0]?.value ?? 'contains';
+    onUpdate({ ...rule, attr: val, op: newOp, val: '' });
+  };
+  const changeOp = (val: string) => onUpdate({ ...rule, op: val as FilterOperator, val: '' });
+  const changeVal = (val: string) => onUpdate({ ...rule, val });
 
   return (
     <div
-      style={{
-        border: '1px solid #e8e8e8',
-        borderRadius: 8,
-        padding: '10px 12px',
-      }}
+      draggable={canDrag}
+      data-rule-row
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      style={css.ruleRow(isDragging)}
     >
-      {/* Group header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {t({ id: 'common.entityOps.filter.conditionGroup' })}
-        </Typography.Text>
-        {totalGroups > 1 && (
-          <Button size="small" type="text" danger icon={<CloseOutlined />} onClick={onRemove} />
-        )}
-      </div>
+      {/* Drag handle */}
+      <span aria-hidden style={css.dragHandle(canDrag)}>⠿</span>
 
-      {/* Conditions with AND/OR connectors between them */}
-      <div style={{ borderLeft: '2px solid #e8e8e8', paddingLeft: 12, marginTop: 8 }}>
-        {group.conditions.map((c, idx) => (
-          <React.Fragment key={c.id}>
-            {idx > 0 && (
-              <div style={{ marginLeft: -20, margin: '4px 0 4px -20px' }}>
-                <LogicConnector
-                  logic={group.logic}
-                  isFirst={idx === 1}
-                  onChange={(val) => onUpdate({ ...group, logic: val })}
-                />
-              </div>
-            )}
-            <div style={{ marginBottom: 6 }}>
-              <ConditionRow
-                condition={c}
-                attrs={attrs}
-                onUpdate={(updated) => updateCondition(idx, updated)}
-                onRemove={() => removeCondition(idx)}
-                canRemove={canRemoveCondition}
-              />
-            </div>
-          </React.Fragment>
-        ))}
+      {/* Field selector */}
+      <Select
+        size="small"
+        style={{ width: 118 }}
+        placeholder={t({ id: 'common.entityOps.filter.attribute' })}
+        value={rule.attr || undefined}
+        options={attrs.map((a) => ({ value: a.key, label: a.label }))}
+        onChange={changeField}
+      />
 
-        <Button size="small" icon={<PlusOutlined />} onClick={addCondition} style={{ marginTop: 2 }}>
-          {t({ id: 'common.entityOps.filter.addCondition' })}
-        </Button>
+      {/* Operator selector */}
+      <Select
+        size="small"
+        style={{ width: 148 }}
+        value={rule.op}
+        options={ops.map((o) => ({ value: o.value, label: t({ id: o.labelId }) }))}
+        onChange={changeOp}
+      />
+
+      {/* Value input */}
+      {noValue ? (
+        <span style={css.noValue}>{t({ id: 'common.entityOps.filter.noValueNeeded' })}</span>
+      ) : attr?.dataType === 'single_select' ? (
+        <Select
+          size="small"
+          style={{ flex: 1, minWidth: 100 }}
+          placeholder={t({ id: 'common.entityOps.filter.value' })}
+          value={rule.val || undefined}
+          options={(attr.options ?? []).map((o) => ({ value: o, label: o }))}
+          onChange={changeVal}
+        />
+      ) : attr?.dataType === 'number' ? (
+        <InputNumber
+          size="small"
+          style={{ flex: 1, minWidth: 80 }}
+          placeholder={t({ id: 'common.entityOps.filter.value' })}
+          value={rule.val !== '' ? Number(rule.val) : undefined}
+          onChange={(v) => changeVal(v?.toString() ?? '')}
+        />
+      ) : attr?.dataType === 'date' ? (
+        <Input
+          size="small"
+          type="date"
+          style={{ flex: 1, minWidth: 130 }}
+          value={rule.val}
+          onChange={(e) => changeVal(e.target.value)}
+        />
+      ) : (
+        <Input
+          size="small"
+          style={{ flex: 1, minWidth: 100 }}
+          placeholder={t({ id: 'common.entityOps.filter.value' })}
+          value={rule.val}
+          onChange={(e) => changeVal(e.target.value)}
+        />
+      )}
+
+      {/* Remove rule */}
+      <button aria-label="✕" style={css.removeRuleBtn} onClick={onRemove}>✕</button>
+    </div>
+  );
+}
+
+// ── GroupCard — renders a group and its children recursively ─────────────────
+
+interface GroupCardProps {
+  group: FilterGroupItem;
+  attrs: FilterableAttribute[];
+  depth: number;         // 0 = root, 1 = nested
+  onUpdate: (g: FilterGroupItem) => void;
+  onRemove: (() => void) | null; // null = root (can't be removed)
+}
+
+function GroupCard({ group, attrs, depth, onUpdate, onRemove }: GroupCardProps) {
+  const { formatMessage: t } = useIntl();
+  const [dragFromId, setDragFromId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [dragOverPos, setDragOverPos] = useState<'before' | 'after' | null>(null);
+
+  const canDrag = group.rules.length > 1;
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+
+  const updateItem = (id: string, updated: FilterItem) =>
+    onUpdate({ ...group, rules: group.rules.map((r) => (r.id === id ? updated : r)) });
+
+  const removeItem = (id: string) => {
+    const next = group.rules.filter((r) => r.id !== id);
+    onUpdate({ ...group, rules: next.length > 0 ? next : [emptyRule()] });
+  };
+
+  const addRule = () =>
+    onUpdate({ ...group, rules: [...group.rules, emptyRule()] });
+
+  const addGroup = () =>
+    onUpdate({
+      ...group,
+      rules: [
+        ...group.rules,
+        {
+          id: uid(),
+          type: 'group',
+          logic: group.logic === 'and' ? 'or' : 'and',
+          rules: [emptyRule(), emptyRule()],
+        } satisfies FilterGroupItem,
+      ],
+    });
+
+  const toggleLogic = () =>
+    onUpdate({ ...group, logic: (group.logic === 'and' ? 'or' : 'and') as GroupLogic });
+
+  // ── Drag & drop ───────────────────────────────────────────────────────────
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+    setDragFromId(id);
+  };
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    setDragOverId(id);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setDragOverPos(e.clientY < rect.top + rect.height / 2 ? 'before' : 'after');
+  };
+  const handleDrop = (e: React.DragEvent, toId: string) => {
+    e.preventDefault();
+    if (dragFromId && dragFromId !== toId) {
+      const next = [...group.rules];
+      const fromIdx = next.findIndex((r) => r.id === dragFromId);
+      const removed = next.splice(fromIdx, 1);
+      const toIdx = next.findIndex((r) => r.id === toId);
+      if (removed[0] && toIdx !== -1) {
+        next.splice(dragOverPos === 'after' ? toIdx + 1 : toIdx, 0, removed[0]);
+        onUpdate({ ...group, rules: next });
+      }
+    }
+    setDragFromId(null);
+    setDragOverId(null);
+    setDragOverPos(null);
+  };
+  const handleDragEnd = () => {
+    setDragFromId(null);
+    setDragOverId(null);
+    setDragOverPos(null);
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* Circular remove button — only for nested groups */}
+      {onRemove && (
+        <button
+          aria-label="✕"
+          title={t({ id: 'common.entityOps.filter.removeConditionGroup' })}
+          onClick={onRemove}
+          style={css.removeGroupBtn(depth)}
+        >
+          ✕
+        </button>
+      )}
+
+      <div
+        style={{
+          background: depth > 0 ? 'rgba(0,0,0,0.03)' : 'transparent',
+          border: depth > 0 ? '1px solid #d9d9d9' : 'none',
+          borderRadius: depth > 0 ? 6 : 0,
+          overflow: 'visible',
+        }}
+      >
+        {/* Rules + separators */}
+        <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {group.rules.map((item, i) => {
+            const isDropTarget = dragOverId === item.id;
+            const showBefore = isDropTarget && dragOverPos === 'before';
+            const showAfter  = isDropTarget && dragOverPos === 'after';
+            // Hide the AND/OR badge when the drop-before line takes its place
+            const showBadge  = i > 0 && !showBefore;
+
+            return (
+              <React.Fragment key={item.id}>
+                {/* AND/OR logic badge — hidden when drop indicator replaces it */}
+                {showBadge && (
+                  <div style={{ padding: '4px 0' }}>
+                    <span style={css.logicBadge} onClick={toggleLogic} data-testid="logic-badge">
+                      {group.logic.toUpperCase()}
+                    </span>
+                  </div>
+                )}
+
+                {/* Drop indicator: BEFORE target */}
+                {showBefore && <div data-drop-indicator style={css.dropIndicator} />}
+
+                {isFilterGroup(item) ? (
+                  <div
+                    draggable={canDrag}
+                    onDragStart={(e) => handleDragStart(e, item.id)}
+                    onDragOver={(e) => handleDragOver(e, item.id)}
+                    onDrop={(e) => handleDrop(e, item.id)}
+                    onDragEnd={handleDragEnd}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: dragFromId === item.id ? 0.35 : 1 }}
+                  >
+                    <span aria-hidden style={css.dragHandle(canDrag)}>⠿</span>
+                    <div style={{ flex: 1 }}>
+                      <GroupCard
+                        group={item}
+                        attrs={attrs}
+                        depth={depth + 1}
+                        onUpdate={(updated) => updateItem(item.id, updated)}
+                        onRemove={() => removeItem(item.id)}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <RuleRow
+                    rule={item}
+                    attrs={attrs}
+                    onUpdate={(updated) => updateItem(item.id, updated)}
+                    onRemove={() => removeItem(item.id)}
+                    canDrag={canDrag}
+                    isDragging={dragFromId === item.id}
+                    onDragStart={(e) => handleDragStart(e, item.id)}
+                    onDragOver={(e) => handleDragOver(e, item.id)}
+                    onDrop={(e) => handleDrop(e, item.id)}
+                    onDragEnd={handleDragEnd}
+                  />
+                )}
+
+                {/* Drop indicator: AFTER target */}
+                {showAfter && <div data-drop-indicator style={css.dropIndicator} />}
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        {/* Card footer: + Rule  + Group (groups limited to depth 0–1) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px' }}>
+          <button style={css.ghostBtn} onClick={addRule}>
+            {t({ id: 'common.entityOps.filter.addCondition' })}
+          </button>
+          {depth < 1 && (
+            <button style={css.ghostBtn} onClick={addGroup}>
+              {t({ id: 'common.entityOps.filter.addConditionGroup' })}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Filter panel ──────────────────────────────────────────────────────────────
+// ── FilterPanel ───────────────────────────────────────────────────────────────
 
 export interface FilterPanelProps {
   attrs: FilterableAttribute[];
@@ -232,75 +425,39 @@ export interface FilterPanelProps {
 
 export function FilterPanel({ attrs, hook, onApply, onClose }: FilterPanelProps) {
   const { formatMessage: t } = useIntl();
-  const { pendingGroups, setPendingGroups, apply } = hook;
+  const { pendingRoot, setPendingRoot, apply, cancel } = hook;
 
-  const addGroup = () =>
-    setPendingGroups([
-      ...pendingGroups,
-      {
-        id: uid(),
-        logic: 'and',
-        conditions: [
-          { id: uid(), attr: '', op: 'contains', val: '' },
-          { id: uid(), attr: '', op: 'contains', val: '' },
-        ],
-      },
-    ]);
-
-  const updateGroup = (idx: number, updated: FilterGroup) =>
-    setPendingGroups(pendingGroups.map((g, i) => (i === idx ? updated : g)));
-
-  const removeGroup = (idx: number) =>
-    setPendingGroups(pendingGroups.filter((_, i) => i !== idx));
+  // Initialise with an empty root if somehow pendingRoot is missing
+  const root: FilterGroupItem = pendingRoot ?? emptyRoot();
 
   return (
-    <Card
-      size="small"
-      style={{ width: 520, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-      styles={{ body: { padding: 12 } }}
+    <div
+      style={{
+        width: 520,
+        background: '#ffffff',
+        borderRadius: 8,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+        padding: 12,
+      }}
     >
-      {pendingGroups.map((g, idx) => (
-        <React.Fragment key={g.id}>
-          {/* OR connector between groups — same visual language as AND/OR inside groups */}
-          {idx > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', margin: '8px 0' }}>
-              <Select
-                size="small"
-                value="or"
-                disabled
-                options={[{ value: 'or', label: t({ id: 'common.entityOps.filter.or' }) }]}
-                style={{ width: 72 }}
-              />
-            </div>
-          )}
-          <GroupBlock
-            group={g}
-            attrs={attrs}
-            totalGroups={pendingGroups.length}
-            onUpdate={(updated) => updateGroup(idx, updated)}
-            onRemove={() => removeGroup(idx)}
-          />
-        </React.Fragment>
-      ))}
+      <GroupCard
+        group={root}
+        attrs={attrs}
+        depth={0}
+        onUpdate={setPendingRoot}
+        onRemove={null}
+      />
 
-      <Button
-        size="small"
-        icon={<PlusOutlined />}
-        onClick={addGroup}
-        style={{ marginTop: 10, marginBottom: 4 }}
-      >
-        {t({ id: 'common.entityOps.filter.addConditionGroup' })}
-      </Button>
+      <Divider style={{ margin: '10px 0 8px' }} />
 
-      <Divider style={{ margin: '8px 0' }} />
-      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Button size="small" onClick={onClose}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Button size="small" onClick={() => { cancel(); onClose(); }}>
           {t({ id: 'common.entityOps.cancel' })}
         </Button>
         <Button size="small" type="primary" onClick={() => { apply(); onApply(); }}>
           {t({ id: 'common.entityOps.apply' })}
         </Button>
-      </Space>
-    </Card>
+      </div>
+    </div>
   );
 }

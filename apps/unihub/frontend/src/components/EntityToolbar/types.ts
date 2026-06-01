@@ -55,6 +55,32 @@ export interface FilterGroup {
   conditions: FilterCondition[];
 }
 
+// ── Filter tree (used by FilterPanel) ────────────────────────────────────────
+
+/** A single condition rule inside a FilterGroupItem. */
+export interface FilterRuleItem {
+  id: string;
+  attr: string;
+  op: FilterOperator;
+  val: string;
+}
+
+/** A nested group node inside the filter tree. */
+export interface FilterGroupItem {
+  id: string;
+  type: 'group';
+  logic: GroupLogic;
+  rules: FilterItem[];
+}
+
+export type FilterItem = FilterRuleItem | FilterGroupItem;
+
+export function isFilterGroup(item: FilterItem): item is FilterGroupItem {
+  return (item as FilterGroupItem).type === 'group';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /** Shape that is JSON-serialised into the `filters` query param. */
 export interface FilterPayload {
   groups: Array<{

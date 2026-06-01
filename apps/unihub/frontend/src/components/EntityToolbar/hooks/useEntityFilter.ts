@@ -1,28 +1,70 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import type { FilterGroup, FilterPayload } from '../types';
+import { useCallback, useState } from 'react';
+import type { FilterCondition, FilterGroup, FilterGroupItem, FilterItem, FilterPayload, FilterRuleItem } from '../types';
+import { isFilterGroup } from '../types';
 
 const uid = () => crypto.randomUUID();
 
-export interface UseEntityFilterReturn {
-  /** Groups being edited in the panel (not yet applied). */
-  pendingGroups: FilterGroup[];
-  /** Groups currently applied to the query. */
-  activeGroups: FilterGroup[];
-  /** Commit pendingGroups → activeGroups and encode to ?filters= URL param. */
-  apply: () => void;
-  /** Discard pending changes and restore activeGroups to the panel. */
-  cancel: () => void;
-  /** Update the pending groups (called from panel UI). */
-  setPendingGroups: (groups: FilterGroup[]) => void;
-  /** True when there is at least one non-empty active condition. */
-  isActive: boolean;
-  /** True when pendingGroups differ from activeGroups (panel has unsaved changes). */
-  isDirty: boolean;
-  /** Clear all active groups and remove ?filters= from URL. */
-  reset: () => void;
-  /** Serialise activeGroups for the API filters param, or undefined when empty. */
-  toApiParam: () => FilterPayload | undefined;
+const NO_VALUE_OPS = ['is_empty', 'is_not_empty'];
+
+// ── Tree helpers ──────────────────────────────────────────────────────────────
+
+export function emptyRule(): FilterRuleItem {
+  return { id: uid(), attr: '', op: 'contains', val: '' };
+}
+
+export function emptyRoot(): FilterGroupItem {
+  return { id: uid(), type: 'group', logic: 'and', rules: [emptyRule()] };
+}
+
+/** Flatten tree into FilterGroup[] for the backend. */
+function treeToGroups(root: FilterGroupItem): FilterGroup[] {
+  const groups: FilterGroup[] = [];
+
+  const collect = (node: FilterGroupItem) => {
+    const conditions: FilterCondition[] = [];
+    for (const item of node.rules) {
+      if (isFilterGroup(item)) {
+        if (conditions.length > 0) {
+          groups.push({ id: uid(), logic: node.logic, conditions: [...conditions] });
+          conditions.length = 0;
+        }
+        collect(item);
+      } else {
+        conditions.push({ id: item.id, attr: item.attr, op: item.op, val: item.val });
+      }
+    }
+    if (conditions.length > 0) {
+      groups.push({ id: uid(), logic: node.logic, conditions });
+    }
+  };
+
+  collect(root);
+  return groups.length > 0
+    ? groups
+    : [{ id: uid(), logic: 'and', conditions: [{ id: uid(), attr: '', op: 'contains', val: '' }] }];
+}
+
+/** Build a tree from FilterGroup[] (inverse of treeToGroups). */
+function groupsToTree(groups: FilterGroup[]): FilterGroupItem {
+  if (groups.length === 0) return emptyRoot();
+  if (groups.length === 1) {
+    const g = groups[0]!;
+    const rules: FilterItem[] = g.conditions.map((c) => ({ id: c.id, attr: c.attr, op: c.op, val: c.val }));
+    return { id: g.id, type: 'group', logic: g.logic, rules: rules.length > 0 ? rules : [emptyRule(), emptyRule()] };
+  }
+  return {
+    id: uid(),
+    type: 'group',
+    logic: 'and',
+    rules: groups.map((g): FilterGroupItem => ({
+      id: g.id,
+      type: 'group',
+      logic: g.logic,
+      rules: g.conditions.length > 0
+        ? g.conditions.map((c): FilterRuleItem => ({ id: c.id, attr: c.attr, op: c.op, val: c.val }))
+        : [emptyRule()],
+    })),
+  };
 }
 
 function groupsToPayload(groups: FilterGroup[]): FilterPayload | undefined {
@@ -30,12 +72,16 @@ function groupsToPayload(groups: FilterGroup[]): FilterPayload | undefined {
     .map((g) => ({
       logic: g.logic,
       conditions: g.conditions
-        .filter((c) => c.attr && c.op && c.val !== '')
+        .filter((c) => c.attr && c.op && (NO_VALUE_OPS.includes(c.op) || c.val !== ''))
         .map(({ attr, op, val }) => ({ attr, op, val })),
     }))
     .filter((g) => g.conditions.length > 0);
 
   return filled.length > 0 ? { groups: filled } : undefined;
+}
+
+function treeToPayload(root: FilterGroupItem): FilterPayload | undefined {
+  return groupsToPayload(treeToGroups(root));
 }
 
 function payloadToGroups(payload: FilterPayload): FilterGroup[] {
@@ -47,101 +93,87 @@ function payloadToGroups(payload: FilterPayload): FilterGroup[] {
 }
 
 function emptyGroup(): FilterGroup {
-  return {
-    id: uid(),
-    logic: 'and',
-    conditions: [{ id: uid(), attr: '', op: 'contains', val: '' }],
-  };
+  return { id: uid(), logic: 'and', conditions: [{ id: uid(), attr: '', op: 'contains', val: '' }] };
 }
 
-/** Manage filter state, URL encoding, and Apply/Cancel lifecycle. */
+
+// ── Hook interface ────────────────────────────────────────────────────────────
+
+export interface UseEntityFilterReturn {
+  pendingRoot: FilterGroupItem;
+  setPendingRoot: (root: FilterGroupItem) => void;
+  pendingGroups: FilterGroup[];
+  activeGroups: FilterGroup[];
+  setPendingGroups: (groups: FilterGroup[]) => void;
+  apply: () => void;
+  cancel: () => void;
+  isActive: boolean;
+  isDirty: boolean;
+  reset: () => void;
+  toApiParam: () => FilterPayload | undefined;
+}
+
+// ── Hook ─────────────────────────────────────────────────────────────────────
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function useEntityFilter(_key: string): UseEntityFilterReturn {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeGroups, setActiveGroups] = useState<FilterGroup[]>([]);
+  const [pendingGroups, setPendingGroupsState] = useState<FilterGroup[]>([emptyGroup()]);
+  const [pendingRoot, setPendingRootState] = useState<FilterGroupItem>(emptyRoot);
 
-  const readFromUrl = useCallback((): FilterGroup[] => {
-    const raw = searchParams.get('filters');
-    if (!raw) return [];
-    try {
-      const payload = JSON.parse(raw) as FilterPayload;
-      return payloadToGroups(payload);
-    } catch {
-      return [];
-    }
-  }, [searchParams]);
+  const setPendingGroups = useCallback((groups: FilterGroup[]) => {
+    setPendingGroupsState(groups);
+    setPendingRootState(groupsToTree(groups));
+  }, []);
 
-  const [activeGroups, setActiveGroups] = useState<FilterGroup[]>(() => readFromUrl());
-  const [pendingGroups, setPendingGroups] = useState<FilterGroup[]>(() => {
-    const from = readFromUrl();
-    return from.length > 0 ? from : [emptyGroup()];
-  });
-
-  // Sync activeGroups from URL when URL changes externally.
-  useEffect(() => {
-    const fromUrl = readFromUrl();
-    setActiveGroups(fromUrl);
-    setPendingGroups(fromUrl.length > 0 ? fromUrl : [emptyGroup()]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams.get('filters')]);
+  const setPendingRoot = useCallback((root: FilterGroupItem) => {
+    setPendingRootState(root);
+    setPendingGroupsState(treeToGroups(root));
+  }, []);
 
   const apply = useCallback(() => {
-    const payload = groupsToPayload(pendingGroups);
-    setActiveGroups(pendingGroups);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (payload) {
-          next.set('filters', JSON.stringify(payload));
-        } else {
-          next.delete('filters');
-        }
-        // Applying a filter always resets offset to 0.
-        next.delete('offset');
-        return next;
-      },
-      { replace: true },
-    );
-  }, [pendingGroups, setSearchParams]);
+    const groups = treeToGroups(pendingRoot);
+    setActiveGroups(groups);
+  }, [pendingRoot]);
 
   const cancel = useCallback(() => {
-    setPendingGroups(activeGroups.length > 0 ? activeGroups : [emptyGroup()]);
+    const groups = activeGroups.length > 0 ? activeGroups : [emptyGroup()];
+    setPendingGroupsState(groups);
+    setPendingRootState(activeGroups.length > 0 ? groupsToTree(activeGroups) : emptyRoot());
   }, [activeGroups]);
 
   const reset = useCallback(() => {
     setActiveGroups([]);
-    setPendingGroups([emptyGroup()]);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete('filters');
-        next.delete('offset');
-        return next;
-      },
-      { replace: true },
-    );
-  }, [setSearchParams]);
+    setPendingGroupsState([emptyGroup()]);
+    setPendingRootState(emptyRoot());
+  }, []);
 
   const toApiParam = useCallback((): FilterPayload | undefined => {
     return groupsToPayload(activeGroups);
   }, [activeGroups]);
 
   const isActive = activeGroups.some((g) =>
-    g.conditions.some((c) => c.attr && c.op && c.val !== ''),
+    g.conditions.some((c) => c.attr && c.op && (NO_VALUE_OPS.includes(c.op) || c.val !== '')),
   );
 
   const isDirty =
-    JSON.stringify(groupsToPayload(pendingGroups) ?? null) !==
+    JSON.stringify(treeToPayload(pendingRoot) ?? null) !==
     JSON.stringify(groupsToPayload(activeGroups) ?? null);
 
   return {
+    pendingRoot,
+    setPendingRoot,
     pendingGroups,
     activeGroups,
+    setPendingGroups,
     apply,
     cancel,
-    setPendingGroups,
     isActive,
     isDirty,
     reset,
     toApiParam,
   };
 }
+
+// Keep these for backward compat with any code that imports them directly
+export { payloadToGroups };

@@ -1,0 +1,228 @@
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { IntlProvider } from 'react-intl';
+import enUS from '@/locales/en-US';
+import { FilterPanel } from './FilterPanel';
+import { emptyRoot, emptyRule } from './hooks/useEntityFilter';
+import type { FilterGroupItem } from './types';
+import type { UseEntityFilterReturn } from './hooks/useEntityFilter';
+
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <MemoryRouter>
+    <IntlProvider locale="en" messages={enUS}>
+      {children}
+    </IntlProvider>
+  </MemoryRouter>
+);
+
+const ATTRS = [
+  { key: 'name',   label: 'Name',   dataType: 'text' as const },
+  { key: 'score',  label: 'Score',  dataType: 'number' as const },
+  { key: 'status', label: 'Status', dataType: 'single_select' as const, options: ['Active', 'Inactive'] },
+];
+
+const makeRoot = (overrides: Partial<FilterGroupItem> = {}): FilterGroupItem => ({
+  ...emptyRoot(),
+  ...overrides,
+});
+
+const makeHook = (overrides: Partial<UseEntityFilterReturn> = {}): UseEntityFilterReturn => ({
+  pendingRoot: makeRoot(),
+  setPendingRoot: vi.fn(),
+  pendingGroups: [],
+  activeGroups: [],
+  setPendingGroups: vi.fn(),
+  apply: vi.fn(),
+  cancel: vi.fn(),
+  reset: vi.fn(),
+  isActive: false,
+  isDirty: false,
+  toApiParam: vi.fn().mockReturnValue(undefined),
+  ...overrides,
+} as unknown as UseEntityFilterReturn);
+
+function renderPanel(hookOverrides: Partial<UseEntityFilterReturn> = {}) {
+  const hook = makeHook(hookOverrides);
+  const onApply = vi.fn();
+  const onClose  = vi.fn();
+  render(
+    <FilterPanel attrs={ATTRS} hook={hook} onApply={onApply} onClose={onClose} />,
+    { wrapper },
+  );
+  return { hook, onApply, onClose };
+}
+
+describe('FilterPanel', () => {
+  // FP-01: default root has exactly one rule
+  it('renders one rule row by default (emptyRoot has one rule)', () => {
+    renderPanel();
+    // 1 rule = field selector + operator selector = 2 comboboxes minimum
+    const comboboxes = screen.getAllByRole('combobox');
+    expect(comboboxes.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // FP-01b: no AND/OR badge when there is only one rule
+  it('shows no AND/OR badge when root has only one rule', () => {
+    renderPanel(); // emptyRoot() has 1 rule
+    expect(screen.queryByTestId('logic-badge')).toBeNull();
+  });
+
+  // FP-02: AND badge appears between two rules
+  it('renders AND badge between two rules', () => {
+    const root = makeRoot({ rules: [emptyRule(), emptyRule()] });
+    renderPanel({ pendingRoot: root });
+    expect(screen.getByTestId('logic-badge')).toHaveTextContent('AND');
+  });
+
+  // FP-03: clicking AND badge calls setPendingRoot with logic toggled to OR
+  it('toggles logic from AND to OR when badge is clicked', () => {
+    const root = makeRoot({ rules: [emptyRule(), emptyRule()] });
+    const { hook } = renderPanel({ pendingRoot: root });
+    fireEvent.click(screen.getByTestId('logic-badge'));
+    expect(hook.setPendingRoot).toHaveBeenCalledWith(
+      expect.objectContaining({ logic: 'or' }),
+    );
+  });
+
+  // FP-04: clicking OR badge toggles back to AND
+  it('toggles logic from OR to AND when badge is clicked', () => {
+    const root = makeRoot({ logic: 'or', rules: [emptyRule(), emptyRule()] });
+    const { hook } = renderPanel({ pendingRoot: root });
+    fireEvent.click(screen.getByTestId('logic-badge'));
+    expect(hook.setPendingRoot).toHaveBeenCalledWith(
+      expect.objectContaining({ logic: 'and' }),
+    );
+  });
+
+  // FP-08b: removing the last rule auto-resets to one empty rule
+  it('auto-resets to one empty rule when the last rule is removed', () => {
+    const root = makeRoot({ rules: [emptyRule()] });
+    const { hook } = renderPanel({ pendingRoot: root });
+    fireEvent.click(screen.getByRole('button', { name: /✕/i }));
+    const call = (hook.setPendingRoot as ReturnType<typeof vi.fn>).mock.calls[0]![0] as FilterGroupItem;
+    expect(call.rules).toHaveLength(1);
+    expect((call.rules[0] as { attr: string }).attr).toBe('');
+  });
+
+  // FP-05: Apply button calls apply() and onApply()
+  it('calls apply() and onApply() when Apply is clicked', () => {
+    const { hook, onApply } = renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    expect(hook.apply).toHaveBeenCalled();
+    expect(onApply).toHaveBeenCalled();
+  });
+
+  // FP-06: Cancel button calls cancel() and onClose()
+  it('calls cancel() and onClose() when Cancel is clicked', () => {
+    const { hook, onClose } = renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(hook.cancel).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  // FP-07: no-value operator shows hint text instead of input
+  it('shows "no value needed" when operator has no value', () => {
+    const root = makeRoot({
+      rules: [{ id: 'r1', attr: 'name', op: 'is_empty', val: '' }],
+    });
+    renderPanel({ pendingRoot: root });
+    expect(screen.getByText(/no value needed/i)).toBeInTheDocument();
+  });
+
+  // FP-08: removing a rule calls setPendingRoot without that rule
+  it('removes a rule when its ✕ button is clicked', () => {
+    const { hook } = renderPanel();
+    fireEvent.click(screen.getAllByRole('button', { name: /✕/i })[0]!);
+    const call = (hook.setPendingRoot as ReturnType<typeof vi.fn>).mock.calls[0]![0] as FilterGroupItem;
+    expect(call.rules).toHaveLength(1);
+  });
+
+  // FP-09: + Rule button adds a rule to the root group
+  it('adds a rule when + Rule is clicked', () => {
+    const root = makeRoot({ rules: [emptyRule()] });
+    const { hook } = renderPanel({ pendingRoot: root });
+    fireEvent.click(screen.getByRole('button', { name: /rule/i }));
+    const call = (hook.setPendingRoot as ReturnType<typeof vi.fn>).mock.calls[0]![0] as FilterGroupItem;
+    expect(call.rules).toHaveLength(2);
+  });
+
+  // FP-10: + Group button adds a nested group (type: 'group')
+  it('adds a nested group when + Group is clicked', () => {
+    const { hook } = renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: /group/i }));
+    const call = (hook.setPendingRoot as ReturnType<typeof vi.fn>).mock.calls[0]![0] as FilterGroupItem;
+    const added = call.rules[call.rules.length - 1]!;
+    expect((added as FilterGroupItem).type).toBe('group');
+  });
+
+  // FP-11: nested group renders with its own AND/OR badge and + Rule / no + Group (depth limit)
+  it('nested group does not show + Group button (depth limit)', () => {
+    const root = makeRoot({
+      rules: [
+        emptyRule(),
+        { id: 'g1', type: 'group', logic: 'or', rules: [emptyRule(), emptyRule()] } satisfies FilterGroupItem,
+      ],
+    });
+    renderPanel({ pendingRoot: root });
+    // Outer group shows + Group, inner group does not → only one + Group button
+    const groupBtns = screen.getAllByRole('button', { name: /group/i });
+    expect(groupBtns).toHaveLength(1);
+  });
+
+  // FP-12: nested group has a circular ✕ remove button
+  it('nested group has a remove button', () => {
+    const root = makeRoot({
+      rules: [
+        { id: 'g1', type: 'group', logic: 'or', rules: [emptyRule()] } satisfies FilterGroupItem,
+      ],
+    });
+    renderPanel({ pendingRoot: root });
+    expect(screen.getAllByRole('button', { name: /✕/i }).length).toBeGreaterThan(0);
+  });
+
+  // ── Drag & drop ─────────────────────────────────────────────────────────────
+
+  // FP-DnD-01: drop indicator renders during dragover, not a highlight on the target
+  it('shows a [data-drop-indicator] line when dragging over another rule', () => {
+    const rule1 = { id: 'r1', attr: '', op: 'contains' as const, val: '' };
+    const rule2 = { id: 'r2', attr: '', op: 'contains' as const, val: '' };
+    renderPanel({ pendingRoot: makeRoot({ rules: [rule1, rule2] }) });
+
+    const rows = document.querySelectorAll('[data-rule-row]');
+    fireEvent.dragStart(rows[0]!);
+    fireEvent.dragOver(rows[1]!);
+
+    expect(document.querySelector('[data-drop-indicator]')).toBeInTheDocument();
+  });
+
+  // FP-DnD-02: drop indicator disappears after drag ends
+  it('removes [data-drop-indicator] when drag ends', () => {
+    const rule1 = { id: 'r1', attr: '', op: 'contains' as const, val: '' };
+    const rule2 = { id: 'r2', attr: '', op: 'contains' as const, val: '' };
+    renderPanel({ pendingRoot: makeRoot({ rules: [rule1, rule2] }) });
+
+    const rows = document.querySelectorAll('[data-rule-row]');
+    fireEvent.dragStart(rows[0]!);
+    fireEvent.dragOver(rows[1]!);
+    fireEvent.dragEnd(rows[0]!);
+
+    expect(document.querySelector('[data-drop-indicator]')).toBeNull();
+  });
+
+  // FP-DnD-03: dropping reorders rules (jsdom clientY=0 → always 'after')
+  it('reorders items correctly on drop', () => {
+    const rule1 = { id: 'r1', attr: 'name', op: 'contains' as const, val: '' };
+    const rule2 = { id: 'r2', attr: 'score', op: 'eq' as const, val: '' };
+    const { hook } = renderPanel({ pendingRoot: makeRoot({ rules: [rule1, rule2] }) });
+
+    const rows = document.querySelectorAll('[data-rule-row]');
+    fireEvent.dragStart(rows[0]!);
+    fireEvent.dragOver(rows[1]!);
+    fireEvent.drop(rows[1]!);
+
+    const call = (hook.setPendingRoot as ReturnType<typeof vi.fn>).mock.calls[0]![0] as FilterGroupItem;
+    // jsdom: clientY=0, midY=0 → 0 < 0 is false → 'after' → r2 comes first
+    expect(call.rules.map((r) => (r as { id: string }).id)).toEqual(['r2', 'r1']);
+  });
+});

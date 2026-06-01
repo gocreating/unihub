@@ -15,6 +15,7 @@ export { ColumnPanel } from './ColumnPanel';
 export type { ColumnPanelProps } from './ColumnPanel';
 export { useEntityFilter } from './hooks/useEntityFilter';
 export type { UseEntityFilterReturn } from './hooks/useEntityFilter';
+export { emptyRule, emptyRoot } from './hooks/useEntityFilter';
 export { useEntitySort } from './hooks/useEntitySort';
 export type { UseEntitySortReturn } from './hooks/useEntitySort';
 export { useColumnConfig } from './hooks/useColumnConfig';
@@ -25,6 +26,10 @@ export type {
   FilterGroup,
   FilterPayload,
   FilterOperator,
+  FilterRuleItem,
+  FilterGroupItem,
+  FilterItem,
+  isFilterGroup,
   SortRule,
   SortState,
   SortDirection,

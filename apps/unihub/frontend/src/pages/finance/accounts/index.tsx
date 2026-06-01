@@ -14,7 +14,7 @@ import {
   listCurrencies,
   updateAccount,
 } from '@/services/unihub-backend/finance';
-import { EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
+import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
 
 // 20 preset colors covering the full hue spectrum — Material Design palette.
@@ -211,7 +211,6 @@ export function AccountsPage() {
         ...widthForHeader('Name', dataWidths.name),
         sorter: true,
         sortOrder: sort.sortOrderForField('name') ?? undefined,
-        showSorterTooltip: false,
         fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'name'
           ? 'left'
           : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'name'
@@ -224,7 +223,6 @@ export function AccountsPage() {
         ...widthForHeader('Currency', dataWidths.currency),
         sorter: true,
         sortOrder: sort.sortOrderForField('currency') ?? undefined,
-        showSorterTooltip: false,
         fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'currency'
           ? 'left'
           : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'currency'
@@ -259,7 +257,6 @@ export function AccountsPage() {
         ...widthForHeader('Open Date', Math.max(220, dataWidths.open_datetime)),
         sorter: true,
         sortOrder: sort.sortOrderForField('open_datetime') ?? undefined,
-        showSorterTooltip: false,
         render: (_, record) => {
           const formatted = formatDateRelative(record.open_datetime);
           return formatted ? (
@@ -277,7 +274,6 @@ export function AccountsPage() {
         ...widthForHeader('Close Date', Math.max(220, dataWidths.close_datetime)),
         sorter: true,
         sortOrder: sort.sortOrderForField('close_datetime') ?? undefined,
-        showSorterTooltip: false,
         render: (_, record) => {
           const formatted = formatDateRelative(record.close_datetime);
           return formatted ? (
@@ -344,7 +340,8 @@ export function AccountsPage() {
         loading={isLoading}
         scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
-        pagination={table.paginationProps(accountsData?.count) as never}
+        pagination={false}
+        footer={() => <EntityOffsetFooter {...table.paginationProps(accountsData?.count)} />}
       />
 
       <Modal

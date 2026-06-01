@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from core.filters import EntityFilterBackend
-from core.pagination import EntityCursorPagination, EntityOffsetPagination
+from core.pagination import EntityOffsetPagination
 from finance.models import Account, Balance, BalanceSheet, Currency, ExchangeRate
 from finance.serializers import (
     AccountSerializer,
@@ -85,7 +85,7 @@ class BalanceSheetViewSet(viewsets.ModelViewSet):
     }
     ordering_fields = ["date"]
     ordering = ["-date"]
-    pagination_class = EntityCursorPagination
+    pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
 
     @action(detail=True, methods=["get"], url_path="balances")

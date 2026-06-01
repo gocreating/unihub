@@ -113,7 +113,6 @@ describe('useEntityTable', () => {
     expect(props.total).toBe(100);
     expect(props.pageSize).toBe(25);
     expect(props.current).toBe(1);
-    expect(props.showSizeChanger).toBe(true);
   });
 
   it('paginationProps.onChange advances offset for page navigation', () => {

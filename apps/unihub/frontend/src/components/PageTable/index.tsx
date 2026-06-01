@@ -45,15 +45,6 @@ const useStyles = createStyles(({ token }) => ({
       margin: 0,
       zIndex: 2,
     },
-    '.ant-pagination': {
-      position: 'sticky',
-      bottom: 0,
-      backgroundColor: token.colorBgContainer,
-      padding: `${token.paddingXS}px 0`,
-      borderTop: `1px solid ${token.colorBorderSecondary}`,
-      zIndex: 5,
-      margin: '0 !important',
-    },
     '.ant-table-cell': {
       whiteSpace: 'nowrap',
     },
@@ -278,6 +269,7 @@ function PageTable<T extends Record<string, any>>({
           pagination={pagination}
           sticky={noStickyFix ? false : { offsetHeader }}
           {...proTableProps}
+          showSorterTooltip={false}
         />
       </div>
     </div>

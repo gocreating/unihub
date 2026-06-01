@@ -319,6 +319,7 @@ export default {
   'common.entityOps.columns.isCustomised': 'Columns customised',
   'common.entityOps.unsavedChanges': 'Unsaved changes — click Apply or Cancel',
   'common.entityOps.pagination.total': '{total} records',
+  'common.entityOps.pagination.perPage': '{n} / page',
   'common.entityOps.sort.attribute': 'Column',
   'common.entityOps.sort.direction': 'Toggle direction',
   'common.entityOps.sort.moveUp': 'Increase priority',

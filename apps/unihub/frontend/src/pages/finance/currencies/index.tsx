@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Modal, Space, Switch, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
-import type { SorterResult } from 'antd/es/table/interface';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
 import type { Currency } from '@/services/unihub-backend/finance';
@@ -13,7 +12,7 @@ import {
   listCurrencies,
   updateCurrency,
 } from '@/services/unihub-backend/finance';
-import { EntityToolbar, useColumnConfig, useEntityFilter, useEntitySort } from '@/components/EntityToolbar';
+import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
 
 const CURRENCY_FILTERABLE_ATTRS: FilterableAttribute[] = [
@@ -42,25 +41,14 @@ export function CurrenciesPage() {
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
   const [form] = Form.useForm<CurrencyFormValues>();
 
-  // ── Entity operations hooks ─────────────────────────────────────────
-  const filter = useEntityFilter('currencies');
-  const sort = useEntitySort('currencies');
-  const cols = useColumnConfig(CURRENCY_COLUMN_DEFS);
-  const [limit] = useState(50);
-  const [offset, setOffset] = useState(0);
+  const table = useEntityTable({ key: 'currencies', filterableAttrs: CURRENCY_FILTERABLE_ATTRS, columnDefs: CURRENCY_COLUMN_DEFS });
 
-  // Reset offset when filter or sort changes.
-  useEffect(() => { setOffset(0); }, [filter.activeGroups, sort.activeRules]);
-
-  const { data: currenciesData, isLoading, isError } = useQuery({
-    queryKey: ['finance', 'currencies', filter.toApiParam(), sort.toOrderingParam(), limit, offset],
-    queryFn: () => listCurrencies({ filters: filter.toApiParam(), ordering: sort.toOrderingParam(), limit, offset }),
+  const { data: currenciesData, isLoading } = useQuery({
+    queryKey: ['finance', 'currencies', table.queryParams],
+    queryFn: () => listCurrencies(table.queryParams),
+    meta: { errorMessage: t({ id: 'pages.finance.currencies.loadError' }) },
   });
   const currencies = useMemo(() => currenciesData?.results ?? [], [currenciesData]);
-
-  useEffect(() => {
-    if (isError) message.error(t({ id: 'pages.finance.currencies.loadError' }));
-  }, [isError, t]);
 
   const createMutation = useMutation({
     mutationFn: createCurrency,
@@ -130,8 +118,8 @@ export function CurrenciesPage() {
     return w;
   }, [currencies]);
 
-  const visibleKeys = new Set(cols.visibleColumns.map((c) => c.key));
-  const lastVisKey = cols.visibleColumns.at(-1)?.key;
+  const visibleKeys = new Set(table.cols.visibleColumns.map((c) => c.key));
+  const lastVisKey = table.cols.visibleColumns.at(-1)?.key;
 
   const columns: ProColumns<Currency>[] = useMemo(
     () => [
@@ -140,25 +128,25 @@ export function CurrenciesPage() {
         dataIndex: 'code',
         ...widthForHeader('Code', dataWidths.code),
         sorter: true,
-        sortOrder: sort.sortOrderForField('code') ?? undefined,
+        sortOrder: table.sort.sortOrderForField('code') ?? undefined,
         hidden: !visibleKeys.has('code'),
-        fixed: cols.visibleColumns[0]?.key === 'code' ? cols.firstColumnFixed : lastVisKey === 'code' ? cols.lastColumnFixed : undefined,
+        fixed: table.cols.visibleColumns[0]?.key === 'code' ? table.cols.firstColumnFixed : lastVisKey === 'code' ? table.cols.lastColumnFixed : undefined,
       },
       {
         title: t({ id: 'common.name' }),
         dataIndex: 'name',
         ...widthForHeader('Name', dataWidths.name),
         sorter: true,
-        sortOrder: sort.sortOrderForField('name') ?? undefined,
+        sortOrder: table.sort.sortOrderForField('name') ?? undefined,
         hidden: !visibleKeys.has('name'),
-        fixed: cols.visibleColumns[0]?.key === 'name' ? cols.firstColumnFixed : lastVisKey === 'name' ? cols.lastColumnFixed : undefined,
+        fixed: table.cols.visibleColumns[0]?.key === 'name' ? table.cols.firstColumnFixed : lastVisKey === 'name' ? table.cols.lastColumnFixed : undefined,
       },
       {
         title: t({ id: 'pages.finance.currencies.col.symbol' }),
         dataIndex: 'symbol',
         ...widthForHeader('Symbol', dataWidths.symbol),
         hidden: !visibleKeys.has('symbol'),
-        fixed: cols.visibleColumns[0]?.key === 'symbol' ? cols.firstColumnFixed : lastVisKey === 'symbol' ? cols.lastColumnFixed : undefined,
+        fixed: table.cols.visibleColumns[0]?.key === 'symbol' ? table.cols.firstColumnFixed : lastVisKey === 'symbol' ? table.cols.lastColumnFixed : undefined,
         render: (val) =>
           val ? String(val) : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
       },
@@ -202,13 +190,8 @@ export function CurrenciesPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, sort.activeRules, cols.activeState, visibleKeys, lastVisKey],
+    [t, dataWidths, actionsColWidth, table.sort.activeRules, table.cols.activeState, visibleKeys, lastVisKey],
   );
-
-  const handleTableChange = (_: unknown, __: unknown, sorter: SorterResult<Currency> | SorterResult<Currency>[]) => {
-    const s = Array.isArray(sorter) ? sorter[0] : sorter;
-    if (s?.field) sort.handleHeaderClick(String(s.field));
-  };
 
   return (
     <>
@@ -221,9 +204,9 @@ export function CurrenciesPage() {
         }
         headerTitle={
           <EntityToolbar
-            filterProps={{ attrs: CURRENCY_FILTERABLE_ATTRS, hook: filter }}
-            sortProps={{ attrs: CURRENCY_FILTERABLE_ATTRS, hook: sort }}
-            columnProps={{ hook: cols }}
+            filterProps={{ attrs: CURRENCY_FILTERABLE_ATTRS, hook: table.filter }}
+            sortProps={{ attrs: CURRENCY_FILTERABLE_ATTRS, hook: table.sort }}
+            columnProps={{ hook: table.cols }}
           />
         }
         rowKey="code"
@@ -231,15 +214,9 @@ export function CurrenciesPage() {
         dataSource={currencies}
         loading={isLoading}
         scroll={{ x: computeScrollX(columns) }}
-        onChange={handleTableChange as never}
-        pagination={{
-          total: currenciesData?.count,
-          pageSize: limit,
-          current: Math.floor(offset / limit) + 1,
-          showTotal: (total) => `${total} records`,
-          onChange: (page) => setOffset((page - 1) * limit),
-          showSizeChanger: false,
-        }}
+        onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
+        pagination={false}
+        footer={() => <EntityOffsetFooter {...table.paginationProps(currenciesData?.count)} />}
       />
 
       <Modal

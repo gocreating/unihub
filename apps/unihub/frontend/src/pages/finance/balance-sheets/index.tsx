@@ -10,6 +10,7 @@ import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
+import { EntityOffsetFooter } from '@/components/EntityToolbar';
 import type { BalanceSheet } from '@/services/unihub-backend/finance';
 import {
   deleteBalanceSheet,
@@ -60,18 +61,22 @@ export function BalanceSheetsPage() {
     setExcludedFromNetWorth(new Set());
   }, [chartType]);
 
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [limit, setLimit] = useState(10);
+  const [offset, setOffset] = useState(0);
   const { data: sheetsData, isLoading } = useQuery({
-    queryKey: ['finance', 'balance-sheets', cursor],
-    queryFn: () => listBalanceSheets({ cursor, limit: 50, ordering: '-date' }),
+    queryKey: ['finance', 'balance-sheets', limit, offset],
+    queryFn: () => listBalanceSheets({ limit, offset, ordering: '-date' }),
   });
   const sheets = useMemo(() => sheetsData?.results ?? [], [sheetsData]);
-  const nextCursorUrl = sheetsData?.next ?? null;
-  const prevCursorUrl = sheetsData?.previous ?? null;
 
-  const extractCursor = (url: string | null): string | undefined => {
-    if (!url) return undefined;
-    try { return new URL(url).searchParams.get('cursor') ?? undefined; } catch { return undefined; }
+  const paginationProps = {
+    total: sheetsData?.count,
+    pageSize: limit,
+    current: Math.floor(offset / limit) + 1,
+    onChange: (page: number, size: number) => {
+      if (size !== limit) { setLimit(size); setOffset(0); }
+      else { setOffset((page - 1) * size); }
+    },
   };
 
   const { data: currenciesData } = useQuery({
@@ -671,24 +676,11 @@ export function BalanceSheetsPage() {
       <PageTable<BalanceSheet>
         pageTitle={t({ id: 'pages.finance.balanceSheets.title' })}
         action={
-          <Space>
-            <Button
-              disabled={!prevCursorUrl}
-              onClick={() => setCursor(extractCursor(prevCursorUrl))}
-            >
-              ← {t({ id: 'common.entityOps.pagination.previous' })}
-            </Button>
-            <Button
-              disabled={!nextCursorUrl}
-              onClick={() => setCursor(extractCursor(nextCursorUrl))}
-            >
-              {t({ id: 'common.entityOps.pagination.next' })} →
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/finance/balance-sheets/new')}>
-              {t({ id: 'pages.finance.balanceSheets.new' })}
-            </Button>
-          </Space>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/finance/balance-sheets/new')}>
+            {t({ id: 'pages.finance.balanceSheets.new' })}
+          </Button>
         }
+        footer={() => <EntityOffsetFooter {...paginationProps} pageSizeOptions={[10, 20]} />}
         rowKey="id"
         columns={columns}
         dataSource={sheets}

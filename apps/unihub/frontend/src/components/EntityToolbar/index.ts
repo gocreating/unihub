@@ -1,4 +1,8 @@
 export { EntityToolbar } from './EntityToolbar';
+export { EntityOffsetFooter } from './EntityOffsetFooter';
+export type { EntityOffsetFooterProps } from './EntityOffsetFooter';
+export { EntityCursorFooter } from './EntityCursorFooter';
+export type { EntityCursorFooterProps } from './EntityCursorFooter';
 export { useEntityTable } from './useEntityTable';
 export type { UseEntityTableOptions, UseEntityTableReturn, EntityPaginationProps, EntityPageSize } from './useEntityTable';
 export { ENTITY_PAGE_SIZE_OPTIONS } from './useEntityTable';

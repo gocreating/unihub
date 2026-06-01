@@ -1,5 +1,5 @@
 import { API_BASE_URL } from './index';
-import type { CursorPaginatedResponse, EntityListParams, OffsetPaginatedResponse } from '@/components/EntityToolbar';
+import type { EntityListParams, OffsetPaginatedResponse } from '@/components/EntityToolbar';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -148,8 +148,8 @@ export function deleteAccount(id: string, confirm = false): Promise<void | { aff
 
 // ── Balance Sheets ────────────────────────────────────────────────────
 
-export function listBalanceSheets(params?: EntityListParams): Promise<CursorPaginatedResponse<BalanceSheet>> {
-  return fetchJson<CursorPaginatedResponse<BalanceSheet>>(`/api/v1/finance/balance-sheets/${buildEntityListQs(params)}`);
+export function listBalanceSheets(params?: EntityListParams): Promise<OffsetPaginatedResponse<BalanceSheet>> {
+  return fetchJson<OffsetPaginatedResponse<BalanceSheet>>(`/api/v1/finance/balance-sheets/${buildEntityListQs(params)}`);
 }
 
 export function createBalanceSheet(data: Pick<BalanceSheet, 'date'>): Promise<BalanceSheet> {

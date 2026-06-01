@@ -5,43 +5,65 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Person',
+            name="Person",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=255)),
-                ('nickname', models.CharField(blank=True, max_length=255)),
-                ('email', models.EmailField(blank=True, max_length=254)),
-                ('phone', models.CharField(blank=True, max_length=50)),
-                ('notes', models.TextField(blank=True)),
-                ('tags', models.JSONField(blank=True, default=list)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("name", models.CharField(max_length=255)),
+                ("nickname", models.CharField(blank=True, max_length=255)),
+                ("email", models.EmailField(blank=True, max_length=254)),
+                ("phone", models.CharField(blank=True, max_length=50)),
+                ("notes", models.TextField(blank=True)),
+                ("tags", models.JSONField(blank=True, default=list)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'ordering': ['name'],
+                "ordering": ["name"],
             },
         ),
         migrations.CreateModel(
-            name='Relationship',
+            name="Relationship",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('kind', models.CharField(max_length=100)),
-                ('notes', models.TextField(blank=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('from_person', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='relationships_from', to='people.person')),
-                ('to_person', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='relationships_to', to='people.person')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("kind", models.CharField(max_length=100)),
+                ("notes", models.TextField(blank=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "from_person",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="relationships_from",
+                        to="people.person",
+                    ),
+                ),
+                (
+                    "to_person",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="relationships_to",
+                        to="people.person",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['from_person', 'kind'],
-                'unique_together': {('from_person', 'to_person', 'kind')},
+                "ordering": ["from_person", "kind"],
+                "unique_together": {("from_person", "to_person", "kind")},
             },
         ),
     ]

@@ -4,31 +4,34 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Song',
+            name="Song",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('title', models.CharField(max_length=255)),
-                ('artist', models.CharField(max_length=255)),
-                ('album', models.CharField(blank=True, max_length=255)),
-                ('year', models.PositiveSmallIntegerField(blank=True, null=True)),
-                ('genre', models.CharField(blank=True, max_length=100)),
-                ('language', models.CharField(blank=True, max_length=100)),
-                ('rating', models.PositiveSmallIntegerField(blank=True, null=True)),
-                ('notes', models.TextField(blank=True)),
-                ('tags', models.JSONField(blank=True, default=list)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("title", models.CharField(max_length=255)),
+                ("artist", models.CharField(max_length=255)),
+                ("album", models.CharField(blank=True, max_length=255)),
+                ("year", models.PositiveSmallIntegerField(blank=True, null=True)),
+                ("genre", models.CharField(blank=True, max_length=100)),
+                ("language", models.CharField(blank=True, max_length=100)),
+                ("rating", models.PositiveSmallIntegerField(blank=True, null=True)),
+                ("notes", models.TextField(blank=True)),
+                ("tags", models.JSONField(blank=True, default=list)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'ordering': ['artist', 'title'],
+                "ordering": ["artist", "title"],
             },
         ),
     ]

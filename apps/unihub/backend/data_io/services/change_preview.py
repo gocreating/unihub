@@ -185,23 +185,31 @@ def _parse_field_value_for_db(field_desc: FieldDescriptor, raw_value: str) -> An
     return raw_value
 
 
+_MISSING = object()  # sentinel for absent optional CSV columns
+
+
 def _build_model_kwargs(
     csv_row: dict[str, str], descriptor: TableDescriptor, exclude_pk: bool = False
 ) -> dict[str, Any]:
-    """Build kwargs for Model.objects.create() or .update() from a CSV row."""
+    """Build kwargs for Model.objects.create() or .update() from a CSV row.
+
+    For optional fields absent from an older CSV, ``default_value`` is used
+    so that importing pre-fix exports does not fail or corrupt data.
+    """
     kwargs: dict[str, Any] = {}
     for field_desc in descriptor.system_fields:
         if exclude_pk and field_desc.is_pk:
             continue
-        raw = csv_row.get(field_desc.csv_header, "")
+        raw = csv_row.get(field_desc.csv_header, _MISSING)
+        if raw is _MISSING:
+            # Column absent from CSV — use the registered default for optional fields.
+            if field_desc.optional:
+                kwargs[field_desc.column_name] = field_desc.default_value
+            # Required fields absent from CSV should have been caught by parse_csv;
+            # skip silently here to avoid a KeyError.
+            continue
         parsed = _parse_field_value_for_db(field_desc, raw)
-        if (
-            field_desc.use_natural_key
-            and field_desc.fk_content_type_label == "contenttypes.contenttype"
-        ):
-            kwargs[field_desc.column_name] = parsed
-        else:
-            kwargs[field_desc.column_name] = parsed
+        kwargs[field_desc.column_name] = parsed
     return kwargs
 
 
@@ -237,6 +245,19 @@ def _upsert_attribute_values(
         )
 
 
+def _has_auto_now(model_class: type, attname: str) -> bool:
+    """Return True if the field has auto_now=True or auto_now_add=True.
+
+    These fields are overwritten by Django's pre_save() on create/save and
+    require a two-step import to preserve the original value.
+    """
+    try:
+        field = model_class._meta.get_field(attname)
+        return getattr(field, "auto_now", False) or getattr(field, "auto_now_add", False)
+    except Exception:
+        return False
+
+
 def apply_diff(
     change_records: list[dict[str, Any]],
     descriptor: TableDescriptor,
@@ -258,7 +279,35 @@ def apply_diff(
             if operation == "create":
                 csv_row = record["after"]
                 kwargs = _build_model_kwargs(csv_row, descriptor, exclude_pk=False)
+
+                # Identify auto_now and auto_now_add fields.  Django's pre_save
+                # hooks overwrite these values during objects.create(), so we
+                # must restore the original values with a follow-up .update()
+                # call that bypasses the pre_save hooks entirely.
+                auto_ts_fields = [
+                    fd
+                    for fd in descriptor.system_fields
+                    if fd.data_type == "datetime"
+                    and not fd.is_pk
+                    and fd.csv_header in csv_row
+                    and csv_row.get(fd.csv_header, "") != ""
+                    and _has_auto_now(descriptor.model_class, fd.column_name)
+                ]
+                # Remove auto-timestamp kwargs before create — they'd be ignored anyway.
+                ts_update_kwargs = {}
+                for fd in auto_ts_fields:
+                    if fd.column_name in kwargs and kwargs[fd.column_name] is not None:
+                        ts_update_kwargs[fd.column_name] = kwargs.pop(fd.column_name)
+
                 descriptor.model_class.objects.create(**kwargs)
+
+                # Step 2: restore original timestamps via .update() which bypasses auto_now.
+                if ts_update_kwargs:
+                    pk_field_obj = next(f for f in descriptor.system_fields if f.is_pk)
+                    descriptor.model_class.objects.filter(
+                        **{pk_field_obj.column_name: pk_val}
+                    ).update(**ts_update_kwargs)
+
                 if descriptor.has_user_attributes:
                     _upsert_attribute_values(descriptor, pk_val, csv_row)
                 created += 1

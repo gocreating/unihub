@@ -110,23 +110,41 @@ def parse_csv(
     if errors:
         return [], errors
 
-    # ── Check all required system columns are present ──────────────────────────
-    expected_system = _expected_system_header_set(descriptor)
-    header_set = set(headers)
+    # ── Build column-name → canonical registry header mapping ─────────────────
+    # Maps the bare column name (e.g. "symbol") to the registry's full header
+    # (e.g. "symbol:string").  This lets us accept CSVs exported before a data
+    # type was renamed (e.g. "symbol:text" → "symbol:string") without error.
+    col_name_to_reg_header: dict[str, str] = {}
+    for fd in descriptor.system_fields:
+        bare = fd.csv_header.split(":")[0]
+        col_name_to_reg_header[bare] = fd.csv_header
+    for ua_header in _get_user_attr_header_set(descriptor):
+        bare = ua_header.split(":")[0]
+        col_name_to_reg_header[bare] = ua_header
 
-    for required in expected_system:
-        if required not in header_set:
+    # ── Check all *required* system columns are present ────────────────────────
+    # Optional fields (optional=True on FieldDescriptor) may be absent in older
+    # exported CSVs produced before those fields were added to the data model.
+    # Missing optional columns are silently filled with default_value on import.
+    # Presence is checked by column name only (type suffix may differ in old CSVs).
+    csv_col_names = {h.split(":")[0] for h in headers}
+
+    for fd in descriptor.system_fields:
+        bare = fd.csv_header.split(":")[0]
+        if not fd.optional and bare not in csv_col_names:
             errors.append(
-                ValidationIssue(row=0, column=None, message=f"Missing required column: {required}.")
+                ValidationIssue(
+                    row=0, column=None, message=f"Missing required column: {fd.csv_header}."
+                )
             )
 
     if errors:
         return [], errors
 
     # ── Check for unknown columns (not in system fields or user attrs) ─────────
-    valid_headers = expected_system | _get_user_attr_header_set(descriptor)
     for header in headers:
-        if header not in valid_headers:
+        bare = header.split(":")[0]
+        if bare not in col_name_to_reg_header:
             errors.append(
                 ValidationIssue(
                     row=0,
@@ -158,9 +176,10 @@ def parse_csv(
     for row_num, row in enumerate(reader, start=1):
         row_errors: list[ValidationIssue] = []
 
-        # Duplicate PK check
+        # Duplicate PK check — use bare column name to handle any type-suffix change
         if pk_header:
-            pk_val = row.get(pk_header, "")
+            pk_col = pk_header.split(":")[0]
+            pk_val = next((v for k, v in row.items() if k.split(":")[0] == pk_col), "")
             if pk_val and pk_val in seen_pks:
                 row_errors.append(
                     ValidationIssue(
@@ -172,15 +191,25 @@ def parse_csv(
             elif pk_val:
                 seen_pks.add(pk_val)
 
-        # FK existence validation
+        # FK existence validation — use bare column name for header-agnostic lookup
         for fk_field in fk_fields:
-            val = row.get(fk_field.csv_header, "")
+            fk_col = fk_field.csv_header.split(":")[0]
+            val = next((v for k, v in row.items() if k.split(":")[0] == fk_col), "")
             issue = _validate_fk_value(fk_field, val, row_num, allowed_fk_pks=allowed_fk_pks)
             if issue:
                 row_errors.append(issue)
 
         errors.extend(row_errors)
-        rows.append(dict(row))
+        # Normalize row keys to use the registry's canonical headers so that
+        # downstream code can use field_desc.csv_header for lookups regardless
+        # of what type suffix appeared in the original CSV (e.g. "symbol:text"
+        # is remapped to "symbol:string" if the registry now uses "string").
+        normalized_row: dict[str, str] = {}
+        for k, v in row.items():
+            bare = k.split(":")[0]
+            canonical = col_name_to_reg_header.get(bare, k)
+            normalized_row[canonical] = v
+        rows.append(normalized_row)
 
     if errors:
         return [], errors

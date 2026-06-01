@@ -19,7 +19,7 @@
 
 **Purpose**: No new project structure needed — this is a backend-only change to existing files.
 
-- [ ] T001 Verify all Finance model fields in `apps/unihub/backend/finance/models.py` match the expected field sets documented in `specs/009-fix-finance-sync/data-model.md`
+- [x] T001 Verify all Finance model fields in `apps/unihub/backend/finance/models.py` match the expected field sets documented in `specs/009-fix-finance-sync/data-model.md`
 
 **Checkpoint**: Field sets confirmed — proceed to foundational infrastructure
 
@@ -31,11 +31,11 @@
 
 **⚠️ CRITICAL**: Constitution Principle V — tests MUST be written first and MUST fail before implementation.
 
-- [ ] T002 Write failing test for `auto_system_fields()` — Currency model generates 4 FieldDescriptors matching `Currency._meta.concrete_fields`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T003 [P] Write failing test: `auto_system_fields()` handles FK fields — Balance model with `fk_overrides` generates correct `is_fk=True` and `fk_content_type_label` on `account_id` and `balance_sheet_id`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T004 [P] Write failing test: `_field_to_data_type()` maps BooleanField→`"boolean"`, DateTimeField→`"datetime"`, DecimalField→`"decimal"`, CharField(max_length≤50)→`"string"`, CharField(max_length>50)→`"text"`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T005 Implement `_field_to_data_type(field)` helper in `apps/unihub/backend/data_io/registry.py` — maps Django field classes to data_io data_type strings per mapping in `specs/009-fix-finance-sync/data-model.md` (makes T004 pass)
-- [ ] T006 Implement `auto_system_fields(model_class, exclude=None, fk_overrides=None)` in `apps/unihub/backend/data_io/registry.py` — reads `model._meta.concrete_fields`, creates one `FieldDescriptor` per field using `_field_to_data_type()`, sets `is_pk`/`is_fk`/`nullable` from field metadata, merges `fk_overrides` (makes T002, T003 pass)
+- [x] T002 Write failing test for `auto_system_fields()` — Currency model generates 4 FieldDescriptors matching `Currency._meta.concrete_fields`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T003 [P] Write failing test: `auto_system_fields()` handles FK fields — Balance model with `fk_overrides` generates correct `is_fk=True` and `fk_content_type_label` on `account_id` and `balance_sheet_id`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T004 [P] Write failing test: `_field_to_data_type()` maps BooleanField→`"boolean"`, DateTimeField→`"datetime"`, DecimalField→`"decimal"`, CharField(max_length≤50)→`"string"`, CharField(max_length>50)→`"text"`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T005 Implement `_field_to_data_type(field)` helper in `apps/unihub/backend/data_io/registry.py` — maps Django field classes to data_io data_type strings per mapping in `specs/009-fix-finance-sync/data-model.md` (makes T004 pass)
+- [x] T006 Implement `auto_system_fields(model_class, exclude=None, fk_overrides=None)` in `apps/unihub/backend/data_io/registry.py` — reads `model._meta.concrete_fields`, creates one `FieldDescriptor` per field using `_field_to_data_type()`, sets `is_pk`/`is_fk`/`nullable` from field metadata, merges `fk_overrides` (makes T002, T003 pass)
 
 **Checkpoint**: `uv run pytest tests/test_sync_field_coverage.py::test_auto_system_fields* -v` passes
 
@@ -47,15 +47,15 @@
 
 **Independent Test**: Create Currency with `is_base_currency=True`, Account with `color="#2196f3"`. Export via the sync mechanism. Inspect the exported CSV — both `is_base_currency:boolean` and `color:string` columns appear with correct values.
 
-- [ ] T007 [US1] Write failing regression test: export of `finance.currency` includes all 4 fields (code, name, symbol, is_base_currency) — assert exported CSV header contains `is_base_currency:boolean`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T008 [P] [US1] Write failing regression test: export of `finance.account` includes all 8 fields (id, name, currency, color, open_datetime, close_datetime, created_at, updated_at), in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T009 [P] [US1] Write failing regression test: export of `finance.balancesheet` includes all 4 fields (id, date, created_at, updated_at), in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T010 [P] [US1] Write failing field-coverage invariant test: for every registered Finance table, `{fd.column_name for fd in table.system_fields} == {f.attname for f in table.model_class._meta.concrete_fields}`, in `apps/unihub/backend/tests/test_sync_field_coverage.py` (this is the permanent regression guard from `contracts/field-coverage-contract.md`)
-- [ ] T011 [US1] Migrate `finance.currency` registration in `apps/unihub/backend/finance/apps.py` to use `auto_system_fields(Currency)` — replaces the 3-field manual list with auto-discovered 4 fields including `is_base_currency` (makes T007, T010 partial pass)
-- [ ] T012 [US1] Migrate `finance.account` registration in `apps/unihub/backend/finance/apps.py` to use `auto_system_fields(Account)` — replaces the 5-field manual list with auto-discovered 8 fields including `color`, `created_at`, `updated_at` (makes T008, T010 partial pass)
-- [ ] T013 [US1] Migrate `finance.balancesheet` registration in `apps/unihub/backend/finance/apps.py` to use `auto_system_fields(BalanceSheet)` — replaces the 2-field manual list with auto-discovered 4 fields including `created_at`, `updated_at` (makes T009, T010 partial pass)
-- [ ] T014 [P] [US1] Migrate `finance.exchangerate` registration in `apps/unihub/backend/finance/apps.py` to use `auto_system_fields(ExchangeRate)` — no missing fields, but migrates to auto-discovery for systemic consistency (makes T010 partial pass)
-- [ ] T015 [P] [US1] Migrate `finance.balance` registration in `apps/unihub/backend/finance/apps.py` to use `auto_system_fields(Balance, fk_overrides={'account_id': {'is_fk': True, 'fk_content_type_label': 'finance.account'}, 'balance_sheet_id': {'is_fk': True, 'fk_content_type_label': 'finance.balancesheet'}})` — no missing fields, but migrates to auto-discovery (makes T010 fully pass)
+- [x] T007 [US1] Write failing regression test: export of `finance.currency` includes all 4 fields (code, name, symbol, is_base_currency) — assert exported CSV header contains `is_base_currency:boolean`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T008 [P] [US1] Write failing regression test: export of `finance.account` includes all 8 fields (id, name, currency, color, open_datetime, close_datetime, created_at, updated_at), in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T009 [P] [US1] Write failing regression test: export of `finance.balancesheet` includes all 4 fields (id, date, created_at, updated_at), in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T010 [P] [US1] Write failing field-coverage invariant test: for every registered Finance table, `{fd.column_name for fd in table.system_fields} == {f.attname for f in table.model_class._meta.concrete_fields}`, in `apps/unihub/backend/tests/test_sync_field_coverage.py` (this is the permanent regression guard from `contracts/field-coverage-contract.md`)
+- [x] T011 [US1] Migrate `finance.currency` registration in `apps/unihub/backend/finance/apps.py` to use `auto_system_fields(Currency)` — replaces the 3-field manual list with auto-discovered 4 fields including `is_base_currency` (makes T007, T010 partial pass)
+- [x] T012 [US1] Migrate `finance.account` registration in `apps/unihub/backend/finance/apps.py` to use `auto_system_fields(Account)` — replaces the 5-field manual list with auto-discovered 8 fields including `color`, `created_at`, `updated_at` (makes T008, T010 partial pass)
+- [x] T013 [US1] Migrate `finance.balancesheet` registration in `apps/unihub/backend/finance/apps.py` to use `auto_system_fields(BalanceSheet)` — replaces the 2-field manual list with auto-discovered 4 fields including `created_at`, `updated_at` (makes T009, T010 partial pass)
+- [x] T014 [P] [US1] Migrate `finance.exchangerate` registration in `apps/unihub/backend/finance/apps.py` to use `auto_system_fields(ExchangeRate)` — no missing fields, but migrates to auto-discovery for systemic consistency (makes T010 partial pass)
+- [x] T015 [P] [US1] Migrate `finance.balance` registration in `apps/unihub/backend/finance/apps.py` to use `auto_system_fields(Balance, fk_overrides={'account_id': {'is_fk': True, 'fk_content_type_label': 'finance.account'}, 'balance_sheet_id': {'is_fk': True, 'fk_content_type_label': 'finance.balancesheet'}})` — no missing fields, but migrates to auto-discovery (makes T010 fully pass)
 
 **Checkpoint**: `uv run pytest tests/test_sync_field_coverage.py -v` all pass — all 5 Finance tables have complete field coverage
 
@@ -67,9 +67,9 @@
 
 **Independent Test**: Mark a currency as base currency. Open publish preview. Verify the Currency table shows at least 1 modification in the preview count.
 
-- [ ] T016 [US2] Write failing test: publish preview detects a change in `is_base_currency` as a modification to the Currency record — assert preview returns `modified_count >= 1` for `finance.currency` after toggling `is_base_currency`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T017 [P] [US2] Write failing test: publish preview detects a change in `color` as a modification to the Account record — assert preview returns `modified_count >= 1` for `finance.account` after changing `color`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T018 [US2] Verify preview works end-to-end with the updated field registrations — run the full push-and-pull smoke test: push data to a temp location, modify `is_base_currency` on a currency, run publish preview, assert the currency appears in the modified count. No code change expected (preview logic already uses registry); this task verifies the fix propagates through the full pipeline, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T016 [US2] Write failing test: publish preview detects a change in `is_base_currency` as a modification to the Currency record — assert preview returns `modified_count >= 1` for `finance.currency` after toggling `is_base_currency`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T017 [P] [US2] Write failing test: publish preview detects a change in `color` as a modification to the Account record — assert preview returns `modified_count >= 1` for `finance.account` after changing `color`, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T018 [US2] Verify preview works end-to-end with the updated field registrations — run the full push-and-pull smoke test: push data to a temp location, modify `is_base_currency` on a currency, run publish preview, assert the currency appears in the modified count. No code change expected (preview logic already uses registry); this task verifies the fix propagates through the full pipeline, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
 
 **Checkpoint**: `uv run pytest tests/test_sync_field_coverage.py::test_preview_* -v` passes — preview correctly detects changes to all fields
 
@@ -81,11 +81,11 @@
 
 **Independent Test**: Construct a Currency CSV that has only `code`, `name`, `symbol` columns (no `is_base_currency`). Perform an import. Verify it succeeds and the imported currency has `is_base_currency=False`.
 
-- [ ] T019 [US3] Write failing test: importing a Currency CSV missing `is_base_currency` column succeeds and defaults to `False` — construct minimal CSV without `is_base_currency`, call importer, assert success and `is_base_currency=False` on imported record, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T020 [P] [US3] Write failing test: importing an Account CSV missing `color` column succeeds and defaults to empty string — assert `color=""` on imported record, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T021 [P] [US3] Write failing test: importing an Account CSV missing timestamp columns succeeds — imported record exists; `created_at` and `updated_at` are set to a value (import timestamp acceptable as default), in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T022 [US3] Confirm `csv_importer.py` handles missing columns gracefully for new fields — read `apps/unihub/backend/data_io/services/csv_importer.py` and verify that columns absent in the CSV are skipped rather than causing a KeyError. If the current importer raises on missing columns, add a defensive check: `value = row.get(fd.column_name, fd.default_value)` using a new `default_value` attribute on `FieldDescriptor` (makes T019, T020, T021 pass)
-- [ ] T023 [US3] If `FieldDescriptor` needed a `default_value` field (from T022), update `auto_system_fields()` in `apps/unihub/backend/data_io/registry.py` to populate `default_value` from `field.default` or a type-appropriate safe default (boolean→False, string→"", nullable→None)
+- [x] T019 [US3] Write failing test: importing a Currency CSV missing `is_base_currency` column succeeds and defaults to `False` — construct minimal CSV without `is_base_currency`, call importer, assert success and `is_base_currency=False` on imported record, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T020 [P] [US3] Write failing test: importing an Account CSV missing `color` column succeeds and defaults to empty string — assert `color=""` on imported record, in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T021 [P] [US3] Write failing test: importing an Account CSV missing timestamp columns succeeds — imported record exists; `created_at` and `updated_at` are set to a value (import timestamp acceptable as default), in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T022 [US3] Confirm `csv_importer.py` handles missing columns gracefully for new fields — read `apps/unihub/backend/data_io/services/csv_importer.py` and verify that columns absent in the CSV are skipped rather than causing a KeyError. If the current importer raises on missing columns, add a defensive check: `value = row.get(fd.column_name, fd.default_value)` using a new `default_value` attribute on `FieldDescriptor` (makes T019, T020, T021 pass)
+- [x] T023 [US3] If `FieldDescriptor` needed a `default_value` field (from T022), update `auto_system_fields()` in `apps/unihub/backend/data_io/registry.py` to populate `default_value` from `field.default` or a type-appropriate safe default (boolean→False, string→"", nullable→None)
 
 **Checkpoint**: `uv run pytest tests/test_sync_field_coverage.py::test_backward_compat* -v` passes — old CSVs import cleanly
 
@@ -95,10 +95,10 @@
 
 **Purpose**: Ensure timestamp fields are restored to original values (not import time) when present in the CSV, and the full quality loop passes.
 
-- [ ] T024 Write test: push-and-pull round-trip preserves `created_at` exactly — create Account, record `created_at`, push, pull, assert `created_at` unchanged in `apps/unihub/backend/tests/test_sync_field_coverage.py`
-- [ ] T025 Update `csv_importer.py` in `apps/unihub/backend/data_io/services/csv_importer.py` to use two-step import for `auto_now`/`auto_now_add` timestamp fields: (1) `save()` to create the record, (2) `queryset.filter(pk=pk).update(created_at=original, updated_at=original)` to restore original timestamps, bypassing Django's `auto_now` (makes T024 pass)
-- [ ] T026 [P] Run backend quality loop from `apps/unihub/backend/`: `uv run ruff format . && uv run ruff check . --fix && uv run pytest` — confirm zero errors; fix any ruff issues in changed files
-- [ ] T027 [P] Verify `uv run pytest tests/test_sync_field_coverage.py -v` — all tasks pass in a single clean run
+- [x] T024 Write test: push-and-pull round-trip preserves `created_at` exactly — create Account, record `created_at`, push, pull, assert `created_at` unchanged in `apps/unihub/backend/tests/test_sync_field_coverage.py`
+- [x] T025 Update `csv_importer.py` in `apps/unihub/backend/data_io/services/csv_importer.py` to use two-step import for `auto_now`/`auto_now_add` timestamp fields: (1) `save()` to create the record, (2) `queryset.filter(pk=pk).update(created_at=original, updated_at=original)` to restore original timestamps, bypassing Django's `auto_now` (makes T024 pass)
+- [x] T026 [P] Run backend quality loop from `apps/unihub/backend/`: `uv run ruff format . && uv run ruff check . --fix && uv run pytest` — confirm zero errors; fix any ruff issues in changed files
+- [x] T027 [P] Verify `uv run pytest tests/test_sync_field_coverage.py -v` — all tasks pass in a single clean run
 
 **Checkpoint**: All tests pass, ruff clean, round-trip preserves all fields including timestamps
 

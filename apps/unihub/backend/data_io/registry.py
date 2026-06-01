@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -16,6 +17,8 @@ class FieldDescriptor:
     nullable: bool = False
     use_natural_key: bool = False  # For FK fields serialized as "app_label.model"
     is_json: bool = False  # For JSONField (serialized as JSON string in CSV)
+    optional: bool = False  # If True, absence in an imported CSV is not an error
+    default_value: Any = None  # Value used when the column is absent in an old CSV
 
 
 @dataclass
@@ -109,6 +112,168 @@ def topo_sort(labels: list[str]) -> list[str]:
     result_set = set(result)
     result.extend(lbl for lbl in labels if lbl not in result_set)
     return result
+
+
+def _field_to_data_type(field_obj: Any) -> str:
+    """Map a Django field instance to a data_io data_type string.
+
+    Args:
+        field_obj: A Django model field from ``model._meta.concrete_fields``.
+
+    Returns:
+        One of: ``"boolean"``, ``"datetime"``, ``"decimal"``, ``"float"``,
+        ``"integer"``, ``"json"``, ``"string"``, ``"text"``.
+    """
+    from django.db import models as dj
+
+    if isinstance(field_obj, (dj.BooleanField, dj.NullBooleanField)):
+        return "boolean"
+    if isinstance(field_obj, (dj.DateTimeField, dj.DateField)):
+        return "datetime"
+    if isinstance(field_obj, dj.DecimalField):
+        return "decimal"
+    if isinstance(field_obj, dj.FloatField):
+        return "float"
+    if isinstance(
+        field_obj,
+        (
+            dj.IntegerField,
+            dj.AutoField,
+            dj.BigAutoField,
+            dj.SmallAutoField,
+            dj.SmallIntegerField,
+            dj.BigIntegerField,
+            dj.PositiveIntegerField,
+            dj.PositiveSmallIntegerField,
+        ),
+    ):
+        return "integer"
+    if isinstance(field_obj, dj.JSONField):
+        return "json"
+    # ForeignKey is a relation stored as a char/int column
+    if hasattr(field_obj, "remote_field") and field_obj.remote_field is not None:
+        return "string"
+    # CharField and TextField: use "string" for short identifiers, "text" for long
+    max_len = getattr(field_obj, "max_length", None)
+    if max_len is not None and max_len <= 50:
+        return "string"
+    return "text"
+
+
+def _field_default_value(field_obj: Any) -> Any:
+    """Return a safe default value for a Django field when it is absent in an old CSV.
+
+    Args:
+        field_obj: A Django model field.
+
+    Returns:
+        A Python value appropriate as the missing-column default.
+    """
+    from django.db import models as dj
+    from django.db.models.fields import NOT_PROVIDED
+
+    if isinstance(field_obj, (dj.BooleanField, dj.NullBooleanField)):
+        raw = field_obj.default
+        if raw is not NOT_PROVIDED:
+            return raw
+        return False if not field_obj.null else None
+    if field_obj.null:
+        return None
+    raw = field_obj.default
+    if raw is not NOT_PROVIDED and not callable(raw):
+        return raw
+    if isinstance(field_obj, (dj.CharField, dj.TextField)) and field_obj.blank:
+        return ""
+    return None
+
+
+def auto_system_fields(
+    model_class: type,
+    exclude: set[str] | None = None,
+    fk_overrides: dict[str, dict[str, Any]] | None = None,
+) -> list[FieldDescriptor]:
+    """Generate FieldDescriptors from ``model_class._meta.concrete_fields``.
+
+    This function ensures every concrete model field is represented in the
+    sync registry without requiring manual maintenance.  When a new field is
+    added to a model it is automatically included in the next export/import
+    without any change to the registration code.
+
+    Args:
+        model_class: The Django model class to introspect.
+        exclude: Set of field ``attname`` values to skip (e.g. ``{"updated_at"}``).
+        fk_overrides: Maps FK field attname to additional ``FieldDescriptor`` kwargs.
+            Required for FK fields that need ``fk_content_type_label``::
+
+                {
+                    "account_id": {
+                        "is_fk": True,
+                        "fk_content_type_label": "finance.account",
+                    }
+                }
+
+    Returns:
+        List of ``FieldDescriptor`` objects, one per concrete model field.
+    """
+    exclude = exclude or set()
+    fk_overrides = fk_overrides or {}
+    descriptors: list[FieldDescriptor] = []
+
+    for f in model_class._meta.concrete_fields:
+        attname: str = f.attname
+        if attname in exclude:
+            continue
+
+        data_type = _field_to_data_type(f)
+        csv_header = f"{attname}:{data_type}"
+        is_pk = bool(f.primary_key)
+        is_fk = bool(f.is_relation and hasattr(f, "column"))
+        # nullable=True means the DB column accepts NULL; mirrors field.null.
+        # Do not conflate with field.blank (which allows empty strings in forms).
+        nullable = bool(f.null)
+        is_json = data_type == "json"
+
+        # Determine whether this field is optional in older CSV imports.
+        # PK fields are always required.  Non-PK fields are optional when they
+        # have a safe default (blank, null, or an explicit default value) so
+        # that CSVs created before this field was added can still be imported.
+        if is_pk:
+            optional = False
+            default = None
+        else:
+            from django.db.models.fields import NOT_PROVIDED
+
+            auto_now = getattr(f, "auto_now", False)
+            auto_now_add = getattr(f, "auto_now_add", False)
+            has_default = (
+                f.null
+                or getattr(f, "blank", False)
+                or auto_now
+                or auto_now_add
+                or (getattr(f, "default", NOT_PROVIDED) is not NOT_PROVIDED)
+            )
+            optional = bool(has_default)
+            default = _field_default_value(f)
+
+        kwargs: dict[str, Any] = {
+            "column_name": attname,
+            "csv_header": csv_header,
+            "data_type": data_type,
+            "is_pk": is_pk,
+            "is_fk": is_fk,
+            "nullable": nullable,
+            "is_json": is_json,
+            "optional": optional,
+            "default_value": default,
+        }
+
+        # Merge caller-supplied FK overrides (e.g. fk_content_type_label)
+        if attname in fk_overrides:
+            kwargs.update(fk_overrides[attname])
+
+        descriptors.append(FieldDescriptor(**kwargs))
+
+    return descriptors
 
 
 def _clear_registry() -> None:

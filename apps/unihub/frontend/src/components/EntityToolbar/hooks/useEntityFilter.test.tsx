@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useEntityFilter } from './useEntityFilter';
-import type { FilterGroup } from '../types';
+import { useEntityFilter, emptyRoot, emptyRule } from './useEntityFilter';
+import type { FilterGroup, FilterGroupItem } from '../types';
 
 /** Build a FilterGroup with one filled condition for testing. */
 function makeFilledGroup(): FilterGroup {
@@ -181,5 +181,105 @@ describe('useEntityFilter', () => {
     // The empty group is stored in activeGroups, but isActive is false because
     // no condition has attr+val filled
     expect(result.current.isActive).toBe(false);
+  });
+});
+
+// ── Tree API (pendingRoot / setPendingRoot) ───────────────────────────────────
+
+function makeFilledRoot(): FilterGroupItem {
+  return {
+    id: 'root-1',
+    type: 'group',
+    logic: 'and',
+    rules: [{ id: 'r1', attr: 'name', op: 'contains', val: 'Alice' }],
+  };
+}
+
+describe('useEntityFilter — tree API', () => {
+  // T-01: pendingRoot initialises to emptyRoot (one empty rule, no border)
+  it('pendingRoot initialises to a single-rule empty root group', () => {
+    const { result } = renderHook(() => useEntityFilter('test'));
+    expect(result.current.pendingRoot.type).toBe('group');
+    expect(result.current.pendingRoot.rules).toHaveLength(1);
+    expect(result.current.pendingRoot.rules[0]).toMatchObject({ attr: '', op: 'contains', val: '' });
+  });
+
+  // T-02: setPendingRoot updates pendingRoot and derives pendingGroups from it
+  it('setPendingRoot updates pendingRoot and keeps pendingGroups in sync', () => {
+    const { result } = renderHook(() => useEntityFilter('test'));
+    const filled = makeFilledRoot();
+    act(() => { result.current.setPendingRoot(filled); });
+    expect(result.current.pendingRoot.rules[0]).toMatchObject({ attr: 'name', val: 'Alice' });
+    // flat pendingGroups derived from tree
+    expect(result.current.pendingGroups[0]!.conditions[0]!.attr).toBe('name');
+  });
+
+  // T-03: setPendingGroups updates pendingGroups and derives pendingRoot from it
+  it('setPendingGroups keeps pendingRoot in sync', () => {
+    const { result } = renderHook(() => useEntityFilter('test'));
+    act(() => { result.current.setPendingGroups([makeFilledGroup()]); });
+    expect(result.current.pendingRoot.rules[0]).toMatchObject({ attr: 'name', val: 'Alice' });
+  });
+
+  // T-04: apply() commits tree → activeGroups reflects the committed conditions
+  it('apply() commits pendingRoot into activeGroups', () => {
+    const { result } = renderHook(() => useEntityFilter('test'));
+    act(() => { result.current.setPendingRoot(makeFilledRoot()); });
+    act(() => { result.current.apply(); });
+    expect(result.current.activeGroups[0]!.conditions[0]!.attr).toBe('name');
+    expect(result.current.isActive).toBe(true);
+  });
+
+  // T-05: cancel() restores pendingRoot from the last applied activeGroups
+  it('cancel() restores pendingRoot from applied activeGroups', () => {
+    const { result } = renderHook(() => useEntityFilter('test'));
+    act(() => { result.current.setPendingRoot(makeFilledRoot()); });
+    act(() => { result.current.apply(); });
+    // edit pending without applying
+    act(() => { result.current.setPendingRoot({ ...emptyRoot(), rules: [emptyRule()] }); });
+    act(() => { result.current.cancel(); });
+    expect(result.current.pendingRoot.rules[0]).toMatchObject({ attr: 'name', val: 'Alice' });
+  });
+
+  // T-06: reset() resets pendingRoot back to emptyRoot
+  it('reset() resets pendingRoot to a single-rule empty group', () => {
+    const { result } = renderHook(() => useEntityFilter('test'));
+    act(() => { result.current.setPendingRoot(makeFilledRoot()); });
+    act(() => { result.current.apply(); });
+    act(() => { result.current.reset(); });
+    expect(result.current.pendingRoot.rules).toHaveLength(1);
+    expect(result.current.pendingRoot.rules[0]).toMatchObject({ attr: '' });
+    expect(result.current.isActive).toBe(false);
+  });
+
+  // T-07: isDirty reflects tree changes vs applied state
+  it('isDirty is true when pendingRoot differs from applied activeGroups', () => {
+    const { result } = renderHook(() => useEntityFilter('test'));
+    expect(result.current.isDirty).toBe(false);
+    act(() => { result.current.setPendingRoot(makeFilledRoot()); });
+    expect(result.current.isDirty).toBe(true);
+    act(() => { result.current.apply(); });
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  // T-08: nested groups in the tree flatten correctly for toApiParam
+  it('nested groups flatten to separate FilterPayload groups', () => {
+    const { result } = renderHook(() => useEntityFilter('test'));
+    const nestedRoot: FilterGroupItem = {
+      id: 'root', type: 'group', logic: 'and',
+      rules: [
+        { id: 'r1', attr: 'name', op: 'contains', val: 'Alice' },
+        {
+          id: 'g1', type: 'group', logic: 'or',
+          rules: [{ id: 'r2', attr: 'score', op: 'eq', val: '10' }],
+        },
+      ],
+    };
+    act(() => { result.current.setPendingRoot(nestedRoot); });
+    act(() => { result.current.apply(); });
+    const param = result.current.toApiParam();
+    expect(param?.groups).toHaveLength(2);
+    expect(param?.groups[0]!.conditions[0]!.attr).toBe('name');
+    expect(param?.groups[1]!.conditions[0]!.attr).toBe('score');
   });
 });

@@ -29,8 +29,8 @@ const makeFilter = (overrides: Partial<UseEntityFilterReturn> = {}): UseEntityFi
 
 const makeSort = (overrides: Partial<UseEntitySortReturn> = {}): UseEntitySortReturn =>
   ({
-    isActive: false, isDirty: false,
-    activeRules: [], pendingRules: [],
+    isActive: false, isDirty: false, isDefault: true,
+    activeRules: [], pendingRules: [], panelApplyCount: 0,
     apply: vi.fn(), cancel: vi.fn(), reset: vi.fn(),
     handleHeaderClick: vi.fn(),
     sortOrderForField: vi.fn().mockReturnValue(null),
@@ -86,9 +86,9 @@ describe('EntityToolbar button variant', () => {
     expect(isPrimary(screen.getByRole('button', { name: /filter/i }))).toBe(true);
   });
 
-  // T-04: sort active → primary
-  it('sort button is primary when sort is active', () => {
-    renderToolbar({ sortProps: { attrs: [], hook: makeSort({ isActive: true }) } });
+  // T-04: sort differs from default → primary
+  it('sort button is primary when sort differs from default', () => {
+    renderToolbar({ sortProps: { attrs: [], hook: makeSort({ isDefault: false }) } });
     expect(isPrimary(screen.getByRole('button', { name: /sort/i }))).toBe(true);
   });
 

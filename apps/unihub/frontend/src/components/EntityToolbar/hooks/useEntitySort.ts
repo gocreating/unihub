@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { SortRule, SortState } from '../types';
 
 const EMPTY_RULE: SortRule = { field: '', direction: 'asc' };
@@ -19,6 +19,10 @@ export interface UseEntitySortReturn {
    *  ProTable `key` to force a remount — AntD only updates sort indicators via its own
    *  onChange; a prop-only change (panel apply) is invisible to its internal state. */
   panelApplyCount: number;
+  /** True when activeRules matches the initial default rules passed to the hook.
+   *  Used to: disable the Reset button (nothing to reset to), and decide whether
+   *  to highlight the Sort toolbar button (primary when NOT at default). */
+  isDefault: boolean;
 }
 
 function rulesToOrdering(rules: SortState): string | undefined {
@@ -59,6 +63,7 @@ function initialPending(active: SortState): SortState {
 }
 
 export function useEntitySort(_key: string, initialActiveRules: SortRule[] = []): UseEntitySortReturn {
+  const defaultRulesRef = useRef(initialActiveRules);
   const [activeRules, setActiveRules] = useState<SortState>(initialActiveRules);
   const [pendingRules, setPendingRules] = useState<SortState>(
     initialActiveRules.length > 0 ? initialActiveRules : [EMPTY_RULE],
@@ -77,8 +82,9 @@ export function useEntitySort(_key: string, initialActiveRules: SortRule[] = [])
   }, [activeRules]);
 
   const reset = useCallback(() => {
-    setActiveRules([]);
-    setPendingRules([EMPTY_RULE]);
+    const defaults = defaultRulesRef.current;
+    setActiveRules(defaults);
+    setPendingRules(defaults.length > 0 ? defaults : [EMPTY_RULE]);
     setPanelApplyCount((c) => c + 1);
   }, []);
 
@@ -113,6 +119,7 @@ export function useEntitySort(_key: string, initialActiveRules: SortRule[] = [])
   );
 
   const isDirty = serializeForDirty(pendingRules) !== serializeForDirty(activeRules);
+  const isDefault = serializeForDirty(activeRules) === serializeForDirty(defaultRulesRef.current);
 
   return {
     pendingRules,
@@ -127,6 +134,7 @@ export function useEntitySort(_key: string, initialActiveRules: SortRule[] = [])
     isActive: activeRules.length > 0,
     isDirty,
     panelApplyCount,
+    isDefault,
   };
 }
 

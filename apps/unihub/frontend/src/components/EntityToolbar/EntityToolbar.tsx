@@ -127,7 +127,7 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
       >
         <Button
           icon={<SortAscendingOutlined />}
-          type={sortProps.hook.isActive ? 'primary' : 'default'}
+          type={!sortProps.hook.isDefault ? 'primary' : 'default'}
         >
           {t({ id: 'common.entityOps.sort' })}
         </Button>

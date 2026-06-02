@@ -38,7 +38,7 @@ const deleteBtnStyle = (disabled: boolean): React.CSSProperties => ({
 
 export function SortPanel({ attrs, hook, onApply, onClose, focusCancelOn }: SortPanelProps) {
   const { formatMessage: t } = useIntl();
-  const { pendingRules, setPendingRules, apply, cancel, reset, isDirty, isActive } = hook;
+  const { pendingRules, setPendingRules, apply, cancel, reset, isDirty, isDefault } = hook;
   const cancelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -174,7 +174,7 @@ export function SortPanel({ attrs, hook, onApply, onClose, focusCancelOn }: Sort
       <Divider style={{ margin: '8px 0' }} />
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
         <Space>
-          <Button size="small" disabled={!isActive && !isDirty} onClick={() => { reset(); onApply(); }}>
+          <Button size="small" disabled={isDefault && !isDirty} onClick={() => { reset(); onApply(); }}>
             {t({ id: 'common.entityOps.reset' })}
           </Button>
           <div ref={cancelRef}>

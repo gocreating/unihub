@@ -17,8 +17,10 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 const makeHook = (overrides: Partial<UseEntitySortReturn> = {}): UseEntitySortReturn => ({
   isActive: false,
   isDirty: false,
+  isDefault: true,   // empty active = at default state
   activeRules: [],
   pendingRules: [{ field: '', direction: 'asc' }],
+  panelApplyCount: 0,
   apply: vi.fn(),
   cancel: vi.fn(),
   reset: vi.fn(),
@@ -49,9 +51,9 @@ describe('SortPanel', () => {
     expect(screen.getByRole('button', { name: /reset/i })).toBeInTheDocument();
   });
 
-  // SP-02: Reset calls hook.reset() and onApply() (needs isActive=true to be enabled)
+  // SP-02: Reset calls hook.reset() and onApply() (needs isDefault=false to be enabled)
   it('Reset button calls hook.reset() and onApply()', () => {
-    const { hook, onApply } = renderPanel({ isActive: true });
+    const { hook, onApply } = renderPanel({ isDefault: false });
     fireEvent.click(screen.getByRole('button', { name: /reset/i }));
     expect(hook.reset).toHaveBeenCalled();
     expect(onApply).toHaveBeenCalled();
@@ -107,15 +109,15 @@ describe('SortPanel', () => {
     expect(screen.getByRole('button', { name: /apply/i })).not.toBeDisabled();
   });
 
-  // SP-07b: Reset disabled when nothing active and not dirty
-  it('Reset button disabled when isActive=false and isDirty=false', () => {
-    renderPanel({ isActive: false, isDirty: false });
+  // SP-07b: Reset disabled when at default state and not dirty
+  it('Reset button disabled when isDefault=true and isDirty=false', () => {
+    renderPanel({ isDefault: true, isDirty: false });
     expect(screen.getByRole('button', { name: /reset/i })).toBeDisabled();
   });
 
-  // SP-07c: Reset enabled when isActive or isDirty
-  it('Reset button enabled when isActive=true', () => {
-    renderPanel({ isActive: true });
+  // SP-07c: Reset enabled when sort differs from default (e.g. user modified sort)
+  it('Reset button enabled when isDefault=false', () => {
+    renderPanel({ isDefault: false });
     expect(screen.getByRole('button', { name: /reset/i })).not.toBeDisabled();
   });
 

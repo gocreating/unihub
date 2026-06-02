@@ -308,6 +308,62 @@ describe('useEntitySort', () => {
     expect(result.current.isDirty).toBe(true);
   });
 
+  // DF-01: isDefault is true when active matches initialActiveRules (default = empty)
+  it('isDefault is true on init with no initialActiveRules', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+    expect(result.current.isDefault).toBe(true);
+  });
+
+  it('isDefault is false when active sort differs from initialActiveRules', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.isDefault).toBe(false);
+  });
+
+  // DF-02: isDefault with non-empty initialActiveRules — balance-sheets use case
+  it('isDefault is true when active matches non-empty initialActiveRules', () => {
+    const { result } = renderHook(() =>
+      useEntitySort('bs', [{ field: 'date', direction: 'desc' }]),
+    );
+    expect(result.current.isDefault).toBe(true);
+
+    act(() => { result.current.setPendingRules([{ field: 'date', direction: 'asc' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.isDefault).toBe(false);
+  });
+
+  // DF-03: reset() with initialActiveRules restores to those rules, not to empty
+  it('reset() restores to initialActiveRules and isDefault becomes true', () => {
+    const { result } = renderHook(() =>
+      useEntitySort('bs', [{ field: 'date', direction: 'desc' }]),
+    );
+    // Apply a different sort
+    act(() => { result.current.setPendingRules([{ field: 'date', direction: 'asc' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.sortOrderForField('date')).toBe('ascend');
+    expect(result.current.isDefault).toBe(false);
+
+    // Reset — should restore to initialActiveRules, not empty
+    act(() => { result.current.reset(); });
+    expect(result.current.sortOrderForField('date')).toBe('descend');
+    expect(result.current.isActive).toBe(true);
+    expect(result.current.isDefault).toBe(true);
+    expect(result.current.isDirty).toBe(false);
+    expect(result.current.toOrderingParam()).toBe('-date');
+  });
+
+  // DF-04: reset() with no initialActiveRules still clears to empty (backward compat)
+  it('reset() clears to empty when initialActiveRules is empty', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc' }]); });
+    act(() => { result.current.apply(); });
+    act(() => { result.current.reset(); });
+    expect(result.current.isActive).toBe(false);
+    expect(result.current.isDefault).toBe(true);
+    expect(result.current.toOrderingParam()).toBeUndefined();
+  });
+
   // N-01: nulls suffix is encoded in toOrderingParam — required for backend NULLS FIRST/LAST
   it('toOrderingParam encodes nulls:first as __nullsfirst suffix', () => {
     const { result } = renderHook(() => useEntitySort('test'));

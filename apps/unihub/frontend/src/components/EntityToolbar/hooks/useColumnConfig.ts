@@ -50,15 +50,17 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
 
   // When a parent re-renders with updated column labels (e.g. async currency loads),
   // patch labels in both states without disturbing visibility/order/sticky config.
+  // Only updates state when a label actually changed to avoid unnecessary re-renders.
   useEffect(() => {
     const labelMap = new Map(initialColumns.map((c) => [c.key, c.label]));
-    const patchLabels = (state: ColumnState): ColumnState => ({
-      ...state,
-      columns: state.columns.map((c) => {
+    const patchLabels = (state: ColumnState): ColumnState => {
+      const newColumns = state.columns.map((c) => {
         const newLabel = labelMap.get(c.key);
         return newLabel !== undefined && newLabel !== c.label ? { ...c, label: newLabel } : c;
-      }),
-    });
+      });
+      const changed = newColumns.some((c, i) => c !== state.columns[i]);
+      return changed ? { ...state, columns: newColumns } : state;
+    };
     setActiveState(patchLabels);
     setPendingState(patchLabels);
   }, [initialColumns]);

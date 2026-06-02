@@ -213,8 +213,8 @@ describe('useColumnConfig', () => {
           c.key === 'amount' ? { ...c, visible: false } : c,
         ),
       });
-      result.current.apply();
     });
+    act(() => { result.current.apply(); });
     expect(result.current.visibleColumns.some((c) => c.key === 'amount')).toBe(false);
 
     // Parent re-renders with updated label for 'amount' (e.g. baseCurrency loaded)

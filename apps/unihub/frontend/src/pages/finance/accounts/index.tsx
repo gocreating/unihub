@@ -234,6 +234,11 @@ export function AccountsPage() {
         title: t({ id: 'pages.finance.accounts.col.color' }),
         dataIndex: 'color',
         width: 72,
+        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'color'
+          ? 'left'
+          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'color'
+            ? 'right'
+            : undefined,
         render: (_dom, record) =>
           record.color ? (
             <span
@@ -257,6 +262,11 @@ export function AccountsPage() {
         ...widthForHeader('Open Date', Math.max(220, dataWidths.open_datetime)),
         sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'open_datetime') + 1 || 999 },
         sortOrder: sort.sortOrderForField('open_datetime') ?? null,
+        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'open_datetime'
+          ? 'left'
+          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'open_datetime'
+            ? 'right'
+            : undefined,
         render: (_, record) => {
           const formatted = formatDateRelative(record.open_datetime);
           return formatted ? (
@@ -274,6 +284,11 @@ export function AccountsPage() {
         ...widthForHeader('Close Date', Math.max(220, dataWidths.close_datetime)),
         sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'close_datetime') + 1 || 999 },
         sortOrder: sort.sortOrderForField('close_datetime') ?? null,
+        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'close_datetime'
+          ? 'left'
+          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'close_datetime'
+            ? 'right'
+            : undefined,
         render: (_, record) => {
           const formatted = formatDateRelative(record.close_datetime);
           return formatted ? (
@@ -289,6 +304,11 @@ export function AccountsPage() {
         title: t({ id: 'common.actions' }),
         key: 'actions',
         width: actionsColWidth,
+        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'actions'
+          ? 'left'
+          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'actions'
+            ? 'right'
+            : undefined,
         render: (_, record) => (
           <span data-actions-col>
             <Space>
@@ -321,6 +341,7 @@ export function AccountsPage() {
   return (
     <>
       <PageTable<Account>
+        key={`${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
         pageTitle={t({ id: 'pages.finance.accounts.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

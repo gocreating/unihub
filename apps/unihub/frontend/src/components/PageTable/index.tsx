@@ -18,7 +18,7 @@ import { createStyles } from 'antd-style';
 import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef } from 'react';
 import { useStickyHeaderOffset } from './useStickyHeaderOffset';
 // eslint-disable-next-line react-refresh/only-export-components
-export { widthForHeader, measureTextWidth, computeScrollX, twoLineCellStyle } from './utils';
+export { widthForHeader, measureTextWidth, computeScrollX, computeStickyScrollX, twoLineCellStyle } from './utils';
 // eslint-disable-next-line react-refresh/only-export-components
 export { useActionsColWidth } from './useActionsColWidth';
 

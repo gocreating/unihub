@@ -5,8 +5,10 @@ import { IntlProvider } from 'react-intl';
 import enUS from '@/locales/en-US';
 import { ColumnPanel } from './ColumnPanel';
 import { useColumnConfig } from './hooks/useColumnConfig';
+import PageTable from '@/components/PageTable';
 import type { UseColumnConfigReturn } from './hooks/useColumnConfig';
 import type { ColumnDef, ColumnState } from './types';
+type ColDef = { key: string; width?: number; fixed?: 'left' | 'right' | boolean };
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <MemoryRouter>
@@ -240,6 +242,95 @@ describe('ColumnPanel — sticky integration (real hook)', () => {
 
     expect(capturedHook.lastColumnFixed).toBe('right');
     expect(capturedHook.isDirty).toBe(false);
+  });
+
+  // CP-Int-03b: colDefMap pattern — fixed property reaches ProTable column after pin+apply
+  // This mirrors the exact pattern used in pages (currencies, exchange-rates, accounts).
+  it('fixed: left is set on the first column definition after pin left + Apply', () => {
+    let capturedCols: ColDef[] = [];
+
+    function Page() {
+      const hook = useColumnConfig(TWO_COLS);
+
+      // Exact same pattern as pages (e.g. currencies colDefMap)
+      const colDefMap = React.useMemo<Record<string, ColDef>>(() => ({
+        a: {
+          key: 'a',
+          fixed: hook.visibleColumns[0]?.key === 'a' ? hook.firstColumnFixed
+            : hook.visibleColumns.at(-1)?.key === 'a' ? hook.lastColumnFixed : undefined,
+        },
+        b: {
+          key: 'b',
+          fixed: hook.visibleColumns[0]?.key === 'b' ? hook.firstColumnFixed
+            : hook.visibleColumns.at(-1)?.key === 'b' ? hook.lastColumnFixed : undefined,
+        },
+      }), [hook.firstColumnFixed, hook.lastColumnFixed, hook.visibleColumns]);
+
+      const columns = React.useMemo(
+        () => hook.visibleColumns.map((c) => colDefMap[c.key]).filter((c): c is ColDef => Boolean(c)),
+        [hook.visibleColumns, colDefMap],
+      );
+      capturedCols = columns;
+
+      return <ColumnPanel hook={hook} onApply={vi.fn()} onClose={vi.fn()} />;
+    }
+
+    render(<Page />, { wrapper });
+
+    expect(capturedCols[0]?.fixed).toBeUndefined();
+
+    // Pin the first column left
+    fireEvent.click(document.querySelector('[data-sticky-pin="left"]')!);
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+
+    // The first column in the array must now have fixed: 'left'
+    expect(capturedCols[0]?.key).toBe('a');
+    expect(capturedCols[0]?.fixed).toBe('left');
+    // The second column must not be fixed
+    expect(capturedCols[1]?.fixed).toBeUndefined();
+  });
+
+
+  // CP-Int-03b-DOM: after pin left + Apply, the ProTable column must have
+  // ant-table-cell-fix-left in the rendered DOM. AntD ProTable initialises its
+  // internal column layout on MOUNT; changing fixed:'left' on an already-mounted
+  // table does not trigger a re-initialisation. The fix: use a key derived from
+  // the fixed state so PageTable remounts when fixed columns change.
+  it('pinned column has ant-table-cell-fix-left DOM class after pin left + Apply', () => {
+    function Page() {
+      const hook = useColumnConfig(TWO_COLS);
+      // Key changes when fixed state toggles → forces PageTable to remount so
+      // AntD initialises its column layout fresh with the new fixed value.
+      const fixedKey = `${!!hook.firstColumnFixed}-${!!hook.lastColumnFixed}`;
+      return (
+        <>
+          <ColumnPanel hook={hook} onApply={vi.fn()} onClose={vi.fn()} />
+          <PageTable
+            key={fixedKey}
+            rowKey="key"
+            columns={hook.visibleColumns.map((c) => ({
+              key: c.key,
+              dataIndex: c.key,
+              title: c.label,
+              width: 200,
+              fixed: hook.visibleColumns[0]?.key === c.key ? hook.firstColumnFixed
+                : hook.visibleColumns.at(-1)?.key === c.key ? hook.lastColumnFixed : undefined,
+            }))}
+            dataSource={[{ key: '1', a: 'val-a', b: 'val-b' }]}
+            scroll={{ x: 500 }}
+          />
+        </>
+      );
+    }
+
+    render(<Page />, { wrapper });
+    expect(document.querySelector('th.ant-table-cell-fix-left')).toBeNull();
+
+    fireEvent.click(document.querySelector('[data-sticky-pin="left"]')!);
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+
+    const fixedTh = document.querySelector('th.ant-table-cell-fix-left');
+    expect(fixedTh, 'ant-table-cell-fix-left must appear after pin+apply').not.toBeNull();
   });
 
   // CP-Int-03: toggling pin off + apply clears the sticky

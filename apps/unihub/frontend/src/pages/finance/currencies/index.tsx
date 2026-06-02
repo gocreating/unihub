@@ -152,12 +152,16 @@ export function CurrenciesPage() {
         title: t({ id: 'pages.finance.currencies.col.isBaseCurrency' }),
         dataIndex: 'is_base_currency',
         width: 130,
+        fixed: table.cols.visibleColumns[0]?.key === 'is_base_currency' ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === 'is_base_currency' ? table.cols.lastColumnFixed : undefined,
         render: (_, record) => <Switch checked={record.is_base_currency} disabled size="small" />,
       },
       actions: {
         title: t({ id: 'common.actions' }),
         key: 'actions',
         width: actionsColWidth,
+        fixed: table.cols.visibleColumns[0]?.key === 'actions' ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === 'actions' ? table.cols.lastColumnFixed : undefined,
         render: (_, record) => (
           <span data-actions-col>
             <Space>
@@ -194,6 +198,7 @@ export function CurrenciesPage() {
   return (
     <>
       <PageTable<Currency>
+        key={`${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
         pageTitle={t({ id: 'pages.finance.currencies.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

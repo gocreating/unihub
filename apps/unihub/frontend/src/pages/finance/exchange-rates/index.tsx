@@ -179,6 +179,8 @@ export function ExchangeRatesPage() {
         title: t({ id: 'common.actions' }),
         key: 'actions',
         width: actionsColWidth,
+        fixed: table.cols.visibleColumns[0]?.key === 'actions' ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === 'actions' ? table.cols.lastColumnFixed : undefined,
         render: (_, record) => (
           <span data-actions-col>
             <Space>
@@ -215,6 +217,7 @@ export function ExchangeRatesPage() {
   return (
     <>
       <PageTable<ExchangeRate>
+        key={`${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
         pageTitle={t({ id: 'pages.finance.exchangeRates.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

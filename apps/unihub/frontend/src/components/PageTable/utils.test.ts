@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { widthForHeader, measureTextWidth, computeScrollX } from './utils';
+import { widthForHeader, measureTextWidth, computeScrollX, computeStickyScrollX } from './utils';
 
 describe('widthForHeader', () => {
   it('returns width based on text length plus padding', () => {
@@ -70,6 +70,31 @@ describe('computeScrollX', () => {
   it('uses explicit width and ignores fallback when width is set (U-13)', () => {
     // U-13: single column with width=100 and custom fallback=50 → 100 (not 50)
     expect(computeScrollX([{ width: 100 }], 50)).toBe(100);
+  });
+});
+
+describe('computeStickyScrollX', () => {
+  // S-01: no sticky → returns natural column width sum
+  it('returns natural width when no column is fixed', () => {
+    expect(computeStickyScrollX([{ width: 100 }, { width: 200 }], false)).toBe(300);
+  });
+
+  // S-02: sticky active + columns narrower than min → returns min (9999)
+  // This forces horizontal overflow so fixed columns are always visible
+  it('returns at least 9999 when a column is fixed and columns are narrow', () => {
+    expect(computeStickyScrollX([{ width: 100 }, { width: 200 }], true)).toBe(9999);
+  });
+
+  // S-03: sticky active + columns wider than min → returns natural width
+  it('returns the natural width if it already exceeds the minimum', () => {
+    const wide = Array.from({ length: 100 }, () => ({ width: 200 })); // 20 000px
+    expect(computeStickyScrollX(wide, true)).toBe(20000);
+  });
+
+  // S-04: sticky false → same as computeScrollX regardless of column count
+  it('behaves identically to computeScrollX when hasFixed is false', () => {
+    const cols = [{ width: 50 }, { width: 75 }, { width: 25 }];
+    expect(computeStickyScrollX(cols, false)).toBe(computeScrollX(cols));
   });
 });
 

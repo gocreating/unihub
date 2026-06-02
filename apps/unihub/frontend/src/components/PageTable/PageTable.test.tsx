@@ -129,6 +129,22 @@ describe('PageTable rendering', () => {
     });
     expect(screen.getByText('Alice')).toBeInTheDocument();
   });
+
+  // P-14: fixed:'left' on a column produces ant-table-cell-fix-left class in DOM
+  // This is the baseline test confirming AntD applies the class in jsdom.
+  it('fixed column renders ant-table-cell-fix-left class in table header', () => {
+    renderPageTable({
+      pageTitle: 'Test',
+      columns: [
+        { title: 'Fixed', dataIndex: 'a', key: 'a', fixed: 'left', width: 100 },
+        { title: 'Normal', dataIndex: 'b', key: 'b', width: 100 },
+      ],
+      dataSource: [{ id: '1', a: 'x', b: 'y' }],
+      scroll: { x: 500 },
+    });
+    const fixedTh = document.querySelector('th.ant-table-cell-fix-left');
+    expect(fixedTh).not.toBeNull();
+  });
 });
 
 // ─── PageTable footer alignment ────────────────────────────────────────────

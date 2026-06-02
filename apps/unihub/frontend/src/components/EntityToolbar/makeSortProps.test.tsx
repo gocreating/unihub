@@ -79,34 +79,55 @@ describe('makeSortProps', () => {
     expect(handleHeaderClick).toHaveBeenCalledWith('amount');
   });
 
-  // M-06: Title renders ascending icon when field is sorted ascend
-  it('title renders up-arrow icon for ascend-sorted field', () => {
-    const props = makeSortProps('code', 'Code', makeCtx({
+  // M-06: Title always renders both caret icons (AntD style — both shown, active one highlighted)
+  it('title always renders both caret-up and caret-down icons for sortable column', () => {
+    // Unsorted
+    const unsorted = makeSortProps('code', 'Code', makeCtx({ sortOrderForField: () => null }));
+    const { container: cu } = render(unsorted.title as React.ReactElement);
+    expect(cu.querySelector('.anticon-caret-up')).toBeTruthy();
+    expect(cu.querySelector('.anticon-caret-down')).toBeTruthy();
+
+    // Sorted ascend
+    const sorted = makeSortProps('code', 'Code', makeCtx({
       sortOrderForField: (f) => f === 'code' ? 'ascend' : null,
       activeRules: [{ field: 'code', direction: 'asc' }],
     }));
-    const { container } = render(props.title as React.ReactElement);
-    expect(container.querySelector('.anticon-arrow-up')).toBeTruthy();
-    expect(container.querySelector('.anticon-arrow-down')).toBeNull();
+    const { container: ca } = render(sorted.title as React.ReactElement);
+    expect(ca.querySelector('.anticon-caret-up')).toBeTruthy();
+    expect(ca.querySelector('.anticon-caret-down')).toBeTruthy();
   });
 
-  // M-07: Title renders descending icon when field is sorted descend
-  it('title renders down-arrow icon for descend-sorted field', () => {
-    const props = makeSortProps('code', 'Code', makeCtx({
+  // M-07: Active caret gets primary color; inactive caret is muted — matches AntD's indicator style
+  it('title highlights up caret when sorted ascend and down caret when sorted descend', () => {
+    const ascendProps = makeSortProps('code', 'Code', makeCtx({
+      sortOrderForField: (f) => f === 'code' ? 'ascend' : null,
+      activeRules: [{ field: 'code', direction: 'asc' }],
+    }));
+    const { container: asc } = render(ascendProps.title as React.ReactElement);
+    const upIcon = asc.querySelector<HTMLElement>('.anticon-caret-up');
+    const downIcon = asc.querySelector<HTMLElement>('.anticon-caret-down');
+    expect(upIcon?.style.color).toBe('rgb(22, 119, 255)');
+    expect(downIcon?.style.color).not.toBe('rgb(22, 119, 255)');
+
+    const descendProps = makeSortProps('code', 'Code', makeCtx({
       sortOrderForField: (f) => f === 'code' ? 'descend' : null,
       activeRules: [{ field: 'code', direction: 'desc' }],
     }));
-    const { container } = render(props.title as React.ReactElement);
-    expect(container.querySelector('.anticon-arrow-down')).toBeTruthy();
-    expect(container.querySelector('.anticon-arrow-up')).toBeNull();
+    const { container: desc } = render(descendProps.title as React.ReactElement);
+    const downIcon2 = desc.querySelector<HTMLElement>('.anticon-caret-down');
+    const upIcon2 = desc.querySelector<HTMLElement>('.anticon-caret-up');
+    expect(downIcon2?.style.color).toBe('rgb(22, 119, 255)');
+    expect(upIcon2?.style.color).not.toBe('rgb(22, 119, 255)');
   });
 
-  // M-08: Title renders NO sort icon for unsorted field
-  it('title renders no sort icon for unsorted field', () => {
+  // M-08: Unsorted — both carets are muted (not primary color)
+  it('title renders both carets muted when field is not sorted', () => {
     const props = makeSortProps('code', 'Code', makeCtx({ sortOrderForField: () => null }));
     const { container } = render(props.title as React.ReactElement);
-    expect(container.querySelector('.anticon-arrow-up')).toBeNull();
-    expect(container.querySelector('.anticon-arrow-down')).toBeNull();
+    const upIcon = container.querySelector<HTMLElement>('.anticon-caret-up');
+    const downIcon = container.querySelector<HTMLElement>('.anticon-caret-down');
+    expect(upIcon?.style.color).not.toBe('rgb(22, 119, 255)');
+    expect(downIcon?.style.color).not.toBe('rgb(22, 119, 255)');
   });
 
   // M-09: Title renders label text in all cases

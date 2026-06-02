@@ -1,4 +1,4 @@
-import { ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
+import { CaretDownFilled, CaretUpFilled } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import type { SortRule } from './types';
 
@@ -39,15 +39,20 @@ export function makeSortProps<T>(
 
   return {
     title: (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        {label}
-        {order === 'ascend' && <ArrowUpOutlined style={{ color: '#1677ff', fontSize: 11 }} />}
-        {order === 'descend' && <ArrowDownOutlined style={{ color: '#1677ff', fontSize: 11 }} />}
-        {showPriority && (
-          <span style={{ color: '#1677ff', fontSize: 10, lineHeight: 1, fontWeight: 600 }}>
-            {ruleIdx + 1}
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        <span>{label}</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 6, flexShrink: 0 }}>
+          {showPriority && (
+            <span style={{ color: '#1677ff', fontSize: 10, lineHeight: 1, fontWeight: 600 }}>
+              {ruleIdx + 1}
+            </span>
+          )}
+          {/* Stacked caret pair — AntD's native sort indicator style */}
+          <span style={{ display: 'inline-flex', flexDirection: 'column', fontSize: 10, lineHeight: 1, gap: 1 }}>
+            <CaretUpFilled style={{ color: order === 'ascend' ? '#1677ff' : 'rgba(0,0,0,0.29)' }} />
+            <CaretDownFilled style={{ color: order === 'descend' ? '#1677ff' : 'rgba(0,0,0,0.29)' }} />
           </span>
-        )}
+        </span>
       </span>
     ),
     onHeaderCell: () => ({

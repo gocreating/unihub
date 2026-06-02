@@ -4,8 +4,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { IntlProvider } from 'react-intl';
 import enUS from '@/locales/en-US';
 import { ColumnPanel } from './ColumnPanel';
+import { useColumnConfig } from './hooks/useColumnConfig';
 import type { UseColumnConfigReturn } from './hooks/useColumnConfig';
-import type { ColumnState } from './types';
+import type { ColumnDef, ColumnState } from './types';
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <MemoryRouter>
@@ -122,5 +123,143 @@ describe('ColumnPanel', () => {
     const reset = screen.getByRole('button', { name: /reset/i });
     const cancel = screen.getByRole('button', { name: /cancel/i });
     expect(reset.closest('.ant-space')).toBe(cancel.closest('.ant-space'));
+  });
+
+  // CP-08: drag first item onto third item places it at second position (off-by-one fix)
+  it('dragging first column onto third places it at second position', () => {
+    const cols: ColumnDef[] = [
+      { key: 'a', label: 'A', dataType: 'text', visible: true, order: 0 },
+      { key: 'b', label: 'B', dataType: 'text', visible: true, order: 1 },
+      { key: 'c', label: 'C', dataType: 'text', visible: true, order: 2 },
+    ];
+    const hook = makeHook({
+      pendingState: { columns: cols, stickyLeft: false, stickyRight: false },
+    });
+    render(<ColumnPanel hook={hook} onApply={vi.fn()} onClose={vi.fn()} />, { wrapper });
+
+    const rows = document.querySelectorAll('[data-column-row]');
+    // dragStart on 'a' (row 0), drop on 'c' (row 2)
+    fireEvent.dragStart(rows[0]!);
+    fireEvent.drop(rows[2]!);
+
+    const call = (hook.setPendingState as ReturnType<typeof vi.fn>).mock.calls[0]![0] as ColumnState;
+    const aOrder = call.columns.find((c) => c.key === 'a')!.order;
+    const bOrder = call.columns.find((c) => c.key === 'b')!.order;
+    const cOrder = call.columns.find((c) => c.key === 'c')!.order;
+    // After dragging 'a' onto 'c': expected [b(0), a(1), c(2)]
+    expect(bOrder).toBe(0);
+    expect(aOrder).toBe(1);
+    expect(cOrder).toBe(2);
+  });
+
+  // CP-09: sticky-left pin appears on the right of the first visible column row
+  it('shows sticky-left pin only on the first visible column row', () => {
+    renderPanel();
+    const pinBtns = document.querySelectorAll('[data-sticky-pin]');
+    // Two pins total: one for first column, one for last
+    expect(pinBtns).toHaveLength(2);
+    const leftPin = document.querySelector('[data-sticky-pin="left"]');
+    expect(leftPin).toBeInTheDocument();
+    const rightPin = document.querySelector('[data-sticky-pin="right"]');
+    expect(rightPin).toBeInTheDocument();
+  });
+
+  // CP-10: sticky-left pin button toggles stickyLeft in pendingState
+  it('clicking sticky-left pin calls setPendingState with stickyLeft toggled', () => {
+    const hook = makeHook({ pendingState: { ...defaultPending, stickyLeft: false } });
+    render(<ColumnPanel hook={hook} onApply={vi.fn()} onClose={vi.fn()} />, { wrapper });
+    fireEvent.click(document.querySelector('[data-sticky-pin="left"]')!);
+    expect(hook.setPendingState).toHaveBeenCalledWith(
+      expect.objectContaining({ stickyLeft: true }),
+    );
+  });
+
+  // CP-11: sticky-right pin button toggles stickyRight in pendingState
+  it('clicking sticky-right pin calls setPendingState with stickyRight toggled', () => {
+    const hook = makeHook({ pendingState: { ...defaultPending, stickyRight: false } });
+    render(<ColumnPanel hook={hook} onApply={vi.fn()} onClose={vi.fn()} />, { wrapper });
+    fireEvent.click(document.querySelector('[data-sticky-pin="right"]')!);
+    expect(hook.setPendingState).toHaveBeenCalledWith(
+      expect.objectContaining({ stickyRight: true }),
+    );
+  });
+
+  // CP-12: no separate "Sticky Left" / "Sticky Right" text labels at the top
+  it('does not show separate sticky-left / sticky-right label text', () => {
+    renderPanel();
+    expect(screen.queryByText(/sticky left|pin first/i)).toBeNull();
+    expect(screen.queryByText(/sticky right|pin last/i)).toBeNull();
+  });
+});
+
+// ── Integration tests (real useColumnConfig hook) ─────────────────────────────
+
+const TWO_COLS: ColumnDef[] = [
+  { key: 'a', label: 'A', dataType: 'text', visible: true, order: 0 },
+  { key: 'b', label: 'B', dataType: 'text', visible: true, order: 1 },
+];
+
+describe('ColumnPanel — sticky integration (real hook)', () => {
+  // CP-Int-01: pin left + apply → firstColumnFixed becomes 'left'
+  it('pin left then Apply sets firstColumnFixed to left', () => {
+    let capturedHook!: UseColumnConfigReturn;
+    function Page() {
+      const hook = useColumnConfig(TWO_COLS);
+      capturedHook = hook;
+      return <ColumnPanel hook={hook} onApply={vi.fn()} onClose={vi.fn()} />;
+    }
+    render(<Page />, { wrapper });
+
+    expect(capturedHook.firstColumnFixed).toBeUndefined();
+
+    fireEvent.click(document.querySelector('[data-sticky-pin="left"]')!);
+    expect(capturedHook.isDirty).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+
+    expect(capturedHook.firstColumnFixed).toBe('left');
+    expect(capturedHook.isDirty).toBe(false);
+  });
+
+  // CP-Int-02: pin right + apply → lastColumnFixed becomes 'right'
+  it('pin right then Apply sets lastColumnFixed to right', () => {
+    let capturedHook!: UseColumnConfigReturn;
+    function Page() {
+      const hook = useColumnConfig(TWO_COLS);
+      capturedHook = hook;
+      return <ColumnPanel hook={hook} onApply={vi.fn()} onClose={vi.fn()} />;
+    }
+    render(<Page />, { wrapper });
+
+    expect(capturedHook.lastColumnFixed).toBeUndefined();
+
+    fireEvent.click(document.querySelector('[data-sticky-pin="right"]')!);
+    expect(capturedHook.isDirty).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+
+    expect(capturedHook.lastColumnFixed).toBe('right');
+    expect(capturedHook.isDirty).toBe(false);
+  });
+
+  // CP-Int-03: toggling pin off + apply clears the sticky
+  it('pinning then un-pinning then Apply clears firstColumnFixed', () => {
+    let capturedHook!: UseColumnConfigReturn;
+    function Page() {
+      const hook = useColumnConfig(TWO_COLS);
+      capturedHook = hook;
+      return <ColumnPanel hook={hook} onApply={vi.fn()} onClose={vi.fn()} />;
+    }
+    render(<Page />, { wrapper });
+
+    // Pin on
+    fireEvent.click(document.querySelector('[data-sticky-pin="left"]')!);
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    expect(capturedHook.firstColumnFixed).toBe('left');
+
+    // Pin off
+    fireEvent.click(document.querySelector('[data-sticky-pin="left"]')!);
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    expect(capturedHook.firstColumnFixed).toBeUndefined();
   });
 });

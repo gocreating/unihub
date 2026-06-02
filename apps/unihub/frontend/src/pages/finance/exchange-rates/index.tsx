@@ -36,6 +36,7 @@ export function ExchangeRatesPage() {
     { key: 'quote_currency', label: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataType: 'single_select', visible: true, order: 1 },
     { key: 'rate', label: t({ id: 'pages.finance.exchangeRates.col.rate' }), dataType: 'text', visible: true, order: 2 },
     { key: 'date', label: t({ id: 'common.date' }), dataType: 'date', visible: true, order: 3 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 4 },
   ], [t]);
 
   const table = useEntityTable({ key: 'exchange-rates', filterableAttrs, columnDefs });
@@ -130,85 +131,85 @@ export function ExchangeRatesPage() {
     return w;
   }, [rates]);
 
-  const visibleKeys = new Set(table.cols.visibleColumns.map((c) => c.key));
-  const lastVisKey = table.cols.visibleColumns.at(-1)?.key;
-
-  const columns: ProColumns<ExchangeRate>[] = useMemo(
-    () => [
-      {
+  const colDefMap = useMemo<Record<string, ProColumns<ExchangeRate>>>(
+    () => ({
+      base_currency: {
         title: t({ id: 'pages.finance.exchangeRates.col.base' }),
         dataIndex: 'base_currency',
         ...widthForHeader('Base', dataWidths.base_currency),
-        sorter: true,
-        sortOrder: table.sort.sortOrderForField('base_currency') ?? undefined,
-        hidden: !visibleKeys.has('base_currency'),
-        fixed: table.cols.visibleColumns[0]?.key === 'base_currency' ? table.cols.firstColumnFixed : lastVisKey === 'base_currency' ? table.cols.lastColumnFixed : undefined,
+        sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'base_currency') + 1 || 999 },
+        sortOrder: table.sort.sortOrderForField('base_currency') ?? null,
+        fixed: table.cols.visibleColumns[0]?.key === 'base_currency' ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === 'base_currency' ? table.cols.lastColumnFixed : undefined,
         render: (val) => <Tag>{val as string}</Tag>,
       },
-      {
+      quote_currency: {
         title: t({ id: 'pages.finance.exchangeRates.col.quote' }),
         dataIndex: 'quote_currency',
         ...widthForHeader('Quote', dataWidths.quote_currency),
-        sorter: true,
-        sortOrder: table.sort.sortOrderForField('quote_currency') ?? undefined,
-        hidden: !visibleKeys.has('quote_currency'),
-        fixed: table.cols.visibleColumns[0]?.key === 'quote_currency' ? table.cols.firstColumnFixed : lastVisKey === 'quote_currency' ? table.cols.lastColumnFixed : undefined,
+        sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'quote_currency') + 1 || 999 },
+        sortOrder: table.sort.sortOrderForField('quote_currency') ?? null,
+        fixed: table.cols.visibleColumns[0]?.key === 'quote_currency' ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === 'quote_currency' ? table.cols.lastColumnFixed : undefined,
         render: (val) => <Tag>{val as string}</Tag>,
       },
-      {
+      rate: {
         title: t({ id: 'pages.finance.exchangeRates.col.rate' }),
         dataIndex: 'rate',
         ...widthForHeader('Rate', Math.max(120, dataWidths.rate)),
         align: 'right',
-        hidden: !visibleKeys.has('rate'),
-        fixed: table.cols.visibleColumns[0]?.key === 'rate' ? table.cols.firstColumnFixed : lastVisKey === 'rate' ? table.cols.lastColumnFixed : undefined,
+        fixed: table.cols.visibleColumns[0]?.key === 'rate' ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === 'rate' ? table.cols.lastColumnFixed : undefined,
         render: (val) => formatAmount(val as string),
       },
-      {
+      date: {
         title: t({ id: 'common.date' }),
         dataIndex: 'date',
         ...widthForHeader('Date', Math.max(220, dataWidths.date)),
-        sorter: true,
-        sortOrder: table.sort.sortOrderForField('date') ?? undefined,
-        hidden: !visibleKeys.has('date'),
-        fixed: table.cols.visibleColumns[0]?.key === 'date' ? table.cols.firstColumnFixed : lastVisKey === 'date' ? table.cols.lastColumnFixed : undefined,
+        sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'date') + 1 || 999 },
+        sortOrder: table.sort.sortOrderForField('date') ?? null,
+        fixed: table.cols.visibleColumns[0]?.key === 'date' ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === 'date' ? table.cols.lastColumnFixed : undefined,
         render: (val) => {
           const d = dayjs(val as string);
           return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
         },
       },
-      {
+      actions: {
         title: t({ id: 'common.actions' }),
         key: 'actions',
         width: actionsColWidth,
         render: (_, record) => (
           <span data-actions-col>
-          <Space>
-            <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-              {t({ id: 'common.edit' })}
-            </Button>
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => {
-                Modal.confirm({
-                  title: t({ id: 'pages.finance.exchangeRates.delete.title' }),
-                  content: t({ id: 'pages.finance.exchangeRates.delete.confirm' }),
-                  okType: 'danger',
-                  onOk: () => deleteMutation.mutate(record.id),
-                });
-              }}
-            >
-              {t({ id: 'common.delete' })}
-            </Button>
-          </Space>
+            <Space>
+              <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+                {t({ id: 'common.edit' })}
+              </Button>
+              <Button
+                size="small" danger icon={<DeleteOutlined />}
+                onClick={() => {
+                  Modal.confirm({
+                    title: t({ id: 'pages.finance.exchangeRates.delete.title' }),
+                    content: t({ id: 'pages.finance.exchangeRates.delete.confirm' }),
+                    okType: 'danger',
+                    onOk: () => deleteMutation.mutate(record.id),
+                  });
+                }}
+              >
+                {t({ id: 'common.delete' })}
+              </Button>
+            </Space>
           </span>
         ),
       },
-    ],
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, table.sort.activeRules, table.cols.activeState, visibleKeys, lastVisKey],
+    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.firstColumnFixed, table.cols.lastColumnFixed, table.cols.visibleColumns],
+  );
+
+  const columns = useMemo<ProColumns<ExchangeRate>[]>(
+    () => table.cols.visibleColumns.map((c) => colDefMap[c.key]).filter((c): c is ProColumns<ExchangeRate> => Boolean(c)),
+    [table.cols.visibleColumns, colDefMap],
   );
 
   return (

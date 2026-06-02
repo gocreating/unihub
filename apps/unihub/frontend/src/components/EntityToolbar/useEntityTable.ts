@@ -81,8 +81,33 @@ export function useEntityTable({
 
   const handleTableSorterChange = useCallback(
     (sorter: SorterResult<unknown> | SorterResult<unknown>[]) => {
-      const s = Array.isArray(sorter) ? sorter[0] : sorter;
-      if (s?.field) sort.handleHeaderClick(String(s.field));
+      // In multi-sort mode AntD passes the FULL array of all currently sorted
+      // columns, not just the one that changed. Compare against activeRules to
+      // identify which field was actually clicked, then delegate to handleHeaderClick
+      // which implements the correct 3-state toggle (asc → desc → remove).
+      const sorters = Array.isArray(sorter) ? sorter : sorter ? [sorter] : [];
+      const newSortMap = new Map<string, 'ascend' | 'descend'>();
+      for (const s of sorters) {
+        if (s.field && s.order) newSortMap.set(String(s.field), s.order as 'ascend' | 'descend');
+      }
+      const activeFields = new Set(sort.activeRules.map((r) => r.field));
+
+      // Field newly added (present in sorters but not in activeRules)
+      const added = [...newSortMap.keys()].find((f) => !activeFields.has(f));
+      if (added) { sort.handleHeaderClick(added); return; }
+
+      // Field removed (was in activeRules, absent from sorters)
+      const removed = [...activeFields].find((f) => !newSortMap.has(f));
+      if (removed) { sort.handleHeaderClick(removed); return; }
+
+      // Direction changed for an existing field
+      for (const [field, newOrder] of newSortMap) {
+        const rule = sort.activeRules.find((r) => r.field === field);
+        if (rule && rule.direction !== (newOrder === 'ascend' ? 'asc' : 'desc')) {
+          sort.handleHeaderClick(field);
+          return;
+        }
+      }
     },
     [sort],
   );

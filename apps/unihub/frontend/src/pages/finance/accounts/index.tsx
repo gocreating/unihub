@@ -209,8 +209,8 @@ export function AccountsPage() {
         title: t({ id: 'common.name' }),
         dataIndex: 'name',
         ...widthForHeader('Name', dataWidths.name),
-        sorter: true,
-        sortOrder: sort.sortOrderForField('name') ?? undefined,
+        sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'name') + 1 || 999 },
+        sortOrder: sort.sortOrderForField('name') ?? null,
         fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'name'
           ? 'left'
           : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'name'
@@ -221,8 +221,8 @@ export function AccountsPage() {
         title: t({ id: 'common.currency' }),
         dataIndex: 'currency',
         ...widthForHeader('Currency', dataWidths.currency),
-        sorter: true,
-        sortOrder: sort.sortOrderForField('currency') ?? undefined,
+        sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'currency') + 1 || 999 },
+        sortOrder: sort.sortOrderForField('currency') ?? null,
         fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'currency'
           ? 'left'
           : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'currency'
@@ -255,8 +255,8 @@ export function AccountsPage() {
         title: t({ id: 'pages.finance.accounts.col.openDatetime' }),
         dataIndex: 'open_datetime',
         ...widthForHeader('Open Date', Math.max(220, dataWidths.open_datetime)),
-        sorter: true,
-        sortOrder: sort.sortOrderForField('open_datetime') ?? undefined,
+        sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'open_datetime') + 1 || 999 },
+        sortOrder: sort.sortOrderForField('open_datetime') ?? null,
         render: (_, record) => {
           const formatted = formatDateRelative(record.open_datetime);
           return formatted ? (
@@ -272,8 +272,8 @@ export function AccountsPage() {
         title: t({ id: 'pages.finance.accounts.col.closeDatetime' }),
         dataIndex: 'close_datetime',
         ...widthForHeader('Close Date', Math.max(220, dataWidths.close_datetime)),
-        sorter: true,
-        sortOrder: sort.sortOrderForField('close_datetime') ?? undefined,
+        sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'close_datetime') + 1 || 999 },
+        sortOrder: sort.sortOrderForField('close_datetime') ?? null,
         render: (_, record) => {
           const formatted = formatDateRelative(record.close_datetime);
           return formatted ? (
@@ -304,7 +304,7 @@ export function AccountsPage() {
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, sort.sortOrderForField, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns],
+    [t, dataWidths, actionsColWidth, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns],
   );
 
   // Column array derived from the visible column order — this is what makes reordering work.

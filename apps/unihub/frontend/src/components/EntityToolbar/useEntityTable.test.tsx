@@ -93,7 +93,7 @@ describe('useEntityTable', () => {
     expect(result.current.offset).toBe(0);
   });
 
-  it('handleTableSorterChange calls sort.handleHeaderClick with the field', () => {
+  it('handleTableSorterChange calls sort.handleHeaderClick with the field (single object)', () => {
     const { result } = renderHook(
       () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
       { wrapper },
@@ -102,6 +102,71 @@ describe('useEntityTable', () => {
       result.current.handleTableSorterChange({ field: 'name', order: 'ascend', column: {} } as never);
     });
     expect(result.current.sort.sortOrderForField('name')).toBe('ascend');
+  });
+
+  // Multi-sort: AntD passes full array; correctly identifies the NEW field
+  it('handleTableSorterChange detects newly added field from multi-sort array', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+    // Pre-sort 'name' asc
+    act(() => { result.current.sort.handleHeaderClick('name'); });
+    expect(result.current.sort.sortOrderForField('name')).toBe('ascend');
+
+    // AntD fires with [name(existing), amount(new)]
+    act(() => {
+      result.current.handleTableSorterChange([
+        { field: 'name', order: 'ascend', column: {} },
+        { field: 'amount', order: 'ascend', column: {} },
+      ] as never);
+    });
+    expect(result.current.sort.sortOrderForField('amount')).toBe('ascend');
+    expect(result.current.sort.sortOrderForField('name')).toBe('ascend'); // unchanged
+  });
+
+  // Multi-sort: AntD omits a field that was removed; correctly identifies the REMOVED field.
+  // AntD only omits a field from the array after it was at 'descend' (third click = remove).
+  it('handleTableSorterChange detects removed field from multi-sort array', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+    // Put 'name' at descend so the next click removes it
+    act(() => { result.current.sort.handleHeaderClick('name'); });   // → asc
+    act(() => { result.current.sort.handleHeaderClick('name'); });   // → desc
+    act(() => { result.current.sort.handleHeaderClick('amount'); }); // → asc
+    expect(result.current.sort.sortOrderForField('name')).toBe('descend');
+    expect(result.current.sort.sortOrderForField('amount')).toBe('ascend');
+
+    // AntD fires without 'name' (was desc, user clicked → removed)
+    act(() => {
+      result.current.handleTableSorterChange([
+        { field: 'amount', order: 'ascend', column: {} },
+      ] as never);
+    });
+    expect(result.current.sort.sortOrderForField('name')).toBeNull();
+    expect(result.current.sort.sortOrderForField('amount')).toBe('ascend'); // unchanged
+  });
+
+  // Multi-sort: AntD reports direction change for one field; correctly toggles that field
+  it('handleTableSorterChange detects direction change in multi-sort array', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+    act(() => { result.current.sort.handleHeaderClick('name'); });   // name → asc
+    act(() => { result.current.sort.handleHeaderClick('amount'); }); // amount → asc
+
+    // AntD fires: 'name' changed to descend, 'amount' still ascend
+    act(() => {
+      result.current.handleTableSorterChange([
+        { field: 'name', order: 'descend', column: {} },
+        { field: 'amount', order: 'ascend', column: {} },
+      ] as never);
+    });
+    expect(result.current.sort.sortOrderForField('name')).toBe('descend');
+    expect(result.current.sort.sortOrderForField('amount')).toBe('ascend'); // unchanged
   });
 
   it('paginationProps reflects current page and size', () => {

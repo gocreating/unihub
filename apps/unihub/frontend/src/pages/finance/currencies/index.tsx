@@ -39,6 +39,7 @@ export function CurrenciesPage() {
     { key: 'name', label: t({ id: 'common.name' }), dataType: 'text', visible: true, order: 1 },
     { key: 'symbol', label: t({ id: 'pages.finance.currencies.col.symbol' }), dataType: 'text', visible: true, order: 2 },
     { key: 'is_base_currency', label: t({ id: 'pages.finance.currencies.col.isBaseCurrency' }), dataType: 'boolean', visible: true, order: 3 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 4 },
   ], [t]);
 
   const table = useEntityTable({ key: 'currencies', filterableAttrs, columnDefs });
@@ -118,79 +119,76 @@ export function CurrenciesPage() {
     return w;
   }, [currencies]);
 
-  const visibleKeys = new Set(table.cols.visibleColumns.map((c) => c.key));
-  const lastVisKey = table.cols.visibleColumns.at(-1)?.key;
-
-  const columns: ProColumns<Currency>[] = useMemo(
-    () => [
-      {
+  const colDefMap = useMemo<Record<string, ProColumns<Currency>>>(
+    () => ({
+      code: {
         title: t({ id: 'pages.finance.currencies.col.code' }),
         dataIndex: 'code',
         ...widthForHeader('Code', dataWidths.code),
-        sorter: true,
-        sortOrder: table.sort.sortOrderForField('code') ?? undefined,
-        hidden: !visibleKeys.has('code'),
-        fixed: table.cols.visibleColumns[0]?.key === 'code' ? table.cols.firstColumnFixed : lastVisKey === 'code' ? table.cols.lastColumnFixed : undefined,
+        sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'code') + 1 || 999 },
+        sortOrder: table.sort.sortOrderForField('code') ?? null,
+        fixed: table.cols.visibleColumns[0]?.key === 'code' ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === 'code' ? table.cols.lastColumnFixed : undefined,
       },
-      {
+      name: {
         title: t({ id: 'common.name' }),
         dataIndex: 'name',
         ...widthForHeader('Name', dataWidths.name),
-        sorter: true,
-        sortOrder: table.sort.sortOrderForField('name') ?? undefined,
-        hidden: !visibleKeys.has('name'),
-        fixed: table.cols.visibleColumns[0]?.key === 'name' ? table.cols.firstColumnFixed : lastVisKey === 'name' ? table.cols.lastColumnFixed : undefined,
+        sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'name') + 1 || 999 },
+        sortOrder: table.sort.sortOrderForField('name') ?? null,
+        fixed: table.cols.visibleColumns[0]?.key === 'name' ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === 'name' ? table.cols.lastColumnFixed : undefined,
       },
-      {
+      symbol: {
         title: t({ id: 'pages.finance.currencies.col.symbol' }),
         dataIndex: 'symbol',
         ...widthForHeader('Symbol', dataWidths.symbol),
-        hidden: !visibleKeys.has('symbol'),
-        fixed: table.cols.visibleColumns[0]?.key === 'symbol' ? table.cols.firstColumnFixed : lastVisKey === 'symbol' ? table.cols.lastColumnFixed : undefined,
+        fixed: table.cols.visibleColumns[0]?.key === 'symbol' ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === 'symbol' ? table.cols.lastColumnFixed : undefined,
         render: (val) =>
           val ? String(val) : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
       },
-      {
+      is_base_currency: {
         title: t({ id: 'pages.finance.currencies.col.isBaseCurrency' }),
         dataIndex: 'is_base_currency',
         width: 130,
-        hidden: !visibleKeys.has('is_base_currency'),
-        render: (_, record) => (
-          <Switch checked={record.is_base_currency} disabled size="small" />
-        ),
+        render: (_, record) => <Switch checked={record.is_base_currency} disabled size="small" />,
       },
-      {
+      actions: {
         title: t({ id: 'common.actions' }),
         key: 'actions',
         width: actionsColWidth,
         render: (_, record) => (
           <span data-actions-col>
-          <Space>
-            <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-              {t({ id: 'common.edit' })}
-            </Button>
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() =>
-                Modal.confirm({
-                  title: t({ id: 'pages.finance.currencies.delete.title' }),
-                  content: t({ id: 'pages.finance.currencies.delete.confirm' }, { code: record.code, name: record.name }),
-                  okType: 'danger',
-                  onOk: () => deleteMutation.mutate(record.code),
-                })
-              }
-            >
-              {t({ id: 'common.delete' })}
-            </Button>
-          </Space>
+            <Space>
+              <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+                {t({ id: 'common.edit' })}
+              </Button>
+              <Button
+                size="small" danger icon={<DeleteOutlined />}
+                onClick={() =>
+                  Modal.confirm({
+                    title: t({ id: 'pages.finance.currencies.delete.title' }),
+                    content: t({ id: 'pages.finance.currencies.delete.confirm' }, { code: record.code, name: record.name }),
+                    okType: 'danger',
+                    onOk: () => deleteMutation.mutate(record.code),
+                  })
+                }
+              >
+                {t({ id: 'common.delete' })}
+              </Button>
+            </Space>
           </span>
         ),
       },
-    ],
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, table.sort.activeRules, table.cols.activeState, visibleKeys, lastVisKey],
+    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.firstColumnFixed, table.cols.lastColumnFixed, table.cols.visibleColumns],
+  );
+
+  const columns = useMemo<ProColumns<Currency>[]>(
+    () => table.cols.visibleColumns.map((c) => colDefMap[c.key]).filter((c): c is ProColumns<Currency> => Boolean(c)),
+    [table.cols.visibleColumns, colDefMap],
   );
 
   return (

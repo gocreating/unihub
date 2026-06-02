@@ -10,7 +10,8 @@ import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
-import { EntityOffsetFooter, useEntitySort } from '@/components/EntityToolbar';
+import { EntityOffsetFooter, EntityToolbar, useEntityFilter, useEntitySort } from '@/components/EntityToolbar';
+import type { FilterableAttribute } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 import type { BalanceSheet } from '@/services/unihub-backend/finance';
 import {
@@ -62,18 +63,25 @@ export function BalanceSheetsPage() {
     setExcludedFromNetWorth(new Set());
   }, [chartType]);
 
+  const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
+    { key: 'date', label: t({ id: 'common.date' }), dataType: 'date' },
+  ], [t]);
+
+  const filter = useEntityFilter('balance-sheets');
   const sort = useEntitySort('balance-sheets');
   const ordering = sort.toOrderingParam();
+  const filters = filter.toApiParam();
 
   const [limit, setLimit] = useState(10);
   const [offset, setOffset] = useState(0);
 
-  // Reset to page 1 when sort changes.
+  // Reset to page 1 when filter or sort changes.
   useEffect(() => { setOffset(0); }, [sort.activeRules]);
+  useEffect(() => { setOffset(0); }, [filter.activeGroups]);
 
   const { data: sheetsData, isLoading } = useQuery({
-    queryKey: ['finance', 'balance-sheets', limit, offset, ordering],
-    queryFn: () => listBalanceSheets({ limit, offset, ordering: ordering ?? '-date' }),
+    queryKey: ['finance', 'balance-sheets', limit, offset, ordering, filters],
+    queryFn: () => listBalanceSheets({ limit, offset, ordering: ordering ?? '-date', filters }),
   });
   const sheets = useMemo(() => sheetsData?.results ?? [], [sheetsData]);
 
@@ -686,6 +694,12 @@ export function BalanceSheetsPage() {
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/finance/balance-sheets/new')}>
             {t({ id: 'pages.finance.balanceSheets.new' })}
           </Button>
+        }
+        headerTitle={
+          <EntityToolbar
+            filterProps={{ attrs: filterableAttrs, hook: filter }}
+            sortProps={{ attrs: filterableAttrs, hook: sort }}
+          />
         }
         footer={() => <EntityOffsetFooter {...paginationProps} pageSizeOptions={[10, 20]} />}
         rowKey="id"

@@ -19,7 +19,8 @@ export interface EntityToolbarProps {
     attrs: FilterableAttribute[];
     hook: UseEntitySortReturn;
   };
-  columnProps: {
+  /** Optional — omit to hide the Columns button (e.g. pages that manage columns manually). */
+  columnProps?: {
     hook: UseColumnConfigReturn;
   };
 }
@@ -59,19 +60,19 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
   }, [sortProps.hook]);
 
   const closeColumn = useCallback(() => {
-    columnProps.hook.cancel();
+    columnProps?.hook.cancel();
     setColumnOpen(false);
-  }, [columnProps.hook]);
+  }, [columnProps]);
 
   const handleFilterOpenChange = (open: boolean) => {
-    if (open && (sortProps.hook.isDirty || columnProps.hook.isDirty)) return;
+    if (open && (sortProps.hook.isDirty || columnProps?.hook.isDirty)) return;
     if (!open && filterProps.hook.isDirty) { setFilterCancelToken((n) => n + 1); return; }
     setFilterOpen(open);
     if (!open) filterProps.hook.cancel();
   };
 
   const handleSortOpenChange = (open: boolean) => {
-    if (open && (filterProps.hook.isDirty || columnProps.hook.isDirty)) return;
+    if (open && (filterProps.hook.isDirty || columnProps?.hook.isDirty)) return;
     if (!open && sortProps.hook.isDirty) { setSortCancelToken((n) => n + 1); return; }
     setSortOpen(open);
     if (!open) sortProps.hook.cancel();
@@ -79,9 +80,9 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
 
   const handleColumnOpenChange = (open: boolean) => {
     if (open && (filterProps.hook.isDirty || sortProps.hook.isDirty)) return;
-    if (!open && columnProps.hook.isDirty) { setColumnCancelToken((n) => n + 1); return; }
+    if (!open && columnProps?.hook.isDirty) { setColumnCancelToken((n) => n + 1); return; }
     setColumnOpen(open);
-    if (!open) columnProps.hook.cancel();
+    if (!open) columnProps?.hook.cancel();
   };
 
   return (
@@ -132,27 +133,29 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
         </Button>
       </Dropdown>
 
-      {/* Columns */}
-      <Dropdown
-        open={columnOpen}
-        onOpenChange={handleColumnOpenChange}
-        trigger={['click']}
-        dropdownRender={() => (
-          <ColumnPanel
-            hook={columnProps.hook}
-            onApply={applyAndCloseColumn}
-            onClose={closeColumn}
-            focusCancelOn={columnCancelToken}
-          />
-        )}
-      >
-        <Button
-          icon={<TableOutlined />}
-          type={columnProps.hook.isCustomised ? 'primary' : 'default'}
+      {/* Columns — only shown when columnProps is provided */}
+      {columnProps && (
+        <Dropdown
+          open={columnOpen}
+          onOpenChange={handleColumnOpenChange}
+          trigger={['click']}
+          dropdownRender={() => (
+            <ColumnPanel
+              hook={columnProps.hook}
+              onApply={applyAndCloseColumn}
+              onClose={closeColumn}
+              focusCancelOn={columnCancelToken}
+            />
+          )}
         >
-          {t({ id: 'common.entityOps.columns' })}
-        </Button>
-      </Dropdown>
+          <Button
+            icon={<TableOutlined />}
+            type={columnProps.hook.isCustomised ? 'primary' : 'default'}
+          >
+            {t({ id: 'common.entityOps.columns' })}
+          </Button>
+        </Dropdown>
+      )}
     </Space>
   );
 }

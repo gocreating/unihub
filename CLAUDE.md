@@ -162,9 +162,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `008-entity-operations` | **Plan**: [specs/008-entity-operations/plan.md](specs/008-entity-operations/plan.md)
+**Branch**: `010-pipeline-release-management` | **Plan**: [specs/010-pipeline-release-management/plan.md](specs/010-pipeline-release-management/plan.md)
 
-Entity operations infrastructure — adds filter, sort, column visibility/ordering/sticky, and server-side pagination to all entity list views. Backend: `core/filters.py` (EntityFilterBackend with JSON-encoded multi-condition/group filter param) and `core/pagination.py` (EntityOffsetPagination, EntityCursorPagination). Frontend: shared `EntityToolbar` component with three Apply-gated panels (filter, sort, column) plus immediate header-click sort. Finance domain is the reference integration for all four entity types. See plan for full implementation details, data model, API contracts, and constitution check.
+Pipeline and release management — GitHub Actions CI (quality checks + full test on all branches), auto-release on main when `pyproject.toml` version bumps (calendar versioning `v{yyyy}.{mm}.{dd}.{n}`), new `system` Django app with `GET /api/v1/system/version/` endpoint, and new "System > Profile" frontend page displaying the deployed version. See plan for full implementation details, data model, API contracts, and constitution check.
 <!-- SPECKIT END -->
 
 ## Active Technologies

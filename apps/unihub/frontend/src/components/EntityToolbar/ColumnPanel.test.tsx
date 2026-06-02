@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { IntlProvider } from 'react-intl';
 import enUS from '@/locales/en-US';
@@ -127,32 +127,25 @@ describe('ColumnPanel', () => {
     expect(reset.closest('.ant-space')).toBe(cancel.closest('.ant-space'));
   });
 
-  // CP-08: drag first item onto third item places it at second position (off-by-one fix)
-  it('dragging first column onto third places it at second position', () => {
+  // CP-08: column rows are rendered in the sorted order
+  it('renders column rows in sorted order by order value', () => {
     const cols: ColumnDef[] = [
+      { key: 'c', label: 'C', dataType: 'text', visible: true, order: 2 },
       { key: 'a', label: 'A', dataType: 'text', visible: true, order: 0 },
       { key: 'b', label: 'B', dataType: 'text', visible: true, order: 1 },
-      { key: 'c', label: 'C', dataType: 'text', visible: true, order: 2 },
     ];
-    const hook = makeHook({
-      pendingState: { columns: cols, stickyLeft: false, stickyRight: false },
-    });
+    const hook = makeHook({ pendingState: { columns: cols, stickyLeft: false, stickyRight: false } });
     render(<ColumnPanel hook={hook} onApply={vi.fn()} onClose={vi.fn()} />, { wrapper });
 
-    const rows = document.querySelectorAll('[data-column-row]');
-    // dragStart on 'a' (row 0), drop on 'c' (row 2)
-    fireEvent.dragStart(rows[0]!);
-    fireEvent.drop(rows[2]!);
-
-    const call = (hook.setPendingState as ReturnType<typeof vi.fn>).mock.calls[0]![0] as ColumnState;
-    const aOrder = call.columns.find((c) => c.key === 'a')!.order;
-    const bOrder = call.columns.find((c) => c.key === 'b')!.order;
-    const cOrder = call.columns.find((c) => c.key === 'c')!.order;
-    // After dragging 'a' onto 'c': expected [b(0), a(1), c(2)]
-    expect(bOrder).toBe(0);
-    expect(aOrder).toBe(1);
-    expect(cOrder).toBe(2);
+    const rows = Array.from(document.querySelectorAll('[data-column-row]'));
+    // Sorted by order: a(0), b(1), c(2)
+    expect(rows[0]?.getAttribute('data-column-row')).toBe('a');
+    expect(rows[1]?.getAttribute('data-column-row')).toBe('b');
+    expect(rows[2]?.getAttribute('data-column-row')).toBe('c');
   });
+
+  // CP-08b: drag-and-drop reorder logic is tested via SortableList.test.tsx reorderById.
+  // dnd-kit pointer-event drag simulation is covered by Playwright E2E tests.
 
   // CP-09: sticky-left pin appears on the right of the first visible column row
   it('shows sticky-left pin only on the first visible column row', () => {
@@ -331,6 +324,91 @@ describe('ColumnPanel — sticky integration (real hook)', () => {
 
     const fixedTh = document.querySelector('th.ant-table-cell-fix-left');
     expect(fixedTh, 'ant-table-cell-fix-left must appear after pin+apply').not.toBeNull();
+  });
+
+  // CP-Int-03-right: sticky right also produces DOM class after pin right + Apply
+  it('pinned right column has ant-table-cell-fix-right DOM class after pin right + Apply', () => {
+    function Page() {
+      const hook = useColumnConfig(TWO_COLS);
+      const v = hook.visibleColumns;
+      const fixedKey = `${v[0]?.key ?? ''}-${v.at(-1)?.key ?? ''}-${!!hook.firstColumnFixed}-${!!hook.lastColumnFixed}`;
+      const getFixed = (key: string) =>
+        v[0]?.key === key ? hook.firstColumnFixed : v.at(-1)?.key === key ? hook.lastColumnFixed : undefined;
+      return (
+        <>
+          <ColumnPanel hook={hook} onApply={vi.fn()} onClose={vi.fn()} />
+          <PageTable
+            key={fixedKey}
+            rowKey="key"
+            columns={v.map((c) => ({ key: c.key, dataIndex: c.key, title: c.label, width: 200, fixed: getFixed(c.key) }))}
+            dataSource={[{ key: '1', a: 'x', b: 'y' }]}
+            scroll={{ x: 500 }}
+          />
+        </>
+      );
+    }
+    render(<Page />, { wrapper });
+    expect(document.querySelector('th.ant-table-cell-fix-right')).toBeNull();
+    fireEvent.click(document.querySelector('[data-sticky-pin="right"]')!);
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    expect(document.querySelector('th.ant-table-cell-fix-right')).not.toBeNull();
+  });
+
+  // CP-Int-03-reorder: after reordering columns AND applying, sticky right follows
+  // the NEW last column (requires key to include first/last visible column identity)
+  it('sticky right follows the new last column after reorder + apply', () => {
+    const COLS: ColumnDef[] = [
+      { key: 'a', label: 'A', dataType: 'text', visible: true, order: 0 },
+      { key: 'b', label: 'B', dataType: 'text', visible: true, order: 1 },
+    ];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hookRef = { current: null as any };
+
+    function Page() {
+      const hook = useColumnConfig(COLS);
+      hookRef.current = hook;
+      const v = hook.visibleColumns;
+      const fixedKey = `${v[0]?.key ?? ''}-${v.at(-1)?.key ?? ''}-${!!hook.firstColumnFixed}-${!!hook.lastColumnFixed}`;
+      const getFixed = (key: string) =>
+        v[0]?.key === key ? hook.firstColumnFixed : v.at(-1)?.key === key ? hook.lastColumnFixed : undefined;
+      return (
+        <>
+          <ColumnPanel hook={hook} onApply={vi.fn()} onClose={vi.fn()} />
+          <PageTable
+            key={fixedKey}
+            rowKey="key"
+            columns={v.map((c) => ({ key: c.key, dataIndex: c.key, title: c.label, width: 200, fixed: getFixed(c.key) }))}
+            dataSource={[{ key: '1', a: 'x', b: 'y' }]}
+            scroll={{ x: 500 }}
+          />
+        </>
+      );
+    }
+    render(<Page />, { wrapper });
+
+    // 1) Pin right (b is last) → Apply
+    fireEvent.click(document.querySelector('[data-sticky-pin="right"]')!);
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+    const ths = () => Array.from(document.querySelectorAll<HTMLElement>('th'));
+    expect(ths().find((th) => th.textContent?.includes('B'))?.classList.contains('ant-table-cell-fix-right')).toBe(true);
+
+    // 2) Simulate reorder via direct state mutation (dnd-kit drag → pointer events
+    //    in E2E). Swap order: b becomes first, a becomes last.
+    act(() => {
+      hookRef.current?.setPendingState({
+        columns: [
+          { key: 'a', label: 'A', dataType: 'text', visible: true, order: 1 },
+          { key: 'b', label: 'B', dataType: 'text', visible: true, order: 0 },
+        ],
+        stickyLeft: false,
+        stickyRight: true,
+      });
+    });
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
+
+    // Now a should be the last visible column → a gets fixed:right
+    expect(ths().find((th) => th.textContent?.includes('A'))?.classList.contains('ant-table-cell-fix-right')).toBe(true);
+    expect(ths().find((th) => th.textContent?.includes('B'))?.classList.contains('ant-table-cell-fix-right')).toBe(false);
   });
 
   // CP-Int-03: toggling pin off + apply clears the sticky

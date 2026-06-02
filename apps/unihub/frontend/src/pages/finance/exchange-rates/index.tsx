@@ -132,15 +132,19 @@ export function ExchangeRatesPage() {
   }, [rates]);
 
   const colDefMap = useMemo<Record<string, ProColumns<ExchangeRate>>>(
-    () => ({
+    () => {
+      const getFixed = (key: string) =>
+        table.cols.visibleColumns[0]?.key === key ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === key ? table.cols.lastColumnFixed
+          : undefined;
+      return {
       base_currency: {
         title: t({ id: 'pages.finance.exchangeRates.col.base' }),
         dataIndex: 'base_currency',
         ...widthForHeader('Base', dataWidths.base_currency),
         sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'base_currency') + 1 || 999 },
         sortOrder: table.sort.sortOrderForField('base_currency') ?? null,
-        fixed: table.cols.visibleColumns[0]?.key === 'base_currency' ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === 'base_currency' ? table.cols.lastColumnFixed : undefined,
+        fixed: getFixed('base_currency'),
         render: (val) => <Tag>{val as string}</Tag>,
       },
       quote_currency: {
@@ -149,8 +153,7 @@ export function ExchangeRatesPage() {
         ...widthForHeader('Quote', dataWidths.quote_currency),
         sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'quote_currency') + 1 || 999 },
         sortOrder: table.sort.sortOrderForField('quote_currency') ?? null,
-        fixed: table.cols.visibleColumns[0]?.key === 'quote_currency' ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === 'quote_currency' ? table.cols.lastColumnFixed : undefined,
+        fixed: getFixed('quote_currency'),
         render: (val) => <Tag>{val as string}</Tag>,
       },
       rate: {
@@ -158,8 +161,7 @@ export function ExchangeRatesPage() {
         dataIndex: 'rate',
         ...widthForHeader('Rate', Math.max(120, dataWidths.rate)),
         align: 'right',
-        fixed: table.cols.visibleColumns[0]?.key === 'rate' ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === 'rate' ? table.cols.lastColumnFixed : undefined,
+        fixed: getFixed('rate'),
         render: (val) => formatAmount(val as string),
       },
       date: {
@@ -168,8 +170,7 @@ export function ExchangeRatesPage() {
         ...widthForHeader('Date', Math.max(220, dataWidths.date)),
         sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'date') + 1 || 999 },
         sortOrder: table.sort.sortOrderForField('date') ?? null,
-        fixed: table.cols.visibleColumns[0]?.key === 'date' ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === 'date' ? table.cols.lastColumnFixed : undefined,
+        fixed: getFixed('date'),
         render: (val) => {
           const d = dayjs(val as string);
           return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
@@ -179,8 +180,7 @@ export function ExchangeRatesPage() {
         title: t({ id: 'common.actions' }),
         key: 'actions',
         width: actionsColWidth,
-        fixed: table.cols.visibleColumns[0]?.key === 'actions' ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === 'actions' ? table.cols.lastColumnFixed : undefined,
+        fixed: getFixed('actions'),
         render: (_, record) => (
           <span data-actions-col>
             <Space>
@@ -204,7 +204,8 @@ export function ExchangeRatesPage() {
           </span>
         ),
       },
-    }),
+      };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.firstColumnFixed, table.cols.lastColumnFixed, table.cols.visibleColumns],
   );
@@ -217,7 +218,7 @@ export function ExchangeRatesPage() {
   return (
     <>
       <PageTable<ExchangeRate>
-        key={`${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
+        key={`${table.cols.visibleColumns[0]?.key ?? ''}-${table.cols.visibleColumns.at(-1)?.key ?? ''}-${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
         pageTitle={t({ id: 'pages.finance.exchangeRates.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

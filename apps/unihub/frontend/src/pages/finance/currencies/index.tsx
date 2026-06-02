@@ -120,15 +120,19 @@ export function CurrenciesPage() {
   }, [currencies]);
 
   const colDefMap = useMemo<Record<string, ProColumns<Currency>>>(
-    () => ({
+    () => {
+      const getFixed = (key: string) =>
+        table.cols.visibleColumns[0]?.key === key ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === key ? table.cols.lastColumnFixed
+          : undefined;
+      return {
       code: {
         title: t({ id: 'pages.finance.currencies.col.code' }),
         dataIndex: 'code',
         ...widthForHeader('Code', dataWidths.code),
         sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'code') + 1 || 999 },
         sortOrder: table.sort.sortOrderForField('code') ?? null,
-        fixed: table.cols.visibleColumns[0]?.key === 'code' ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === 'code' ? table.cols.lastColumnFixed : undefined,
+        fixed: getFixed('code'),
       },
       name: {
         title: t({ id: 'common.name' }),
@@ -136,15 +140,13 @@ export function CurrenciesPage() {
         ...widthForHeader('Name', dataWidths.name),
         sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'name') + 1 || 999 },
         sortOrder: table.sort.sortOrderForField('name') ?? null,
-        fixed: table.cols.visibleColumns[0]?.key === 'name' ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === 'name' ? table.cols.lastColumnFixed : undefined,
+        fixed: getFixed('name'),
       },
       symbol: {
         title: t({ id: 'pages.finance.currencies.col.symbol' }),
         dataIndex: 'symbol',
         ...widthForHeader('Symbol', dataWidths.symbol),
-        fixed: table.cols.visibleColumns[0]?.key === 'symbol' ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === 'symbol' ? table.cols.lastColumnFixed : undefined,
+        fixed: getFixed('symbol'),
         render: (val) =>
           val ? String(val) : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
       },
@@ -152,16 +154,14 @@ export function CurrenciesPage() {
         title: t({ id: 'pages.finance.currencies.col.isBaseCurrency' }),
         dataIndex: 'is_base_currency',
         width: 130,
-        fixed: table.cols.visibleColumns[0]?.key === 'is_base_currency' ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === 'is_base_currency' ? table.cols.lastColumnFixed : undefined,
+        fixed: getFixed('is_base_currency'),
         render: (_, record) => <Switch checked={record.is_base_currency} disabled size="small" />,
       },
       actions: {
         title: t({ id: 'common.actions' }),
         key: 'actions',
         width: actionsColWidth,
-        fixed: table.cols.visibleColumns[0]?.key === 'actions' ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === 'actions' ? table.cols.lastColumnFixed : undefined,
+        fixed: getFixed('actions'),
         render: (_, record) => (
           <span data-actions-col>
             <Space>
@@ -185,7 +185,8 @@ export function CurrenciesPage() {
           </span>
         ),
       },
-    }),
+      };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.firstColumnFixed, table.cols.lastColumnFixed, table.cols.visibleColumns],
   );
@@ -198,7 +199,7 @@ export function CurrenciesPage() {
   return (
     <>
       <PageTable<Currency>
-        key={`${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
+        key={`${table.cols.visibleColumns[0]?.key ?? ''}-${table.cols.visibleColumns.at(-1)?.key ?? ''}-${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
         pageTitle={t({ id: 'pages.finance.currencies.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

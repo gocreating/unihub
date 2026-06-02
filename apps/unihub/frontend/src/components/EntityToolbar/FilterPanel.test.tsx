@@ -266,48 +266,8 @@ describe('FilterPanel', () => {
     expect(groupRemoveBtn).not.toBeDisabled();
   });
 
-  // ── Drag & drop ─────────────────────────────────────────────────────────────
-
-  // FP-DnD-01: drop indicator renders during dragover, not a highlight on the target
-  it('shows a [data-drop-indicator] line when dragging over another rule', () => {
-    const rule1 = { id: 'r1', attr: '', op: 'contains' as const, val: '' };
-    const rule2 = { id: 'r2', attr: '', op: 'contains' as const, val: '' };
-    renderPanel({ pendingRoot: makeRoot({ rules: [rule1, rule2] }) });
-
-    const rows = document.querySelectorAll('[data-rule-row]');
-    fireEvent.dragStart(rows[0]!);
-    fireEvent.dragOver(rows[1]!);
-
-    expect(document.querySelector('[data-drop-indicator]')).toBeInTheDocument();
-  });
-
-  // FP-DnD-02: drop indicator disappears after drag ends
-  it('removes [data-drop-indicator] when drag ends', () => {
-    const rule1 = { id: 'r1', attr: '', op: 'contains' as const, val: '' };
-    const rule2 = { id: 'r2', attr: '', op: 'contains' as const, val: '' };
-    renderPanel({ pendingRoot: makeRoot({ rules: [rule1, rule2] }) });
-
-    const rows = document.querySelectorAll('[data-rule-row]');
-    fireEvent.dragStart(rows[0]!);
-    fireEvent.dragOver(rows[1]!);
-    fireEvent.dragEnd(rows[0]!);
-
-    expect(document.querySelector('[data-drop-indicator]')).toBeNull();
-  });
-
-  // FP-DnD-03: dropping reorders rules (jsdom clientY=0 → always 'after')
-  it('reorders items correctly on drop', () => {
-    const rule1 = { id: 'r1', attr: 'name', op: 'contains' as const, val: '' };
-    const rule2 = { id: 'r2', attr: 'score', op: 'eq' as const, val: '' };
-    const { hook } = renderPanel({ pendingRoot: makeRoot({ rules: [rule1, rule2] }) });
-
-    const rows = document.querySelectorAll('[data-rule-row]');
-    fireEvent.dragStart(rows[0]!);
-    fireEvent.dragOver(rows[1]!);
-    fireEvent.drop(rows[1]!);
-
-    const call = (hook.setPendingRoot as ReturnType<typeof vi.fn>).mock.calls[0]![0] as FilterGroupItem;
-    // jsdom: clientY=0, midY=0 → 0 < 0 is false → 'after' → r2 comes first
-    expect(call.rules.map((r) => (r as { id: string }).id)).toEqual(['r2', 'r1']);
-  });
+  // ── Drag & drop (logic tested via SortableList.test.tsx reorderById) ─────────
+  // FilterPanel now uses dnd-kit (SortableList) for drag sorting — see
+  // SortableList.test.tsx for comprehensive reorder logic tests. The actual
+  // drag mechanism is verified by the Playwright E2E tests.
 });

@@ -204,18 +204,19 @@ export function AccountsPage() {
   // All column definitions keyed by column key. Derived order comes from cols.visibleColumns.
   // Depends on sort.sortOrderForField so sort highlighting updates when active rules change.
   const colDefMap = useMemo<Record<string, ProColumns<Account>>>(
-    () => ({
+    () => {
+      const getFixed = (key: string) =>
+        cols.visibleColumns[0]?.key === key ? cols.firstColumnFixed
+          : cols.visibleColumns.at(-1)?.key === key ? cols.lastColumnFixed
+          : undefined;
+      return {
       name: {
         title: t({ id: 'common.name' }),
         dataIndex: 'name',
         ...widthForHeader('Name', dataWidths.name),
         sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'name') + 1 || 999 },
         sortOrder: sort.sortOrderForField('name') ?? null,
-        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'name'
-          ? 'left'
-          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'name'
-            ? 'right'
-            : undefined,
+        fixed: getFixed('name'),
       },
       currency: {
         title: t({ id: 'common.currency' }),
@@ -223,22 +224,14 @@ export function AccountsPage() {
         ...widthForHeader('Currency', dataWidths.currency),
         sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'currency') + 1 || 999 },
         sortOrder: sort.sortOrderForField('currency') ?? null,
-        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'currency'
-          ? 'left'
-          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'currency'
-            ? 'right'
-            : undefined,
+        fixed: getFixed('currency'),
         render: (val) => <Tag>{val as string}</Tag>,
       },
       color: {
         title: t({ id: 'pages.finance.accounts.col.color' }),
         dataIndex: 'color',
         width: 72,
-        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'color'
-          ? 'left'
-          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'color'
-            ? 'right'
-            : undefined,
+        fixed: getFixed('color'),
         render: (_dom, record) =>
           record.color ? (
             <span
@@ -262,11 +255,7 @@ export function AccountsPage() {
         ...widthForHeader('Open Date', Math.max(220, dataWidths.open_datetime)),
         sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'open_datetime') + 1 || 999 },
         sortOrder: sort.sortOrderForField('open_datetime') ?? null,
-        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'open_datetime'
-          ? 'left'
-          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'open_datetime'
-            ? 'right'
-            : undefined,
+        fixed: getFixed('open_datetime'),
         render: (_, record) => {
           const formatted = formatDateRelative(record.open_datetime);
           return formatted ? (
@@ -284,11 +273,7 @@ export function AccountsPage() {
         ...widthForHeader('Close Date', Math.max(220, dataWidths.close_datetime)),
         sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'close_datetime') + 1 || 999 },
         sortOrder: sort.sortOrderForField('close_datetime') ?? null,
-        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'close_datetime'
-          ? 'left'
-          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'close_datetime'
-            ? 'right'
-            : undefined,
+        fixed: getFixed('close_datetime'),
         render: (_, record) => {
           const formatted = formatDateRelative(record.close_datetime);
           return formatted ? (
@@ -304,11 +289,7 @@ export function AccountsPage() {
         title: t({ id: 'common.actions' }),
         key: 'actions',
         width: actionsColWidth,
-        fixed: cols.firstColumnFixed && cols.visibleColumns[0]?.key === 'actions'
-          ? 'left'
-          : cols.lastColumnFixed && cols.visibleColumns.at(-1)?.key === 'actions'
-            ? 'right'
-            : undefined,
+        fixed: getFixed('actions'),
         render: (_, record) => (
           <span data-actions-col>
             <Space>
@@ -322,7 +303,8 @@ export function AccountsPage() {
           </span>
         ),
       },
-    }),
+      };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, dataWidths, actionsColWidth, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns],
   );
@@ -341,7 +323,7 @@ export function AccountsPage() {
   return (
     <>
       <PageTable<Account>
-        key={`${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
+        key={`${cols.visibleColumns[0]?.key ?? ''}-${cols.visibleColumns.at(-1)?.key ?? ''}-${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
         pageTitle={t({ id: 'pages.finance.accounts.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Button, Divider, Input, InputNumber, Select, Space } from 'antd';
 import { useIntl } from 'react-intl';
 import { emptyRoot, emptyRule } from './hooks/useEntityFilter';
@@ -12,6 +12,7 @@ import type {
   GroupLogic,
 } from './types';
 import { isFilterGroup } from './types';
+import { SortableList } from './SortableList';
 
 const uid = () => crypto.randomUUID();
 
@@ -130,13 +131,10 @@ interface RuleRowProps {
   onRemove: () => void;
   canDrag: boolean;
   isDragging: boolean;
-  onDragStart: (e: React.DragEvent) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent) => void;
-  onDragEnd: () => void;
+  handleProps: React.HTMLAttributes<HTMLElement>;
 }
 
-function RuleRow({ rule, attrs, onUpdate, onRemove, canDrag, isDragging, onDragStart, onDragOver, onDrop, onDragEnd }: RuleRowProps) {
+function RuleRow({ rule, attrs, onUpdate, onRemove, canDrag, isDragging, handleProps }: RuleRowProps) {
   const { formatMessage: t } = useIntl();
   const attr = attrs.find((a) => a.key === rule.attr);
   const ops = getOps(attr);
@@ -151,17 +149,9 @@ function RuleRow({ rule, attrs, onUpdate, onRemove, canDrag, isDragging, onDragS
   const changeVal = (val: string) => onUpdate({ ...rule, val });
 
   return (
-    <div
-      draggable={canDrag}
-      data-rule-row
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
-      style={css.ruleRow(isDragging)}
-    >
-      {/* Drag handle */}
-      <span aria-hidden style={css.dragHandle(canDrag)}>⠿</span>
+    <div data-rule-row style={css.ruleRow(isDragging)}>
+      {/* Drag handle — connected to dnd-kit via handleProps */}
+      <span aria-hidden {...handleProps} style={css.dragHandle(canDrag)}>⠿</span>
 
       {/* Field selector */}
       <Select
@@ -244,20 +234,12 @@ interface GroupCardProps {
 
 function GroupCard({ group, attrs, depth, onUpdate, onRemove, canDelete = true }: GroupCardProps) {
   const { formatMessage: t } = useIntl();
-  const [dragFromId, setDragFromId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const [dragOverPos, setDragOverPos] = useState<'before' | 'after' | null>(null);
-
-  const canDrag = group.rules.length > 1;
-
-  // ── Mutations ──────────────────────────────────────────────────────────────
 
   const updateItem = (id: string, updated: FilterItem) =>
     onUpdate({ ...group, rules: group.rules.map((r) => (r.id === id ? updated : r)) });
 
-  const removeItem = (id: string) => {
+  const removeItem = (id: string) =>
     onUpdate({ ...group, rules: group.rules.filter((r) => r.id !== id) });
-  };
 
   const addRule = () =>
     onUpdate({ ...group, rules: [...group.rules, emptyRule()] });
@@ -267,58 +249,20 @@ function GroupCard({ group, attrs, depth, onUpdate, onRemove, canDelete = true }
       ...group,
       rules: [
         ...group.rules,
-        {
-          id: uid(),
-          type: 'group',
-          logic: group.logic === 'and' ? 'or' : 'and',
-          rules: [emptyRule(), emptyRule()],
-        } satisfies FilterGroupItem,
+        { id: uid(), type: 'group', logic: group.logic === 'and' ? 'or' : 'and', rules: [emptyRule(), emptyRule()] } satisfies FilterGroupItem,
       ],
     });
 
   const toggleLogic = () =>
     onUpdate({ ...group, logic: (group.logic === 'and' ? 'or' : 'and') as GroupLogic });
 
-  // ── Drag & drop ───────────────────────────────────────────────────────────
+  const handleReorder = (reordered: FilterItem[]) =>
+    onUpdate({ ...group, rules: reordered });
 
-  const handleDragStart = (e: React.DragEvent, id: string) => {
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-    setDragFromId(id);
-  };
-  const handleDragOver = (e: React.DragEvent, id: string) => {
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    setDragOverId(id);
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDragOverPos(e.clientY < rect.top + rect.height / 2 ? 'before' : 'after');
-  };
-  const handleDrop = (e: React.DragEvent, toId: string) => {
-    e.preventDefault();
-    if (dragFromId && dragFromId !== toId) {
-      const next = [...group.rules];
-      const fromIdx = next.findIndex((r) => r.id === dragFromId);
-      const removed = next.splice(fromIdx, 1);
-      const toIdx = next.findIndex((r) => r.id === toId);
-      if (removed[0] && toIdx !== -1) {
-        next.splice(dragOverPos === 'after' ? toIdx + 1 : toIdx, 0, removed[0]);
-        onUpdate({ ...group, rules: next });
-      }
-    }
-    setDragFromId(null);
-    setDragOverId(null);
-    setDragOverPos(null);
-  };
-  const handleDragEnd = () => {
-    setDragFromId(null);
-    setDragOverId(null);
-    setDragOverPos(null);
-  };
-
-  // ── Render ────────────────────────────────────────────────────────────────
+  const canDelete2 = group.rules.length > 1;
 
   return (
     <div style={{ position: 'relative' }}>
-      {/* Circular remove button — only for nested groups; disabled when it is the only item */}
       {onRemove && (
         <button
           aria-label="✕"
@@ -339,73 +283,53 @@ function GroupCard({ group, attrs, depth, onUpdate, onRemove, canDelete = true }
           overflow: 'visible',
         }}
       >
-        {/* Rules + separators */}
         <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 0 }}>
-          {group.rules.map((item, i) => {
-            const isDropTarget = dragOverId === item.id;
-            const showBefore = isDropTarget && dragOverPos === 'before';
-            const showAfter  = isDropTarget && dragOverPos === 'after';
-            // Hide the AND/OR badge when the drop-before line takes its place
-            const showBadge  = i > 0 && !showBefore;
-
-            return (
-              <React.Fragment key={item.id}>
-                {/* AND/OR logic badge — hidden when drop indicator replaces it */}
-                {showBadge && (
-                  <div style={{ padding: '4px 0' }}>
-                    <span style={css.logicBadge} onClick={toggleLogic} data-testid="logic-badge">
-                      {group.logic.toUpperCase()}
-                    </span>
-                  </div>
-                )}
-
-                {/* Drop indicator: BEFORE target */}
-                {showBefore && <div data-drop-indicator style={css.dropIndicator} />}
-
-                {isFilterGroup(item) ? (
-                  <div
-                    draggable={canDrag}
-                    onDragStart={(e) => handleDragStart(e, item.id)}
-                    onDragOver={(e) => handleDragOver(e, item.id)}
-                    onDrop={(e) => handleDrop(e, item.id)}
-                    onDragEnd={handleDragEnd}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: dragFromId === item.id ? 0.35 : 1 }}
-                  >
-                    <span aria-hidden style={css.dragHandle(canDrag)}>⠿</span>
-                    <div style={{ flex: 1 }}>
-                      <GroupCard
-                        group={item}
-                        attrs={attrs}
-                        depth={depth + 1}
-                        onUpdate={(updated) => updateItem(item.id, updated)}
-                        onRemove={() => removeItem(item.id)}
-                        canDelete={canDrag}
-                      />
+          <SortableList
+            items={group.rules}
+            onReorder={handleReorder}
+            renderItem={(item, handleProps, isDragging) => {
+              const idx = group.rules.findIndex((r) => r.id === item.id);
+              return (
+                <React.Fragment>
+                  {/* AND/OR badge between items */}
+                  {idx > 0 && (
+                    <div style={{ padding: '4px 0' }}>
+                      <span style={css.logicBadge} onClick={toggleLogic} data-testid="logic-badge">
+                        {group.logic.toUpperCase()}
+                      </span>
                     </div>
-                  </div>
-                ) : (
-                  <RuleRow
-                    rule={item}
-                    attrs={attrs}
-                    onUpdate={(updated) => updateItem(item.id, updated)}
-                    onRemove={() => removeItem(item.id)}
-                    canDrag={canDrag}
-                    isDragging={dragFromId === item.id}
-                    onDragStart={(e) => handleDragStart(e, item.id)}
-                    onDragOver={(e) => handleDragOver(e, item.id)}
-                    onDrop={(e) => handleDrop(e, item.id)}
-                    onDragEnd={handleDragEnd}
-                  />
-                )}
-
-                {/* Drop indicator: AFTER target */}
-                {showAfter && <div data-drop-indicator style={css.dropIndicator} />}
-              </React.Fragment>
-            );
-          })}
+                  )}
+                  {isFilterGroup(item) ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: isDragging ? 0.35 : 1 }}>
+                      <span aria-hidden {...handleProps} style={css.dragHandle(true)}>⠿</span>
+                      <div style={{ flex: 1 }}>
+                        <GroupCard
+                          group={item}
+                          attrs={attrs}
+                          depth={depth + 1}
+                          onUpdate={(updated) => updateItem(item.id, updated)}
+                          onRemove={() => removeItem(item.id)}
+                          canDelete={canDelete2}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <RuleRow
+                      rule={item}
+                      attrs={attrs}
+                      onUpdate={(updated) => updateItem(item.id, updated)}
+                      onRemove={() => removeItem(item.id)}
+                      canDrag={canDelete2}
+                      isDragging={isDragging}
+                      handleProps={handleProps}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            }}
+          />
         </div>
 
-        {/* Card footer: + Rule  + Group (groups limited to depth 0–1) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px' }}>
           <button style={css.ghostBtn} onClick={addRule}>
             {t({ id: 'common.entityOps.filter.addCondition' })}

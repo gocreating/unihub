@@ -14,6 +14,9 @@ import {
   listCurrencies,
   updateAccount,
 } from '@/services/unihub-backend/finance';
+import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 // 20 preset colors covering the full hue spectrum — Material Design palette.
 const ACCOUNT_PRESET_COLORS = [
@@ -63,15 +66,39 @@ export function AccountsPage() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [form] = Form.useForm<AccountFormValues>();
 
-  const { data: accounts = [], isLoading, isError } = useQuery({
-    queryKey: ['finance', 'accounts'],
-    queryFn: () => listAccounts(),
-  });
+  // Localized attrs/defs must come before hooks that consume them.
+  const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
+    { key: 'name', label: t({ id: 'common.name' }), dataType: 'text' },
+    { key: 'currency', label: t({ id: 'common.currency' }), dataType: 'single_select' },
+    { key: 'color', label: t({ id: 'pages.finance.accounts.col.color' }), dataType: 'text' },
+    { key: 'open_datetime', label: t({ id: 'pages.finance.accounts.col.openDatetime' }), dataType: 'date' },
+    { key: 'close_datetime', label: t({ id: 'pages.finance.accounts.col.closeDatetime' }), dataType: 'date' },
+  ], [t]);
 
-  const { data: currencies = [] } = useQuery({
+  const columnDefs = useMemo<ColumnDef[]>(() => [
+    { key: 'name', label: t({ id: 'common.name' }), dataType: 'text', visible: true, order: 0 },
+    { key: 'currency', label: t({ id: 'common.currency' }), dataType: 'single_select', visible: true, order: 1 },
+    { key: 'color', label: t({ id: 'pages.finance.accounts.col.color' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'open_datetime', label: t({ id: 'pages.finance.accounts.col.openDatetime' }), dataType: 'date', visible: true, order: 3 },
+    { key: 'close_datetime', label: t({ id: 'pages.finance.accounts.col.closeDatetime' }), dataType: 'date', visible: true, order: 4 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 5 },
+  ], [t]);
+
+  // ── Entity operations — single standardized hook ─────────────────────
+  const table = useEntityTable({ key: 'accounts', filterableAttrs, columnDefs });
+  const { filter, sort, cols } = table;
+
+  const { data: accountsData, isLoading, isError } = useQuery({
+    queryKey: ['finance', 'accounts', table.queryParams],
+    queryFn: () => listAccounts(table.queryParams),
+  });
+  const accounts = useMemo(() => accountsData?.results ?? [], [accountsData]);
+
+  const { data: currenciesData } = useQuery({
     queryKey: ['finance', 'currencies'],
     queryFn: () => listCurrencies(),
   });
+  const currencies = currenciesData?.results ?? [];
 
   useEffect(() => {
     if (isError) message.error(t({ id: 'pages.finance.accounts.loadError' }));
@@ -176,62 +203,113 @@ export function AccountsPage() {
     return w;
   }, [accounts]);
 
-  const columns: ProColumns<Account>[] = useMemo(
-    () => [
-      { title: t({ id: 'common.name' }), dataIndex: 'name', ...widthForHeader('Name', dataWidths.name), sorter: true },
-      { title: t({ id: 'common.currency' }), dataIndex: 'currency', ...widthForHeader('Currency', dataWidths.currency), sorter: true, render: (val) => <Tag>{val as string}</Tag> },
-      {
-        title: t({ id: 'pages.finance.accounts.col.color' }),
+  // All column definitions keyed by column key. Derived order comes from cols.visibleColumns.
+  // Depends on sort.sortOrderForField so sort highlighting updates when active rules change.
+  const colDefMap = useMemo<Record<string, ProColumns<Account>>>(
+    () => {
+      const getFixed = (key: string) =>
+        cols.visibleColumns[0]?.key === key ? cols.firstColumnFixed
+          : cols.visibleColumns.at(-1)?.key === key ? cols.lastColumnFixed
+          : undefined;
+      return {
+      name: {
+        dataIndex: 'name',
+        ...widthForHeader('Name', dataWidths.name),
+        fixed: getFixed('name'),
+        ...makeSortProps('name', t({ id: 'common.name' }), sort),
+      },
+      currency: {
+        dataIndex: 'currency',
+        ...widthForHeader('Currency', dataWidths.currency),
+        fixed: getFixed('currency'),
+        render: (val) => <Tag>{val as string}</Tag>,
+        ...makeSortProps('currency', t({ id: 'common.currency' }), sort),
+      },
+      color: {
         dataIndex: 'color',
         width: 72,
-        render: (_dom, record) => record.color
-          ? <span style={{ display: 'inline-block', width: 20, height: 20, borderRadius: '50%', background: record.color, border: '1px solid rgba(0,0,0,0.12)', verticalAlign: 'middle' }} />
-          : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
+        fixed: getFixed('color'),
+        render: (_dom, record) =>
+          record.color ? (
+            <span
+              style={{
+                display: 'inline-block',
+                width: 20,
+                height: 20,
+                borderRadius: '50%',
+                background: record.color,
+                border: '1px solid rgba(0,0,0,0.12)',
+                verticalAlign: 'middle',
+              }}
+            />
+          ) : (
+            <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>
+          ),
+        ...makeSortProps('color', t({ id: 'pages.finance.accounts.col.color' }), sort),
       },
-      {
-        title: t({ id: 'pages.finance.accounts.col.openDatetime' }),
+      open_datetime: {
         dataIndex: 'open_datetime',
         ...widthForHeader('Open Date', Math.max(220, dataWidths.open_datetime)),
-        sorter: true,
+        fixed: getFixed('open_datetime'),
+        ...makeSortProps('open_datetime', t({ id: 'pages.finance.accounts.col.openDatetime' }), sort),
         render: (_, record) => {
           const formatted = formatDateRelative(record.open_datetime);
-          return formatted
-            ? <Tooltip title={dayjs(record.open_datetime!).format('YYYY-MM-DD HH:mm:ss')}>{formatted}</Tooltip>
-            : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
+          return formatted ? (
+            <Tooltip title={dayjs(record.open_datetime!).format('YYYY-MM-DD HH:mm:ss')}>
+              {formatted}
+            </Tooltip>
+          ) : (
+            <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>
+          );
         },
       },
-      {
-        title: t({ id: 'pages.finance.accounts.col.closeDatetime' }),
+      close_datetime: {
         dataIndex: 'close_datetime',
         ...widthForHeader('Close Date', Math.max(220, dataWidths.close_datetime)),
-        sorter: true,
+        fixed: getFixed('close_datetime'),
+        ...makeSortProps('close_datetime', t({ id: 'pages.finance.accounts.col.closeDatetime' }), sort),
         render: (_, record) => {
           const formatted = formatDateRelative(record.close_datetime);
-          return formatted
-            ? <Tooltip title={dayjs(record.close_datetime!).format('YYYY-MM-DD HH:mm:ss')}>{formatted}</Tooltip>
-            : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
+          return formatted ? (
+            <Tooltip title={dayjs(record.close_datetime!).format('YYYY-MM-DD HH:mm:ss')}>
+              {formatted}
+            </Tooltip>
+          ) : (
+            <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>
+          );
         },
       },
-      {
+      actions: {
         title: t({ id: 'common.actions' }),
         key: 'actions',
         width: actionsColWidth,
+        fixed: getFixed('actions'),
         render: (_, record) => (
           <span data-actions-col>
-          <Space>
-            <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-              {t({ id: 'common.edit' })}
-            </Button>
-            <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-              {t({ id: 'common.delete' })}
-            </Button>
-          </Space>
+            <Space>
+              <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+                {t({ id: 'common.edit' })}
+              </Button>
+              <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+                {t({ id: 'common.delete' })}
+              </Button>
+            </Space>
           </span>
         ),
       },
-    ],
+      };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth],
+    [t, dataWidths, actionsColWidth, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns],
+  );
+
+  // Column array derived from the visible column order — this is what makes reordering work.
+  const columns = useMemo<ProColumns<Account>[]>(
+    () =>
+      cols.visibleColumns
+        .map((c) => colDefMap[c.key])
+        .filter((c): c is ProColumns<Account> => Boolean(c)),
+    [cols.visibleColumns, colDefMap],
   );
 
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} – ${c.name}` }));
@@ -239,17 +317,28 @@ export function AccountsPage() {
   return (
     <>
       <PageTable<Account>
+        key={`${cols.visibleColumns[0]?.key ?? ''}-${cols.visibleColumns.at(-1)?.key ?? ''}-${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
         pageTitle={t({ id: 'pages.finance.accounts.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             {t({ id: 'pages.finance.accounts.new' })}
           </Button>
         }
+        headerTitle={
+          <EntityToolbar
+            filterProps={{ attrs: filterableAttrs, hook: filter }}
+            sortProps={{ attrs: filterableAttrs, hook: sort }}
+            columnProps={{ hook: cols }}
+          />
+        }
         rowKey="id"
         columns={columns}
         dataSource={accounts}
         loading={isLoading}
         scroll={{ x: computeScrollX(columns) }}
+        onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
+        pagination={false}
+        footer={() => <EntityOffsetFooter {...table.paginationProps(accountsData?.count)} />}
       />
 
       <Modal

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, DatePicker, Form, Input, Modal, Select, Space, Tag, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
@@ -15,6 +15,9 @@ import {
   listExchangeRates,
   updateExchangeRate,
 } from '@/services/unihub-backend/finance';
+import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 export function ExchangeRatesPage() {
   const queryClient = useQueryClient();
@@ -23,19 +26,35 @@ export function ExchangeRatesPage() {
   const [editingRate, setEditingRate] = useState<ExchangeRate | null>(null);
   const [form] = Form.useForm();
 
-  const { data: rates = [], isLoading, isError } = useQuery({
-    queryKey: ['finance', 'exchange-rates'],
-    queryFn: () => listExchangeRates(),
+  const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
+    { key: 'base_currency', label: t({ id: 'pages.finance.exchangeRates.col.base' }), dataType: 'single_select' },
+    { key: 'quote_currency', label: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataType: 'single_select' },
+    { key: 'rate', label: t({ id: 'pages.finance.exchangeRates.col.rate' }), dataType: 'number' },
+    { key: 'date', label: t({ id: 'common.date' }), dataType: 'date' },
+  ], [t]);
+
+  const columnDefs = useMemo<ColumnDef[]>(() => [
+    { key: 'base_currency', label: t({ id: 'pages.finance.exchangeRates.col.base' }), dataType: 'single_select', visible: true, order: 0 },
+    { key: 'quote_currency', label: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataType: 'single_select', visible: true, order: 1 },
+    { key: 'rate', label: t({ id: 'pages.finance.exchangeRates.col.rate' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'date', label: t({ id: 'common.date' }), dataType: 'date', visible: true, order: 3 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 4 },
+  ], [t]);
+
+  const table = useEntityTable({ key: 'exchange-rates', filterableAttrs, columnDefs });
+
+  const { data: ratesData, isLoading } = useQuery({
+    queryKey: ['finance', 'exchange-rates', table.queryParams],
+    queryFn: () => listExchangeRates(table.queryParams),
+    meta: { errorMessage: t({ id: 'pages.finance.exchangeRates.loadError' }) },
   });
+  const rates = useMemo(() => ratesData?.results ?? [], [ratesData]);
 
-  useEffect(() => {
-    if (isError) message.error(t({ id: 'pages.finance.exchangeRates.loadError' }));
-  }, [isError, t]);
-
-  const { data: currencies = [] } = useQuery({
+  const { data: currenciesData } = useQuery({
     queryKey: ['finance', 'currencies'],
     queryFn: () => listCurrencies(),
   });
+  const currencies = useMemo(() => currenciesData?.results ?? [], [currenciesData]);
 
   const currencyOptions = currencies.map((c) => ({
     value: c.code,
@@ -114,75 +133,109 @@ export function ExchangeRatesPage() {
     return w;
   }, [rates]);
 
-  const columns: ProColumns<ExchangeRate>[] = useMemo(
-    () => [
-      { title: t({ id: 'pages.finance.exchangeRates.col.base' }), dataIndex: 'base_currency', ...widthForHeader('Base', dataWidths.base_currency), render: (val) => <Tag>{val as string}</Tag> },
-      { title: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataIndex: 'quote_currency', ...widthForHeader('Quote', dataWidths.quote_currency), render: (val) => <Tag>{val as string}</Tag> },
-      {
-        title: t({ id: 'pages.finance.exchangeRates.col.rate' }),
+  const colDefMap = useMemo<Record<string, ProColumns<ExchangeRate>>>(
+    () => {
+      const getFixed = (key: string) =>
+        table.cols.visibleColumns[0]?.key === key ? table.cols.firstColumnFixed
+          : table.cols.visibleColumns.at(-1)?.key === key ? table.cols.lastColumnFixed
+          : undefined;
+      return {
+      base_currency: {
+        dataIndex: 'base_currency',
+        ...widthForHeader('Base', dataWidths.base_currency),
+        fixed: getFixed('base_currency'),
+        render: (val) => <Tag>{val as string}</Tag>,
+        ...makeSortProps('base_currency', t({ id: 'pages.finance.exchangeRates.col.base' }), table.sort),
+      },
+      quote_currency: {
+        dataIndex: 'quote_currency',
+        ...widthForHeader('Quote', dataWidths.quote_currency),
+        fixed: getFixed('quote_currency'),
+        render: (val) => <Tag>{val as string}</Tag>,
+        ...makeSortProps('quote_currency', t({ id: 'pages.finance.exchangeRates.col.quote' }), table.sort),
+      },
+      rate: {
         dataIndex: 'rate',
         ...widthForHeader('Rate', Math.max(120, dataWidths.rate)),
         align: 'right',
+        fixed: getFixed('rate'),
         render: (val) => formatAmount(val as string),
+        ...makeSortProps('rate', t({ id: 'pages.finance.exchangeRates.col.rate' }), table.sort),
       },
-      {
-        title: t({ id: 'common.date' }),
+      date: {
         dataIndex: 'date',
         ...widthForHeader('Date', Math.max(220, dataWidths.date)),
-        sorter: true,
+        fixed: getFixed('date'),
         render: (val) => {
           const d = dayjs(val as string);
           return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
         },
+        ...makeSortProps('date', t({ id: 'common.date' }), table.sort),
       },
-      {
+      actions: {
         title: t({ id: 'common.actions' }),
         key: 'actions',
         width: actionsColWidth,
+        fixed: getFixed('actions'),
         render: (_, record) => (
           <span data-actions-col>
-          <Space>
-            <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-              {t({ id: 'common.edit' })}
-            </Button>
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => {
-                Modal.confirm({
-                  title: t({ id: 'pages.finance.exchangeRates.delete.title' }),
-                  content: t({ id: 'pages.finance.exchangeRates.delete.confirm' }),
-                  okType: 'danger',
-                  onOk: () => deleteMutation.mutate(record.id),
-                });
-              }}
-            >
-              {t({ id: 'common.delete' })}
-            </Button>
-          </Space>
+            <Space>
+              <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+                {t({ id: 'common.edit' })}
+              </Button>
+              <Button
+                size="small" danger icon={<DeleteOutlined />}
+                onClick={() => {
+                  Modal.confirm({
+                    title: t({ id: 'pages.finance.exchangeRates.delete.title' }),
+                    content: t({ id: 'pages.finance.exchangeRates.delete.confirm' }),
+                    okType: 'danger',
+                    onOk: () => deleteMutation.mutate(record.id),
+                  });
+                }}
+              >
+                {t({ id: 'common.delete' })}
+              </Button>
+            </Space>
           </span>
         ),
       },
-    ],
+      };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth],
+    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.firstColumnFixed, table.cols.lastColumnFixed, table.cols.visibleColumns],
+  );
+
+  const columns = useMemo<ProColumns<ExchangeRate>[]>(
+    () => table.cols.visibleColumns.map((c) => colDefMap[c.key]).filter((c): c is ProColumns<ExchangeRate> => Boolean(c)),
+    [table.cols.visibleColumns, colDefMap],
   );
 
   return (
     <>
       <PageTable<ExchangeRate>
+        key={`${table.cols.visibleColumns[0]?.key ?? ''}-${table.cols.visibleColumns.at(-1)?.key ?? ''}-${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
         pageTitle={t({ id: 'pages.finance.exchangeRates.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             {t({ id: 'pages.finance.exchangeRates.new' })}
           </Button>
         }
+        headerTitle={
+          <EntityToolbar
+            filterProps={{ attrs: filterableAttrs, hook: table.filter }}
+            sortProps={{ attrs: filterableAttrs, hook: table.sort }}
+            columnProps={{ hook: table.cols }}
+          />
+        }
         rowKey="id"
         columns={columns}
         dataSource={rates}
         loading={isLoading}
         scroll={{ x: computeScrollX(columns) }}
+        onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
+        pagination={false}
+        footer={() => <EntityOffsetFooter {...table.paginationProps(ratesData?.count)} />}
       />
 
       <Modal

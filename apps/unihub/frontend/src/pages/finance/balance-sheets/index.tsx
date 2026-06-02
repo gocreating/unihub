@@ -10,6 +10,9 @@ import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
+import { EntityOffsetFooter, EntityToolbar, useColumnConfig, useEntityFilter, useEntitySort } from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 import type { BalanceSheet } from '@/services/unihub-backend/finance';
 import {
   deleteBalanceSheet,
@@ -60,23 +63,59 @@ export function BalanceSheetsPage() {
     setExcludedFromNetWorth(new Set());
   }, [chartType]);
 
-  const { data: sheets = [], isLoading } = useQuery({
-    queryKey: ['finance', 'balance-sheets'],
-    queryFn: () => listBalanceSheets(),
-  });
+  const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
+    { key: 'date', label: t({ id: 'common.date' }), dataType: 'date' },
+  ], [t]);
 
-  const { data: currencies = [] } = useQuery({
+  const filter = useEntityFilter('balance-sheets');
+  const sort = useEntitySort('balance-sheets', [{ field: 'date', direction: 'desc' }]);
+  const ordering = sort.toOrderingParam();
+  const filters = filter.toApiParam();
+
+  const [limit, setLimit] = useState(10);
+  const [offset, setOffset] = useState(0);
+
+  // Reset to page 1 when filter or sort changes.
+  useEffect(() => { setOffset(0); }, [sort.activeRules]);
+  useEffect(() => { setOffset(0); }, [filter.activeGroups]);
+
+  const { data: sheetsData, isLoading } = useQuery({
+    queryKey: ['finance', 'balance-sheets', limit, offset, ordering, filters],
+    queryFn: () => listBalanceSheets({ limit, offset, ordering: ordering ?? '-date', filters }),
+  });
+  const sheets = useMemo(() => sheetsData?.results ?? [], [sheetsData]);
+
+  const paginationProps = {
+    total: sheetsData?.count,
+    pageSize: limit,
+    current: Math.floor(offset / limit) + 1,
+    onChange: (page: number, size: number) => {
+      if (size !== limit) { setLimit(size); setOffset(0); }
+      else { setOffset((page - 1) * size); }
+    },
+  };
+
+  const { data: currenciesData } = useQuery({
     queryKey: ['finance', 'currencies'],
     queryFn: () => listCurrencies(),
   });
+  const currencies = useMemo(() => currenciesData?.results ?? [], [currenciesData]);
 
-  const { data: rates = [] } = useQuery({
+  const { data: ratesData } = useQuery({
     queryKey: ['finance', 'exchange-rates'],
     queryFn: () => listExchangeRates(),
   });
+  const rates = useMemo(() => ratesData?.results ?? [], [ratesData]);
 
   const baseCurrencies = useMemo(() => currencies.filter((c) => c.is_base_currency), [currencies]);
   const [baseCurrency, setBaseCurrency] = useBaseCurrency(baseCurrencies);
+
+  const columnDefs = useMemo<ColumnDef[]>(() => [
+    { key: 'date', label: t({ id: 'common.date' }), dataType: 'date', visible: true, order: 0 },
+    { key: 'net_worth', label: t({ id: 'pages.finance.balanceSheets.col.netWorth' }, { currency: baseCurrency ?? '' }), dataType: 'number', visible: true, order: 1 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 2 },
+  ], [t, baseCurrency]);
+  const cols = useColumnConfig(columnDefs);
 
   const balanceQueries = useQueries({
     queries: sheets.map((sheet) => ({
@@ -389,75 +428,90 @@ export function BalanceSheetsPage() {
     return w;
   }, [sheets]);
 
-  const columns: ProColumns<BalanceSheet>[] = useMemo(
-    () => [
-      {
-        title: t({ id: 'common.date' }),
-        dataIndex: 'date',
-        ...widthForHeader('Date', Math.max(220, dataWidths.date)),
-        sorter: true,
-        render: (val) => {
-          const d = dayjs(val as string);
-          return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
+  const colDefMap = useMemo<Record<string, ProColumns<BalanceSheet> | undefined>>(
+    () => {
+      const getFixed = (key: string) =>
+        cols.visibleColumns[0]?.key === key ? cols.firstColumnFixed
+          : cols.visibleColumns.at(-1)?.key === key ? cols.lastColumnFixed
+          : undefined;
+      return {
+        date: {
+          dataIndex: 'date',
+          ...widthForHeader('Date', Math.max(220, dataWidths.date)),
+          fixed: getFixed('date'),
+          render: (val) => {
+            const d = dayjs(val as string);
+            return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
+          },
+          ...makeSortProps('date', t({ id: 'common.date' }), sort),
         },
-      },
-      ...(baseCurrency
-        ? [{
-            title: t({ id: 'pages.finance.balanceSheets.col.netWorth' }, { currency: baseCurrency }),
-            key: 'net_worth',
-            width: 160,
-            align: 'right' as const,
-            render: (_dom: unknown, record: BalanceSheet) => {
-              if (allBalancesLoading) return <Spin size="small" />;
-              const nwv = sheetNetWorths[record.id];
-              if (!nwv) return <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
-              return `${getCurrencySymbol(baseCurrency)} ${formatAmount(nwv.toString())}`;
-            },
-          }]
-        : []),
-      {
-        title: t({ id: 'common.actions' }),
-        key: 'actions',
-        width: actionsColWidth,
-        render: (_, record) => (
-          <span data-actions-col>
-          <Space>
-            <Button
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => navigate(`/finance/balance-sheets/${record.id}`)}
-            >
-              {t({ id: 'common.view' })}
-            </Button>
-            <Button
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => navigate(`/finance/balance-sheets/${record.id}/edit`)}
-            >
-              {t({ id: 'common.edit' })}
-            </Button>
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => {
-                Modal.confirm({
-                  title: t({ id: 'pages.finance.balanceSheets.delete.title' }),
-                  content: t({ id: 'pages.finance.balanceSheets.delete.confirm' }),
-                  okType: 'danger',
-                  onOk: () => deleteMutation.mutate(record.id),
-                });
-              }}
-            >
-              {t({ id: 'common.delete' })}
-            </Button>
-          </Space>
-          </span>
-        ),
-      },
-    ],
+        // net_worth is client-side computed — only defined when baseCurrency is set
+        net_worth: baseCurrency ? {
+          title: t({ id: 'pages.finance.balanceSheets.col.netWorth' }, { currency: baseCurrency }),
+          key: 'net_worth',
+          width: 160,
+          align: 'right' as const,
+          fixed: getFixed('net_worth'),
+          render: (_dom: unknown, record: BalanceSheet) => {
+            if (allBalancesLoading) return <Spin size="small" />;
+            const nwv = sheetNetWorths[record.id];
+            if (!nwv) return <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
+            return `${getCurrencySymbol(baseCurrency)} ${formatAmount(nwv.toString())}`;
+          },
+        } : undefined,
+        actions: {
+          title: t({ id: 'common.actions' }),
+          key: 'actions',
+          width: actionsColWidth,
+          fixed: getFixed('actions'),
+          render: (_, record) => (
+            <span data-actions-col>
+            <Space>
+              <Button
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => navigate(`/finance/balance-sheets/${record.id}`)}
+              >
+                {t({ id: 'common.view' })}
+              </Button>
+              <Button
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => navigate(`/finance/balance-sheets/${record.id}/edit`)}
+              >
+                {t({ id: 'common.edit' })}
+              </Button>
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => {
+                  Modal.confirm({
+                    title: t({ id: 'pages.finance.balanceSheets.delete.title' }),
+                    content: t({ id: 'pages.finance.balanceSheets.delete.confirm' }),
+                    okType: 'danger',
+                    onOk: () => deleteMutation.mutate(record.id),
+                  });
+                }}
+              >
+                {t({ id: 'common.delete' })}
+              </Button>
+            </Space>
+            </span>
+          ),
+        },
+      };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, navigate, dataWidths, actionsColWidth, baseCurrency, sheetNetWorths, allBalancesLoading],
+    [t, navigate, dataWidths, actionsColWidth, baseCurrency, sheetNetWorths, allBalancesLoading,
+     sort.sortOrderForField, sort.activeRules, cols.visibleColumns, cols.firstColumnFixed, cols.lastColumnFixed],
+  );
+
+  const columns = useMemo<ProColumns<BalanceSheet>[]>(
+    () => cols.visibleColumns
+      .map((c) => colDefMap[c.key])
+      .filter((c): c is ProColumns<BalanceSheet> => c != null),
+    [cols.visibleColumns, colDefMap],
   );
 
   return (
@@ -664,6 +718,15 @@ export function BalanceSheetsPage() {
             {t({ id: 'pages.finance.balanceSheets.new' })}
           </Button>
         }
+        key={`${cols.visibleColumns[0]?.key ?? ''}-${cols.visibleColumns.at(-1)?.key ?? ''}-${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
+        headerTitle={
+          <EntityToolbar
+            filterProps={{ attrs: filterableAttrs, hook: filter }}
+            sortProps={{ attrs: filterableAttrs, hook: sort }}
+            columnProps={{ hook: cols }}
+          />
+        }
+        footer={() => <EntityOffsetFooter {...paginationProps} pageSizeOptions={[10, 20]} />}
         rowKey="id"
         columns={columns}
         dataSource={sheets}

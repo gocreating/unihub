@@ -67,6 +67,20 @@ export function computeScrollX(columns: readonly { width?: unknown }[], fallback
   return columns.reduce((sum, col) => sum + ((col.width as number) || fallback), 0);
 }
 
+/**
+ * Like computeScrollX but ensures horizontal overflow when any column is fixed
+ * (sticky left/right). AntD's fixed column only sticks when the table scrolls;
+ * without overflow the pin has no visual effect. 9999 covers any typical viewport.
+ */
+export function computeStickyScrollX(
+  columns: readonly { width?: unknown }[],
+  hasFixed: boolean,
+  minOverflow = 9999,
+): number {
+  const natural = computeScrollX(columns);
+  return hasFixed ? Math.max(natural, minOverflow) : natural;
+}
+
 
 /** Style for two-line cells (name + @username pattern). */
 export const twoLineCellStyle: React.CSSProperties = {

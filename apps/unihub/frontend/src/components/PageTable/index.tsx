@@ -15,17 +15,17 @@ import type { ProTableProps } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
 import { Flex, Typography } from 'antd';
 import { createStyles } from 'antd-style';
-import { type ReactNode, type RefObject, useEffect, useRef } from 'react';
+import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef } from 'react';
 import { useStickyHeaderOffset } from './useStickyHeaderOffset';
 // eslint-disable-next-line react-refresh/only-export-components
-export { widthForHeader, measureTextWidth, computeScrollX, twoLineCellStyle } from './utils';
+export { widthForHeader, measureTextWidth, computeScrollX, computeStickyScrollX, twoLineCellStyle } from './utils';
 // eslint-disable-next-line react-refresh/only-export-components
 export { useActionsColWidth } from './useActionsColWidth';
 
 const useStyles = createStyles(({ token }) => ({
   pageCard: {
     background: token.colorBgContainer,
-    borderRadius: token.borderRadiusLG,
+    borderRadius: 0,
   },
   titleRow: {
     padding: '16px 24px',
@@ -35,24 +35,12 @@ const useStyles = createStyles(({ token }) => ({
     '.ant-pro-card': {
       boxShadow: 'none',
     },
-    '.ant-table-footer': {
+    '& .ant-table-wrapper .ant-table-footer': {
       position: 'sticky',
       bottom: 0,
-      backgroundColor: token.colorBgContainer,
-      padding: `${token.paddingXS}px 16px`,
-      borderTop: `1px solid ${token.colorBorderSecondary}`,
-      borderRadius: 0,
-      margin: 0,
       zIndex: 2,
-    },
-    '.ant-pagination': {
-      position: 'sticky',
-      bottom: 0,
       backgroundColor: token.colorBgContainer,
-      padding: `${token.paddingXS}px 0`,
       borderTop: `1px solid ${token.colorBorderSecondary}`,
-      zIndex: 5,
-      margin: '0 !important',
     },
     '.ant-table-cell': {
       whiteSpace: 'nowrap',
@@ -180,7 +168,7 @@ function useStickyHorizontalScrollbar(containerRef: RefObject<HTMLDivElement | n
       const hasOverflow = body.scrollWidth > body.clientWidth;
       spacer.style.width = `${body.scrollWidth}px`;
       bar.style.display = hasOverflow ? 'block' : 'none';
-      const footerEl = container.querySelector<HTMLElement>('.ant-table-footer, .ant-pagination');
+      const footerEl = container.querySelector<HTMLElement>('.ant-table-footer');
       bar.style.bottom = `${footerEl?.offsetHeight ?? 0}px`;
       const rcSb = container.querySelector<HTMLElement>('.ant-table-sticky-scroll');
       if (rcSb) rcSb.style.setProperty('display', 'none', 'important');
@@ -249,6 +237,21 @@ function PageTable<T extends Record<string, any>>({
   useStickyHorizontalScrollbar(tableContainerRef, !noStickyFix);
   useStickyFix(!noStickyFix);
 
+  // AntD injects size-specific padding on .ant-table-footer (e.g. 8px for middle)
+  // that beats our CSS specificity. Inline style is the only reliable override.
+  useLayoutEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+    const zero = () => {
+      const footer = container.querySelector<HTMLElement>('.ant-table-footer');
+      if (footer) { footer.style.paddingLeft = '0'; footer.style.paddingRight = '0'; }
+    };
+    zero();
+    const mo = new MutationObserver(zero);
+    mo.observe(container, { childList: true, subtree: true });
+    return () => mo.disconnect();
+  });
+
   const className = cx(
     styles.tableWrapper,
     hasToolbar && styles.stickyToolbar,
@@ -278,6 +281,7 @@ function PageTable<T extends Record<string, any>>({
           pagination={pagination}
           sticky={noStickyFix ? false : { offsetHeader }}
           {...proTableProps}
+          showSorterTooltip={false}
         />
       </div>
     </div>

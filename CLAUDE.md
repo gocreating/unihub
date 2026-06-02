@@ -162,9 +162,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `009-fix-finance-sync` | **Plan**: [specs/009-fix-finance-sync/plan.md](specs/009-fix-finance-sync/plan.md)
+**Branch**: `008-entity-operations` | **Plan**: [specs/008-entity-operations/plan.md](specs/008-entity-operations/plan.md)
 
-Systematic fix for data sync field omissions. Root cause: `finance/apps.py` manually hardcodes field lists; `Currency.is_base_currency` and `Account.color` were added after initial registration and silently omitted. Fix: (1) add missing fields immediately; (2) implement `auto_system_fields(model_class)` in `data_io/registry.py` that derives `FieldDescriptor` objects from `model._meta.concrete_fields` automatically — any future field addition is included in sync without manual updates. Also fixes `Account.created_at`/`updated_at` and `BalanceSheet.created_at`/`updated_at`. Adds regression test `test_sync_field_coverage.py` asserting all model fields are registered. Backend-only; no migrations.
+Entity operations infrastructure — adds filter, sort, column visibility/ordering/sticky, and server-side pagination to all entity list views. Backend: `core/filters.py` (EntityFilterBackend with JSON-encoded multi-condition/group filter param) and `core/pagination.py` (EntityOffsetPagination, EntityCursorPagination). Frontend: shared `EntityToolbar` component with three Apply-gated panels (filter, sort, column) plus immediate header-click sort. Finance domain is the reference integration for all four entity types. See plan for full implementation details, data model, API contracts, and constitution check.
 <!-- SPECKIT END -->
 
 ## Active Technologies

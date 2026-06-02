@@ -22,11 +22,12 @@ export function BalanceSheetNewPage() {
   const [amountMap, setAmountMap] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
+  const { data: accountsData, isLoading: accountsLoading } = useQuery({
     queryKey: ['finance', 'accounts', 'as_of', selectedDate?.toISOString()],
     queryFn: () => listAccounts({ as_of: selectedDate!.toISOString() }),
     enabled: !!selectedDate,
   });
+  const accounts = useMemo(() => accountsData?.results ?? [], [accountsData]);
 
   const createMutation = useMutation({ mutationFn: createBalanceSheet });
 

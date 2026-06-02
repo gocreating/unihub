@@ -2,10 +2,12 @@ from decimal import Decimal
 
 from django.db.models import Q
 from django.utils.dateparse import parse_datetime
-from rest_framework import filters, status, viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from core.filters import EntityFilterBackend, NullsOrderingFilter
+from core.pagination import EntityOffsetPagination
 from finance.models import Account, Balance, BalanceSheet, Currency, ExchangeRate
 from finance.serializers import (
     AccountSerializer,
@@ -20,20 +22,33 @@ from finance.serializers import (
 class CurrencyViewSet(viewsets.ModelViewSet):
     queryset = Currency.objects.all()
     serializer_class = CurrencySerializer
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["code", "name"]
-    ordering_fields = ["code", "name"]
+    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filterable_fields = {
+        "code": {"lookup": "code", "type": "text"},
+        "name": {"lookup": "name", "type": "text"},
+        "symbol": {"lookup": "symbol", "type": "text"},
+        "is_base_currency": {"lookup": "is_base_currency", "type": "boolean"},
+    }
+    ordering_fields = ["code", "name", "symbol", "is_base_currency"]
     ordering = ["code"]
+    pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
 
 class AccountViewSet(viewsets.ModelViewSet):
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["name"]
-    ordering_fields = ["name", "currency"]
+    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filterable_fields = {
+        "name": {"lookup": "name", "type": "text"},
+        "currency": {"lookup": "currency", "type": "single_select"},
+        "color": {"lookup": "color", "type": "text"},
+        "open_datetime": {"lookup": "open_datetime", "type": "date"},
+        "close_datetime": {"lookup": "close_datetime", "type": "date"},
+    }
+    ordering_fields = ["name", "currency", "color", "open_datetime", "close_datetime"]
     ordering = ["name"]
+    pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
@@ -67,9 +82,13 @@ class AccountViewSet(viewsets.ModelViewSet):
 class BalanceSheetViewSet(viewsets.ModelViewSet):
     queryset = BalanceSheet.objects.all()
     serializer_class = BalanceSheetSerializer
-    filter_backends = [filters.OrderingFilter]
+    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filterable_fields = {
+        "date": {"lookup": "date", "type": "date"},
+    }
     ordering_fields = ["date"]
     ordering = ["-date"]
+    pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
 
     @action(detail=True, methods=["get"], url_path="balances")
@@ -137,12 +156,20 @@ class BalanceSheetViewSet(viewsets.ModelViewSet):
 class ExchangeRateViewSet(viewsets.ModelViewSet):
     queryset = ExchangeRate.objects.all()
     serializer_class = ExchangeRateSerializer
-    filter_backends = [filters.OrderingFilter]
-    ordering_fields = ["date", "base_currency", "quote_currency"]
+    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filterable_fields = {
+        "base_currency": {"lookup": "base_currency", "type": "single_select"},
+        "quote_currency": {"lookup": "quote_currency", "type": "single_select"},
+        "rate": {"lookup": "rate", "type": "number"},
+        "date": {"lookup": "date", "type": "date"},
+    }
+    ordering_fields = ["date", "base_currency", "quote_currency", "rate"]
     ordering = ["-date"]
+    pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
+        """Filter by base_currency and quote_currency legacy query params."""
         qs = super().get_queryset()
         base = self.request.query_params.get("base_currency")
         quote = self.request.query_params.get("quote_currency")

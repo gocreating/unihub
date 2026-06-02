@@ -91,10 +91,11 @@ export function BalanceSheetDetailPage() {
   const [draggingDim, setDraggingDim] = useState<GroupingDimension | null>(null);
   const [dropTargetDim, setDropTargetDim] = useState<GroupingDimension | null>(null);
 
-  const { data: sheets = [] } = useQuery({
+  const { data: sheetsData } = useQuery({
     queryKey: ['finance', 'balance-sheets'],
     queryFn: () => listBalanceSheets(),
   });
+  const sheets = useMemo(() => sheetsData?.results ?? [], [sheetsData]);
   const sheet = sheets.find((s) => s.id === id);
 
   const { data: balances = [], isLoading: balancesLoading, isError: balancesError } = useQuery({
@@ -103,15 +104,17 @@ export function BalanceSheetDetailPage() {
     enabled: !!id,
   });
 
-  const { data: currencies = [] } = useQuery({
+  const { data: currenciesData } = useQuery({
     queryKey: ['finance', 'currencies'],
     queryFn: () => listCurrencies(),
   });
+  const currencies = useMemo(() => currenciesData?.results ?? [], [currenciesData]);
 
-  const { data: rates = [] } = useQuery({
+  const { data: ratesData } = useQuery({
     queryKey: ['finance', 'exchange-rates'],
     queryFn: () => listExchangeRates(),
   });
+  const rates = useMemo(() => ratesData?.results ?? [], [ratesData]);
 
   const baseCurrencies = useMemo(() => currencies.filter((c) => c.is_base_currency), [currencies]);
   const [baseCurrency, setBaseCurrency] = useBaseCurrency(baseCurrencies);

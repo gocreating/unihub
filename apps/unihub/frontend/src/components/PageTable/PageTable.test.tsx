@@ -129,6 +129,66 @@ describe('PageTable rendering', () => {
     });
     expect(screen.getByText('Alice')).toBeInTheDocument();
   });
+
+  // P-14: fixed:'left' on a column produces ant-table-cell-fix-left class in DOM
+  // This is the baseline test confirming AntD applies the class in jsdom.
+  it('fixed column renders ant-table-cell-fix-left class in table header', () => {
+    renderPageTable({
+      pageTitle: 'Test',
+      columns: [
+        { title: 'Fixed', dataIndex: 'a', key: 'a', fixed: 'left', width: 100 },
+        { title: 'Normal', dataIndex: 'b', key: 'b', width: 100 },
+      ],
+      dataSource: [{ id: '1', a: 'x', b: 'y' }],
+      scroll: { x: 500 },
+    });
+    const fixedTh = document.querySelector('th.ant-table-cell-fix-left');
+    expect(fixedTh).not.toBeNull();
+  });
+});
+
+// ─── PageTable footer alignment ────────────────────────────────────────────
+
+describe('PageTable footer', () => {
+  // F-20: footer content renders
+  it('renders footer content when footer prop is provided', () => {
+    renderPageTable({
+      pageTitle: 'Test',
+      footer: () => <span data-testid="footer-content">Footer</span>,
+    });
+    expect(screen.getByTestId('footer-content')).toBeInTheDocument();
+  });
+
+  // F-21: footer lives inside .ant-table-footer — same DOM container as the
+  // toolbar, so ProTable's internal layout aligns it with the table body.
+  it('renders footer inside .ant-table-footer', () => {
+    renderPageTable({
+      pageTitle: 'Test',
+      footer: () => <span data-testid="footer-content">Footer</span>,
+    });
+    const el = screen.getByTestId('footer-content');
+    expect(el.closest('.ant-table-footer')).toBeInTheDocument();
+  });
+
+  // F-22: .ant-table-footer horizontal padding is 0 — AntD's default is
+  // 12px 8px which misaligns the footer with the table body.
+  it('overrides .ant-table-footer horizontal padding to 0', () => {
+    renderPageTable({
+      pageTitle: 'Test',
+      footer: () => <span data-testid="footer-content">Footer</span>,
+    });
+    const footerEl = document.querySelector<HTMLElement>('.ant-table-footer');
+    expect(footerEl).toBeInTheDocument();
+    const { paddingLeft, paddingRight } = window.getComputedStyle(footerEl!);
+    expect(paddingLeft).toBe('0px');
+    expect(paddingRight).toBe('0px');
+  });
+
+  // F-23: no footer when footer prop is omitted
+  it('does not render .ant-table-footer when no footer prop', () => {
+    renderPageTable({ pageTitle: 'Test' });
+    expect(document.querySelector('.ant-table-footer')).toBeNull();
+  });
 });
 
 // ─── useStickyHorizontalScrollbar ──────────────────────────────────────────

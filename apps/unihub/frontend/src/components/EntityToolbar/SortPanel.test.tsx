@@ -224,4 +224,29 @@ describe('SortPanel', () => {
     // 2 direction radios + 3 nulls radios = 5 total
     expect(screen.getAllByRole('radio').length).toBe(5);
   });
+
+  // SP-LT-01: long_text attributes are excluded from the sort field dropdown
+  it('excludes long_text attributes from the sort field dropdown options', () => {
+    const attrsWithLongText = [
+      { key: 'name', label: 'Name', dataType: 'text' as const },
+      { key: 'bio', label: 'Bio', dataType: 'long_text' as const },
+      { key: 'score', label: 'Score', dataType: 'number' as const },
+    ];
+    const hook = makeHook({ pendingRules: [{ field: '', direction: 'asc' }] });
+    render(
+      <SortPanel attrs={attrsWithLongText} hook={hook} onApply={vi.fn()} onClose={vi.fn()} />,
+      { wrapper },
+    );
+
+    // Open the field selector dropdown
+    const selector = document.querySelector('.ant-select-selector');
+    fireEvent.mouseDown(selector!);
+
+    // 'Name' and 'Score' must be present as selectable options
+    expect(document.querySelector('.ant-select-item-option[title="Name"]')).toBeInTheDocument();
+    expect(document.querySelector('.ant-select-item-option[title="Score"]')).toBeInTheDocument();
+
+    // 'Bio' (long_text) must be absent from the options entirely
+    expect(document.querySelector('.ant-select-item-option[title="Bio"]')).toBeNull();
+  });
 });

@@ -76,3 +76,24 @@ class TestNullsOrderingFilter:
             "/api/v1/finance/accounts/?ordering=nonexistent_field__nullsfirst"
         )
         assert resp.status_code == 200  # not an error — just falls back to default order
+
+    # N-05: ASC + nullslast → NULLs appear last
+    def test_nullslast_asc_puts_null_last(self, auth_client, accounts_with_close):
+        resp = auth_client.get(
+            "/api/v1/finance/accounts/?ordering=close_datetime__nullslast"
+        )
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        # For ASC NULLS LAST: non-null rows come first, null row at the end
+        assert results[0]["close_datetime"] is not None
+        assert results[-1]["close_datetime"] is None
+
+    # N-06: DESC + nullsfirst → NULLs appear first
+    def test_nullsfirst_desc_puts_null_first(self, auth_client, accounts_with_close):
+        resp = auth_client.get(
+            "/api/v1/finance/accounts/?ordering=-close_datetime__nullsfirst"
+        )
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        # For DESC NULLS FIRST: null row comes first
+        assert results[0]["close_datetime"] is None

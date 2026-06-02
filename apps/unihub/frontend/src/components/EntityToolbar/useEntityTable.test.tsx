@@ -274,4 +274,72 @@ describe('useEntityTable', () => {
     expect(result.current.limit).toBe(50);
     expect(result.current.offset).toBe(0);
   });
+
+  // QF-01: queryParams.filters is undefined before any filter is applied
+  it('queryParams.filters is undefined before any filter is applied', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+    expect(result.current.queryParams.filters).toBeUndefined();
+  });
+
+  // QF-02: after filter.apply() with a real condition, queryParams.filters is defined and contains the condition
+  it('queryParams.filters is defined after filter.apply() with a real condition', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+
+    act(() => {
+      result.current.filter.setPendingGroups([
+        {
+          id: '1',
+          logic: 'and',
+          conditions: [{ id: 'c1', attr: 'name', op: 'contains', val: 'foo' }],
+        },
+      ]);
+    });
+    act(() => {
+      result.current.filter.apply();
+    });
+
+    expect(result.current.queryParams.filters).toBeDefined();
+    const groups = result.current.queryParams.filters?.groups;
+    expect(groups).toBeDefined();
+    expect(groups!.length).toBeGreaterThan(0);
+    const condition = groups![0]!.conditions[0]!;
+    expect(condition.attr).toBe('name');
+    expect(condition.op).toBe('contains');
+    expect(condition.val).toBe('foo');
+  });
+
+  // QF-03: after filter.reset(), queryParams.filters is undefined again
+  it('queryParams.filters is undefined again after filter.reset()', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+
+    // Apply a real filter first
+    act(() => {
+      result.current.filter.setPendingGroups([
+        {
+          id: '1',
+          logic: 'and',
+          conditions: [{ id: 'c1', attr: 'name', op: 'contains', val: 'foo' }],
+        },
+      ]);
+    });
+    act(() => {
+      result.current.filter.apply();
+    });
+    expect(result.current.queryParams.filters).toBeDefined();
+
+    // Now reset — filters must be cleared
+    act(() => {
+      result.current.filter.reset();
+    });
+    expect(result.current.queryParams.filters).toBeUndefined();
+  });
 });

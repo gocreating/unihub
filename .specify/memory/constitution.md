@@ -1,21 +1,17 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.11.0 → 1.12.0 (minor — added Principle XI: Chart Library &
-  Visualization Standards, encoding the ECharts library choice, SVG renderer
-  requirement, account color system, visualization card tab pattern, and
-  ProTable ghost rule for embedded tables. Reflects Finance domain implementation
-  completed 2026-05-31.)
-Version change: 1.10.0 → 1.11.0 (minor — added Principle X: Chart Rendering,
-  governing minimum chart width and horizontal-scroll container requirements so
-  charts remain usable and undistorted on narrow screens.)
+Version change: 1.12.0 → 1.13.0 (minor — added Principle XII: Entity Toolbar &
+  Sort Controls, encoding the Apply-gate panel pattern, AntD sort indicator bypass
+  via onHeaderCell, ProTable remount key, isDefault vs isActive button state, opt-in
+  backend infrastructure in core/, and async label sync in useColumnConfig. Reflects
+  entity-operations feature (branch 008) completed 2026-06-02.)
 Modified principles: none
 Added sections:
-  - Principle X: Chart Rendering
+  - Principle XII: Entity Toolbar & Sort Controls
 Removed sections: none
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check
-    section is generic and reads live from this file)
+  - .specify/templates/plan-template.md ✅ No changes needed
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
 Follow-up TODOs: None.
@@ -428,6 +424,113 @@ All interactive charts in UniHub MUST use **ECharts** (via `echarts-for-react`) 
 
 **Rationale**: ECharts provides native `roseType` for Nightingale charts, `visualMap.continuous` for per-segment line coloring, a `position` callback with `size.viewSize` for tooltip overflow prevention, and option-level `color` arrays for reliable tab-switch color assignment — all without workarounds. Standardizing on one library with the SVG renderer eliminates cross-library compatibility issues and keeps the bundle size predictable. The account color system with `resolveAccountColor` prevents the most common chart UX defect (colors changing position as data reloads). Custom React legends give precise control over toggle behavior, styling, and interaction (hover-to-highlight) that the ECharts built-in legend cannot match.
 
+### XII. Entity Toolbar & Sort Controls
+
+All entity list pages that support filter, sort, or column visibility MUST follow
+the patterns established in `EntityToolbar` / `useEntitySort` / `useEntityFilter` /
+`useColumnConfig`. These patterns resolve a cluster of non-obvious AntD ProTable
+limitations discovered during the 008-entity-operations feature build.
+
+#### Apply-Gate Panel State
+
+Every interactive panel (filter, sort, column visibility) MUST maintain separate
+`pending` and `active` state. Changes to pending state MUST NOT affect the data
+query until the user explicitly clicks Apply.
+
+- Panel hooks MUST expose `pendingState`, `activeState`, `apply()`, `cancel()`,
+  `reset()`, and `isDirty` (pending ≠ active).
+- Only `activeState` drives the API query; `pendingState` drives panel UI only.
+- **One permitted exception**: column header sort clicks update `activeRules`
+  immediately (no Apply needed) because the interaction is a direct one-tap action
+  with immediately visible effect.
+- Apply button MUST be disabled when `isDirty` is false.
+- Reset button MUST be disabled when the panel is already at its default state
+  (`isDefault && !isDirty`).
+- While a panel is dirty (open and has unsaved changes), clicking outside or
+  attempting to open another panel MUST NOT close/discard the dirty panel — instead
+  bump the `focusCancelOn` token to flash the Cancel button.
+
+#### AntD Sort Indicator Bypass via `onHeaderCell`
+
+**Do not rely on ProTable's `sorter` prop or `sortOrder` column prop for sort
+indicators when sort state is managed by `useEntitySort`.**
+
+AntD ProTable maintains internal `sorterStates` that only update when its own
+`onChange` fires (user header click via `sorter`). External `sortOrder` prop
+changes from panel apply/reset are ignored — ProTable's reconciliation path does
+not re-read `sortOrder` after mount.
+
+- Sortable columns MUST use `makeSortProps(field, label, sortCtx)` which:
+  - Applies `ant-table-column-sort` via `onHeaderCell(() => ({ className: sortedClass }))` and `onCell(() => ({ className: sortedClass }))` where `sortedClass` is derived from `activeRules`.
+  - Renders custom caret icons in the `title` prop driven by `activeRules`.
+  - Registers column header clicks via `onHeaderCell(() => ({ onClick: () => handleHeaderClick(field) }))`.
+- Do not use ProTable's `sorter` prop on columns that participate in `useEntitySort`.
+
+#### ProTable Remount Key for Panel Changes
+
+When sort or column-pin state changes via a panel, ProTable MUST remount.
+
+- Every entity list page using `useEntitySort` MUST include `sort.panelApplyCount`
+  in its `PageTable` `key` prop.
+- Pages using `useColumnConfig` MUST also include the sticky-pin state (first/last
+  visible column identity + fixed flags) in the `key`.
+- `panelApplyCount` increments on `apply()` and `reset()` but NOT on header clicks.
+- Without remount, ProTable's internal column-layout initialisation (sticky shadow,
+  sorterStates) stays stale when props change after mount.
+
+#### `isDefault` vs `isActive` for Toolbar Button State
+
+The Sort toolbar button's primary variant and Reset button's disabled state MUST
+be driven by `isDefault`, not `isActive`.
+
+- `isDefault` is true when `activeRules` equals the `initialActiveRules` passed to
+  `useEntitySort`. For pages with no default sort (`initialActiveRules = []`),
+  `isDefault` and `!isActive` coincide; for pages with a default sort (e.g.,
+  balance-sheets `-date`), `isDefault` remains true at page load even though
+  `isActive` is true.
+- Sort toolbar button: `type={!isDefault ? 'primary' : 'default'}`.
+- `useEntitySort` MUST accept `initialActiveRules` to seed both `activeRules` and
+  the anchor for `isDefault` / `reset()`.
+- `reset()` MUST restore `activeRules` to `initialActiveRules`, not to empty.
+
+#### Backend Query Infrastructure in `core/` — Opt-In via Declarative Fields
+
+Cross-domain backend capabilities (filtering, ordering, pagination) MUST live in
+`core/` as DRF filter/pagination classes. Domain viewsets opt in by declaring
+configuration attributes, not by importing shared business logic.
+
+- `EntityFilterBackend`, `NullsOrderingFilter`, `EntityOffsetPagination`, and
+  `EntityCursorPagination` live in `apps/unihub/backend/core/`.
+- Filtering opt-in: declare `filterable_fields: dict[str, dict]` mapping attribute
+  keys to `{"lookup": str, "type": str}`.
+- Null-aware ordering opt-in: declare `filter_backends = [..., NullsOrderingFilter]`
+  and `ordering_fields`. Frontend encodes null preference as `__nullsfirst` /
+  `__nullslast` suffix on the ordering field name; the backend parses and applies
+  `F(field).asc/desc(nulls_first/last=True)`.
+- Unknown `attr` keys in `filters` param MUST be silently skipped (backward-compatible
+  schema evolution). Malformed JSON MUST raise `ValidationError` (400).
+
+#### `useColumnConfig` Async Label Patching
+
+When column definitions include labels that depend on async data (e.g., a currency
+name), `useColumnConfig` MUST patch labels without resetting user configuration.
+
+- `useColumnConfig` watches `initialColumns` via `useEffect` and, on each change,
+  compares labels by column key. Only `label` is updated; `visible`, `order`,
+  `stickyLeft`, `stickyRight` are never touched by the patch.
+- The patch MUST apply to BOTH `activeState` and `pendingState` so the column panel
+  shows the updated label immediately regardless of panel-open state.
+- `isDirty` MUST remain unchanged after a label-only patch.
+- If no label changed, the effect MUST return the same state object reference
+  (stable identity) to prevent a spurious re-render that would hang `act()` in tests.
+
+**Rationale**: These patterns resolve specific AntD ProTable limitations where
+external prop changes (sortOrder, fixed) do not propagate to internal component
+state after mount. Formalising them here prevents future features from re-discovering
+the same traps. The Apply-gate pattern decouples user intent from server round-trips,
+which is critical for pages with large datasets. The `core/` opt-in approach keeps
+filter/sort/pagination infrastructure domain-independent (Principle II).
+
 ## Development Constraints
 
 - **Package managers**: `pnpm` for frontend, `uv` for backend. Never use `npm`,
@@ -487,4 +590,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.12.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-31
+**Version**: 1.13.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-06-02

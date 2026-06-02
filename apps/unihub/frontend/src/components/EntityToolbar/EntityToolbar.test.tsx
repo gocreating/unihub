@@ -128,3 +128,17 @@ describe('EntityToolbar cross-panel dirty blocking', () => {
     expect(document.querySelector('.ant-dropdown-open')).toBeNull();
   });
 });
+
+describe('EntityToolbar columnProps visibility', () => {
+  // T-09: Columns button is hidden when columnProps is not provided
+  it('does not render Columns button when columnProps is omitted', () => {
+    const { queryByRole } = renderToolbar({ columnProps: undefined });
+    expect(queryByRole('button', { name: /columns/i })).toBeNull();
+  });
+
+  // T-10: Columns button is present when columnProps is provided (the current default)
+  it('renders Columns button when columnProps is provided', () => {
+    renderToolbar(); // uses defaultProps which includes columnProps
+    expect(screen.getByRole('button', { name: /columns/i })).toBeInTheDocument();
+  });
+});

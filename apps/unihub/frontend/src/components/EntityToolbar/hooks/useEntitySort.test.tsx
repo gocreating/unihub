@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useEntitySort, rulesToOrdering } from './useEntitySort';
+import { useEntitySort, rulesToOrdering, orderingToRules } from './useEntitySort';
 
 
 describe('useEntitySort', () => {
@@ -412,5 +412,71 @@ describe('useEntitySort', () => {
     );
     expect(result.current.sortOrderForField('date')).toBe('descend');
     expect(result.current.sortOrderForField('name')).toBeNull();
+  });
+
+  // ── orderingToRules ──────────────────────────────────────────────────────────
+
+  // OTR-01: basic asc — plain field name → single asc rule
+  it('orderingToRules: plain field name produces asc rule', () => {
+    expect(orderingToRules('name')).toEqual([{ field: 'name', direction: 'asc' }]);
+  });
+
+  // OTR-02: basic desc — leading dash → single desc rule
+  it('orderingToRules: leading dash produces desc rule', () => {
+    expect(orderingToRules('-amount')).toEqual([{ field: 'amount', direction: 'desc' }]);
+  });
+
+  // OTR-03: nullsfirst suffix — asc with nulls:first
+  it('orderingToRules: __nullsfirst suffix sets nulls:first on asc rule', () => {
+    expect(orderingToRules('close_datetime__nullsfirst')).toEqual([
+      { field: 'close_datetime', direction: 'asc', nulls: 'first' },
+    ]);
+  });
+
+  // OTR-04: nullslast suffix on desc — desc with nulls:last
+  it('orderingToRules: __nullslast suffix on desc field sets nulls:last', () => {
+    expect(orderingToRules('-date__nullslast')).toEqual([
+      { field: 'date', direction: 'desc', nulls: 'last' },
+    ]);
+  });
+
+  // OTR-05: round-trip identity — rulesToOrdering → orderingToRules preserves all fields
+  it('orderingToRules round-trips through rulesToOrdering for multi-rule with nulls', () => {
+    const rules = [
+      { field: 'name', direction: 'asc' as const, nulls: 'first' as const },
+      { field: 'amount', direction: 'desc' as const, nulls: 'last' as const },
+    ];
+    expect(orderingToRules(rulesToOrdering(rules)!)).toEqual(rules);
+  });
+
+  // OTR-06: empty string → empty array
+  it('orderingToRules: empty string returns empty array', () => {
+    expect(orderingToRules('')).toEqual([]);
+  });
+
+  // ── handleHeaderClick pendingRules sync ──────────────────────────────────────
+
+  // HC-01: handleHeaderClick syncs pendingRules to match new activeRules
+  it('handleHeaderClick syncs pendingRules to reflect updated activeRules', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+
+    // First click → asc; pendingRules must reflect name:asc
+    act(() => {
+      result.current.handleHeaderClick('name');
+    });
+    expect(result.current.pendingRules[0]!.field).toBe('name');
+    expect(result.current.pendingRules[0]!.direction).toBe('asc');
+
+    // Second click → desc; pendingRules must reflect name:desc
+    act(() => {
+      result.current.handleHeaderClick('name');
+    });
+    expect(result.current.pendingRules[0]!.direction).toBe('desc');
+
+    // Third click → removed; pendingRules resets to empty placeholder
+    act(() => {
+      result.current.handleHeaderClick('name');
+    });
+    expect(result.current.pendingRules[0]!.field).toBe('');
   });
 });

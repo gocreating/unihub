@@ -136,3 +136,43 @@ class TestAccountsOffsetPagination:
         resp = auth_client.get("/api/v1/finance/accounts/?limit=1&ordering=name").json()
         if resp.get("next"):
             assert "ordering=name" in resp["next"]
+
+    def test_next_url_preserves_filters_param(self, auth_client, usd_currency):
+        """The `next` pagination URL must include the `filters` param so that
+        navigating to the next page continues filtering by the same criteria."""
+        import json
+
+        # Create accounts: two matching the filter, one that does not
+        for name in ("Savings Alpha", "Savings Beta", "Checking"):
+            auth_client.post(
+                "/api/v1/finance/accounts/",
+                {
+                    "name": name,
+                    "currency": "USD",
+                    "open_datetime": "2020-01-01T00:00:00Z",
+                },
+                content_type="application/json",
+            )
+
+        filters_payload = json.dumps(
+            {
+                "groups": [
+                    {
+                        "logic": "and",
+                        "conditions": [{"attr": "name", "op": "contains", "val": "Savings"}],
+                    }
+                ]
+            }
+        )
+
+        import urllib.parse
+        encoded_filters = urllib.parse.quote(filters_payload)
+
+        resp = auth_client.get(
+            f"/api/v1/finance/accounts/?limit=1&filters={encoded_filters}"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        # Two "Savings" accounts with limit=1 → there must be a next page
+        assert data["next"] is not None, "Expected a next page URL (limit=1, 2 matching rows)"
+        assert "filters=" in data["next"], "next URL must preserve the filters param"

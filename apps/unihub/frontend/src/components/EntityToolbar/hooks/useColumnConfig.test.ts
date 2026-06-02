@@ -195,4 +195,41 @@ describe('useColumnConfig', () => {
     expect(result.current.isCustomised).toBe(false);
     expect(result.current.isDirty).toBe(false);
   });
+
+  // L-01: When initialColumns labels change (e.g. async currency loads), the column
+  // panel must show the updated label — visibility and order must be preserved.
+  it('syncs updated labels from initialColumns without resetting visibility or order', () => {
+    const initial = makeColumns();
+    const { result, rerender } = renderHook(
+      ({ cols }) => useColumnConfig(cols),
+      { initialProps: { cols: initial } },
+    );
+
+    // User hides 'amount' before the label update arrives
+    act(() => {
+      result.current.setPendingState({
+        ...result.current.pendingState,
+        columns: result.current.pendingState.columns.map((c) =>
+          c.key === 'amount' ? { ...c, visible: false } : c,
+        ),
+      });
+      result.current.apply();
+    });
+    expect(result.current.visibleColumns.some((c) => c.key === 'amount')).toBe(false);
+
+    // Parent re-renders with updated label for 'amount' (e.g. baseCurrency loaded)
+    const updated = makeColumns([{}, { label: 'Amount (TWD)' }]);
+    rerender({ cols: updated });
+
+    // Label must update in both active and pending state
+    const activeAmount = result.current.activeState.columns.find((c) => c.key === 'amount');
+    const pendingAmount = result.current.pendingState.columns.find((c) => c.key === 'amount');
+    expect(activeAmount?.label).toBe('Amount (TWD)');
+    expect(pendingAmount?.label).toBe('Amount (TWD)');
+
+    // User's visibility choice (amount hidden) must be preserved
+    expect(result.current.visibleColumns.some((c) => c.key === 'amount')).toBe(false);
+    // isDirty must be unaffected by the label update
+    expect(result.current.isDirty).toBe(false);
+  });
 });

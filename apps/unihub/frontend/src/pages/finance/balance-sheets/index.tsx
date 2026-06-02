@@ -67,15 +67,8 @@ export function BalanceSheetsPage() {
     { key: 'date', label: t({ id: 'common.date' }), dataType: 'date' },
   ], [t]);
 
-  const columnDefs = useMemo<ColumnDef[]>(() => [
-    { key: 'date', label: t({ id: 'common.date' }), dataType: 'date', visible: true, order: 0 },
-    { key: 'net_worth', label: t({ id: 'pages.finance.balanceSheets.col.netWorth' }, { currency: '' }).trim(), dataType: 'number', visible: true, order: 1 },
-    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 2 },
-  ], [t]);
-
   const filter = useEntityFilter('balance-sheets');
   const sort = useEntitySort('balance-sheets', [{ field: 'date', direction: 'desc' }]);
-  const cols = useColumnConfig(columnDefs);
   const ordering = sort.toOrderingParam();
   const filters = filter.toApiParam();
 
@@ -116,6 +109,13 @@ export function BalanceSheetsPage() {
 
   const baseCurrencies = useMemo(() => currencies.filter((c) => c.is_base_currency), [currencies]);
   const [baseCurrency, setBaseCurrency] = useBaseCurrency(baseCurrencies);
+
+  const columnDefs = useMemo<ColumnDef[]>(() => [
+    { key: 'date', label: t({ id: 'common.date' }), dataType: 'date', visible: true, order: 0 },
+    { key: 'net_worth', label: t({ id: 'pages.finance.balanceSheets.col.netWorth' }, { currency: baseCurrency ?? '' }), dataType: 'number', visible: true, order: 1 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 2 },
+  ], [t, baseCurrency]);
+  const cols = useColumnConfig(columnDefs);
 
   const balanceQueries = useQueries({
     queries: sheets.map((sheet) => ({

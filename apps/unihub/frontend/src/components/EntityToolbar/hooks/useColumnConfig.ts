@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ColumnDef, ColumnState } from '../types';
 
 export interface UseColumnConfigReturn {
@@ -47,6 +47,21 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
 
   const [activeState, setActiveState] = useState<ColumnState>(initial);
   const [pendingState, setPendingState] = useState<ColumnState>(initial);
+
+  // When a parent re-renders with updated column labels (e.g. async currency loads),
+  // patch labels in both states without disturbing visibility/order/sticky config.
+  useEffect(() => {
+    const labelMap = new Map(initialColumns.map((c) => [c.key, c.label]));
+    const patchLabels = (state: ColumnState): ColumnState => ({
+      ...state,
+      columns: state.columns.map((c) => {
+        const newLabel = labelMap.get(c.key);
+        return newLabel !== undefined && newLabel !== c.label ? { ...c, label: newLabel } : c;
+      }),
+    });
+    setActiveState(patchLabels);
+    setPendingState(patchLabels);
+  }, [initialColumns]);
 
   const apply = useCallback(() => {
     setActiveState(pendingState);

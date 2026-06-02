@@ -26,8 +26,10 @@ class CurrencyViewSet(viewsets.ModelViewSet):
     filterable_fields = {
         "code": {"lookup": "code", "type": "text"},
         "name": {"lookup": "name", "type": "text"},
+        "symbol": {"lookup": "symbol", "type": "text"},
+        "is_base_currency": {"lookup": "is_base_currency", "type": "boolean"},
     }
-    ordering_fields = ["code", "name"]
+    ordering_fields = ["code", "name", "symbol", "is_base_currency"]
     ordering = ["code"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
@@ -40,10 +42,11 @@ class AccountViewSet(viewsets.ModelViewSet):
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
         "currency": {"lookup": "currency", "type": "single_select"},
+        "color": {"lookup": "color", "type": "text"},
         "open_datetime": {"lookup": "open_datetime", "type": "date"},
         "close_datetime": {"lookup": "close_datetime", "type": "date"},
     }
-    ordering_fields = ["name", "currency", "open_datetime", "close_datetime"]
+    ordering_fields = ["name", "currency", "color", "open_datetime", "close_datetime"]
     ordering = ["name"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
@@ -157,9 +160,10 @@ class ExchangeRateViewSet(viewsets.ModelViewSet):
     filterable_fields = {
         "base_currency": {"lookup": "base_currency", "type": "single_select"},
         "quote_currency": {"lookup": "quote_currency", "type": "single_select"},
+        "rate": {"lookup": "rate", "type": "number"},
         "date": {"lookup": "date", "type": "date"},
     }
-    ordering_fields = ["date", "base_currency", "quote_currency"]
+    ordering_fields = ["date", "base_currency", "quote_currency", "rate"]
     ordering = ["-date"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]

@@ -104,6 +104,59 @@ describe('useEntityTable', () => {
     expect(result.current.sort.sortOrderForField('name')).toBe('ascend');
   });
 
+  // Panel apply: sort.apply() must commit pendingRules to activeRules AND increment panelApplyCount.
+  // sortOrderForField drives the sortOrder prop passed to each column; panelApplyCount drives the
+  // PageTable key so ProTable remounts and picks up the new sortOrder (AntD multi-sort internal
+  // state only updates via its own onChange, not via prop-only changes).
+  it('sort.apply() from panel updates sortOrderForField and increments panelApplyCount for column highlighting', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+    // Simulate user picking 'name' desc in the sort panel
+    act(() => {
+      result.current.sort.setPendingRules([{ field: 'name', direction: 'desc' }]);
+    });
+    expect(result.current.sort.isDirty).toBe(true);
+    expect(result.current.sort.sortOrderForField('name')).toBeNull(); // not yet applied
+    expect(result.current.sort.panelApplyCount).toBe(0);
+
+    // User clicks Apply in sort panel
+    act(() => {
+      result.current.sort.apply();
+    });
+
+    // After apply: sortOrderForField reflects the new sort (column will be highlighted on remount)
+    expect(result.current.sort.sortOrderForField('name')).toBe('descend');
+    expect(result.current.sort.isActive).toBe(true);
+    expect(result.current.sort.isDirty).toBe(false);
+    expect(result.current.sort.toOrderingParam()).toBe('-name');
+    // panelApplyCount must have incremented — page includes it in PageTable key to force remount
+    expect(result.current.sort.panelApplyCount).toBe(1);
+  });
+
+  // Panel reset: sort.reset() must clear activeRules AND increment panelApplyCount so ProTable
+  // remounts and the sort indicators are cleared.
+  it('sort.reset() from panel clears sortOrderForField and increments panelApplyCount', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+    // Apply a sort first
+    act(() => { result.current.sort.setPendingRules([{ field: 'name', direction: 'asc' }]); });
+    act(() => { result.current.sort.apply(); });
+    expect(result.current.sort.sortOrderForField('name')).toBe('ascend');
+    expect(result.current.sort.panelApplyCount).toBe(1);
+
+    // User clicks Reset in sort panel
+    act(() => { result.current.sort.reset(); });
+
+    // After reset: no column should be highlighted; panelApplyCount incremented for remount
+    expect(result.current.sort.sortOrderForField('name')).toBeNull();
+    expect(result.current.sort.isActive).toBe(false);
+    expect(result.current.sort.panelApplyCount).toBe(2);
+  });
+
   // Multi-sort: AntD passes full array; correctly identifies the NEW field
   it('handleTableSorterChange detects newly added field from multi-sort array', () => {
     const { result } = renderHook(

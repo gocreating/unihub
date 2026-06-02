@@ -14,6 +14,7 @@ import {
 } from '@/services/unihub-backend/finance';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 interface CurrencyFormValues {
   code: string;
@@ -127,20 +128,16 @@ export function CurrenciesPage() {
           : undefined;
       return {
       code: {
-        title: t({ id: 'pages.finance.currencies.col.code' }),
         dataIndex: 'code',
         ...widthForHeader('Code', dataWidths.code),
-        sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'code') + 1 || 999 },
-        sortOrder: table.sort.sortOrderForField('code') ?? null,
         fixed: getFixed('code'),
+        ...makeSortProps('code', t({ id: 'pages.finance.currencies.col.code' }), table.sort),
       },
       name: {
-        title: t({ id: 'common.name' }),
         dataIndex: 'name',
         ...widthForHeader('Name', dataWidths.name),
-        sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'name') + 1 || 999 },
-        sortOrder: table.sort.sortOrderForField('name') ?? null,
         fixed: getFixed('name'),
+        ...makeSortProps('name', t({ id: 'common.name' }), table.sort),
       },
       symbol: {
         title: t({ id: 'pages.finance.currencies.col.symbol' }),

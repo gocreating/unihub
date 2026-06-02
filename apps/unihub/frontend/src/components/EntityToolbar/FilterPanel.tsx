@@ -376,7 +376,8 @@ export function FilterPanel({ attrs, hook, onApply, onClose, focusCancelOn }: Fi
   return (
     <div
       style={{
-        width: 520,
+        width: 'max-content',
+        minWidth: 420,
         background: '#ffffff',
         borderRadius: 8,
         boxShadow: '0 4px 12px rgba(0,0,0,0.12)',

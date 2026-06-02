@@ -16,6 +16,7 @@ import {
 } from '@/services/unihub-backend/finance';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 // 20 preset colors covering the full hue spectrum — Material Design palette.
 const ACCOUNT_PRESET_COLORS = [
@@ -211,21 +212,17 @@ export function AccountsPage() {
           : undefined;
       return {
       name: {
-        title: t({ id: 'common.name' }),
         dataIndex: 'name',
         ...widthForHeader('Name', dataWidths.name),
-        sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'name') + 1 || 999 },
-        sortOrder: sort.sortOrderForField('name') ?? null,
         fixed: getFixed('name'),
+        ...makeSortProps('name', t({ id: 'common.name' }), sort),
       },
       currency: {
-        title: t({ id: 'common.currency' }),
         dataIndex: 'currency',
         ...widthForHeader('Currency', dataWidths.currency),
-        sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'currency') + 1 || 999 },
-        sortOrder: sort.sortOrderForField('currency') ?? null,
         fixed: getFixed('currency'),
         render: (val) => <Tag>{val as string}</Tag>,
+        ...makeSortProps('currency', t({ id: 'common.currency' }), sort),
       },
       color: {
         title: t({ id: 'pages.finance.accounts.col.color' }),
@@ -250,12 +247,10 @@ export function AccountsPage() {
           ),
       },
       open_datetime: {
-        title: t({ id: 'pages.finance.accounts.col.openDatetime' }),
         dataIndex: 'open_datetime',
         ...widthForHeader('Open Date', Math.max(220, dataWidths.open_datetime)),
-        sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'open_datetime') + 1 || 999 },
-        sortOrder: sort.sortOrderForField('open_datetime') ?? null,
         fixed: getFixed('open_datetime'),
+        ...makeSortProps('open_datetime', t({ id: 'pages.finance.accounts.col.openDatetime' }), sort),
         render: (_, record) => {
           const formatted = formatDateRelative(record.open_datetime);
           return formatted ? (
@@ -268,12 +263,10 @@ export function AccountsPage() {
         },
       },
       close_datetime: {
-        title: t({ id: 'pages.finance.accounts.col.closeDatetime' }),
         dataIndex: 'close_datetime',
         ...widthForHeader('Close Date', Math.max(220, dataWidths.close_datetime)),
-        sorter: { compare: () => 0, multiple: sort.activeRules.findIndex((r) => r.field === 'close_datetime') + 1 || 999 },
-        sortOrder: sort.sortOrderForField('close_datetime') ?? null,
         fixed: getFixed('close_datetime'),
+        ...makeSortProps('close_datetime', t({ id: 'pages.finance.accounts.col.closeDatetime' }), sort),
         render: (_, record) => {
           const formatted = formatDateRelative(record.close_datetime);
           return formatted ? (

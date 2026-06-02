@@ -17,6 +17,7 @@ import {
 } from '@/services/unihub-backend/finance';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 export function ExchangeRatesPage() {
   const queryClient = useQueryClient();
@@ -139,22 +140,18 @@ export function ExchangeRatesPage() {
           : undefined;
       return {
       base_currency: {
-        title: t({ id: 'pages.finance.exchangeRates.col.base' }),
         dataIndex: 'base_currency',
         ...widthForHeader('Base', dataWidths.base_currency),
-        sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'base_currency') + 1 || 999 },
-        sortOrder: table.sort.sortOrderForField('base_currency') ?? null,
         fixed: getFixed('base_currency'),
         render: (val) => <Tag>{val as string}</Tag>,
+        ...makeSortProps('base_currency', t({ id: 'pages.finance.exchangeRates.col.base' }), table.sort),
       },
       quote_currency: {
-        title: t({ id: 'pages.finance.exchangeRates.col.quote' }),
         dataIndex: 'quote_currency',
         ...widthForHeader('Quote', dataWidths.quote_currency),
-        sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'quote_currency') + 1 || 999 },
-        sortOrder: table.sort.sortOrderForField('quote_currency') ?? null,
         fixed: getFixed('quote_currency'),
         render: (val) => <Tag>{val as string}</Tag>,
+        ...makeSortProps('quote_currency', t({ id: 'pages.finance.exchangeRates.col.quote' }), table.sort),
       },
       rate: {
         title: t({ id: 'pages.finance.exchangeRates.col.rate' }),
@@ -165,16 +162,14 @@ export function ExchangeRatesPage() {
         render: (val) => formatAmount(val as string),
       },
       date: {
-        title: t({ id: 'common.date' }),
         dataIndex: 'date',
         ...widthForHeader('Date', Math.max(220, dataWidths.date)),
-        sorter: { compare: () => 0, multiple: table.sort.activeRules.findIndex((r) => r.field === 'date') + 1 || 999 },
-        sortOrder: table.sort.sortOrderForField('date') ?? null,
         fixed: getFixed('date'),
         render: (val) => {
           const d = dayjs(val as string);
           return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
         },
+        ...makeSortProps('date', t({ id: 'common.date' }), table.sort),
       },
       actions: {
         title: t({ id: 'common.actions' }),

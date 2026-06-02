@@ -214,4 +214,97 @@ describe('useEntitySort', () => {
     expect(result.current.pendingRules[0]!.field).toBe('');
     expect(result.current.isDirty).toBe(false);
   });
+
+  // P-01: panelApplyCount starts at 0
+  it('panelApplyCount starts at 0', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+    expect(result.current.panelApplyCount).toBe(0);
+  });
+
+  // P-02: apply() increments panelApplyCount on each call — used by pages to force ProTable remount
+  it('apply() increments panelApplyCount on each call', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.panelApplyCount).toBe(1);
+
+    act(() => { result.current.setPendingRules([{ field: 'amount', direction: 'desc' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.panelApplyCount).toBe(2);
+  });
+
+  // P-03: handleHeaderClick does NOT increment panelApplyCount (header clicks update normally via props)
+  it('handleHeaderClick does not increment panelApplyCount', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+
+    act(() => { result.current.handleHeaderClick('name'); });
+    expect(result.current.panelApplyCount).toBe(0);
+
+    act(() => { result.current.handleHeaderClick('name'); });
+    expect(result.current.panelApplyCount).toBe(0);
+  });
+
+  // P-04: cancel() does not increment panelApplyCount
+  it('cancel() does not increment panelApplyCount', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc' }]); });
+    act(() => { result.current.cancel(); });
+    expect(result.current.panelApplyCount).toBe(0);
+  });
+
+  // P-05: reset() DOES increment panelApplyCount — panel reset changes active sort so ProTable must remount
+  it('reset() increments panelApplyCount for ProTable remount to clear sort indicators', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.panelApplyCount).toBe(1);
+    expect(result.current.isActive).toBe(true);
+
+    act(() => { result.current.reset(); });
+    expect(result.current.panelApplyCount).toBe(2); // incremented — forces remount to clear indicators
+    expect(result.current.isActive).toBe(false);
+    expect(result.current.sortOrderForField('name')).toBeNull();
+  });
+
+  // D-01: isDirty is true when nulls changes — nulls is a distinct part of the sort spec
+  it('isDirty is true when pending nulls differs from active nulls', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+
+    // Apply sort without nulls preference
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.isDirty).toBe(false);
+
+    // Switching nulls radio to 'first' must make panel dirty
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc', nulls: 'first' }]); });
+    expect(result.current.isDirty).toBe(true);
+  });
+
+  // D-02: isDirty is false when pending matches active including nulls
+  it('isDirty is false when pending matches active including nulls', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc', nulls: 'last' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.isDirty).toBe(false);
+
+    // Pending set to exact same values — must stay clean
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc', nulls: 'last' }]); });
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  // D-03: isDirty is true when nulls changes from a set value back to undefined
+  it('isDirty is true when pending nulls is cleared after being set', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc', nulls: 'first' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.isDirty).toBe(false);
+
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc' }]); });
+    expect(result.current.isDirty).toBe(true);
+  });
 });

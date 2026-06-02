@@ -62,7 +62,7 @@ export function ColumnPanel({ hook, onApply, onClose, focusCancelOn }: ColumnPan
   return (
     <Card
       size="small"
-      style={{ width: 300, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+      style={{ width: 'max-content', minWidth: 260, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
       styles={{ body: { padding: 12 } }}
     >
       <SortableList

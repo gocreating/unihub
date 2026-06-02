@@ -15,12 +15,25 @@ export interface UseEntitySortReturn {
   toOrderingParam: () => string | undefined;
   isActive: boolean;
   isDirty: boolean;
+  /** Increments each time apply() is called from the panel. Pages include this in the
+   *  ProTable `key` to force a remount — AntD only updates sort indicators via its own
+   *  onChange; a prop-only change (panel apply) is invisible to its internal state. */
+  panelApplyCount: number;
 }
 
 function rulesToOrdering(rules: SortState): string | undefined {
   const filled = rules.filter((r) => r.field);
   if (filled.length === 0) return undefined;
   return filled.map((r) => (r.direction === 'desc' ? `-${r.field}` : r.field)).join(',');
+}
+
+/** Serialize filled rules for dirty comparison — includes nulls which rulesToOrdering omits. */
+function serializeForDirty(rules: SortState): string {
+  return JSON.stringify(
+    rules
+      .filter((r) => r.field)
+      .map((r) => ({ f: r.field, d: r.direction, n: r.nulls ?? null })),
+  );
 }
 
 function orderingToRules(ordering: string): SortState {
@@ -41,11 +54,13 @@ function initialPending(active: SortState): SortState {
 export function useEntitySort(_key: string): UseEntitySortReturn {
   const [activeRules, setActiveRules] = useState<SortState>([]);
   const [pendingRules, setPendingRules] = useState<SortState>([EMPTY_RULE]);
+  const [panelApplyCount, setPanelApplyCount] = useState(0);
 
   const apply = useCallback(() => {
     const filled = pendingRules.filter((r) => r.field);
     setActiveRules(filled);
     setPendingRules(filled.length > 0 ? filled : [EMPTY_RULE]);
+    setPanelApplyCount((c) => c + 1);
   }, [pendingRules]);
 
   const cancel = useCallback(() => {
@@ -55,6 +70,7 @@ export function useEntitySort(_key: string): UseEntitySortReturn {
   const reset = useCallback(() => {
     setActiveRules([]);
     setPendingRules([EMPTY_RULE]);
+    setPanelApplyCount((c) => c + 1);
   }, []);
 
   const handleHeaderClick = useCallback((field: string) => {
@@ -87,9 +103,7 @@ export function useEntitySort(_key: string): UseEntitySortReturn {
     [activeRules],
   );
 
-  const isDirty =
-    JSON.stringify(rulesToOrdering(pendingRules.filter((r) => r.field)) ?? null) !==
-    JSON.stringify(rulesToOrdering(activeRules) ?? null);
+  const isDirty = serializeForDirty(pendingRules) !== serializeForDirty(activeRules);
 
   return {
     pendingRules,
@@ -103,6 +117,7 @@ export function useEntitySort(_key: string): UseEntitySortReturn {
     toOrderingParam,
     isActive: activeRules.length > 0,
     isDirty,
+    panelApplyCount,
   };
 }
 

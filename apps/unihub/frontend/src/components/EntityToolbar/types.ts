@@ -93,9 +93,12 @@ export interface FilterPayload {
 
 export type SortDirection = 'asc' | 'desc';
 
+export type SortNulls = 'first' | 'last';
+
 export interface SortRule {
   field: string;
   direction: SortDirection;
+  nulls?: SortNulls;
 }
 
 /** Ordered list — index 0 is the highest-priority sort key. */

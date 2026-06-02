@@ -22,6 +22,7 @@ import { LanguagePage } from '@/pages/language/LanguagePage';
 import { PeoplePage } from '@/pages/people/PeoplePage';
 import { MusicPage } from '@/pages/music/MusicPage';
 import { IoPage } from '@/pages/io/index';
+import { ProfilePage } from '@/pages/system/ProfilePage';
 import { getMe } from '@/services/unihub-backend/auth';
 
 const queryClient = new QueryClient({
@@ -78,6 +79,7 @@ function AppRoutes() {
                 <Route path="/people" element={<PeoplePage />} />
                 <Route path="/music" element={<MusicPage />} />
                 <Route path="/system/io" element={<IoPage />} />
+                <Route path="/system/profile" element={<ProfilePage />} />
               </Routes>
             </AppShell>
           </AuthGuard>

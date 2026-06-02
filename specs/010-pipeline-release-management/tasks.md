@@ -21,8 +21,8 @@ description: "Task list for pipeline and release management feature"
 
 **Purpose**: Create infrastructure directories and skeleton.
 
-- [ ] T001 Create `.github/workflows/` directory at repository root
-- [ ] T002 Create `apps/unihub/backend/system/` Django app skeleton: `__init__.py`, `apps.py` (AppConfig name `"system"`), placeholder `views.py`, placeholder `urls.py`
+- [x] T001 Create `.github/workflows/` directory at repository root
+- [x] T002 Create `apps/unihub/backend/system/` Django app skeleton: `__init__.py`, `apps.py` (AppConfig name `"system"`), placeholder `views.py`, placeholder `urls.py`
 
 ---
 
@@ -32,8 +32,8 @@ description: "Task list for pipeline and release management feature"
 
 **⚠️ CRITICAL**: Must complete before Phase 3 (version in `pyproject.toml` must be valid before CI can detect bumps; `settings.VERSION` must exist before the view can read it).
 
-- [ ] T003 Update `apps/unihub/backend/pyproject.toml` version from `"0.1.0"` to current calendar version `"2026.6.3.1"` (format: `YYYY.M.D.N`, unpadded, PEP 440 valid)
-- [ ] T004 Update `apps/unihub/backend/unihub/settings.py` to read the version from `pyproject.toml` using `tomllib` at startup and format it as `settings.VERSION = "vYYYY.MM.DD.N"` (zero-padded month/day, `v` prefix)
+- [x] T003 Update `apps/unihub/backend/pyproject.toml` version from `"0.1.0"` to current calendar version `"2026.6.3.1"` (format: `YYYY.M.D.N`, unpadded, PEP 440 valid)
+- [x] T004 Update `apps/unihub/backend/unihub/settings.py` to read the version from `pyproject.toml` using `tomllib` at startup and format it as `settings.VERSION = "vYYYY.MM.DD.N"` (zero-padded month/day, `v` prefix)
 
 **Checkpoint**: `settings.VERSION` is readable. `pyproject.toml` has a calendar-format version.
 
@@ -47,8 +47,8 @@ description: "Task list for pipeline and release management feature"
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Create `.github/workflows/ci.yml` with `frontend-ci` job: triggers on `push` and `pull_request` for all branches; working directory `apps/unihub/frontend/`; steps: checkout, setup Node (LTS) + pnpm, `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm typecheck`, `pnpm test --run`
-- [ ] T006 [US1] Add `backend-ci` job to `.github/workflows/ci.yml` (parallel job, same trigger): working directory `apps/unihub/backend/`; steps: checkout, setup Python 3.12 + `uv`, start PostgreSQL 16 service (env: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`), `uv sync`, `uv run ruff check .`, `uv run pytest`; set `DATABASE_URL` env var pointing to the service
+- [x] T005 [US1] Create `.github/workflows/ci.yml` with `frontend-ci` job: triggers on `push` and `pull_request` for all branches; working directory `apps/unihub/frontend/`; steps: checkout, setup Node (LTS) + pnpm, `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm typecheck`, `pnpm test --run`
+- [x] T006 [US1] Add `backend-ci` job to `.github/workflows/ci.yml` (parallel job, same trigger): working directory `apps/unihub/backend/`; steps: checkout, setup Python 3.12 + `uv`, start PostgreSQL 16 service (env: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`), `uv sync`, `uv run ruff check .`, `uv run pytest`; set `DATABASE_URL` env var pointing to the service
 
 **Checkpoint**: CI workflow created. Push to a feature branch to verify both jobs run.
 
@@ -62,8 +62,8 @@ description: "Task list for pipeline and release management feature"
 
 ### Implementation for User Story 2
 
-- [ ] T007 [US2] Create `.github/workflows/release.yml` with trigger on `push` to `main` only; add steps to detect version bump: fetch current `pyproject.toml` version using `grep`, fetch the same field from `HEAD~1` using `git show HEAD~1:apps/unihub/backend/pyproject.toml` (with `fetch-depth: 2` in checkout), compare and set `bumped=true/false` output
-- [ ] T008 [US2] Add conditional release step to `.github/workflows/release.yml`: runs only when `bumped=true`; formats the display tag (`vYYYY.MM.DD.N` with zero-padded month/day from the raw `YYYY.M.D.N` stored in `pyproject.toml`); creates the release with `gh release create <tag> --generate-notes --title "<tag>"`; requires `GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}`
+- [x] T007 [US2] Create `.github/workflows/release.yml` with trigger on `push` to `main` only; add steps to detect version bump: fetch current `pyproject.toml` version using `grep`, fetch the same field from `HEAD~1` using `git show HEAD~1:apps/unihub/backend/pyproject.toml` (with `fetch-depth: 2` in checkout), compare and set `bumped=true/false` output
+- [x] T008 [US2] Add conditional release step to `.github/workflows/release.yml`: runs only when `bumped=true`; formats the display tag (`vYYYY.MM.DD.N` with zero-padded month/day from the raw `YYYY.M.D.N` stored in `pyproject.toml`); creates the release with `gh release create <tag> --generate-notes --title "<tag>"`; requires `GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}`
 
 **Checkpoint**: Release workflow created. After merging a version-bumped commit to `main`, a GitHub release appears automatically.
 
@@ -77,17 +77,17 @@ description: "Task list for pipeline and release management feature"
 
 ### Backend — Version Endpoint (TDD: test before implementation)
 
-- [ ] T009 [US3] Write failing pytest test for `GET /api/v1/system/version/` in `apps/unihub/backend/tests/test_system.py`: assert HTTP 200, JSON body has `version` key, value starts with `"v"` and matches `settings.VERSION`; run `uv run pytest tests/test_system.py` to confirm it fails before implementation
-- [ ] T010 [US3] Implement `VersionView` in `apps/unihub/backend/system/views.py`: DRF `APIView` subclass, `permission_classes = []` (public, same as health), `get()` returns `Response({"version": settings.VERSION})`
-- [ ] T011 [US3] Define URL in `apps/unihub/backend/system/urls.py`: `path("version/", VersionView.as_view())`; register `system` in `INSTALLED_APPS` in `apps/unihub/backend/unihub/settings.py`; include `system.urls` under `api/v1/system/` in `apps/unihub/backend/unihub/urls.py`; run `uv run pytest tests/test_system.py` to confirm the test now passes
+- [x] T009 [US3] Write failing pytest test for `GET /api/v1/system/version/` in `apps/unihub/backend/tests/test_system.py`: assert HTTP 200, JSON body has `version` key, value starts with `"v"` and matches `settings.VERSION`; run `uv run pytest tests/test_system.py` to confirm it fails before implementation
+- [x] T010 [US3] Implement `VersionView` in `apps/unihub/backend/system/views.py`: DRF `APIView` subclass, `permission_classes = []` (public, same as health), `get()` returns `Response({"version": settings.VERSION})`
+- [x] T011 [US3] Define URL in `apps/unihub/backend/system/urls.py`: `path("version/", VersionView.as_view())`; register `system` in `INSTALLED_APPS` in `apps/unihub/backend/unihub/settings.py`; include `system.urls` under `api/v1/system/` in `apps/unihub/backend/unihub/urls.py`; run `uv run pytest tests/test_system.py` to confirm the test now passes
 
 ### Frontend — Service, i18n, Page, Navigation
 
-- [ ] T012 [P] [US3] Create `apps/unihub/frontend/src/services/unihub-backend/system.ts`: export `interface SystemVersion { version: string }` and `async function getSystemVersion(): Promise<SystemVersion>` calling `GET /api/v1/system/version/`; add `export * from './system'` to `apps/unihub/frontend/src/services/unihub-backend/index.ts`
-- [ ] T013 [P] [US3] Add `'menu.system.profile': 'Profile'` to `apps/unihub/frontend/src/locales/en-US/menu.ts` and `'menu.system.profile': '概覽'` to `apps/unihub/frontend/src/locales/zh-TW/menu.ts`
-- [ ] T014 [P] [US3] Add `'pages.system.profile.title': 'System Profile'` and `'pages.system.profile.version': 'Version'` to `apps/unihub/frontend/src/locales/en-US/pages.ts`; add corresponding Traditional Chinese values (`'系統概覽'`, `'版本'`) to `apps/unihub/frontend/src/locales/zh-TW/pages.ts`
-- [ ] T015 [US3] Create `apps/unihub/frontend/src/pages/system/ProfilePage.tsx`: use `useQuery` to call `getSystemVersion()`; render a `Descriptions` component (1 column) with a single item — label from `formatMessage({ id: 'pages.system.profile.version' })`, value from `data?.version`; use the empty-cell placeholder `<Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>` while loading or on error; wrap the page in a `Card` with `title` from `formatMessage({ id: 'pages.system.profile.title' })`
-- [ ] T016 [US3] Add `{ path: '/system/profile', name: t({ id: 'menu.system.profile' }) }` to the System section routes in `apps/unihub/frontend/src/components/AppShell/AppShell.tsx`; add `<Route path="/system/profile" element={<ProfilePage />} />` in `apps/unihub/frontend/src/App.tsx` (alongside the existing `/system/io` route); add the import for `ProfilePage`
+- [x] T012 [P] [US3] Create `apps/unihub/frontend/src/services/unihub-backend/system.ts`: export `interface SystemVersion { version: string }` and `async function getSystemVersion(): Promise<SystemVersion>` calling `GET /api/v1/system/version/`; add `export * from './system'` to `apps/unihub/frontend/src/services/unihub-backend/index.ts`
+- [x] T013 [P] [US3] Add `'menu.system.profile': 'Profile'` to `apps/unihub/frontend/src/locales/en-US/menu.ts` and `'menu.system.profile': '概覽'` to `apps/unihub/frontend/src/locales/zh-TW/menu.ts`
+- [x] T014 [P] [US3] Add `'pages.system.profile.title': 'System Profile'` and `'pages.system.profile.version': 'Version'` to `apps/unihub/frontend/src/locales/en-US/pages.ts`; add corresponding Traditional Chinese values (`'系統概覽'`, `'版本'`) to `apps/unihub/frontend/src/locales/zh-TW/pages.ts`
+- [x] T015 [US3] Create `apps/unihub/frontend/src/pages/system/ProfilePage.tsx`: use `useQuery` to call `getSystemVersion()`; render a `Descriptions` component (1 column) with a single item — label from `formatMessage({ id: 'pages.system.profile.version' })`, value from `data?.version`; use the empty-cell placeholder `<Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>` while loading or on error; wrap the page in a `Card` with `title` from `formatMessage({ id: 'pages.system.profile.title' })`
+- [x] T016 [US3] Add `{ path: '/system/profile', name: t({ id: 'menu.system.profile' }) }` to the System section routes in `apps/unihub/frontend/src/components/AppShell/AppShell.tsx`; add `<Route path="/system/profile" element={<ProfilePage />} />` in `apps/unihub/frontend/src/App.tsx` (alongside the existing `/system/io` route); add the import for `ProfilePage`
 
 **Checkpoint**: Navigate to `/system/profile` — version is displayed. Both locale switches show translated labels.
 
@@ -97,7 +97,7 @@ description: "Task list for pipeline and release management feature"
 
 **Purpose**: Quality loop validation across all changes.
 
-- [ ] T017 Run the full quality loop: backend (`cd apps/unihub/backend && uv run ruff check . && uv run pytest`) then frontend (`cd apps/unihub/frontend && pnpm lint && pnpm typecheck && pnpm test --run`); fix any issues before closing the feature
+- [x] T017 Run the full quality loop: backend (`cd apps/unihub/backend && uv run ruff check . && uv run pytest`) then frontend (`cd apps/unihub/frontend && pnpm lint && pnpm typecheck && pnpm test --run`); fix any issues before closing the feature
 
 ---
 

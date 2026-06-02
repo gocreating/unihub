@@ -70,6 +70,7 @@ export function AccountsPage() {
   const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
     { key: 'name', label: t({ id: 'common.name' }), dataType: 'text' },
     { key: 'currency', label: t({ id: 'common.currency' }), dataType: 'single_select' },
+    { key: 'color', label: t({ id: 'pages.finance.accounts.col.color' }), dataType: 'text' },
     { key: 'open_datetime', label: t({ id: 'pages.finance.accounts.col.openDatetime' }), dataType: 'date' },
     { key: 'close_datetime', label: t({ id: 'pages.finance.accounts.col.closeDatetime' }), dataType: 'date' },
   ], [t]);
@@ -225,7 +226,6 @@ export function AccountsPage() {
         ...makeSortProps('currency', t({ id: 'common.currency' }), sort),
       },
       color: {
-        title: t({ id: 'pages.finance.accounts.col.color' }),
         dataIndex: 'color',
         width: 72,
         fixed: getFixed('color'),
@@ -245,6 +245,7 @@ export function AccountsPage() {
           ) : (
             <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>
           ),
+        ...makeSortProps('color', t({ id: 'pages.finance.accounts.col.color' }), sort),
       },
       open_datetime: {
         dataIndex: 'open_datetime',

@@ -33,6 +33,8 @@ export function CurrenciesPage() {
   const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
     { key: 'code', label: t({ id: 'pages.finance.currencies.col.code' }), dataType: 'text' },
     { key: 'name', label: t({ id: 'common.name' }), dataType: 'text' },
+    { key: 'symbol', label: t({ id: 'pages.finance.currencies.col.symbol' }), dataType: 'text' },
+    { key: 'is_base_currency', label: t({ id: 'pages.finance.currencies.col.isBaseCurrency' }), dataType: 'boolean' },
   ], [t]);
 
   const columnDefs = useMemo<ColumnDef[]>(() => [
@@ -140,19 +142,19 @@ export function CurrenciesPage() {
         ...makeSortProps('name', t({ id: 'common.name' }), table.sort),
       },
       symbol: {
-        title: t({ id: 'pages.finance.currencies.col.symbol' }),
         dataIndex: 'symbol',
         ...widthForHeader('Symbol', dataWidths.symbol),
         fixed: getFixed('symbol'),
         render: (val) =>
           val ? String(val) : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
+        ...makeSortProps('symbol', t({ id: 'pages.finance.currencies.col.symbol' }), table.sort),
       },
       is_base_currency: {
-        title: t({ id: 'pages.finance.currencies.col.isBaseCurrency' }),
         dataIndex: 'is_base_currency',
         width: 130,
         fixed: getFixed('is_base_currency'),
         render: (_, record) => <Switch checked={record.is_base_currency} disabled size="small" />,
+        ...makeSortProps('is_base_currency', t({ id: 'pages.finance.currencies.col.isBaseCurrency' }), table.sort),
       },
       actions: {
         title: t({ id: 'common.actions' }),

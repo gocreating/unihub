@@ -10,7 +10,8 @@ import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
-import { EntityOffsetFooter } from '@/components/EntityToolbar';
+import { EntityOffsetFooter, useEntitySort } from '@/components/EntityToolbar';
+import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 import type { BalanceSheet } from '@/services/unihub-backend/finance';
 import {
   deleteBalanceSheet,
@@ -61,11 +62,18 @@ export function BalanceSheetsPage() {
     setExcludedFromNetWorth(new Set());
   }, [chartType]);
 
+  const sort = useEntitySort('balance-sheets');
+  const ordering = sort.toOrderingParam();
+
   const [limit, setLimit] = useState(10);
   const [offset, setOffset] = useState(0);
+
+  // Reset to page 1 when sort changes.
+  useEffect(() => { setOffset(0); }, [sort.activeRules]);
+
   const { data: sheetsData, isLoading } = useQuery({
-    queryKey: ['finance', 'balance-sheets', limit, offset],
-    queryFn: () => listBalanceSheets({ limit, offset, ordering: '-date' }),
+    queryKey: ['finance', 'balance-sheets', limit, offset, ordering],
+    queryFn: () => listBalanceSheets({ limit, offset, ordering: ordering ?? '-date' }),
   });
   const sheets = useMemo(() => sheetsData?.results ?? [], [sheetsData]);
 
@@ -408,14 +416,13 @@ export function BalanceSheetsPage() {
   const columns: ProColumns<BalanceSheet>[] = useMemo(
     () => [
       {
-        title: t({ id: 'common.date' }),
         dataIndex: 'date',
         ...widthForHeader('Date', Math.max(220, dataWidths.date)),
-        sorter: true,
         render: (val) => {
           const d = dayjs(val as string);
           return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
         },
+        ...makeSortProps('date', t({ id: 'common.date' }), sort),
       },
       ...(baseCurrency
         ? [{
@@ -473,7 +480,7 @@ export function BalanceSheetsPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, navigate, dataWidths, actionsColWidth, baseCurrency, sheetNetWorths, allBalancesLoading],
+    [t, navigate, dataWidths, actionsColWidth, baseCurrency, sheetNetWorths, allBalancesLoading, sort.sortOrderForField, sort.activeRules],
   );
 
   return (

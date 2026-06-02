@@ -29,6 +29,7 @@ export function ExchangeRatesPage() {
   const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
     { key: 'base_currency', label: t({ id: 'pages.finance.exchangeRates.col.base' }), dataType: 'single_select' },
     { key: 'quote_currency', label: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataType: 'single_select' },
+    { key: 'rate', label: t({ id: 'pages.finance.exchangeRates.col.rate' }), dataType: 'number' },
     { key: 'date', label: t({ id: 'common.date' }), dataType: 'date' },
   ], [t]);
 
@@ -154,12 +155,12 @@ export function ExchangeRatesPage() {
         ...makeSortProps('quote_currency', t({ id: 'pages.finance.exchangeRates.col.quote' }), table.sort),
       },
       rate: {
-        title: t({ id: 'pages.finance.exchangeRates.col.rate' }),
         dataIndex: 'rate',
         ...widthForHeader('Rate', Math.max(120, dataWidths.rate)),
         align: 'right',
         fixed: getFixed('rate'),
         render: (val) => formatAmount(val as string),
+        ...makeSortProps('rate', t({ id: 'pages.finance.exchangeRates.col.rate' }), table.sort),
       },
       date: {
         dataIndex: 'date',

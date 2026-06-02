@@ -66,10 +66,11 @@ async function mockAll(page: Page) {
     r.fulfill({ json: paginated(ACCOUNTS_RESULTS) }));
   await page.route('**/api/v1/finance/exchange-rates/**', (r) =>
     r.fulfill({ json: paginated(EXCHANGE_RATES_RESULTS) }));
-  await page.route('**/api/v1/finance/balance-sheets/**balances**', (r) =>
-    r.fulfill({ json: [] }));
+  // Register general route first, specific balances route last — Playwright applies LIFO
   await page.route('**/api/v1/finance/balance-sheets/**', (r) =>
     r.fulfill({ json: paginated(SHEETS_RESULTS) }));
+  await page.route('**/api/v1/finance/balance-sheets/**balances**', (r) =>
+    r.fulfill({ json: [] }));
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -148,7 +149,9 @@ test.describe('Screenshots — 008-entity-operations', () => {
     await mockAll(page);
     await page.goto('/finance/balance-sheets');
     await expect(page.locator('.ant-table-row').first()).toBeVisible({ timeout: 15_000 });
-    await page.waitForTimeout(800);
+    // Scroll to the table section so the toolbar is visible
+    await page.locator('.ant-pro-table').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(600);
     await page.screenshot({ path: ss('08-balance-sheets-toolbar.png'), fullPage: false });
   });
 

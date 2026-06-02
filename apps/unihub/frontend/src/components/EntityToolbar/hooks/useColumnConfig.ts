@@ -10,6 +10,8 @@ export interface UseColumnConfigReturn {
   apply: () => void;
   /** Discard pending changes and restore activeState to the panel. */
   cancel: () => void;
+  /** Reset both pendingState and activeState back to the initial default. */
+  reset: () => void;
   /** Update the pending state (called from panel UI). */
   setPendingState: (state: ColumnState) => void;
   /** Ordered visible columns derived from activeState. */
@@ -54,6 +56,12 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
     setPendingState(activeState);
   }, [activeState]);
 
+  const reset = useCallback(() => {
+    const defaultState: ColumnState = { columns: initialColumns, stickyLeft: false, stickyRight: false };
+    setActiveState(defaultState);
+    setPendingState(defaultState);
+  }, [initialColumns]);
+
   const visible = sortedVisible(activeState);
 
   return {
@@ -61,6 +69,7 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
     activeState,
     apply,
     cancel,
+    reset,
     setPendingState,
     visibleColumns: visible,
     firstColumnFixed: activeState.stickyLeft && visible.length > 0 ? 'left' : undefined,

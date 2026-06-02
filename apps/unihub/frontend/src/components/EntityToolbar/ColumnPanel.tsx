@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, Checkbox, Divider, Space, Switch, Typography, message } from 'antd';
 import { HolderOutlined } from '@ant-design/icons';
 import { useIntl } from 'react-intl';
@@ -8,11 +8,23 @@ export interface ColumnPanelProps {
   hook: UseColumnConfigReturn;
   onApply: () => void;
   onClose: () => void;
+  focusCancelOn?: number;
 }
 
-export function ColumnPanel({ hook, onApply, onClose }: ColumnPanelProps) {
+export function ColumnPanel({ hook, onApply, onClose, focusCancelOn }: ColumnPanelProps) {
   const { formatMessage: t } = useIntl();
-  const { pendingState, setPendingState, apply } = hook;
+  const { pendingState, setPendingState, apply, cancel, reset, isDirty, isCustomised } = hook;
+  const cancelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!focusCancelOn) return;
+    const btn = cancelRef.current?.querySelector<HTMLButtonElement>('button');
+    if (!btn) return;
+    btn.focus();
+    btn.style.boxShadow = '0 0 0 3px rgba(22,119,255,0.45)';
+    const t = setTimeout(() => { btn.style.boxShadow = ''; }, 700);
+    return () => clearTimeout(t);
+  }, [focusCancelOn]);
   const { columns, stickyLeft, stickyRight } = pendingState;
 
   const visibleCount = columns.filter((c) => c.visible).length;
@@ -126,10 +138,17 @@ export function ColumnPanel({ hook, onApply, onClose }: ColumnPanelProps) {
 
       <Divider style={{ margin: '8px 0' }} />
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Button size="small" onClick={onClose}>
-          {t({ id: 'common.entityOps.cancel' })}
-        </Button>
-        <Button size="small" type="primary" onClick={() => { apply(); onApply(); }}>
+        <Space>
+          <Button size="small" disabled={!isCustomised && !isDirty} onClick={() => { reset(); onApply(); }}>
+            {t({ id: 'common.entityOps.reset' })}
+          </Button>
+          <div ref={cancelRef}>
+            <Button size="small" onClick={() => { cancel(); onClose(); }}>
+              {t({ id: 'common.entityOps.cancel' })}
+            </Button>
+          </div>
+        </Space>
+        <Button size="small" type="primary" disabled={!isDirty} onClick={() => { apply(); onApply(); }}>
           {t({ id: 'common.entityOps.apply' })}
         </Button>
       </Space>

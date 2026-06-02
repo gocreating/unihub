@@ -18,19 +18,6 @@ import {
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
 
-const EXCHANGE_RATE_FILTERABLE_ATTRS: FilterableAttribute[] = [
-  { key: 'base_currency', label: 'Base Currency', dataType: 'single_select' },
-  { key: 'quote_currency', label: 'Quote Currency', dataType: 'single_select' },
-  { key: 'date', label: 'Date', dataType: 'date' },
-];
-
-const EXCHANGE_RATE_COLUMN_DEFS: ColumnDef[] = [
-  { key: 'base_currency', label: 'Base Currency', dataType: 'single_select', visible: true, order: 0 },
-  { key: 'quote_currency', label: 'Quote Currency', dataType: 'single_select', visible: true, order: 1 },
-  { key: 'rate', label: 'Rate', dataType: 'text', visible: true, order: 2 },
-  { key: 'date', label: 'Date', dataType: 'date', visible: true, order: 3 },
-];
-
 export function ExchangeRatesPage() {
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
@@ -38,7 +25,20 @@ export function ExchangeRatesPage() {
   const [editingRate, setEditingRate] = useState<ExchangeRate | null>(null);
   const [form] = Form.useForm();
 
-  const table = useEntityTable({ key: 'exchange-rates', filterableAttrs: EXCHANGE_RATE_FILTERABLE_ATTRS, columnDefs: EXCHANGE_RATE_COLUMN_DEFS });
+  const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
+    { key: 'base_currency', label: t({ id: 'pages.finance.exchangeRates.col.base' }), dataType: 'single_select' },
+    { key: 'quote_currency', label: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataType: 'single_select' },
+    { key: 'date', label: t({ id: 'common.date' }), dataType: 'date' },
+  ], [t]);
+
+  const columnDefs = useMemo<ColumnDef[]>(() => [
+    { key: 'base_currency', label: t({ id: 'pages.finance.exchangeRates.col.base' }), dataType: 'single_select', visible: true, order: 0 },
+    { key: 'quote_currency', label: t({ id: 'pages.finance.exchangeRates.col.quote' }), dataType: 'single_select', visible: true, order: 1 },
+    { key: 'rate', label: t({ id: 'pages.finance.exchangeRates.col.rate' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'date', label: t({ id: 'common.date' }), dataType: 'date', visible: true, order: 3 },
+  ], [t]);
+
+  const table = useEntityTable({ key: 'exchange-rates', filterableAttrs, columnDefs });
 
   const { data: ratesData, isLoading } = useQuery({
     queryKey: ['finance', 'exchange-rates', table.queryParams],
@@ -222,8 +222,8 @@ export function ExchangeRatesPage() {
         }
         headerTitle={
           <EntityToolbar
-            filterProps={{ attrs: EXCHANGE_RATE_FILTERABLE_ATTRS, hook: table.filter }}
-            sortProps={{ attrs: EXCHANGE_RATE_FILTERABLE_ATTRS, hook: table.sort }}
+            filterProps={{ attrs: filterableAttrs, hook: table.filter }}
+            sortProps={{ attrs: filterableAttrs, hook: table.sort }}
             columnProps={{ hook: table.cols }}
           />
         }

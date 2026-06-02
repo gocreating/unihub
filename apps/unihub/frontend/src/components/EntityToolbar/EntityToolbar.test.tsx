@@ -31,7 +31,7 @@ const makeSort = (overrides: Partial<UseEntitySortReturn> = {}): UseEntitySortRe
   ({
     isActive: false, isDirty: false,
     activeRules: [], pendingRules: [],
-    apply: vi.fn(), cancel: vi.fn(),
+    apply: vi.fn(), cancel: vi.fn(), reset: vi.fn(),
     handleHeaderClick: vi.fn(),
     sortOrderForField: vi.fn().mockReturnValue(null),
     toOrderingParam: vi.fn().mockReturnValue(undefined),
@@ -47,7 +47,7 @@ const makeColumns = (overrides: Partial<UseColumnConfigReturn> = {}): UseColumnC
     activeState: emptyColumnState,
     pendingState: emptyColumnState,
     firstColumnFixed: undefined, lastColumnFixed: undefined,
-    apply: vi.fn(), cancel: vi.fn(), setPendingState: vi.fn(),
+    apply: vi.fn(), cancel: vi.fn(), reset: vi.fn(), setPendingState: vi.fn(),
     ...overrides,
   }) as unknown as UseColumnConfigReturn;
 
@@ -104,5 +104,27 @@ describe('EntityToolbar button variant', () => {
   it('columns button is primary when columns are customised', () => {
     renderToolbar({ columnProps: { hook: makeColumns({ isCustomised: true }) } });
     expect(isPrimary(screen.getByRole('button', { name: /columns/i }))).toBe(true);
+  });
+});
+
+describe('EntityToolbar cross-panel dirty blocking', () => {
+  // T-07: clicking Sort button while Filter panel is dirty keeps Sort closed
+  it('does not open Sort panel when Filter panel is dirty', () => {
+    renderToolbar({
+      filterProps: { attrs: [], hook: makeFilter({ isDirty: true }) },
+    });
+    const sortBtn = screen.getByRole('button', { name: /sort/i });
+    fireEvent.click(sortBtn);
+    // Sort dropdown should NOT open (no sort panel content visible)
+    expect(document.querySelector('.ant-dropdown-open')).toBeNull();
+  });
+
+  // T-08: clicking Columns button while Sort panel is dirty keeps Columns closed
+  it('does not open Columns panel when Sort panel is dirty', () => {
+    renderToolbar({
+      sortProps: { attrs: [], hook: makeSort({ isDirty: true }) },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /columns/i }));
+    expect(document.querySelector('.ant-dropdown-open')).toBeNull();
   });
 });

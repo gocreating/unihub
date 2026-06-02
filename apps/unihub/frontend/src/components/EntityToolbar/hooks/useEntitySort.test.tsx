@@ -198,4 +198,20 @@ describe('useEntitySort', () => {
 
     expect(result.current.toOrderingParam()).toBe('name,-amount');
   });
+
+  // S-15: reset() clears both active and pending rules
+  it('reset() clears activeRules and resets pendingRules to empty placeholder', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.isActive).toBe(true);
+
+    act(() => { result.current.reset(); });
+
+    expect(result.current.activeRules).toHaveLength(0);
+    expect(result.current.isActive).toBe(false);
+    expect(result.current.pendingRules[0]!.field).toBe('');
+    expect(result.current.isDirty).toBe(false);
+  });
 });

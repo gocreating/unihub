@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Button, Divider, Input, InputNumber, Select } from 'antd';
+import React, { useEffect, useRef, useState } from 'react';
+import { Button, Divider, Input, InputNumber, Select, Space } from 'antd';
 import { useIntl } from 'react-intl';
 import { emptyRoot, emptyRule } from './hooks/useEntityFilter';
 import type { UseEntityFilterReturn } from './hooks/useEntityFilter';
@@ -220,8 +220,13 @@ function RuleRow({ rule, attrs, onUpdate, onRemove, canDrag, isDragging, onDragS
         />
       )}
 
-      {/* Remove rule */}
-      <button aria-label="✕" style={css.removeRuleBtn} onClick={onRemove}>✕</button>
+      {/* Remove rule — disabled when it is the only item in the group */}
+      <button
+        aria-label="✕"
+        disabled={!canDrag}
+        style={{ ...css.removeRuleBtn, opacity: canDrag ? 1 : 0.3, cursor: canDrag ? 'pointer' : 'not-allowed' }}
+        onClick={canDrag ? onRemove : undefined}
+      >✕</button>
     </div>
   );
 }
@@ -234,9 +239,10 @@ interface GroupCardProps {
   depth: number;         // 0 = root, 1 = nested
   onUpdate: (g: FilterGroupItem) => void;
   onRemove: (() => void) | null; // null = root (can't be removed)
+  canDelete?: boolean;   // whether the ✕ remove button is enabled (default true)
 }
 
-function GroupCard({ group, attrs, depth, onUpdate, onRemove }: GroupCardProps) {
+function GroupCard({ group, attrs, depth, onUpdate, onRemove, canDelete = true }: GroupCardProps) {
   const { formatMessage: t } = useIntl();
   const [dragFromId, setDragFromId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
@@ -250,8 +256,7 @@ function GroupCard({ group, attrs, depth, onUpdate, onRemove }: GroupCardProps) 
     onUpdate({ ...group, rules: group.rules.map((r) => (r.id === id ? updated : r)) });
 
   const removeItem = (id: string) => {
-    const next = group.rules.filter((r) => r.id !== id);
-    onUpdate({ ...group, rules: next.length > 0 ? next : [emptyRule()] });
+    onUpdate({ ...group, rules: group.rules.filter((r) => r.id !== id) });
   };
 
   const addRule = () =>
@@ -313,13 +318,14 @@ function GroupCard({ group, attrs, depth, onUpdate, onRemove }: GroupCardProps) 
 
   return (
     <div style={{ position: 'relative' }}>
-      {/* Circular remove button — only for nested groups */}
+      {/* Circular remove button — only for nested groups; disabled when it is the only item */}
       {onRemove && (
         <button
           aria-label="✕"
           title={t({ id: 'common.entityOps.filter.removeConditionGroup' })}
-          onClick={onRemove}
-          style={css.removeGroupBtn(depth)}
+          disabled={!canDelete}
+          onClick={canDelete ? onRemove : undefined}
+          style={{ ...css.removeGroupBtn(depth), opacity: canDelete ? 1 : 0.3, cursor: canDelete ? 'pointer' : 'not-allowed' }}
         >
           ✕
         </button>
@@ -373,6 +379,7 @@ function GroupCard({ group, attrs, depth, onUpdate, onRemove }: GroupCardProps) 
                         depth={depth + 1}
                         onUpdate={(updated) => updateItem(item.id, updated)}
                         onRemove={() => removeItem(item.id)}
+                        canDelete={canDrag}
                       />
                     </div>
                   </div>
@@ -421,14 +428,26 @@ export interface FilterPanelProps {
   hook: UseEntityFilterReturn;
   onApply: () => void;
   onClose: () => void;
+  focusCancelOn?: number;
 }
 
-export function FilterPanel({ attrs, hook, onApply, onClose }: FilterPanelProps) {
+export function FilterPanel({ attrs, hook, onApply, onClose, focusCancelOn }: FilterPanelProps) {
   const { formatMessage: t } = useIntl();
-  const { pendingRoot, setPendingRoot, apply, cancel } = hook;
+  const { pendingRoot, setPendingRoot, apply, cancel, reset, isDirty, isActive } = hook;
+  const cancelRef = useRef<HTMLDivElement>(null);
 
-  // Initialise with an empty root if somehow pendingRoot is missing
+  useEffect(() => {
+    if (!focusCancelOn) return;
+    const btn = cancelRef.current?.querySelector<HTMLButtonElement>('button');
+    if (!btn) return;
+    btn.focus();
+    btn.style.boxShadow = '0 0 0 3px rgba(22,119,255,0.45)';
+    const t = setTimeout(() => { btn.style.boxShadow = ''; }, 700);
+    return () => clearTimeout(t);
+  }, [focusCancelOn]);
+
   const root: FilterGroupItem = pendingRoot ?? emptyRoot();
+  const resetDisabled = !isActive && !isDirty;
 
   return (
     <div
@@ -451,10 +470,17 @@ export function FilterPanel({ attrs, hook, onApply, onClose }: FilterPanelProps)
       <Divider style={{ margin: '10px 0 8px' }} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Button size="small" onClick={() => { cancel(); onClose(); }}>
-          {t({ id: 'common.entityOps.cancel' })}
-        </Button>
-        <Button size="small" type="primary" onClick={() => { apply(); onApply(); }}>
+        <Space>
+          <Button size="small" disabled={resetDisabled} onClick={() => { reset(); onApply(); }}>
+            {t({ id: 'common.entityOps.reset' })}
+          </Button>
+          <div ref={cancelRef}>
+            <Button size="small" onClick={() => { cancel(); onClose(); }}>
+              {t({ id: 'common.entityOps.cancel' })}
+            </Button>
+          </div>
+        </Space>
+        <Button size="small" type="primary" disabled={!isDirty} onClick={() => { apply(); onApply(); }}>
           {t({ id: 'common.entityOps.apply' })}
         </Button>
       </div>

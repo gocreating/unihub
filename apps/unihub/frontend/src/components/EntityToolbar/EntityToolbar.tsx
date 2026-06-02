@@ -30,6 +30,9 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [columnOpen, setColumnOpen] = useState(false);
+  const [filterCancelToken, setFilterCancelToken] = useState(0);
+  const [sortCancelToken, setSortCancelToken] = useState(0);
+  const [columnCancelToken, setColumnCancelToken] = useState(0);
 
   // onApply: just close the dropdown — no cancel. Called after apply() commits state.
   const applyAndCloseFilter = useCallback(() => {
@@ -61,19 +64,22 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
   }, [columnProps.hook]);
 
   const handleFilterOpenChange = (open: boolean) => {
-    if (!open && filterProps.hook.isDirty) return;
+    if (open && (sortProps.hook.isDirty || columnProps.hook.isDirty)) return;
+    if (!open && filterProps.hook.isDirty) { setFilterCancelToken((n) => n + 1); return; }
     setFilterOpen(open);
     if (!open) filterProps.hook.cancel();
   };
 
   const handleSortOpenChange = (open: boolean) => {
-    if (!open && sortProps.hook.isDirty) return;
+    if (open && (filterProps.hook.isDirty || columnProps.hook.isDirty)) return;
+    if (!open && sortProps.hook.isDirty) { setSortCancelToken((n) => n + 1); return; }
     setSortOpen(open);
     if (!open) sortProps.hook.cancel();
   };
 
   const handleColumnOpenChange = (open: boolean) => {
-    if (!open && columnProps.hook.isDirty) return;
+    if (open && (filterProps.hook.isDirty || sortProps.hook.isDirty)) return;
+    if (!open && columnProps.hook.isDirty) { setColumnCancelToken((n) => n + 1); return; }
     setColumnOpen(open);
     if (!open) columnProps.hook.cancel();
   };
@@ -91,6 +97,7 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
             hook={filterProps.hook}
             onApply={applyAndCloseFilter}
             onClose={closeFilter}
+            focusCancelOn={filterCancelToken}
           />
         )}
       >
@@ -113,6 +120,7 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
             hook={sortProps.hook}
             onApply={applyAndCloseSort}
             onClose={closeSort}
+            focusCancelOn={sortCancelToken}
           />
         )}
       >
@@ -134,6 +142,7 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
             hook={columnProps.hook}
             onApply={applyAndCloseColumn}
             onClose={closeColumn}
+            focusCancelOn={columnCancelToken}
           />
         )}
       >

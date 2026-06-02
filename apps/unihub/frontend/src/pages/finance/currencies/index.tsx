@@ -15,18 +15,6 @@ import {
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
 
-const CURRENCY_FILTERABLE_ATTRS: FilterableAttribute[] = [
-  { key: 'code', label: 'Code', dataType: 'text' },
-  { key: 'name', label: 'Name', dataType: 'text' },
-];
-
-const CURRENCY_COLUMN_DEFS: ColumnDef[] = [
-  { key: 'code', label: 'Code', dataType: 'text', visible: true, order: 0 },
-  { key: 'name', label: 'Name', dataType: 'text', visible: true, order: 1 },
-  { key: 'symbol', label: 'Symbol', dataType: 'text', visible: true, order: 2 },
-  { key: 'is_base_currency', label: 'Base Currency', dataType: 'boolean', visible: true, order: 3 },
-];
-
 interface CurrencyFormValues {
   code: string;
   name: string;
@@ -41,7 +29,19 @@ export function CurrenciesPage() {
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
   const [form] = Form.useForm<CurrencyFormValues>();
 
-  const table = useEntityTable({ key: 'currencies', filterableAttrs: CURRENCY_FILTERABLE_ATTRS, columnDefs: CURRENCY_COLUMN_DEFS });
+  const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
+    { key: 'code', label: t({ id: 'pages.finance.currencies.col.code' }), dataType: 'text' },
+    { key: 'name', label: t({ id: 'common.name' }), dataType: 'text' },
+  ], [t]);
+
+  const columnDefs = useMemo<ColumnDef[]>(() => [
+    { key: 'code', label: t({ id: 'pages.finance.currencies.col.code' }), dataType: 'text', visible: true, order: 0 },
+    { key: 'name', label: t({ id: 'common.name' }), dataType: 'text', visible: true, order: 1 },
+    { key: 'symbol', label: t({ id: 'pages.finance.currencies.col.symbol' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'is_base_currency', label: t({ id: 'pages.finance.currencies.col.isBaseCurrency' }), dataType: 'boolean', visible: true, order: 3 },
+  ], [t]);
+
+  const table = useEntityTable({ key: 'currencies', filterableAttrs, columnDefs });
 
   const { data: currenciesData, isLoading } = useQuery({
     queryKey: ['finance', 'currencies', table.queryParams],
@@ -204,8 +204,8 @@ export function CurrenciesPage() {
         }
         headerTitle={
           <EntityToolbar
-            filterProps={{ attrs: CURRENCY_FILTERABLE_ATTRS, hook: table.filter }}
-            sortProps={{ attrs: CURRENCY_FILTERABLE_ATTRS, hook: table.sort }}
+            filterProps={{ attrs: filterableAttrs, hook: table.filter }}
+            sortProps={{ attrs: filterableAttrs, hook: table.sort }}
             columnProps={{ hook: table.cols }}
           />
         }

@@ -167,7 +167,6 @@ describe('useColumnConfig', () => {
       result.current.setPendingState({ ...result.current.pendingState, stickyLeft: true });
     });
 
-    // Still false until apply
     expect(result.current.isCustomised).toBe(false);
 
     act(() => {
@@ -175,5 +174,25 @@ describe('useColumnConfig', () => {
     });
 
     expect(result.current.isCustomised).toBe(true);
+  });
+
+  // C-11: reset() restores both activeState and pendingState to the initial defaults
+  it('reset() restores both states to initial and clears isCustomised', () => {
+    const cols = makeColumns();
+    const { result } = renderHook(() => useColumnConfig(cols));
+
+    // Apply a customisation
+    act(() => {
+      result.current.setPendingState({ ...result.current.pendingState, stickyLeft: true });
+    });
+    act(() => { result.current.apply(); });
+    expect(result.current.isCustomised).toBe(true);
+
+    act(() => { result.current.reset(); });
+
+    expect(result.current.activeState.stickyLeft).toBe(false);
+    expect(result.current.pendingState.stickyLeft).toBe(false);
+    expect(result.current.isCustomised).toBe(false);
+    expect(result.current.isDirty).toBe(false);
   });
 });

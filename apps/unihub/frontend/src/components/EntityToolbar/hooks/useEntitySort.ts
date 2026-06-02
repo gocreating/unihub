@@ -8,6 +8,7 @@ export interface UseEntitySortReturn {
   activeRules: SortRule[];
   apply: () => void;
   cancel: () => void;
+  reset: () => void;
   setPendingRules: (rules: SortRule[]) => void;
   handleHeaderClick: (field: string) => void;
   sortOrderForField: (field: string) => 'ascend' | 'descend' | null;
@@ -51,6 +52,11 @@ export function useEntitySort(_key: string): UseEntitySortReturn {
     setPendingRules(initialPending(activeRules));
   }, [activeRules]);
 
+  const reset = useCallback(() => {
+    setActiveRules([]);
+    setPendingRules([EMPTY_RULE]);
+  }, []);
+
   const handleHeaderClick = useCallback((field: string) => {
     setActiveRules((prev) => {
       const existing = prev.find((r) => r.field === field);
@@ -90,6 +96,7 @@ export function useEntitySort(_key: string): UseEntitySortReturn {
     activeRules,
     apply,
     cancel,
+    reset,
     setPendingRules,
     handleHeaderClick,
     sortOrderForField,

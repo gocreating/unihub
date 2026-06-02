@@ -95,19 +95,25 @@ describe('FilterPanel', () => {
     );
   });
 
-  // FP-08b: removing the last rule auto-resets to one empty rule
-  it('auto-resets to one empty rule when the last rule is removed', () => {
+  // FP-08b: ✕ button disabled when there is only one rule (no auto-reset needed)
+  it('disables the ✕ button when there is only one rule', () => {
     const root = makeRoot({ rules: [emptyRule()] });
-    const { hook } = renderPanel({ pendingRoot: root });
-    fireEvent.click(screen.getByRole('button', { name: /✕/i }));
-    const call = (hook.setPendingRoot as ReturnType<typeof vi.fn>).mock.calls[0]![0] as FilterGroupItem;
-    expect(call.rules).toHaveLength(1);
-    expect((call.rules[0] as { attr: string }).attr).toBe('');
+    renderPanel({ pendingRoot: root });
+    const deleteBtn = screen.getByRole('button', { name: /✕/i });
+    expect(deleteBtn).toBeDisabled();
   });
 
-  // FP-05: Apply button calls apply() and onApply()
+  // FP-08c: ✕ button enabled when there are multiple rules
+  it('enables the ✕ button when there are multiple rules', () => {
+    const root = makeRoot({ rules: [emptyRule(), emptyRule()] });
+    renderPanel({ pendingRoot: root });
+    const deleteBtns = screen.getAllByRole('button', { name: /✕/i });
+    expect(deleteBtns[0]).not.toBeDisabled();
+  });
+
+  // FP-05: Apply button calls apply() and onApply() (needs isDirty=true to be enabled)
   it('calls apply() and onApply() when Apply is clicked', () => {
-    const { hook, onApply } = renderPanel();
+    const { hook, onApply } = renderPanel({ isDirty: true });
     fireEvent.click(screen.getByRole('button', { name: /apply/i }));
     expect(hook.apply).toHaveBeenCalled();
     expect(onApply).toHaveBeenCalled();
@@ -130,10 +136,12 @@ describe('FilterPanel', () => {
     expect(screen.getByText(/no value needed/i)).toBeInTheDocument();
   });
 
-  // FP-08: removing a rule calls setPendingRoot without that rule
+  // FP-08: removing a rule calls setPendingRoot without that rule (needs 2 rules so button is enabled)
   it('removes a rule when its ✕ button is clicked', () => {
-    const { hook } = renderPanel();
-    fireEvent.click(screen.getAllByRole('button', { name: /✕/i })[0]!);
+    const root = makeRoot({ rules: [emptyRule(), emptyRule()] });
+    const { hook } = renderPanel({ pendingRoot: root });
+    const deleteBtns = screen.getAllByRole('button', { name: /✕/i });
+    fireEvent.click(deleteBtns[0]!);
     const call = (hook.setPendingRoot as ReturnType<typeof vi.fn>).mock.calls[0]![0] as FilterGroupItem;
     expect(call.rules).toHaveLength(1);
   });
@@ -170,15 +178,92 @@ describe('FilterPanel', () => {
     expect(groupBtns).toHaveLength(1);
   });
 
-  // FP-12: nested group has a circular ✕ remove button
-  it('nested group has a remove button', () => {
+  // FP-Reset-01: Reset button is present
+  it('renders a Reset button', () => {
+    renderPanel();
+    expect(screen.getByRole('button', { name: /reset/i })).toBeInTheDocument();
+  });
+
+  // FP-Reset-02: Reset calls hook.reset() and onApply() (needs isActive=true to be enabled)
+  it('Reset button calls hook.reset() and onApply()', () => {
+    const { hook, onApply } = renderPanel({ isActive: true });
+    fireEvent.click(screen.getByRole('button', { name: /reset/i }));
+    expect(hook.reset).toHaveBeenCalled();
+    expect(onApply).toHaveBeenCalled();
+  });
+
+  // FP-Focus-01: Cancel button gets a visible box-shadow highlight when focusCancelOn changes
+  it('highlights the Cancel button when focusCancelOn changes', () => {
+    const { rerender } = render(
+      <FilterPanel attrs={ATTRS} hook={makeHook()} onApply={vi.fn()} onClose={vi.fn()} focusCancelOn={0} />,
+      { wrapper },
+    );
+    rerender(
+      <FilterPanel attrs={ATTRS} hook={makeHook()} onApply={vi.fn()} onClose={vi.fn()} focusCancelOn={1} />,
+    );
+    const cancelBtn = screen.getByRole('button', { name: /cancel/i });
+    expect(cancelBtn.style.boxShadow).not.toBe('');
+  });
+
+  // FP-Apply-Disabled-01: Apply disabled when not dirty
+  it('Apply button is disabled when isDirty is false', () => {
+    renderPanel({ isDirty: false });
+    expect(screen.getByRole('button', { name: /apply/i })).toBeDisabled();
+  });
+
+  // FP-Apply-Disabled-02: Apply enabled when dirty
+  it('Apply button is enabled when isDirty is true', () => {
+    renderPanel({ isDirty: true });
+    expect(screen.getByRole('button', { name: /apply/i })).not.toBeDisabled();
+  });
+
+  // FP-Reset-Disabled-01: Reset disabled when state is already default (nothing active, not dirty)
+  it('Reset button is disabled when isActive is false and isDirty is false', () => {
+    renderPanel({ isActive: false, isDirty: false });
+    expect(screen.getByRole('button', { name: /reset/i })).toBeDisabled();
+  });
+
+  // FP-Reset-Disabled-02: Reset enabled when there are active filters
+  it('Reset button is enabled when isActive is true', () => {
+    renderPanel({ isActive: true, isDirty: false });
+    expect(screen.getByRole('button', { name: /reset/i })).not.toBeDisabled();
+  });
+
+  // FP-Reset-Disabled-03: Reset enabled when panel is dirty (pending changes to clear)
+  it('Reset button is enabled when isDirty is true', () => {
+    renderPanel({ isActive: false, isDirty: true });
+    expect(screen.getByRole('button', { name: /reset/i })).not.toBeDisabled();
+  });
+
+  // FP-12: nested group ✕ disabled when it is the only item in the parent
+  it('disables nested group ✕ when it is the only item in the parent group', () => {
     const root = makeRoot({
       rules: [
         { id: 'g1', type: 'group', logic: 'or', rules: [emptyRule()] } satisfies FilterGroupItem,
       ],
     });
     renderPanel({ pendingRoot: root });
-    expect(screen.getAllByRole('button', { name: /✕/i }).length).toBeGreaterThan(0);
+    // The circular group-remove button has a title attribute — check it is disabled
+    const groupRemoveBtn = document.querySelector<HTMLButtonElement>('button[title]');
+    expect(groupRemoveBtn).not.toBeNull();
+    expect(groupRemoveBtn).toBeDisabled();
+  });
+
+  // FP-12b: nested group ✕ enabled when parent has multiple items
+  it('enables nested group ✕ when parent group has multiple items', () => {
+    const root = makeRoot({
+      rules: [
+        emptyRule(),
+        { id: 'g1', type: 'group', logic: 'or', rules: [emptyRule()] } satisfies FilterGroupItem,
+      ],
+    });
+    renderPanel({ pendingRoot: root });
+    // The nested group's circular ✕ (the one with title attr) should be enabled
+    const groupRemoveBtn = document.querySelector<HTMLButtonElement>(
+      'button[title]',
+    );
+    expect(groupRemoveBtn).not.toBeNull();
+    expect(groupRemoveBtn).not.toBeDisabled();
   });
 
   // ── Drag & drop ─────────────────────────────────────────────────────────────

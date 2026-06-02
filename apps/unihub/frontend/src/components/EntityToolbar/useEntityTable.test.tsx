@@ -62,6 +62,24 @@ describe('useEntityTable', () => {
     expect(result.current.queryParams.offset).toBe(0);
   });
 
+  // queryParams.ordering drives the API call. After sort.reset() it must be
+  // undefined so the backend returns records in its default (initial) order.
+  it('queryParams.ordering is set after sort and becomes undefined after sort.reset()', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+    // Apply a sort via panel
+    act(() => { result.current.sort.setPendingRules([{ field: 'name', direction: 'asc' }]); });
+    act(() => { result.current.sort.apply(); });
+    expect(result.current.queryParams.ordering).toBe('name');
+
+    // Reset — ordering must be cleared so the API is called without ?ordering=...
+    act(() => { result.current.sort.reset(); });
+    expect(result.current.queryParams.ordering).toBeUndefined();
+    expect(result.current.sort.isActive).toBe(false);
+  });
+
   it('offset resets to 0 when filter is applied', async () => {
     const { result } = renderHook(
       () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),

@@ -1,11 +1,11 @@
-"""DRF filter backend for multi-condition, multi-group entity filtering."""
+"""DRF filter backends for entity filtering and null-aware ordering."""
 
 import json
 from typing import Any
 
-from django.db.models import Q, QuerySet
+from django.db.models import F, Q, QuerySet
 from rest_framework.exceptions import ValidationError
-from rest_framework.filters import BaseFilterBackend
+from rest_framework.filters import BaseFilterBackend, OrderingFilter
 from rest_framework.request import Request
 
 
@@ -31,6 +31,56 @@ _OP_SUFFIX: dict[str, str | None] = {
     "date_before": "__lt",
     "date_after": "__gt",
 }
+
+
+_NULLS_FIRST_SUFFIX = "__nullsfirst"
+_NULLS_LAST_SUFFIX = "__nullslast"
+
+
+class NullsOrderingFilter(OrderingFilter):
+    """Extends DRF's OrderingFilter to support NULLS FIRST / NULLS LAST.
+
+    Accepts ``__nullsfirst`` and ``__nullslast`` suffixes on ordering fields::
+
+        ?ordering=close_datetime__nullsfirst   → ORDER BY close_datetime ASC NULLS FIRST
+        ?ordering=-close_datetime__nullslast   → ORDER BY close_datetime DESC NULLS LAST
+
+    Validation still uses ``ordering_fields`` — only the clean field name (suffix
+    stripped) is checked, so ``close_datetime__nullsfirst`` is accepted if
+    ``close_datetime`` is in ``ordering_fields``.
+    """
+
+    def _parse_term(self, term: str) -> tuple[str, bool, str | None]:
+        """Return (field_name, is_desc, nulls_spec) for one ordering token."""
+        desc = term.startswith("-")
+        base = term[1:] if desc else term
+        if base.endswith(_NULLS_FIRST_SUFFIX):
+            return base[: -len(_NULLS_FIRST_SUFFIX)], desc, "first"
+        if base.endswith(_NULLS_LAST_SUFFIX):
+            return base[: -len(_NULLS_LAST_SUFFIX)], desc, "last"
+        return base, desc, None
+
+    def remove_invalid_fields(self, queryset, fields, view, request):
+        valid_names = {item[0] for item in self.get_valid_fields(queryset, view, {"request": request})}
+        return [term for term in fields if self._parse_term(term)[0] in valid_names]
+
+    def filter_queryset(self, request, queryset, view):
+        orderings = self.get_ordering(request, queryset, view)
+        if not orderings:
+            return queryset
+        expressions = []
+        for term in orderings:
+            field, desc, nulls_spec = self._parse_term(term)
+            if nulls_spec:
+                f = F(field)
+                if nulls_spec == "first":
+                    expr = f.desc(nulls_first=True) if desc else f.asc(nulls_first=True)
+                else:
+                    expr = f.desc(nulls_last=True) if desc else f.asc(nulls_last=True)
+                expressions.append(expr)
+            else:
+                expressions.append(term)
+        return queryset.order_by(*expressions)
 
 
 class EntityFilterBackend(BaseFilterBackend):

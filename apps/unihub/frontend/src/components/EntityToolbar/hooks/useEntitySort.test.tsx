@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useEntitySort } from './useEntitySort';
+import { useEntitySort, rulesToOrdering } from './useEntitySort';
 
 
 describe('useEntitySort', () => {
@@ -306,5 +306,55 @@ describe('useEntitySort', () => {
 
     act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc' }]); });
     expect(result.current.isDirty).toBe(true);
+  });
+
+  // N-01: nulls suffix is encoded in toOrderingParam — required for backend NULLS FIRST/LAST
+  it('toOrderingParam encodes nulls:first as __nullsfirst suffix', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc', nulls: 'first' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.toOrderingParam()).toBe('name__nullsfirst');
+  });
+
+  it('toOrderingParam encodes nulls:last as __nullslast suffix', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'desc', nulls: 'last' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.toOrderingParam()).toBe('-name__nullslast');
+  });
+
+  it('toOrderingParam omits nulls suffix when nulls is undefined', () => {
+    const { result } = renderHook(() => useEntitySort('test'));
+    act(() => { result.current.setPendingRules([{ field: 'name', direction: 'asc' }]); });
+    act(() => { result.current.apply(); });
+    expect(result.current.toOrderingParam()).toBe('name');
+  });
+
+  it('rulesToOrdering encodes nulls in multi-field sort', () => {
+    expect(rulesToOrdering([
+      { field: 'name', direction: 'asc', nulls: 'first' },
+      { field: 'amount', direction: 'desc', nulls: 'last' },
+    ])).toBe('name__nullsfirst,-amount__nullslast');
+  });
+
+  // I-01: initialActiveRules seeds both activeRules and pendingRules
+  it('initialActiveRules seeds activeRules and pendingRules on mount', () => {
+    const { result } = renderHook(() =>
+      useEntitySort('balance-sheets', [{ field: 'date', direction: 'desc' }]),
+    );
+    expect(result.current.activeRules).toHaveLength(1);
+    expect(result.current.activeRules[0]!.field).toBe('date');
+    expect(result.current.activeRules[0]!.direction).toBe('desc');
+    expect(result.current.isActive).toBe(true);
+    expect(result.current.isDirty).toBe(false);
+    expect(result.current.toOrderingParam()).toBe('-date');
+  });
+
+  it('initialActiveRules: sortOrderForField reflects initial rules immediately', () => {
+    const { result } = renderHook(() =>
+      useEntitySort('balance-sheets', [{ field: 'date', direction: 'desc' }]),
+    );
+    expect(result.current.sortOrderForField('date')).toBe('descend');
+    expect(result.current.sortOrderForField('name')).toBeNull();
   });
 });

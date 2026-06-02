@@ -74,7 +74,7 @@ export function BalanceSheetsPage() {
   ], [t]);
 
   const filter = useEntityFilter('balance-sheets');
-  const sort = useEntitySort('balance-sheets');
+  const sort = useEntitySort('balance-sheets', [{ field: 'date', direction: 'desc' }]);
   const cols = useColumnConfig(columnDefs);
   const ordering = sort.toOrderingParam();
   const filters = filter.toApiParam();

@@ -24,7 +24,11 @@ export interface UseEntitySortReturn {
 function rulesToOrdering(rules: SortState): string | undefined {
   const filled = rules.filter((r) => r.field);
   if (filled.length === 0) return undefined;
-  return filled.map((r) => (r.direction === 'desc' ? `-${r.field}` : r.field)).join(',');
+  return filled.map((r) => {
+    const prefix = r.direction === 'desc' ? '-' : '';
+    const nullsSuffix = r.nulls ? `__nulls${r.nulls}` : '';
+    return `${prefix}${r.field}${nullsSuffix}`;
+  }).join(',');
 }
 
 /** Serialize filled rules for dirty comparison — includes nulls which rulesToOrdering omits. */
@@ -42,7 +46,11 @@ function orderingToRules(ordering: string): SortState {
     .filter(Boolean)
     .map((f) => {
       const desc = f.startsWith('-');
-      return { field: desc ? f.slice(1) : f, direction: desc ? 'desc' : 'asc' } as SortRule;
+      let field = desc ? f.slice(1) : f;
+      let nulls: 'first' | 'last' | undefined;
+      if (field.endsWith('__nullsfirst')) { field = field.slice(0, -'__nullsfirst'.length); nulls = 'first'; }
+      else if (field.endsWith('__nullslast')) { field = field.slice(0, -'__nullslast'.length); nulls = 'last'; }
+      return { field, direction: desc ? 'desc' : 'asc', ...(nulls ? { nulls } : {}) } as SortRule;
     });
 }
 
@@ -50,10 +58,11 @@ function initialPending(active: SortState): SortState {
   return active.length > 0 ? active : [EMPTY_RULE];
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function useEntitySort(_key: string): UseEntitySortReturn {
-  const [activeRules, setActiveRules] = useState<SortState>([]);
-  const [pendingRules, setPendingRules] = useState<SortState>([EMPTY_RULE]);
+export function useEntitySort(_key: string, initialActiveRules: SortRule[] = []): UseEntitySortReturn {
+  const [activeRules, setActiveRules] = useState<SortState>(initialActiveRules);
+  const [pendingRules, setPendingRules] = useState<SortState>(
+    initialActiveRules.length > 0 ? initialActiveRules : [EMPTY_RULE],
+  );
   const [panelApplyCount, setPanelApplyCount] = useState(0);
 
   const apply = useCallback(() => {

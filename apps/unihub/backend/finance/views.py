@@ -2,11 +2,11 @@ from decimal import Decimal
 
 from django.db.models import Q
 from django.utils.dateparse import parse_datetime
-from rest_framework import filters, status, viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from core.filters import EntityFilterBackend
+from core.filters import EntityFilterBackend, NullsOrderingFilter
 from core.pagination import EntityOffsetPagination
 from finance.models import Account, Balance, BalanceSheet, Currency, ExchangeRate
 from finance.serializers import (
@@ -22,7 +22,7 @@ from finance.serializers import (
 class CurrencyViewSet(viewsets.ModelViewSet):
     queryset = Currency.objects.all()
     serializer_class = CurrencySerializer
-    filter_backends = [EntityFilterBackend, filters.OrderingFilter]
+    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
     filterable_fields = {
         "code": {"lookup": "code", "type": "text"},
         "name": {"lookup": "name", "type": "text"},
@@ -38,7 +38,7 @@ class CurrencyViewSet(viewsets.ModelViewSet):
 class AccountViewSet(viewsets.ModelViewSet):
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
-    filter_backends = [EntityFilterBackend, filters.OrderingFilter]
+    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
         "currency": {"lookup": "currency", "type": "single_select"},
@@ -82,7 +82,7 @@ class AccountViewSet(viewsets.ModelViewSet):
 class BalanceSheetViewSet(viewsets.ModelViewSet):
     queryset = BalanceSheet.objects.all()
     serializer_class = BalanceSheetSerializer
-    filter_backends = [EntityFilterBackend, filters.OrderingFilter]
+    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
     filterable_fields = {
         "date": {"lookup": "date", "type": "date"},
     }
@@ -156,7 +156,7 @@ class BalanceSheetViewSet(viewsets.ModelViewSet):
 class ExchangeRateViewSet(viewsets.ModelViewSet):
     queryset = ExchangeRate.objects.all()
     serializer_class = ExchangeRateSerializer
-    filter_backends = [EntityFilterBackend, filters.OrderingFilter]
+    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
     filterable_fields = {
         "base_currency": {"lookup": "base_currency", "type": "single_select"},
         "quote_currency": {"lookup": "quote_currency", "type": "single_select"},

@@ -1,6 +1,6 @@
 # Claude Development Guidelines — unihub Monorepo
 
-**unihub** is a single, growing dashboard that serves as a personal central hub — one place to manage and visualize all dimensions of a user's daily life. As the project evolves, new domains get connected to the hub: finance, geography, travel, health, tasks, and whatever comes next. The dashboard frontend is the consistent interaction surface; backends and data sources expand behind it over time.
+**unihub** is a single, growing dashboard that serves as a personal central hub — one place to manage and visualize all dimensions of a user's daily life. As the project evolves, new domains get connected to the hub: finance, visiting, language, people, music, and whatever comes next. The dashboard frontend is the consistent interaction surface; backends and data sources expand behind it over time.
 
 > **Reference implementation**: `ov-fleet` (`/Users/gocreating/projects/OverviewCorporation/ov-pro-tools/apps/ov-fleet`) — the primary architectural reference. Follow its patterns for backend layout, service layer, and frontend organization.
 
@@ -14,11 +14,15 @@ apps/
     frontend/    # Single hub SPA
     backend/     # Single Django project — one DB, domain apps inside
       unihub/    # Django project (settings, urls, wsgi)
+      core/      # Shared infrastructure (filters, pagination, permissions)
       finance/   # Django app — finance entities
       visiting/  # Django app — visiting entities
       language/  # Django app — language learning (WordCard, GrammarSheet)
       people/    # Django app — people & relationships (Person, Relationship)
       music/     # Django app — song collection (Song)
+      data_io/   # Data import/export
+      sync/      # Data sync with external sources
+      system/    # System settings (profile, etc.)
       health/    # Health check endpoint
     docker-compose.local.yml       # Build from source, local dev
     docker-compose.production.yml  # Pre-built images, production
@@ -76,7 +80,7 @@ backend/
     urls.py               # Root URL router — include app-level urls.py
     wsgi.py / asgi.py
     auth/                 # Session auth + RBAC (IsAdminOnly, etc.)
-    <domain>/             # One Django app per domain (finance, geography, …)
+    <domain>/             # One Django app per domain (finance, visiting, language, …)
       models.py
       views.py            # DRF ViewSets
       serializers.py
@@ -106,9 +110,11 @@ Organise API calls under `src/services/<backend-name>/`:
 ```
 src/services/unihub-backend/
   finance.ts        # Finance domain endpoints
-  geography.ts      # Geography/map domain endpoints
-  auth.ts
-  types.ts          # Barrel — re-export all API types
+  auth.ts           # Authentication endpoints
+  core.ts           # Shared/core endpoints
+  io.ts             # Data import/export endpoints
+  sync.ts           # Data sync endpoints
+  system.ts         # System (profile, settings) endpoints
   index.ts          # API_BASE_URL + service exports
 ```
 
@@ -155,9 +161,10 @@ uv run pytest
 When connecting a new dimension to the hub:
 1. Create `apps/unihub/backend/<domain>/` as a new Django app (`models.py`, `views.py`, `serializers.py`, `urls.py`, `migrations/`)
 2. Register the app in `INSTALLED_APPS` and add its URL prefix in `unihub/urls.py`
-3. Add the domain's pages under `apps/unihub/frontend/src/pages/<domain>/`
-4. Add a nav section entry in `AppShell.tsx`
-5. Add a service file at `apps/unihub/frontend/src/services/<domain>.ts`
+3. Seed the domain's system AttributeDefinitions via a data migration or management command — never hardcoded in application code
+4. Add the domain's pages under `apps/unihub/frontend/src/pages/<domain>/`
+5. Add a nav section entry in `AppShell.tsx` using a `menu.*` i18n key (constitution Principle VIII)
+6. Add a service file at `apps/unihub/frontend/src/services/<domain>.ts` with types generated from the updated OpenAPI schema
 
 <!-- SPECKIT START -->
 ## Active Feature

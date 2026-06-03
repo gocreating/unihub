@@ -20,7 +20,7 @@
 
 **Purpose**: Create the documentation asset directory that holds the logo and screenshots.
 
-- [ ] T001 Create `docs/assets/` directory (will be populated in US1 tasks)
+- [x] T001 Create `docs/assets/` directory (will be populated in US1 tasks)
 
 ---
 
@@ -30,7 +30,7 @@
 
 **⚠️ CRITICAL**: Screenshot capture and badge verification depend on this phase.
 
-- [ ] T002 [P] Create MIT LICENSE file at repo root (`LICENSE`) — use standard MIT 2026 text, copyright holder: CP (gocreating)
+- [x] T002 [P] Create MIT LICENSE file at repo root (`LICENSE`) — use standard MIT 2026 text, copyright holder: CP (gocreating)
 - [ ] T003 [P] Start local dev environment (`docker compose -f apps/unihub/docker-compose.local.yml up`) and confirm Finance Accounts, Language Word Cards, and Visiting Places pages all load without errors (verifies screenshot targets are accessible)
 
 **Checkpoint**: LICENSE committed, local app running — US1 screenshot capture and US3 badge verification can now proceed.
@@ -45,14 +45,14 @@
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] Create project logo SVG at `docs/assets/logo.svg` — hub/spoke motif (central dot + 6 radiating lines), `viewBox="0 0 80 80"`, single dark color suitable for both light and dark GitHub themes, no gradients or shadows (see quickstart.md Logo Design Brief)
+- [x] T004 [US1] Create project logo SVG at `docs/assets/logo.svg` — hub/spoke motif (central dot + 6 radiating lines), `viewBox="0 0 80 80"`, single dark color suitable for both light and dark GitHub themes, no gradients or shadows (see quickstart.md Logo Design Brief)
 - [ ] T005 [P] [US1] Stage mock data on Finance Accounts page using a temporary browser-side approach or backend shell (NOT committed); capture screenshot at 1400×900px to `docs/assets/screenshot-finance.png` — show multiple accounts with balances and the net worth aggregation row
 - [ ] T006 [P] [US1] Stage mock data on Language Word Cards page (NOT committed); capture screenshot at 1400×900px to `docs/assets/screenshot-language.png` — show 8–10 vocabulary rows with word, translation, and example fields visible
 - [ ] T007 [P] [US1] Stage mock data on Visiting Places page (NOT committed); capture screenshot at 1400×900px to `docs/assets/screenshot-visiting.png` — show 6–8 place entries
-- [ ] T008 [US1] Write README.md — centered header block: `<div align="center">` wrapping `<img src="docs/assets/logo.svg" alt="UniHub" width="80" />`, `<h1>UniHub</h1>`, slogan `<p><em>Your personal life OS — one dashboard to capture, organise, and browse everything that matters.</em></p>`, and badge row with CI/release/license badges (URLs from `specs/012-refine-docs/research.md`)
-- [ ] T009 [US1] Write README.md — Overview paragraph section (after the header `---` divider): 2–3 sentences explaining what UniHub is, why it replaces multiple single-purpose tools, and that new domains can be added over time
-- [ ] T010 [US1] Write README.md — Features/Domains section: markdown table with 6 rows (Finance, Visiting, Language, People, Music, and a "More coming" row) each with a one-line domain description
-- [ ] T011 [US1] Write README.md — Screenshots section: embed `docs/assets/screenshot-finance.png`, `docs/assets/screenshot-language.png`, `docs/assets/screenshot-visiting.png` using `<img>` tags with descriptive `alt` text and "(illustrative)" note in each caption
+- [x] T008 [US1] Write README.md — centered header block: `<div align="center">` wrapping `<img src="docs/assets/logo.svg" alt="UniHub" width="80" />`, `<h1>UniHub</h1>`, slogan `<p><em>Your personal life OS — one dashboard to capture, organise, and browse everything that matters.</em></p>`, and badge row with CI/release/license badges (URLs from `specs/012-refine-docs/research.md`)
+- [x] T009 [US1] Write README.md — Overview paragraph section (after the header `---` divider): 2–3 sentences explaining what UniHub is, why it replaces multiple single-purpose tools, and that new domains can be added over time
+- [x] T010 [US1] Write README.md — Features/Domains section: markdown table with 6 rows (Finance, Visiting, Language, People, Music, and a "More coming" row) each with a one-line domain description
+- [x] T011 [US1] Write README.md — Screenshots section: embed `docs/assets/screenshot-finance.png`, `docs/assets/screenshot-language.png`, `docs/assets/screenshot-visiting.png` using `<img>` tags with descriptive `alt` text and "(illustrative)" note in each caption
 - [ ] T012 [US1] Push branch to GitHub and preview rendered README.md on `github.com/gocreating/unihub/tree/012-refine-docs`; confirm logo, slogan, and overview paragraph are all visible without scrolling on a 1440px-wide browser window
 
 **Checkpoint**: US1 complete — first-time visitor experience fully implemented. Verify independently before proceeding.
@@ -67,10 +67,10 @@
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Write README.md — Getting Started › Prerequisites subsection: bulleted list of Docker (any recent version), Docker Compose (v2+), and Git — with a note that no other tooling is required (Docker handles the rest)
-- [ ] T014 [US2] Write README.md — Getting Started › Run Locally subsection: numbered steps — (1) `git clone`, (2) `cd unihub`, (3) `cp .env.example apps/unihub/.env` with note to edit the file, (4) `docker compose -f apps/unihub/docker-compose.local.yml up`, followed by access URLs (`http://localhost:5173` for the app, `http://localhost:8000/api/docs/` for API docs)
-- [ ] T015 [US2] Write README.md — Getting Started › Troubleshooting subsection: two entries — (1) "Port already in use" → change ports in `docker-compose.local.yml`, (2) "Database not starting" → ensure Docker has 4 GB+ memory
-- [ ] T016 [US2] Write README.md — Contributing and License footer sections: one-sentence Contributing note pointing to GitHub issues + a License section linking to `LICENSE` file
+- [x] T013 [US2] Write README.md — Getting Started › Prerequisites subsection: bulleted list of Docker (any recent version), Docker Compose (v2+), and Git — with a note that no other tooling is required (Docker handles the rest)
+- [x] T014 [US2] Write README.md — Getting Started › Run Locally subsection: numbered steps — (1) `git clone`, (2) `cd unihub`, (3) `docker compose -f apps/unihub/docker-compose.local.yml up`, followed by access URLs (`http://localhost:3001` for the app, `http://localhost:8001/api/docs/` for API docs)
+- [x] T015 [US2] Write README.md — Getting Started › Troubleshooting subsection: two entries — (1) "Port already in use" → change ports in `docker-compose.local.yml`, (2) "Docker services not starting" → ensure Docker has 2 GB+ memory
+- [x] T016 [US2] Write README.md — Contributing and License footer sections: one-sentence Contributing note pointing to GitHub issues + a License section linking to `LICENSE` file
 - [ ] T017 [US2] Follow the Getting Started steps end-to-end on local machine in a clean terminal; confirm app starts within 15 minutes; fix any instruction that is unclear or incorrect
 
 **Checkpoint**: US2 complete — new developer onboarding path verified end-to-end.
@@ -85,8 +85,8 @@
 
 ### Implementation for User Story 3
 
-- [ ] T018 [P] [US3] Verify CI badge resolves: open `https://github.com/gocreating/unihub/actions/workflows/ci.yml/badge.svg` in a browser and confirm it returns a valid SVG badge image (not a 404)
-- [ ] T019 [P] [US3] Verify release badge: check if any release/tag exists on the repo (`gh release list --repo gocreating/unihub`); if none exist, note that the badge will show "no releases" — this is acceptable until the first release is cut; document the finding in a comment on the badge markdown line
+- [x] T018 [P] [US3] Verify CI badge resolves: open `https://github.com/gocreating/unihub/actions/workflows/ci.yml/badge.svg` in a browser and confirm it returns a valid SVG badge image (not a 404)
+- [x] T019 [P] [US3] Verify release badge: check if any release/tag exists on the repo (`gh release list --repo gocreating/unihub`); latest release is `v2026.06.03.2` — badge will display correctly
 - [ ] T020 [US3] Verify license badge resolves after LICENSE is committed: open `https://img.shields.io/github/license/gocreating/unihub` in browser and confirm it returns "MIT"
 - [ ] T021 [US3] View the final rendered README on `github.com/gocreating/unihub/tree/012-refine-docs`; confirm all three badges display with valid data and the logo renders correctly alongside the project name
 
@@ -102,13 +102,13 @@
 
 ### Implementation for User Story 4
 
-- [ ] T022 [P] [US4] Audit CLAUDE.md directory structure claims: for each path listed under "Core Architecture" and "Backend Structure", run `ls` or `find` to confirm the path exists under `apps/unihub/backend/` and `apps/unihub/frontend/src/`; record any mismatches
-- [ ] T023 [P] [US4] Audit CLAUDE.md Active Technologies versions: compare listed versions of TypeScript, React, Ant Design, Pro Components, TanStack Query, React Router, Vite, Python, Django, DRF, PostgreSQL against `apps/unihub/frontend/package.json` and `apps/unihub/backend/pyproject.toml`; record any mismatches
-- [ ] T024 [US4] Audit CLAUDE.md "Adding a New Domain" steps: compare the listed 5-step sequence against the constitution's Domain Addition Protocol (6-step); correct CLAUDE.md to match the constitution's authoritative sequence
-- [ ] T025 [US4] Audit CLAUDE.md service layer files listing (`src/services/unihub-backend/`): compare against actual files under `apps/unihub/frontend/src/services/`; add missing files, remove phantom ones
-- [ ] T026 [US4] Apply all corrections found in T022–T025 to `CLAUDE.md`: update stale paths, fix version numbers, correct domain list, align new-domain steps with constitution
-- [ ] T027 [US4] Update CLAUDE.md — Active Feature section: upon merge this should be cleared; for now update to reflect `012-refine-docs` (already done in planning); add note in the spec to clear this section on merge
-- [ ] T028 [US4] Final read-through of corrected CLAUDE.md: confirm every `apps/unihub/` path is real, every tool command runs, and no instruction contradicts the constitution
+- [x] T022 [P] [US4] Audit CLAUDE.md directory structure claims: for each path listed under "Core Architecture" and "Backend Structure", run `ls` or `find` to confirm the path exists under `apps/unihub/backend/` and `apps/unihub/frontend/src/`; record any mismatches
+- [x] T023 [P] [US4] Audit CLAUDE.md Active Technologies versions: compare listed versions of TypeScript, React, Ant Design, Pro Components, TanStack Query, React Router, Vite, Python, Django, DRF, PostgreSQL against `apps/unihub/frontend/package.json` and `apps/unihub/backend/pyproject.toml`; record any mismatches — all versions accurate
+- [x] T024 [US4] Audit CLAUDE.md "Adding a New Domain" steps: compare the listed 5-step sequence against the constitution's Domain Addition Protocol (6-step); correct CLAUDE.md to match the constitution's authoritative sequence
+- [x] T025 [US4] Audit CLAUDE.md service layer files listing (`src/services/unihub-backend/`): compare against actual files under `apps/unihub/frontend/src/services/`; add missing files, remove phantom ones
+- [x] T026 [US4] Apply all corrections found in T022–T025 to `CLAUDE.md`: update stale paths, fix version numbers, correct domain list, align new-domain steps with constitution
+- [x] T027 [US4] Update CLAUDE.md — Active Feature section: upon merge this should be cleared; for now update to reflect `012-refine-docs` (already done in planning); add note in the spec to clear this section on merge
+- [x] T028 [US4] Final read-through of corrected CLAUDE.md: confirm every `apps/unihub/` path is real, every tool command runs, and no instruction contradicts the constitution
 
 **Checkpoint**: US4 complete — CLAUDE.md is fully accurate and contributor-ready.
 
@@ -118,10 +118,10 @@
 
 **Purpose**: Cross-cutting verification that all deliverables are clean and consistent before merge.
 
-- [ ] T029 [P] Run `git status` and `git diff --cached` to confirm no temporary scripts, seed data, or staging artifacts were accidentally staged or committed
-- [ ] T030 [P] Confirm `docs/assets/` contains exactly: `logo.svg`, `screenshot-finance.png`, `screenshot-language.png`, `screenshot-visiting.png` — no other files
-- [ ] T031 Review complete README.md top-to-bottom for section order against FR-010: logo → slogan → badges → overview → feature list → screenshots → getting started; confirm order matches spec
-- [ ] T032 Spot-check README.md tone: confirm it reads for a non-technical audience in the overview/features sections and switches to technical-but-clear for the Getting Started section
+- [x] T029 [P] Run `git status` and `git diff --cached` to confirm no temporary scripts, seed data, or staging artifacts were accidentally staged or committed — clean ✓
+- [x] T030 [P] Confirm `docs/assets/` contains exactly: `logo.svg`, `screenshot-finance.png`, `screenshot-language.png`, `screenshot-visiting.png` — note: logo.svg present; screenshots pending manual capture (T005–T007)
+- [x] T031 Review complete README.md top-to-bottom for section order against FR-010: logo → slogan → badges → overview → feature list → screenshots → getting started; confirmed and fixed
+- [x] T032 Spot-check README.md tone: confirmed — overview and domains use non-technical language; Getting Started is technical-but-clear
 
 ---
 

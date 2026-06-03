@@ -162,9 +162,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `011-ui-fixes-enhancements` | **Plan**: [specs/011-ui-fixes-enhancements/plan.md](specs/011-ui-fixes-enhancements/plan.md)
+**Branch**: `012-refine-docs` | **Plan**: [specs/012-refine-docs/plan.md](specs/012-refine-docs/plan.md)
 
-Seven UX fixes from GitHub issue #28: hyperlink View/Edit navigation buttons, numeric-only balance-sheet amount inputs, side menu scroll lock, balance-sheet aggregation tab i18n (current constitution violation), confirm-before-delete constitution amendment, redundant tooltip suppression on accounts page, and user dropdown right-alignment. Frontend-only — no backend changes. See plan for fix-by-fix design and research decisions.
+Repository documentation overhaul from GitHub issue #30: rewrite README.md with logo, slogan, badges, feature list, screenshots, and getting-started guide; correct CLAUDE.md accuracy; add MIT LICENSE. Documentation assets only — no application source code changes. See plan for content design and research decisions.
 <!-- SPECKIT END -->
 
 ## Active Technologies

@@ -30,17 +30,17 @@ Add a new area of your life — finance, vocabulary, places, people — and it a
 ## Screenshots
 
 <div align="center">
-  <img src="apps/unihub/docs/screenshots/006-finance-app-enhancement/01-equity-curve.png" alt="Finance — equity curve showing net worth over time" width="700" />
-  <p><em>Finance — track net worth and equity growth over time</em></p>
+  <img src="apps/unihub/docs/screenshots/readme/01-balance-sheets-equity-curve.png" alt="Finance — net worth equity curve over time" width="700" />
+  <p><em>Finance — track net worth and equity growth across all accounts over time</em></p>
 </div>
 
 <div align="center">
-  <img src="apps/unihub/docs/screenshots/008-entity-operations/06-accounts-toolbar.png" alt="Finance — accounts list with filter, sort, and column controls" width="700" />
-  <p><em>Finance — manage accounts across currencies with rich filtering and sorting</em></p>
+  <img src="apps/unihub/docs/screenshots/readme/02-accounts-list.png" alt="Finance — accounts across multiple currencies with filter and sort" width="700" />
+  <p><em>Finance — manage accounts across currencies with filter, sort, and column controls</em></p>
 </div>
 
 <div align="center">
-  <img src="apps/unihub/docs/screenshots/006-finance-app-enhancement/04-detail-assets-breakdown.png" alt="Finance — assets breakdown by account" width="700" />
+  <img src="apps/unihub/docs/screenshots/readme/03-balance-sheet-assets-breakdown.png" alt="Finance — assets breakdown by account at a point in time" width="700" />
   <p><em>Finance — visualise asset allocation by account at any point in time</em></p>
 </div>
 

@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
   release:
-    name: Create release on version bump
+    name: Create release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -26,52 +28,70 @@ jobs:
 
       - name: Get previous version
         id: prev
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref_type == 'branch'
         run: |
           PREV=$(git show HEAD~1:apps/unihub/backend/pyproject.toml 2>/dev/null \
             | grep '^version' | cut -d'"' -f2 || echo "")
           echo "ver=$PREV" >> "$GITHUB_OUTPUT"
 
-      - name: Detect version bump
-        id: bump
+      - name: Resolve tag and bump flag
+        id: resolve
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          EVENT="${{ github.event_name }}"
+          REF_TYPE="${{ github.ref_type }}"
+          REF_NAME="${{ github.ref_name }}"
+          SHA="${GITHUB_SHA:0:7}"
+
+          if [ "$EVENT" = "push" ] && [ "$REF_TYPE" = "tag" ]; then
+            # Tag push: use the tag name as-is; pre-release if it contains "-rc"
             echo "bumped=true" >> "$GITHUB_OUTPUT"
-            echo "Manual dispatch — skipping bump detection"
-          else
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+            if echo "$REF_NAME" | grep -q '\-rc'; then
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            fi
+
+          elif [ "$EVENT" = "push" ] && [ "$REF_NAME" = "main" ]; then
+            # Push to main: only release when version bumped
             CUR="${{ steps.cur.outputs.ver }}"
             PREV="${{ steps.prev.outputs.ver }}"
             if [ "$CUR" != "$PREV" ] && [ -n "$CUR" ]; then
+              IFS='.' read -r YYYY M D N <<< "$CUR"
+              TAG="v$(printf '%s.%02d.%02d.%s' "$YYYY" "$M" "$D" "$N")"
               echo "bumped=true" >> "$GITHUB_OUTPUT"
-              echo "Version bumped: $PREV → $CUR"
+              echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+              echo "Version bumped: $PREV → $CUR → $TAG"
             else
               echo "bumped=false" >> "$GITHUB_OUTPUT"
-              echo "No version bump detected (current: $CUR)"
+              echo "No version bump detected — skipping release"
+            fi
+
+          else
+            # workflow_dispatch: always release; RC suffix when not on main
+            CUR="${{ steps.cur.outputs.ver }}"
+            IFS='.' read -r YYYY M D N <<< "$CUR"
+            BASE="v$(printf '%s.%02d.%02d.%s' "$YYYY" "$M" "$D" "$N")"
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+            if [ "$REF_NAME" = "main" ]; then
+              echo "tag=$BASE" >> "$GITHUB_OUTPUT"
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "tag=${BASE}-rc-${SHA}" >> "$GITHUB_OUTPUT"
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
             fi
           fi
 
-      - name: Format display tag
-        id: tag
-        if: steps.bump.outputs.bumped == 'true'
-        run: |
-          RAW="${{ steps.cur.outputs.ver }}"
-          IFS='.' read -r YYYY M D N <<< "$RAW"
-          BASE="v$(printf '%s.%02d.%02d.%s' "$YYYY" "$M" "$D" "$N")"
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "tag=$BASE" >> "$GITHUB_OUTPUT"
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${BASE}-rc-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Create GitHub release
-        if: steps.bump.outputs.bumped == 'true'
+        if: steps.resolve.outputs.bumped == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
-          if [ "${{ steps.tag.outputs.prerelease }}" = "true" ]; then
+          TAG="${{ steps.resolve.outputs.tag }}"
+          PRERELEASE="${{ steps.resolve.outputs.prerelease }}"
+          echo "Creating release: $TAG (prerelease=$PRERELEASE)"
+          if [ "$PRERELEASE" = "true" ]; then
             gh release create "$TAG" \
               --title "$TAG" \
               --generate-notes \

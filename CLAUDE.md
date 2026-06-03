@@ -162,9 +162,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `010-pipeline-release-management` | **Plan**: [specs/010-pipeline-release-management/plan.md](specs/010-pipeline-release-management/plan.md)
+**Branch**: `011-ui-fixes-enhancements` | **Plan**: [specs/011-ui-fixes-enhancements/plan.md](specs/011-ui-fixes-enhancements/plan.md)
 
-Pipeline and release management — GitHub Actions CI (quality checks + full test on all branches), auto-release on main when `pyproject.toml` version bumps (calendar versioning `v{yyyy}.{mm}.{dd}.{n}`), new `system` Django app with `GET /api/v1/system/version/` endpoint, and new "System > Profile" frontend page displaying the deployed version. See plan for full implementation details, data model, API contracts, and constitution check.
+Seven UX fixes from GitHub issue #28: hyperlink View/Edit navigation buttons, numeric-only balance-sheet amount inputs, side menu scroll lock, balance-sheet aggregation tab i18n (current constitution violation), confirm-before-delete constitution amendment, redundant tooltip suppression on accounts page, and user dropdown right-alignment. Frontend-only — no backend changes. See plan for fix-by-fix design and research decisions.
 <!-- SPECKIT END -->
 
 ## Active Technologies

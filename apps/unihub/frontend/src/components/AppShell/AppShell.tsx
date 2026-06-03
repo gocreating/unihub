@@ -12,7 +12,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import type { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { getMe, logout } from '@/services/unihub-backend/auth';
 import { SelectLang } from '@/components/SelectLang';
 
@@ -25,7 +25,6 @@ export function AppShell({ children }: AppShellProps) {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
-
   const { data: user } = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: getMe,
@@ -101,6 +100,7 @@ export function AppShell({ children }: AppShellProps) {
         size: 'small',
         render: (_, dom) => (
           <Dropdown
+            placement="bottomRight"
             menu={{
               items: [
                 {

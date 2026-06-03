@@ -486,10 +486,10 @@ export function BalanceSheetDetailPage() {
       {/* Visualization card — 4 tabs: 3 rose charts + aggregation table */}
       <Card
         tabList={[
-          { key: 'asset-vs-debt', label: 'A/L' },
-          { key: 'assets-only',   label: 'Assets Breakdown' },
-          { key: 'debts-only',    label: 'Debts Breakdown' },
-          { key: 'aggregation',   label: 'Statistics' },
+          { key: 'asset-vs-debt', label: t({ id: 'pages.finance.balanceSheets.detail.tab.assetVsDebt' }) },
+          { key: 'assets-only',   label: t({ id: 'pages.finance.balanceSheets.detail.tab.assetsBreakdown' }) },
+          { key: 'debts-only',    label: t({ id: 'pages.finance.balanceSheets.detail.tab.debtsBreakdown' }) },
+          { key: 'aggregation',   label: t({ id: 'pages.finance.balanceSheets.detail.tab.statistics' }) },
         ]}
         activeTabKey={chartType}
         onTabChange={(key) => setChartType(key as BalanceDetailChartType)}
@@ -567,7 +567,8 @@ export function BalanceSheetDetailPage() {
           <Button
             type="primary"
             icon={<EditOutlined />}
-            onClick={() => navigate(`/finance/balance-sheets/${id}/edit`)}
+            href={`/finance/balance-sheets/${id}/edit`}
+            onClick={(e) => { e.preventDefault(); navigate(`/finance/balance-sheets/${id}/edit`); }}
           >
             {t({ id: 'common.edit' })}
           </Button>

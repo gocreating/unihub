@@ -150,6 +150,16 @@ export default {
   'pages.finance.balanceSheets.visualization.netWorth': 'Net Worth',
   'pages.finance.balanceSheets.visualization.empty': 'No balance sheets yet',
 
+  // Finance — Balance Sheet list — chart card tab labels
+  'pages.finance.balanceSheets.tab.equityCurve': 'Equity Curve',
+  'pages.finance.balanceSheets.tab.accountTrend': 'Account Trend',
+
+  // Finance — Balance Sheet detail — chart card tab labels
+  'pages.finance.balanceSheets.detail.tab.assetVsDebt': 'A/L',
+  'pages.finance.balanceSheets.detail.tab.assetsBreakdown': 'Assets Breakdown',
+  'pages.finance.balanceSheets.detail.tab.debtsBreakdown': 'Debts Breakdown',
+  'pages.finance.balanceSheets.detail.tab.statistics': 'Statistics',
+
   // Finance — Exchange Rates
   'pages.finance.exchangeRates.filterBase': 'Filter by base currency…',
   'pages.finance.exchangeRates.title': 'Exchange Rates',

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Breadcrumb, Button, DatePicker, Input, Spin, Tag, message } from 'antd';
+import { Breadcrumb, Button, DatePicker, InputNumber, Spin, Tag, message } from 'antd';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -106,10 +106,11 @@ export function BalanceSheetEditPage() {
       key: 'amount',
       ...widthForHeader('Amount', Math.max(160, dataWidths.amount)),
       render: (_, record) => (
-        <Input
-          value={amountMap[record.id] ?? ''}
-          onChange={(e) =>
-            setAmountMap((prev) => ({ ...prev, [record.id]: e.target.value }))
+        <InputNumber<string>
+          stringMode
+          value={amountMap[record.id] ?? null}
+          onChange={(val) =>
+            setAmountMap((prev) => ({ ...prev, [record.id]: val ?? '' }))
           }
           placeholder="0.00"
           addonBefore={getCurrencySymbol(record.currency)}

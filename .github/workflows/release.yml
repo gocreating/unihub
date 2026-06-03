@@ -97,9 +97,11 @@ jobs:
               --title "$TAG" \
               --generate-notes \
               --prerelease \
-              --draft
+              --draft \
+              --target "$GITHUB_SHA"
           else
             gh release create "$TAG" \
               --title "$TAG" \
-              --generate-notes
+              --generate-notes \
+              --target "$GITHUB_SHA"
           fi

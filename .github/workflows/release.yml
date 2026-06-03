@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   release:
@@ -25,6 +26,7 @@ jobs:
 
       - name: Get previous version
         id: prev
+        if: github.event_name == 'push'
         run: |
           PREV=$(git show HEAD~1:apps/unihub/backend/pyproject.toml 2>/dev/null \
             | grep '^version' | cut -d'"' -f2 || echo "")
@@ -33,14 +35,19 @@ jobs:
       - name: Detect version bump
         id: bump
         run: |
-          CUR="${{ steps.cur.outputs.ver }}"
-          PREV="${{ steps.prev.outputs.ver }}"
-          if [ "$CUR" != "$PREV" ] && [ -n "$CUR" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "bumped=true" >> "$GITHUB_OUTPUT"
-            echo "Version bumped: $PREV → $CUR"
+            echo "Manual dispatch — skipping bump detection"
           else
-            echo "bumped=false" >> "$GITHUB_OUTPUT"
-            echo "No version bump detected (current: $CUR)"
+            CUR="${{ steps.cur.outputs.ver }}"
+            PREV="${{ steps.prev.outputs.ver }}"
+            if [ "$CUR" != "$PREV" ] && [ -n "$CUR" ]; then
+              echo "bumped=true" >> "$GITHUB_OUTPUT"
+              echo "Version bumped: $PREV → $CUR"
+            else
+              echo "bumped=false" >> "$GITHUB_OUTPUT"
+              echo "No version bump detected (current: $CUR)"
+            fi
           fi
 
       - name: Format display tag
@@ -49,9 +56,14 @@ jobs:
         run: |
           RAW="${{ steps.cur.outputs.ver }}"
           IFS='.' read -r YYYY M D N <<< "$RAW"
-          TAG="v$(printf '%s.%02d.%02d.%s' "$YYYY" "$M" "$D" "$N")"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Display tag: $TAG"
+          BASE="v$(printf '%s.%02d.%02d.%s' "$YYYY" "$M" "$D" "$N")"
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "tag=$BASE" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${BASE}-rc-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create GitHub release
         if: steps.bump.outputs.bumped == 'true'
@@ -59,6 +71,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --generate-notes
+          if [ "${{ steps.tag.outputs.prerelease }}" = "true" ]; then
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --generate-notes \
+              --prerelease
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --generate-notes
+          fi

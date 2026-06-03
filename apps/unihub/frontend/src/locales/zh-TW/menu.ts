@@ -9,5 +9,6 @@ export default {
   'menu.music': '音樂',
   'menu.system': '系統',
   'menu.system.io': '資料遷移',
+  'menu.system.profile': '概覽',
   'menu.account.signOut': '登出',
 };

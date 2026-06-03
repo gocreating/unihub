@@ -59,6 +59,7 @@ export function AppShell({ children }: AppShellProps) {
         icon: <SettingOutlined />,
         routes: [
           { path: '/system/io', name: t({ id: 'menu.system.io' }), icon: <DatabaseOutlined /> },
+          { path: '/system/profile', name: t({ id: 'menu.system.profile' }) },
         ],
       },
     ],

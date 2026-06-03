@@ -9,5 +9,6 @@ export default {
   'menu.music': 'Music',
   'menu.system': 'System',
   'menu.system.io': 'Data Migration',
+  'menu.system.profile': 'Profile',
   'menu.account.signOut': 'Sign Out',
 };

@@ -1,0 +1,41 @@
+openapi: "3.1.0"
+info:
+  title: System Version Contract
+  description: |
+    Contract for the system version endpoint.
+    Auto-generated OpenAPI schema from drf-spectacular will be the canonical source
+    after backend implementation. This file documents the intended contract for planning.
+  version: "1.0.0"
+
+paths:
+  /api/v1/system/version/:
+    get:
+      summary: Get system version
+      description: Returns the currently deployed application version.
+      operationId: system_version_retrieve
+      tags:
+        - system
+      security: []
+      responses:
+        "200":
+          description: Current application version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemVersion"
+              example:
+                version: "v2026.06.03.1"
+
+components:
+  schemas:
+    SystemVersion:
+      type: object
+      required:
+        - version
+      properties:
+        version:
+          type: string
+          description: >
+            Display version string in calendar format: vYYYY.MM.DD.N
+            (zero-padded month and day, v prefix, N = daily release counter starting at 1).
+          example: "v2026.06.03.1"

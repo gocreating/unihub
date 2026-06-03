@@ -356,4 +356,8 @@ export default {
   'common.entityOps.op.dateAfter': 'after',
   'common.entityOps.pagination.previous': 'Previous',
   'common.entityOps.pagination.next': 'Next',
+
+  // System > Profile
+  'pages.system.profile.title': 'System Profile',
+  'pages.system.profile.version': 'Version',
 };

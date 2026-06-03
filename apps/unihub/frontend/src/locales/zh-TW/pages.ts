@@ -356,4 +356,8 @@ export default {
   'common.entityOps.op.dateAfter': '晚於',
   'common.entityOps.pagination.previous': '上一頁',
   'common.entityOps.pagination.next': '下一頁',
+
+  // System > Profile
+  'pages.system.profile.title': '系統概覽',
+  'pages.system.profile.version': '版本',
 };

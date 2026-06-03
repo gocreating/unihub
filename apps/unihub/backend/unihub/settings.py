@@ -1,8 +1,15 @@
 from pathlib import Path
 import os
+import tomllib
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+with open(BASE_DIR / "pyproject.toml", "rb") as _f:
+    _meta = tomllib.load(_f)
+_raw_version = _meta["project"]["version"]  # e.g. "2026.6.3.1"
+_parts = _raw_version.split(".")
+VERSION = f"v{_parts[0]}.{int(_parts[1]):02d}.{int(_parts[2]):02d}.{_parts[3]}"
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "insecure-dev-key-change-in-production")
 DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
@@ -28,6 +35,7 @@ INSTALLED_APPS = [
     "people",  # people / relationship network domain app
     "music",  # music collection domain app
     "sync",  # data sync infrastructure
+    "system",  # system info (version endpoint)
 ]
 
 MIDDLEWARE = [

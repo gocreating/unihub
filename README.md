@@ -1,165 +1,82 @@
-# UniHub
+<div align="center">
+  <img src="apps/unihub/frontend/public/favicon.svg" alt="UniHub" width="80" />
+  <h1>UniHub</h1>
+  <p><em>Your personal life OS — one dashboard to capture, organise, and browse everything that matters.</em></p>
 
-Your personal life OS — one dashboard to capture, organise, and browse everything that matters to you.
+  [![CI](https://github.com/gocreating/unihub/actions/workflows/ci.yml/badge.svg)](https://github.com/gocreating/unihub/actions/workflows/ci.yml)
+  [![GitHub Release](https://img.shields.io/github/v/release/gocreating/unihub)](https://github.com/gocreating/unihub/releases)
+  [![License](https://img.shields.io/github/license/gocreating/unihub)](LICENSE)
+</div>
 
-Most productivity tools are built for a single purpose: a contacts app, a music library, a vocabulary trainer, a finance tracker. UniHub replaces the mental overhead of juggling all of them by bringing every dimension of daily life under one roof. As new areas of your life become worth tracking, a new domain is connected to the hub.
+---
+
+## What is UniHub?
+
+Most productivity tools solve one problem. UniHub brings all of them under one roof.
+
+Add a new area of your life — finance, vocabulary, places, people — and it appears in the same familiar dashboard. No app-switching, no data scattered across five different services. As new areas of your life become worth tracking, a new domain is connected to the hub.
 
 ## Domains
 
-More domains are added over time. The interface stays the same; only the data behind it grows.
+| Domain | What it tracks |
+|--------|----------------|
+| **Finance** | Accounts, balances, exchange rates, and net worth over time |
+| **Visiting** | Places you've been and want to visit next |
+| **Language** | Vocabulary cards and grammar sheets for languages you're learning |
+| **People** | Personal contacts and relationship network |
+| **Music** | Your song collection |
+| More... | New domains are added over time — the interface stays the same |
 
-### Finance
-Track accounts, transactions, and net worth over time. (`/finance` · `/api/finance/`)
+## Screenshots
 
-### Visiting
-Log places you've been and plan where you want to go next. (`/visiting` · `/api/visiting/`)
+<div align="center">
+  <img src="apps/unihub/docs/screenshots/readme/01-balance-sheets-equity-curve.png" alt="Finance — net worth equity curve over time" width="700" />
+  <p><em>Finance — track net worth and equity growth across all accounts over time</em></p>
+</div>
 
-### Language Learning
-Personal reference library for languages you're studying. (`/language` · `/api/language/`)
+<div align="center">
+  <img src="apps/unihub/docs/screenshots/readme/02-accounts-list.png" alt="Finance — accounts across multiple currencies with filter and sort" width="700" />
+  <p><em>Finance — manage accounts across currencies with filter, sort, and column controls</em></p>
+</div>
 
-**Language** — one record per language being tracked.
+<div align="center">
+  <img src="apps/unihub/docs/screenshots/readme/03-balance-sheet-assets-breakdown.png" alt="Finance — assets breakdown by account at a point in time" width="700" />
+  <p><em>Finance — visualise asset allocation by account at any point in time</em></p>
+</div>
 
-| Field | Type | Notes |
-|---|---|---|
-| `name` | string | Display name, e.g. "Japanese" |
-| `code` | string | ISO 639-1, e.g. "ja" — unique |
-| `notes` | text | Free-form study notes |
+## Getting Started
 
-**WordCard** — a vocabulary flashcard.
+### Prerequisites
 
-| Field | Type | Notes |
-|---|---|---|
-| `language` | FK → Language | |
-| `word` | string | The word in the target language |
-| `translation` | string | Primary translation |
-| `romanization` | string | Optional — romaji, pinyin, transliteration |
-| `example` | text | Example sentence(s) |
-| `notes` | text | Personal mnemonics or context |
-| `tags` | string[] | e.g. `["n5", "verb", "daily"]` |
+- [Docker](https://docs.docker.com/get-docker/) and Docker Compose v2+
+- Git
 
-**GrammarSheet** — a free-form Markdown document covering a grammar point or pattern.
+No other tooling needed — Docker handles the rest.
 
-| Field | Type | Notes |
-|---|---|---|
-| `language` | FK → Language | |
-| `title` | string | e.g. "て-form conjugation" |
-| `content` | text (Markdown) | Full explanation with examples |
-| `tags` | string[] | e.g. `["verb", "conjugation"]` |
+### Run Locally
 
-Future: spaced-repetition scheduling, Anki import/export.
-
-### People
-A personal contact list and relationship network. (`/people` · `/api/people/`)
-
-**Person** — one record per person you want to track.
-
-| Field | Type | Notes |
-|---|---|---|
-| `name` | string | Full name |
-| `nickname` | string | Optional short name |
-| `email` | email | Optional |
-| `phone` | string | Optional |
-| `notes` | text | Personal observations, shared history, etc. |
-| `tags` | string[] | e.g. `["tokyo", "tech", "climbing"]` |
-
-**Relationship** — a directed edge between two people (e.g. "Alice is my colleague").
-
-| Field | Type | Notes |
-|---|---|---|
-| `from_person` | FK → Person | |
-| `to_person` | FK → Person | |
-| `kind` | string | e.g. "friend", "colleague", "family", "mentor" |
-| `notes` | text | Optional context |
-| Unique on | `(from_person, to_person, kind)` | Prevents duplicate edges |
-
-Future: graph visualisation, interaction log, birthday reminders.
-
-### Music
-A personal song collection with ratings, tags, and notes. (`/music` · `/api/music/`)
-
-**Song** — one record per song in your collection.
-
-| Field | Type | Notes |
-|---|---|---|
-| `title` | string | |
-| `artist` | string | |
-| `album` | string | Optional |
-| `year` | integer | Optional, e.g. 2003 |
-| `genre` | string | Optional, e.g. "jazz", "city pop" |
-| `language` | string | Optional, e.g. "Japanese", "English" |
-| `rating` | integer | Optional, 1–5 |
-| `notes` | text | Personal comments, mood associations, etc. |
-| `tags` | string[] | e.g. `["road-trip", "focus", "90s"]` |
-
-Future: MusicBrainz metadata lookup, playlist groupings, linked streaming URL.
-
-## Philosophy
-
-- **Personal, not collaborative** — built for one user, not a team. No sharing, no permissions overhead.
-- **Owned data** — self-hosted with Docker. Your data lives in your own PostgreSQL database.
-- **Breadth over depth** — each domain starts simple and grows only when there's a real need.
-- **One backend, one database** — all domains share a single Django project and PostgreSQL instance. No microservices.
-
-## Deployment
-
-See [apps/unihub/DEPLOY.md](apps/unihub/DEPLOY.md) for local and production runbooks.
-
-**Local (Docker — recommended)**
 ```bash
-docker compose -f apps/unihub/docker-compose.local.yml up -d
-```
-Frontend → http://localhost:3000 · Backend API → http://localhost:8000/api/docs/
-
-## Development Quick Start
-
-**Frontend**
-```bash
-cd apps/unihub/frontend
-pnpm install
-pnpm dev
+git clone https://github.com/gocreating/unihub.git
+cd unihub
+docker compose -f apps/unihub/docker-compose.local.yml up
 ```
 
-**Backend**
-```bash
-cd apps/unihub/backend
-uv sync
-uv run python manage.py migrate
-uv run python manage.py runserver
-```
+Once running:
 
-**Package managers**: `pnpm` (frontend), `uv` (backend) — never use npm, yarn, or pip directly.
+- **App** → [http://localhost:3001](http://localhost:3001)
+- **API docs** → [http://localhost:8001/api/docs/](http://localhost:8001/api/docs/)
 
-**Quality loops**
+Default login: username `root`, password `root`.
 
-Frontend — run from `apps/unihub/frontend/`:
-```bash
-pnpm lint        # ESLint
-pnpm typecheck   # TypeScript strict check
-pnpm test        # Vitest
-```
+### Troubleshooting
 
-Backend — run from `apps/unihub/backend/`:
-```bash
-uv run ruff check .   # Ruff linter
-uv run pytest         # pytest-django
-```
+- **Port already in use**: Edit the port mappings in `apps/unihub/docker-compose.local.yml`.
+- **Services not starting**: Ensure Docker has at least 2 GB of memory available (Docker Desktop → Settings → Resources).
 
-## Repository Structure
+## Contributing
 
-```text
-apps/
-  unihub/
-    frontend/    # Single hub SPA (React + Vite + Ant Design)
-    backend/     # Django project — one DB, all domain apps inside
-      finance/   #   Finance domain
-      visiting/  #   Visiting domain
-      language/  #   Language learning domain
-      people/    #   People & relationships domain
-      music/     #   Music collection domain
-      health/    #   Health check endpoint
-    docker-compose.local.yml
-    docker-compose.production.yml
-    DEPLOY.md    #   Deployment runbook
-.env.example     # Template — copy to apps/unihub/.env for production
-CLAUDE.md        # AI dev guidelines
-```
+Pull requests are welcome. For significant changes, open an issue first to discuss what you'd like to change.
+
+## License
+
+[MIT](LICENSE)

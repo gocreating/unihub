@@ -1,6 +1,55 @@
 /// <reference types="vitest/globals" />
 import '@testing-library/jest-dom';
 
+// Suppress known AntD/React deprecation warnings that pollute test output.
+// These come from @ant-design/pro-components internal Dropdown usage
+// (dropdownRender is deprecated) and from echarts-for-react receiving a ref
+// through a non-forwardRef component mock.
+const _consoleError = console.error.bind(console);
+console.error = (...args: unknown[]) => {
+  const msg = String(args[0] ?? '');
+  if (
+    msg.includes('Function components cannot be given refs') ||
+    msg.includes('dropdownRender') ||
+    msg.includes('[antd:') ||
+    // ProLayout fires async internal state updates during mount; these are
+    // harmless but React warns about missing act() wrapping.
+    msg.includes('not wrapped in act(')
+  ) return;
+  _consoleError(...args);
+};
+const _consoleWarn = console.warn.bind(console);
+console.warn = (...args: unknown[]) => {
+  const msg = String(args[0] ?? '');
+  if (msg.includes('[antd:')) return;
+  _consoleWarn(...args);
+};
+
+// jsdom does not fully implement window.getComputedStyle — pseudo-element queries
+// (e.g. ::-webkit-scrollbar used by rc-table to measure scrollbar width) trigger
+// a noisy "Not implemented" warning to stderr on every test that renders a table.
+// Return an empty style object for pseudo-element calls; forward real element calls.
+const _realGetComputedStyle = window.getComputedStyle.bind(window);
+Object.defineProperty(window, 'getComputedStyle', {
+  writable: true,
+  value: (elt: Element, pseudoElt?: string | null): CSSStyleDeclaration => {
+    if (pseudoElt) {
+      return new Proxy({} as CSSStyleDeclaration, { get: () => '' });
+    }
+    return _realGetComputedStyle(elt);
+  },
+});
+
+// jsdom does not implement HTMLCanvasElement.getContext — used by PageTable's
+// measureTextWidth() to measure column label widths via a 2D canvas context.
+// Return null silently so canvasMeasure() falls through to its CJK-aware
+// character-count fallback (8px Latin / 14px CJK), which is what the
+// utils.test.ts expectations are written against.
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+  writable: true,
+  value: () => null,
+});
+
 // jsdom does not implement window.matchMedia — required by antd/ProTable
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

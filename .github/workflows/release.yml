@@ -95,7 +95,8 @@ jobs:
             gh release create "$TAG" \
               --title "$TAG" \
               --generate-notes \
-              --prerelease
+              --prerelease \
+              --draft
           else
             gh release create "$TAG" \
               --title "$TAG" \

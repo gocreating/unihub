@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/assets/logo.svg" alt="UniHub" width="80" />
+  <img src="apps/unihub/frontend/public/favicon.svg" alt="UniHub" width="80" />
   <h1>UniHub</h1>
   <p><em>Your personal life OS — one dashboard to capture, organise, and browse everything that matters.</em></p>
 
@@ -30,18 +30,18 @@ Add a new area of your life — finance, vocabulary, places, people — and it a
 ## Screenshots
 
 <div align="center">
-  <img src="docs/assets/screenshot-finance.png" alt="Finance — accounts and net worth overview (illustrative)" width="700" />
-  <p><em>Finance — accounts, balances, and net worth across currencies</em></p>
+  <img src="apps/unihub/docs/screenshots/006-finance-app-enhancement/01-equity-curve.png" alt="Finance — equity curve showing net worth over time" width="700" />
+  <p><em>Finance — track net worth and equity growth over time</em></p>
 </div>
 
 <div align="center">
-  <img src="docs/assets/screenshot-language.png" alt="Language — vocabulary word cards (illustrative)" width="700" />
-  <p><em>Language — personal vocabulary library with translations and examples</em></p>
+  <img src="apps/unihub/docs/screenshots/008-entity-operations/06-accounts-toolbar.png" alt="Finance — accounts list with filter, sort, and column controls" width="700" />
+  <p><em>Finance — manage accounts across currencies with rich filtering and sorting</em></p>
 </div>
 
 <div align="center">
-  <img src="docs/assets/screenshot-visiting.png" alt="Visiting — places log (illustrative)" width="700" />
-  <p><em>Visiting — places you've been and want to go next</em></p>
+  <img src="apps/unihub/docs/screenshots/006-finance-app-enhancement/04-detail-assets-breakdown.png" alt="Finance — assets breakdown by account" width="700" />
+  <p><em>Finance — visualise asset allocation by account at any point in time</em></p>
 </div>
 
 ## Getting Started

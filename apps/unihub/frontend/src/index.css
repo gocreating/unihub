@@ -17,6 +17,37 @@ body {
   min-height: 100vh;
 }
 
+/*
+ * Fix: mobile side-menu drawer mask and panel scroll with the page.
+ *
+ * ProLayout renders its mobile sider as an inline Drawer (getContainer=false),
+ * which causes .ant-drawer-mask and .ant-drawer-content-wrapper to use
+ * position:absolute relative to the document. When the user has scrolled down,
+ * the overlay appears at the wrong vertical position.
+ *
+ * Override to position:fixed so they are always anchored to the viewport.
+ * .ant-pro-drawer-sider lands on .ant-drawer-content (inner element), so
+ * scope via :has() on the .ant-drawer-inline root.
+ */
+.ant-drawer-inline:has(.ant-pro-drawer-sider) .ant-drawer-mask {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
+.ant-drawer-inline:has(.ant-pro-drawer-sider) .ant-drawer-content-wrapper {
+  position: fixed !important;
+  top: 0 !important;
+  height: 100vh !important;
+}
+
+/* Lock body scroll while the drawer is open; auto-released on close. */
+body:has(.ant-drawer-open.ant-drawer-inline) {
+  overflow: hidden !important;
+}
+
 /* Right-align text inside monetary amount input fields */
 .amount-input .ant-input,
 .amount-input .ant-input-number-input {

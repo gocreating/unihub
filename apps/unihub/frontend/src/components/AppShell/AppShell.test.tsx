@@ -50,26 +50,14 @@ describe('AppShell', () => {
     document.body.style.overflowY = '';
   });
 
-  describe('Scroll lock — US3', () => {
-    it('no wheel/touchmove block listeners attached when sider is closed (default)', () => {
-      const addSpy = vi.spyOn(document, 'addEventListener');
-      renderShell();
-      // siderOpen starts false; no blocking listeners should be added
-      const blockingCalls = addSpy.mock.calls.filter(
-        ([type]) => type === 'wheel' || type === 'touchmove',
-      );
-      expect(blockingCalls).toHaveLength(0);
-      addSpy.mockRestore();
-    });
-
-    it('scroll block listeners are removed when AppShell unmounts', () => {
-      const removeSpy = vi.spyOn(document, 'removeEventListener');
-      const { unmount } = renderShell();
-      unmount();
-      // Cleanup should have been called (even if no listeners were added, the
-      // effect returns a cleanup function that removes them safely)
-      removeSpy.mockRestore();
-      expect(document.body.style.overflowY).toBe('');
+  describe('Scroll lock — US3 (CSS-driven via :has selector)', () => {
+    it('AppShell renders without JS scroll-lock side effects', () => {
+      // The scroll lock is handled entirely in index.css via:
+      //   body:has(.ant-drawer-open.ant-drawer-inline) { overflow: hidden }
+      // No JS state or effects involved — just verify the shell renders cleanly.
+      const { container } = renderShell();
+      expect(container.querySelector('[data-testid="content"]')).not.toBeNull();
+      expect(document.body.style.overflow).toBe('');
     });
   });
 

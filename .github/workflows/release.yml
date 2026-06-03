@@ -9,8 +9,12 @@ on:
   workflow_dispatch:
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci-jobs.yml
+
   release:
     name: Create release
+    needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -43,7 +47,6 @@ jobs:
           SHA="${GITHUB_SHA:0:7}"
 
           if [ "$EVENT" = "push" ] && [ "$REF_TYPE" = "tag" ]; then
-            # Tag push: use the tag name as-is; pre-release if it contains "-rc"
             echo "bumped=true" >> "$GITHUB_OUTPUT"
             echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
             if echo "$REF_NAME" | grep -q '\-rc'; then
@@ -53,7 +56,6 @@ jobs:
             fi
 
           elif [ "$EVENT" = "push" ] && [ "$REF_NAME" = "main" ]; then
-            # Push to main: only release when version bumped
             CUR="${{ steps.cur.outputs.ver }}"
             PREV="${{ steps.prev.outputs.ver }}"
             if [ "$CUR" != "$PREV" ] && [ -n "$CUR" ]; then
@@ -69,7 +71,6 @@ jobs:
             fi
 
           else
-            # workflow_dispatch: always release; RC suffix when not on main
             CUR="${{ steps.cur.outputs.ver }}"
             IFS='.' read -r YYYY M D N <<< "$CUR"
             BASE="v$(printf '%s.%02d.%02d.%s' "$YYYY" "$M" "$D" "$N")"

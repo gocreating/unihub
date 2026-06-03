@@ -12,7 +12,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState, useEffect, useRef } from 'react';
 import { getMe, logout } from '@/services/unihub-backend/auth';
 import { SelectLang } from '@/components/SelectLang';
 
@@ -25,6 +25,30 @@ export function AppShell({ children }: AppShellProps) {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
+  // Track whether the sider is open to apply scroll lock.
+  // siderOpen starts false; the first onCollapse call from ProLayout (which
+  // reports its initial state on mount) is skipped via isFirstCollapse to
+  // avoid locking scroll before the user has interacted with the menu.
+  const [siderOpen, setSiderOpen] = useState(false);
+  const isFirstCollapse = useRef(true);
+
+  useEffect(() => {
+    if (!siderOpen) return;
+    // Block scroll via event listeners rather than overflow:hidden so the
+    // scrollbar stays visible and the layout does not shift.
+    const block = (e: Event) => e.preventDefault();
+    document.addEventListener('wheel', block, { passive: false });
+    document.addEventListener('touchmove', block, { passive: false });
+    return () => {
+      document.removeEventListener('wheel', block);
+      document.removeEventListener('touchmove', block);
+    };
+  }, [siderOpen]);
+
+  const handleCollapse = (collapsed: boolean) => {
+    if (isFirstCollapse.current) { isFirstCollapse.current = false; return; }
+    setSiderOpen(!collapsed);
+  };
 
   const { data: user } = useQuery({
     queryKey: ['auth', 'me'],
@@ -77,6 +101,7 @@ export function AppShell({ children }: AppShellProps) {
       token={{ bgLayout: '#f0f2f5' }}
       location={location}
       route={routeConfig}
+      onCollapse={handleCollapse}
       menuHeaderRender={false}
       headerTitleRender={(logo, title) => (
         <span
@@ -101,6 +126,7 @@ export function AppShell({ children }: AppShellProps) {
         size: 'small',
         render: (_, dom) => (
           <Dropdown
+            placement="bottomRight"
             menu={{
               items: [
                 {

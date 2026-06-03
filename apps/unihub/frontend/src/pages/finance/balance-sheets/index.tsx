@@ -470,14 +470,16 @@ export function BalanceSheetsPage() {
               <Button
                 size="small"
                 icon={<EyeOutlined />}
-                onClick={() => navigate(`/finance/balance-sheets/${record.id}`)}
+                href={`/finance/balance-sheets/${record.id}`}
+                onClick={(e) => { e.preventDefault(); navigate(`/finance/balance-sheets/${record.id}`); }}
               >
                 {t({ id: 'common.view' })}
               </Button>
               <Button
                 size="small"
                 icon={<EditOutlined />}
-                onClick={() => navigate(`/finance/balance-sheets/${record.id}/edit`)}
+                href={`/finance/balance-sheets/${record.id}/edit`}
+                onClick={(e) => { e.preventDefault(); navigate(`/finance/balance-sheets/${record.id}/edit`); }}
               >
                 {t({ id: 'common.edit' })}
               </Button>
@@ -532,8 +534,8 @@ export function BalanceSheetsPage() {
       {/* Visualization card */}
       <Card
         tabList={[
-          { key: 'net-worth-trend',   label: 'Equity Curve' },
-          { key: 'stacked-breakdown', label: 'Account Trend' },
+          { key: 'net-worth-trend',   label: t({ id: 'pages.finance.balanceSheets.tab.equityCurve' }) },
+          { key: 'stacked-breakdown', label: t({ id: 'pages.finance.balanceSheets.tab.accountTrend' }) },
         ]}
         activeTabKey={chartType}
         onTabChange={(key) => setChartType(key as BalanceListChartType)}
@@ -714,7 +716,12 @@ export function BalanceSheetsPage() {
       <PageTable<BalanceSheet>
         pageTitle={t({ id: 'pages.finance.balanceSheets.title' })}
         action={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/finance/balance-sheets/new')}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            href="/finance/balance-sheets/new"
+            onClick={(e) => { e.preventDefault(); navigate('/finance/balance-sheets/new'); }}
+          >
             {t({ id: 'pages.finance.balanceSheets.new' })}
           </Button>
         }

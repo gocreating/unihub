@@ -23,7 +23,7 @@
 
 **Purpose**: Verify clean state before any changes are made
 
-- [ ] T001 Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` and confirm zero errors — all subsequent fixes must preserve this baseline
+- [x] T001 Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` and confirm zero errors — all subsequent fixes must preserve this baseline
 
 **Checkpoint**: Baseline clean — all 7 fixes can begin independently
 
@@ -39,15 +39,15 @@
 
 > **Write these tests FIRST — they must FAIL before implementation**
 
-- [ ] T002 [P] [US1] Create `apps/unihub/frontend/src/pages/finance/balance-sheets/BalanceSheetsPage.test.tsx` — render the actions column for a mocked balance sheet row and assert that the View button renders as `<a>` with the correct `href` (`/finance/balance-sheets/<id>`) and the Edit button renders as `<a>` with `href` `/finance/balance-sheets/<id>/edit`
-- [ ] T003 [P] [US1] In the same test file, assert that the Delete button does NOT have an `href` attribute (it opens a modal, not a page)
+- [x] T002 [P] [US1] Create `apps/unihub/frontend/src/pages/finance/balance-sheets/BalanceSheetsPage.test.tsx` — render the actions column for a mocked balance sheet row and assert that the View button renders as `<a>` with the correct `href` (`/finance/balance-sheets/<id>`) and the Edit button renders as `<a>` with `href` `/finance/balance-sheets/<id>/edit`
+- [x] T003 [P] [US1] In the same test file, assert that the Delete button does NOT have an `href` attribute (it opens a modal, not a page)
 
 ### Implementation for User Story 1
 
-- [ ] T004 [P] [US1] In `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` (actions column, lines ~467–487): add `href={/finance/balance-sheets/${record.id}}` and `onClick={(e) => { e.preventDefault(); navigate(...); }}` to the View Button; same pattern for the Edit Button; Delete Button unchanged
-- [ ] T005 [P] [US1] In `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` (New Balance Sheet action button, line ~717): add `href="/finance/balance-sheets/new"` with `onClick={(e) => { e.preventDefault(); navigate('/finance/balance-sheets/new'); }}`
-- [ ] T006 [US1] In `apps/unihub/frontend/src/pages/finance/balance-sheets/detail.tsx` (Edit action button, line ~568): add `href={/finance/balance-sheets/${id}/edit}` with the same prevent-default pattern
-- [ ] T007 [US1] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — all tests including T002/T003 must pass
+- [x] T004 [P] [US1] In `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` (actions column, lines ~467–487): add `href={/finance/balance-sheets/${record.id}}` and `onClick={(e) => { e.preventDefault(); navigate(...); }}` to the View Button; same pattern for the Edit Button; Delete Button unchanged
+- [x] T005 [P] [US1] In `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` (New Balance Sheet action button, line ~717): add `href="/finance/balance-sheets/new"` with `onClick={(e) => { e.preventDefault(); navigate('/finance/balance-sheets/new'); }}`
+- [x] T006 [US1] In `apps/unihub/frontend/src/pages/finance/balance-sheets/detail.tsx` (Edit action button, line ~568): add `href={/finance/balance-sheets/${id}/edit}` with the same prevent-default pattern
+- [x] T007 [US1] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — all tests including T002/T003 must pass
 
 **Checkpoint**: View/Edit/New buttons on balance-sheet pages are now real anchor elements — new-tab support works
 
@@ -63,14 +63,14 @@
 
 > **Write these tests FIRST — they must FAIL before implementation**
 
-- [ ] T008 [P] [US2] Create `apps/unihub/frontend/src/pages/finance/balance-sheets/BalanceSheetNewPage.test.tsx` — render the page with mocked accounts data and assert that the amount cell renders an `InputNumber` component (not a plain `Input`) for each account row
-- [ ] T009 [P] [US2] Create `apps/unihub/frontend/src/pages/finance/balance-sheets/BalanceSheetEditPage.test.tsx` — render the page with mocked accounts and existing balances and assert that the amount cells use `InputNumber`; assert that the pre-seeded value from existing balances is reflected in the `value` prop
+- [x] T008 [P] [US2] Create `apps/unihub/frontend/src/pages/finance/balance-sheets/BalanceSheetNewPage.test.tsx` — render the page with mocked accounts data and assert that the amount cell renders an `InputNumber` component (not a plain `Input`) for each account row
+- [x] T009 [P] [US2] Create `apps/unihub/frontend/src/pages/finance/balance-sheets/BalanceSheetEditPage.test.tsx` — render the page with mocked accounts and existing balances and assert that the amount cells use `InputNumber`; assert that the pre-seeded value from existing balances is reflected in the `value` prop
 
 ### Implementation for User Story 2
 
-- [ ] T010 [P] [US2] In `apps/unihub/frontend/src/pages/finance/balance-sheets/new.tsx`: replace the `Input` component in the amount column `render` with `InputNumber<string> stringMode`, `value={amountMap[record.id] ?? null}`, `onChange={(val) => setAmountMap((prev) => ({ ...prev, [record.id]: val ?? '' }))}`, `placeholder="0.00"`, `addonBefore={getCurrencySymbol(record.currency)}`, `style={{ width: '100%' }}`; remove `Input` from imports if unused
-- [ ] T011 [P] [US2] In `apps/unihub/frontend/src/pages/finance/balance-sheets/edit.tsx`: apply the same `InputNumber<string> stringMode` substitution as T010; the existing-balance seeding logic in `setAmountMap` is unchanged
-- [ ] T012 [US2] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — T008/T009 must pass
+- [x] T010 [P] [US2] In `apps/unihub/frontend/src/pages/finance/balance-sheets/new.tsx`: replace the `Input` component in the amount column `render` with `InputNumber<string> stringMode`, `value={amountMap[record.id] ?? null}`, `onChange={(val) => setAmountMap((prev) => ({ ...prev, [record.id]: val ?? '' }))}`, `placeholder="0.00"`, `addonBefore={getCurrencySymbol(record.currency)}`, `style={{ width: '100%' }}`; remove `Input` from imports if unused
+- [x] T011 [P] [US2] In `apps/unihub/frontend/src/pages/finance/balance-sheets/edit.tsx`: apply the same `InputNumber<string> stringMode` substitution as T010; the existing-balance seeding logic in `setAmountMap` is unchanged
+- [x] T012 [US2] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — T008/T009 must pass
 
 **Checkpoint**: Balance-sheet amount fields are numeric-only and IME-safe
 
@@ -86,12 +86,12 @@
 
 > **Write these tests FIRST — they must FAIL before implementation**
 
-- [ ] T013 [US3] Create `apps/unihub/frontend/src/components/AppShell/AppShell.test.tsx` — render `AppShell` with mocked auth query; simulate calling the `onCollapse` callback with `false` (sidebar expanding); assert `document.body.style.overflowY === 'hidden'`; then simulate `onCollapse(true)` and assert `document.body.style.overflowY === ''`
+- [x] T013 [US3] Create `apps/unihub/frontend/src/components/AppShell/AppShell.test.tsx` — render `AppShell` with mocked auth query; simulate calling the `onCollapse` callback with `false` (sidebar expanding); assert `document.body.style.overflowY === 'hidden'`; then simulate `onCollapse(true)` and assert `document.body.style.overflowY === ''`
 
 ### Implementation for User Story 3
 
-- [ ] T014 [US3] In `apps/unihub/frontend/src/components/AppShell/AppShell.tsx`: add `const [siderCollapsed, setSiderCollapsed] = useState(true)` state; add a `useEffect` that sets `document.body.style.overflowY = siderCollapsed ? '' : 'hidden'` with cleanup `() => { document.body.style.overflowY = ''; }`; add `collapsed={siderCollapsed}` and `onCollapse={setSiderCollapsed}` to `<ProLayout>`; import `useState` and `useEffect` if not already imported
-- [ ] T015 [US3] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — T013 must pass
+- [x] T014 [US3] In `apps/unihub/frontend/src/components/AppShell/AppShell.tsx`: add `const [siderCollapsed, setSiderCollapsed] = useState(true)` state; add a `useEffect` that sets `document.body.style.overflowY = siderCollapsed ? '' : 'hidden'` with cleanup `() => { document.body.style.overflowY = ''; }`; add `collapsed={siderCollapsed}` and `onCollapse={setSiderCollapsed}` to `<ProLayout>`; import `useState` and `useEffect` if not already imported
+- [x] T015 [US3] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — T013 must pass
 
 **Checkpoint**: Side menu open/close correctly locks and restores page scroll
 
@@ -107,28 +107,28 @@
 
 > **Write these tests FIRST — they must FAIL before implementation**
 
-- [ ] T016 [P] [US4] In `apps/unihub/frontend/src/pages/finance/balance-sheets/BalanceSheetsPage.test.tsx` (from T002): add a test asserting that the chart card `tabList` labels are NOT the hardcoded strings `'Equity Curve'` or `'Account Trend'` — they must be i18n message values; verify by rendering with a custom intl provider that overrides the keys to sentinel values and confirming the sentinels appear
-- [ ] T017 [P] [US4] Create `apps/unihub/frontend/src/pages/finance/balance-sheets/BalanceSheetDetailPage.test.tsx` — render `BalanceSheetDetailPage` with mocked data and assert that the chart card `tabList` labels are not the literal strings `'A/L'`, `'Assets Breakdown'`, `'Debts Breakdown'`, or `'Statistics'`
+- [x] T016 [P] [US4] In `apps/unihub/frontend/src/pages/finance/balance-sheets/BalanceSheetsPage.test.tsx` (from T002): add a test asserting that the chart card `tabList` labels are NOT the hardcoded strings `'Equity Curve'` or `'Account Trend'` — they must be i18n message values; verify by rendering with a custom intl provider that overrides the keys to sentinel values and confirming the sentinels appear
+- [x] T017 [P] [US4] Create `apps/unihub/frontend/src/pages/finance/balance-sheets/BalanceSheetDetailPage.test.tsx` — render `BalanceSheetDetailPage` with mocked data and assert that the chart card `tabList` labels are not the literal strings `'A/L'`, `'Assets Breakdown'`, `'Debts Breakdown'`, or `'Statistics'`
 
 ### Implementation for User Story 4
 
-- [ ] T018 [P] [US4] In `apps/unihub/frontend/src/locales/en-US/pages.ts`: add the 6 new keys under the `pages.finance.balanceSheets` namespace as specified in plan.md Phase 1 (R-004):
+- [x] T018 [P] [US4] In `apps/unihub/frontend/src/locales/en-US/pages.ts`: add the 6 new keys under the `pages.finance.balanceSheets` namespace as specified in plan.md Phase 1 (R-004):
   - `pages.finance.balanceSheets.tab.equityCurve`: `'Equity Curve'`
   - `pages.finance.balanceSheets.tab.accountTrend`: `'Account Trend'`
   - `pages.finance.balanceSheets.detail.tab.assetVsDebt`: `'A/L'`
   - `pages.finance.balanceSheets.detail.tab.assetsBreakdown`: `'Assets Breakdown'`
   - `pages.finance.balanceSheets.detail.tab.debtsBreakdown`: `'Debts Breakdown'`
   - `pages.finance.balanceSheets.detail.tab.statistics`: `'Statistics'`
-- [ ] T019 [P] [US4] In `apps/unihub/frontend/src/locales/zh-TW/pages.ts`: add the matching 6 zh-TW keys:
+- [x] T019 [P] [US4] In `apps/unihub/frontend/src/locales/zh-TW/pages.ts`: add the matching 6 zh-TW keys:
   - `pages.finance.balanceSheets.tab.equityCurve`: `'股權曲線'`
   - `pages.finance.balanceSheets.tab.accountTrend`: `'帳戶趨勢'`
   - `pages.finance.balanceSheets.detail.tab.assetVsDebt`: `'資產/負債'`
   - `pages.finance.balanceSheets.detail.tab.assetsBreakdown`: `'資產明細'`
   - `pages.finance.balanceSheets.detail.tab.debtsBreakdown`: `'負債明細'`
   - `pages.finance.balanceSheets.detail.tab.statistics`: `'統計'`
-- [ ] T020 [US4] In `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` (tabList around line 535): replace hardcoded labels with `t({ id: 'pages.finance.balanceSheets.tab.equityCurve' })` and `t({ id: 'pages.finance.balanceSheets.tab.accountTrend' })`
-- [ ] T021 [US4] In `apps/unihub/frontend/src/pages/finance/balance-sheets/detail.tsx` (tabList around line 489): replace all 4 hardcoded labels with their locale key equivalents from T018/T019
-- [ ] T022 [US4] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — T016/T017 must pass; TypeScript must report zero errors on both locale files (ensures both locales stay in sync)
+- [x] T020 [US4] In `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` (tabList around line 535): replace hardcoded labels with `t({ id: 'pages.finance.balanceSheets.tab.equityCurve' })` and `t({ id: 'pages.finance.balanceSheets.tab.accountTrend' })`
+- [x] T021 [US4] In `apps/unihub/frontend/src/pages/finance/balance-sheets/detail.tsx` (tabList around line 489): replace all 4 hardcoded labels with their locale key equivalents from T018/T019
+- [x] T022 [US4] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — T016/T017 must pass; TypeScript must report zero errors on both locale files (ensures both locales stay in sync)
 
 **Checkpoint**: Balance-sheet chart tab labels fully internationalised — constitution violation resolved
 
@@ -142,7 +142,7 @@
 
 ### Implementation for User Story 5
 
-- [ ] T023 [US5] In `.specify/memory/constitution.md`: add a "Delete Confirmation (NON-NEGOTIABLE)" rule to the Development Constraints section stating: every destructive delete action MUST use `Modal.confirm` with `okType: 'danger'`; title and body text MUST use locale keys; inline or silent deletion is a constitution violation; bump version comment in the file from `1.13.0` → `1.13.1` and add a SYNC IMPACT REPORT entry for this PATCH amendment
+- [x] T023 [US5] In `.specify/memory/constitution.md`: add a "Delete Confirmation (NON-NEGOTIABLE)" rule to the Development Constraints section stating: every destructive delete action MUST use `Modal.confirm` with `okType: 'danger'`; title and body text MUST use locale keys; inline or silent deletion is a constitution violation; bump version comment in the file from `1.13.0` → `1.13.1` and add a SYNC IMPACT REPORT entry for this PATCH amendment
 
 **Checkpoint**: Constitution documents the delete-confirmation invariant; all existing code already compliant
 
@@ -158,12 +158,12 @@
 
 > **Write these tests FIRST — they must FAIL before implementation**
 
-- [ ] T024 [US6] In a new `apps/unihub/frontend/src/pages/finance/accounts/AccountsPage.test.tsx`: render the page with mocked accounts that have `open_datetime` and `close_datetime` set; assert that NO `Tooltip` component is rendered wrapping the datetime cells (the datetime string appears directly in the cell without a tooltip ancestor)
+- [x] T024 [US6] In a new `apps/unihub/frontend/src/pages/finance/accounts/AccountsPage.test.tsx`: render the page with mocked accounts that have `open_datetime` and `close_datetime` set; assert that NO `Tooltip` component is rendered wrapping the datetime cells (the datetime string appears directly in the cell without a tooltip ancestor)
 
 ### Implementation for User Story 6
 
-- [ ] T025 [US6] In `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` (lines ~255–264): remove the `<Tooltip>` wrapper from the `open_datetime` column render — replace with direct return of `formatted` or the empty placeholder; same for `close_datetime` (lines ~271–280); remove `Tooltip` from the import line if it is no longer used elsewhere in the file
-- [ ] T026 [US6] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — T024 must pass; Tooltip import warnings must be gone
+- [x] T025 [US6] In `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` (lines ~255–264): remove the `<Tooltip>` wrapper from the `open_datetime` column render — replace with direct return of `formatted` or the empty placeholder; same for `close_datetime` (lines ~271–280); remove `Tooltip` from the import line if it is no longer used elsewhere in the file
+- [x] T026 [US6] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — T024 must pass; Tooltip import warnings must be gone
 
 **Checkpoint**: Accounts page datetime cells show no redundant tooltip
 
@@ -179,12 +179,12 @@
 
 > **Write these tests FIRST — they must FAIL before implementation**
 
-- [ ] T027 [US7] In `apps/unihub/frontend/src/components/AppShell/AppShell.test.tsx` (from T013): add an assertion that the `Dropdown` component wrapping the avatar has `placement="bottomRight"` prop
+- [x] T027 [US7] In `apps/unihub/frontend/src/components/AppShell/AppShell.test.tsx` (from T013): add an assertion that the `Dropdown` component wrapping the avatar has `placement="bottomRight"` prop
 
 ### Implementation for User Story 7
 
-- [ ] T028 [US7] In `apps/unihub/frontend/src/components/AppShell/AppShell.tsx` (avatarProps render, line ~103): add `placement="bottomRight"` to the `<Dropdown>` element
-- [ ] T029 [US7] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — T027 must pass
+- [x] T028 [US7] In `apps/unihub/frontend/src/components/AppShell/AppShell.tsx` (avatarProps render, line ~103): add `placement="bottomRight"` to the `<Dropdown>` element
+- [x] T029 [US7] Run `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/` — T027 must pass
 
 **Checkpoint**: User dropdown no longer overflows viewport at the right edge
 
@@ -195,8 +195,8 @@
 **Purpose**: Confirm all 7 fixes are integrated, the quality loop is clean, and the spec is closed
 
 - [ ] T030 [P] Run the full quality loop from `apps/unihub/frontend/`: `pnpm lint && pnpm typecheck && pnpm test` — confirm zero lint warnings, zero type errors, all tests pass
-- [ ] T031 [P] Manual smoke test: open the browser at the local dev server; verify each of the 7 fix acceptance scenarios from `spec.md` passes (new-tab buttons, numeric input, scroll lock, translated tabs, delete confirmation, no tooltip, right-aligned dropdown)
-- [ ] T032 Verify both locale files (`en-US/pages.ts` and `zh-TW/pages.ts`) have matching key counts for the 6 new tab-label keys added in T018/T019 — TypeScript should catch asymmetry at T022 but do a final eyes-on review
+- [ ] T031 [P] Manual smoke test: open the browser at the local dev server; verify each of the 7 fix acceptance scenarios from `spec.md` passes (new-tab buttons, numeric input, scroll lock, translated tabs, delete confirmation, no tooltip, right-aligned dropdown) — TO BE VERIFIED MANUALLY
+- [x] T032 Verify both locale files (`en-US/pages.ts` and `zh-TW/pages.ts`) have matching key counts for the 6 new tab-label keys added in T018/T019 — confirmed: both locales have exactly 6 matching tab-label keys
 
 ---
 

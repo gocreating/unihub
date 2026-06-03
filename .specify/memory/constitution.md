@@ -1,14 +1,13 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.12.0 → 1.13.0 (minor — added Principle XII: Entity Toolbar &
-  Sort Controls, encoding the Apply-gate panel pattern, AntD sort indicator bypass
-  via onHeaderCell, ProTable remount key, isDefault vs isActive button state, opt-in
-  backend infrastructure in core/, and async label sync in useColumnConfig. Reflects
-  entity-operations feature (branch 008) completed 2026-06-02.)
+Version change: 1.13.0 → 1.13.1 (patch — added delete confirmation rule to
+  Development Constraints. Codifies existing practice as a non-negotiable
+  invariant: Modal.confirm with okType:'danger' required before all destructive
+  actions. Reflects UI fixes feature (branch 011) completed 2026-06-03.)
 Modified principles: none
 Added sections:
-  - Principle XII: Entity Toolbar & Sort Controls
+  - Development Constraints: Delete confirmation rule
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed
@@ -545,6 +544,13 @@ filter/sort/pagination infrastructure domain-independent (Principle II).
   for v1.
 - **Custom attribute types (v1)**: text, long text, number, date, boolean,
   single-select. File/image attachments are out of scope for v1.
+- **Delete confirmation (NON-NEGOTIABLE)**: Every user-initiated destructive
+  action (entity deletion, batch deletion, irreversible record removal) MUST
+  display an Ant Design `Modal.confirm` dialog before executing. The dialog
+  MUST carry `okType: 'danger'`. Clicking Cancel MUST abort the action with
+  no side effects. The confirmation title and body MUST use locale keys
+  (`formatMessage`). Inline or silent deletion without a confirmation gate is
+  a constitution violation.
 
 ## Domain Addition Protocol
 
@@ -590,4 +596,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.13.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-06-02
+**Version**: 1.13.1 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-06-03

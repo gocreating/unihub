@@ -150,6 +150,16 @@ export default {
   'pages.finance.balanceSheets.visualization.netWorth': '淨資產',
   'pages.finance.balanceSheets.visualization.empty': '尚無資產負債表',
 
+  // Finance — Balance Sheet list — chart card tab labels
+  'pages.finance.balanceSheets.tab.equityCurve': '淨值曲線',
+  'pages.finance.balanceSheets.tab.accountTrend': '帳戶趨勢',
+
+  // Finance — Balance Sheet detail — chart card tab labels
+  'pages.finance.balanceSheets.detail.tab.assetVsDebt': '資產/負債',
+  'pages.finance.balanceSheets.detail.tab.assetsBreakdown': '資產明細',
+  'pages.finance.balanceSheets.detail.tab.debtsBreakdown': '負債明細',
+  'pages.finance.balanceSheets.detail.tab.statistics': '統計',
+
   // Finance — Exchange Rates
   'pages.finance.exchangeRates.filterBase': '依基準貨幣篩選…',
   'pages.finance.exchangeRates.title': '匯率',

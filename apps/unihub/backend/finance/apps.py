@@ -6,6 +6,8 @@ class FinanceConfig(AppConfig):
     name = "finance"
 
     def ready(self) -> None:
+        import finance.signals  # noqa: F401 — register signal receivers
+
         from data_io.registry import TableDescriptor, auto_system_fields, register
         from finance.models import Account, Balance, BalanceSheet, Currency, ExchangeRate
 

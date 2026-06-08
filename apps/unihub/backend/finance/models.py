@@ -1,6 +1,86 @@
 from django.db import models
+from django.db.models import F, Max, Min
 
 from core.nanoid import generate_id
+
+
+class Asset(models.Model):
+    id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
+    name = models.CharField(max_length=255)
+    category = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+PORTFOLIO_STATE_ACTIVE = "active"
+PORTFOLIO_STATE_CLOSED = "closed"
+PORTFOLIO_STATE_CHOICES = [
+    (PORTFOLIO_STATE_ACTIVE, "Active"),
+    (PORTFOLIO_STATE_CLOSED, "Closed"),
+]
+
+
+class Portfolio(models.Model):
+    id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
+    name = models.CharField(max_length=255)
+    base_currency = models.CharField(max_length=10)
+    state = models.CharField(
+        max_length=20, choices=PORTFOLIO_STATE_CHOICES, default=PORTFOLIO_STATE_ACTIVE
+    )
+    first_transaction_time = models.DateTimeField(null=True, blank=True)
+    last_transaction_time = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = [F("last_transaction_time").desc(nulls_last=True), "-created_at"]
+
+    def __str__(self):
+        return self.name
+
+    def refresh_transaction_times(self) -> None:
+        result = self.transactions.aggregate(first=Min("timestamp"), last=Max("timestamp"))
+        Portfolio.objects.filter(pk=self.pk).update(
+            first_transaction_time=result["first"],
+            last_transaction_time=result["last"],
+        )
+
+
+class Transaction(models.Model):
+    id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
+    portfolio = models.ForeignKey(Portfolio, on_delete=models.PROTECT, related_name="transactions")
+    timestamp = models.DateTimeField()
+    description = models.CharField(max_length=500, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-timestamp"]
+
+    def __str__(self):
+        return f"{self.portfolio} @ {self.timestamp}"
+
+
+class Transfer(models.Model):
+    id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
+    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="transfers")
+    asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name="transfers")
+    asset_change_amount = models.DecimalField(max_digits=28, decimal_places=8)
+    value_change = models.DecimalField(max_digits=28, decimal_places=8, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.asset} x{self.asset_change_amount}"
 
 
 class Currency(models.Model):

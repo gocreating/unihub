@@ -18,6 +18,9 @@ import { BalanceSheetEditPage } from '@/pages/finance/balance-sheets/edit';
 import { BalanceSheetNewPage } from '@/pages/finance/balance-sheets/new';
 import { CurrenciesPage } from '@/pages/finance/currencies/index';
 import { ExchangeRatesPage } from '@/pages/finance/exchange-rates/index';
+import { AssetsPage } from '@/pages/finance/assets/index';
+import { PortfoliosPage } from '@/pages/finance/portfolios/index';
+import { TransactionsPage } from '@/pages/finance/transactions/index';
 import { CatalogPage } from '@/pages/inventory/catalog/index';
 import { AcquisitionNewPage } from '@/pages/inventory/acquisitions/new';
 import { AcquisitionEditPage } from '@/pages/inventory/acquisitions/edit';
@@ -80,6 +83,9 @@ function AppRoutes() {
                 <Route path="/finance/balance-sheets/:id/edit" element={<BalanceSheetEditPage />} />
                 <Route path="/finance/balance-sheets/:id" element={<BalanceSheetDetailPage />} />
                 <Route path="/finance/exchange-rates" element={<ExchangeRatesPage />} />
+                <Route path="/finance/assets" element={<AssetsPage />} />
+                <Route path="/finance/portfolios" element={<PortfoliosPage />} />
+                <Route path="/finance/transactions" element={<TransactionsPage />} />
                 <Route path="/inventory/catalog" element={<CatalogPage />} />
                 <Route path="/inventory/items" element={<Navigate to="/inventory/catalog" replace />} />
                 <Route path="/inventory/acquisitions" element={<Navigate to="/inventory/catalog" replace />} />

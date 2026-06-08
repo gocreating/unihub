@@ -1,0 +1,2072 @@
+openapi: 3.0.3
+info:
+  title: unihub API
+  version: 1.0.0
+paths:
+  /api/v1/auth/login/:
+    post:
+      operationId: v1_auth_login_create
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/me/:
+    get:
+      operationId: v1_auth_me_retrieve
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/core/attribute-definitions/:
+    get:
+      operationId: v1_core_attribute_definitions_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttributeDefinition'
+          description: ''
+    post:
+      operationId: v1_core_attribute_definitions_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeDefinition'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeDefinition'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeDefinition'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeDefinition'
+          description: ''
+  /api/v1/core/attribute-definitions/{id}/:
+    get:
+      operationId: v1_core_attribute_definitions_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this attribute definition.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeDefinition'
+          description: ''
+    patch:
+      operationId: v1_core_attribute_definitions_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this attribute definition.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeDefinition'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeDefinition'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeDefinition'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeDefinition'
+          description: ''
+    delete:
+      operationId: v1_core_attribute_definitions_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this attribute definition.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/core/attribute-values/:
+    get:
+      operationId: v1_core_attribute_values_retrieve
+      description: List and bulk-upsert attribute values for a specific entity.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/core/attribute-values/bulk-upsert/:
+    post:
+      operationId: v1_core_attribute_values_bulk_upsert_create
+      description: List and bulk-upsert attribute values for a specific entity.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finance/accounts/:
+    get:
+      operationId: v1_finance_accounts_list
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAccountList'
+          description: ''
+    post:
+      operationId: v1_finance_accounts_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Account'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Account'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Account'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+  /api/v1/finance/accounts/{id}/:
+    get:
+      operationId: v1_finance_accounts_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this account.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+    patch:
+      operationId: v1_finance_accounts_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this account.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAccount'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAccount'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAccount'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+    delete:
+      operationId: v1_finance_accounts_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this account.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/finance/assets/:
+    get:
+      operationId: v1_finance_assets_list
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAssetList'
+          description: ''
+    post:
+      operationId: v1_finance_assets_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Asset'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Asset'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Asset'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+          description: ''
+  /api/v1/finance/assets/{id}/:
+    get:
+      operationId: v1_finance_assets_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this asset.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+          description: ''
+    patch:
+      operationId: v1_finance_assets_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this asset.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAsset'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAsset'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAsset'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+          description: ''
+    delete:
+      operationId: v1_finance_assets_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this asset.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/finance/balance-sheets/:
+    get:
+      operationId: v1_finance_balance_sheets_list
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBalanceSheetList'
+          description: ''
+    post:
+      operationId: v1_finance_balance_sheets_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BalanceSheet'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BalanceSheet'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BalanceSheet'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSheet'
+          description: ''
+  /api/v1/finance/balance-sheets/{id}/:
+    get:
+      operationId: v1_finance_balance_sheets_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this balance sheet.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSheet'
+          description: ''
+    put:
+      operationId: v1_finance_balance_sheets_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this balance sheet.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BalanceSheet'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BalanceSheet'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BalanceSheet'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSheet'
+          description: ''
+    patch:
+      operationId: v1_finance_balance_sheets_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this balance sheet.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedBalanceSheet'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedBalanceSheet'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedBalanceSheet'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSheet'
+          description: ''
+    delete:
+      operationId: v1_finance_balance_sheets_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this balance sheet.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/finance/balance-sheets/{id}/balances/:
+    get:
+      operationId: v1_finance_balance_sheets_balances_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this balance sheet.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSheet'
+          description: ''
+  /api/v1/finance/balance-sheets/{id}/balances/{account_id}/:
+    put:
+      operationId: v1_finance_balance_sheets_balances_update
+      parameters:
+      - in: path
+        name: account_id
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9]{12}$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this balance sheet.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BalanceSheet'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BalanceSheet'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BalanceSheet'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSheet'
+          description: ''
+  /api/v1/finance/balance-sheets/{id}/balances/{account_id}/delete/:
+    delete:
+      operationId: v1_finance_balance_sheets_balances_delete_destroy
+      parameters:
+      - in: path
+        name: account_id
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9]{12}$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this balance sheet.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/finance/balance-sheets/{id}/net-worth/:
+    get:
+      operationId: v1_finance_balance_sheets_net_worth_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this balance sheet.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSheet'
+          description: ''
+  /api/v1/finance/currencies/:
+    get:
+      operationId: v1_finance_currencies_list
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCurrencyList'
+          description: ''
+    post:
+      operationId: v1_finance_currencies_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Currency'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Currency'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Currency'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+          description: ''
+  /api/v1/finance/currencies/{code}/:
+    get:
+      operationId: v1_finance_currencies_retrieve
+      parameters:
+      - in: path
+        name: code
+        schema:
+          type: string
+        description: A unique value identifying this currency.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+          description: ''
+    patch:
+      operationId: v1_finance_currencies_partial_update
+      parameters:
+      - in: path
+        name: code
+        schema:
+          type: string
+        description: A unique value identifying this currency.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCurrency'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCurrency'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCurrency'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+          description: ''
+    delete:
+      operationId: v1_finance_currencies_destroy
+      parameters:
+      - in: path
+        name: code
+        schema:
+          type: string
+        description: A unique value identifying this currency.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/finance/exchange-rates/:
+    get:
+      operationId: v1_finance_exchange_rates_list
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExchangeRateList'
+          description: ''
+    post:
+      operationId: v1_finance_exchange_rates_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExchangeRate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExchangeRate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExchangeRate'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeRate'
+          description: ''
+  /api/v1/finance/exchange-rates/{id}/:
+    get:
+      operationId: v1_finance_exchange_rates_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this exchange rate.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeRate'
+          description: ''
+    patch:
+      operationId: v1_finance_exchange_rates_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this exchange rate.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExchangeRate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExchangeRate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExchangeRate'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeRate'
+          description: ''
+    delete:
+      operationId: v1_finance_exchange_rates_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this exchange rate.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/finance/portfolios/:
+    get:
+      operationId: v1_finance_portfolios_list
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPortfolioUpdateList'
+          description: ''
+    post:
+      operationId: v1_finance_portfolios_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortfolioCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PortfolioCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PortfolioCreate'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioCreate'
+          description: ''
+  /api/v1/finance/portfolios/{id}/:
+    get:
+      operationId: v1_finance_portfolios_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this portfolio.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioUpdate'
+          description: ''
+    patch:
+      operationId: v1_finance_portfolios_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this portfolio.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPortfolioUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPortfolioUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPortfolioUpdate'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioUpdate'
+          description: ''
+    delete:
+      operationId: v1_finance_portfolios_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this portfolio.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/finance/transactions/:
+    get:
+      operationId: v1_finance_transactions_list
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTransactionList'
+          description: ''
+    post:
+      operationId: v1_finance_transactions_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+          description: ''
+  /api/v1/finance/transactions/{id}/:
+    get:
+      operationId: v1_finance_transactions_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this transaction.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+          description: ''
+    patch:
+      operationId: v1_finance_transactions_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this transaction.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTransaction'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTransaction'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTransaction'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+          description: ''
+    delete:
+      operationId: v1_finance_transactions_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this transaction.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/io/export/:
+    post:
+      operationId: v1_io_export_create
+      description: POST /api/v1/io/export/ — export one or more tables as CSV or ZIP.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/io/import/batch-preview/:
+    post:
+      operationId: v1_io_import_batch_preview_create
+      description: |-
+        POST /api/v1/io/import/batch-preview/ — preview multiple tables in topo order.
+
+        Accepts a list of {table, csv_text|csv_file} entries. Tables are processed in
+        topological dependency order; PKs collected from each table are passed as
+        allowed_fk_pks to subsequent tables so cross-CSV FK references validate correctly.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/io/import/confirm/:
+    post:
+      operationId: v1_io_import_confirm_create
+      description: POST /api/v1/io/import/confirm/ — apply import diff inside transaction.atomic.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/io/import/preview/:
+    post:
+      operationId: v1_io_import_preview_create
+      description: POST /api/v1/io/import/preview/ — parse CSV and return change diff
+        (no writes).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/io/import/zip/confirm/:
+    post:
+      operationId: v1_io_import_zip_confirm_create
+      description: POST /api/v1/io/import/zip/confirm/ — apply all tables in a ZIP
+        inside one transaction.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/io/import/zip/preview/:
+    post:
+      operationId: v1_io_import_zip_preview_create
+      description: POST /api/v1/io/import/zip/preview/ — preview all tables in a ZIP
+        (no writes).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/io/tables/:
+    get:
+      operationId: v1_io_tables_retrieve
+      description: GET /api/v1/io/tables/ — list all registered tables with field
+        schemas.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sync/apply/confirm/:
+    post:
+      operationId: v1_sync_apply_confirm_create
+      description: POST /api/v1/sync/apply/confirm/ — pull and import all tables.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sync/apply/preview/:
+    get:
+      operationId: v1_sync_apply_preview_retrieve
+      description: GET /api/v1/sync/apply/preview/ — fetch remote and return per-table
+        diff.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sync/config/:
+    get:
+      operationId: v1_sync_config_retrieve
+      description: GET / PUT / DELETE /api/v1/sync/config/ — singleton sync configuration.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_sync_config_update
+      description: GET / PUT / DELETE /api/v1/sync/config/ — singleton sync configuration.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_sync_config_destroy
+      description: GET / PUT / DELETE /api/v1/sync/config/ — singleton sync configuration.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/sync/force-publish/:
+    post:
+      operationId: v1_sync_force_publish_create
+      description: POST /api/v1/sync/force-publish/ — force-push, overwriting remote
+        history.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sync/publish/:
+    post:
+      operationId: v1_sync_publish_create
+      description: POST /api/v1/sync/publish/ — export tables to CSV, commit, and
+        push.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sync/publish/preview/:
+    get:
+      operationId: v1_sync_publish_preview_retrieve
+      description: GET /api/v1/sync/publish/preview/ — compute per-table publish diff.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sync/status/:
+    get:
+      operationId: v1_sync_status_retrieve
+      description: GET /api/v1/sync/status/ — check remote ahead/behind state.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/system/version/:
+    get:
+      operationId: v1_system_version_retrieve
+      description: |-
+        Return the application version string.
+
+        Returns:
+            Response: JSON body with a single ``version`` key.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+components:
+  schemas:
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        currency:
+          type: string
+          maxLength: 3
+        color:
+          type: string
+          maxLength: 25
+        open_datetime:
+          type: string
+          format: date-time
+        close_datetime:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - currency
+      - id
+      - name
+      - open_datetime
+      - updated_at
+    Asset:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        category:
+          type: string
+          maxLength: 255
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
+    AttributeDefinition:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        content_type:
+          type: integer
+        content_type_label:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        data_type:
+          $ref: '#/components/schemas/DataTypeEnum'
+        is_system:
+          type: boolean
+          readOnly: true
+        display_order:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        options: {}
+      required:
+      - content_type
+      - content_type_label
+      - data_type
+      - id
+      - is_system
+      - name
+    BalanceSheet:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        date:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - date
+      - id
+      - updated_at
+    Currency:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 3
+        name:
+          type: string
+          maxLength: 100
+        symbol:
+          type: string
+          maxLength: 10
+        is_base_currency:
+          type: boolean
+      required:
+      - code
+      - name
+    DataTypeEnum:
+      enum:
+      - text
+      - long_text
+      - number
+      - date
+      - boolean
+      - single_select
+      type: string
+      description: |-
+        * `text` - Text
+        * `long_text` - Long Text
+        * `number` - Number
+        * `date` - Date
+        * `boolean` - Boolean
+        * `single_select` - Single Select
+    ExchangeRate:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        base_currency:
+          type: string
+          maxLength: 3
+        quote_currency:
+          type: string
+          maxLength: 3
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,8})?$
+        date:
+          type: string
+          format: date-time
+      required:
+      - base_currency
+      - date
+      - id
+      - quote_currency
+      - rate
+    PaginatedAccountList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+    PaginatedAssetList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Asset'
+    PaginatedBalanceSheetList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BalanceSheet'
+    PaginatedCurrencyList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Currency'
+    PaginatedExchangeRateList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExchangeRate'
+    PaginatedPortfolioUpdateList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortfolioUpdate'
+    PaginatedTransactionList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+    PatchedAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        currency:
+          type: string
+          maxLength: 3
+        color:
+          type: string
+          maxLength: 25
+        open_datetime:
+          type: string
+          format: date-time
+        close_datetime:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedAsset:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        category:
+          type: string
+          maxLength: 255
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedAttributeDefinition:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        content_type:
+          type: integer
+        content_type_label:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        data_type:
+          $ref: '#/components/schemas/DataTypeEnum'
+        is_system:
+          type: boolean
+          readOnly: true
+        display_order:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        options: {}
+    PatchedBalanceSheet:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        date:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedCurrency:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 3
+        name:
+          type: string
+          maxLength: 100
+        symbol:
+          type: string
+          maxLength: 10
+        is_base_currency:
+          type: boolean
+    PatchedExchangeRate:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        base_currency:
+          type: string
+          maxLength: 3
+        quote_currency:
+          type: string
+          maxLength: 3
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,8})?$
+        date:
+          type: string
+          format: date-time
+    PatchedPortfolioUpdate:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        base_currency:
+          type: string
+          readOnly: true
+        state:
+          $ref: '#/components/schemas/StateEnum'
+        first_transaction_time:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_transaction_time:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        portfolio:
+          type: string
+        portfolio_name:
+          type: string
+          readOnly: true
+        timestamp:
+          type: string
+          format: date-time
+        description:
+          type: string
+          maxLength: 500
+        transfers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transfer'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PortfolioCreate:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        base_currency:
+          type: string
+          maxLength: 10
+        state:
+          $ref: '#/components/schemas/StateEnum'
+        first_transaction_time:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_transaction_time:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - base_currency
+      - created_at
+      - first_transaction_time
+      - id
+      - last_transaction_time
+      - name
+      - updated_at
+    PortfolioUpdate:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        base_currency:
+          type: string
+          readOnly: true
+        state:
+          $ref: '#/components/schemas/StateEnum'
+        first_transaction_time:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_transaction_time:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - base_currency
+      - created_at
+      - first_transaction_time
+      - id
+      - last_transaction_time
+      - name
+      - updated_at
+    StateEnum:
+      enum:
+      - active
+      - closed
+      type: string
+      description: |-
+        * `active` - Active
+        * `closed` - Closed
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        portfolio:
+          type: string
+        portfolio_name:
+          type: string
+          readOnly: true
+        timestamp:
+          type: string
+          format: date-time
+        description:
+          type: string
+          maxLength: 500
+        transfers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transfer'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - portfolio
+      - portfolio_name
+      - timestamp
+      - transfers
+      - updated_at
+    Transfer:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        asset:
+          type: string
+        asset_name:
+          type: string
+          readOnly: true
+        asset_change_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,8})?$
+        value_change:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,8})?$
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - asset
+      - asset_change_amount
+      - asset_name
+      - created_at
+      - id
+      - updated_at
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid

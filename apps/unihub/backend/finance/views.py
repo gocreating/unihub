@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.db.models import Q
+from django.db.models import ProtectedError, Q
 from django.utils.dateparse import parse_datetime
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -8,15 +8,102 @@ from rest_framework.response import Response
 
 from core.filters import EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter
 from core.pagination import EntityOffsetPagination
-from finance.models import Account, Balance, BalanceSheet, Currency, ExchangeRate
+from finance.models import (
+    Account,
+    Asset,
+    Balance,
+    BalanceSheet,
+    Currency,
+    ExchangeRate,
+    Portfolio,
+    Transaction,
+)
 from finance.serializers import (
     AccountSerializer,
+    AssetSerializer,
     BalanceSerializer,
     BalanceSheetSerializer,
     BalanceUpsertSerializer,
     CurrencySerializer,
     ExchangeRateSerializer,
+    PortfolioCreateSerializer,
+    PortfolioUpdateSerializer,
+    TransactionSerializer,
 )
+
+
+class AssetViewSet(viewsets.ModelViewSet):
+    queryset = Asset.objects.all()
+    serializer_class = AssetSerializer
+    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filterable_fields = {
+        "name": {"lookup": "icontains", "type": "text"},
+        "category": {"lookup": "icontains", "type": "text"},
+    }
+    ordering_fields = ["name", "category", "created_at"]
+    ordering = ["name"]
+    pagination_class = EntityOffsetPagination
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Cannot delete asset: it is referenced by existing transfers."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+
+class PortfolioViewSet(viewsets.ModelViewSet):
+    queryset = Portfolio.objects.all()
+    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filterable_fields = {
+        "name": {"lookup": "icontains", "type": "text"},
+        "state": {"lookup": "exact", "type": "single_select"},
+        "base_currency": {"lookup": "exact", "type": "single_select"},
+    }
+    ordering_fields = [
+        "name",
+        "state",
+        "base_currency",
+        "last_transaction_time",
+        "first_transaction_time",
+        "created_at",
+    ]
+    pagination_class = EntityOffsetPagination
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_serializer_class(self):
+        if self.action in ("create",):
+            return PortfolioCreateSerializer
+        return PortfolioUpdateSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Cannot delete portfolio: it has associated transactions."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+
+class TransactionViewSet(viewsets.ModelViewSet):
+    queryset = (
+        Transaction.objects.select_related("portfolio").prefetch_related("transfers__asset").all()
+    )
+    serializer_class = TransactionSerializer
+    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filterable_fields = {
+        "portfolio": {"lookup": "exact", "type": "single_select"},
+        "description": {"lookup": "icontains", "type": "text"},
+        "timestamp": {"lookup": "date", "type": "date"},
+    }
+    ordering_fields = ["timestamp", "created_at"]
+    ordering = ["-timestamp"]
+    pagination_class = EntityOffsetPagination
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
 
 class CurrencyViewSet(viewsets.ModelViewSet):

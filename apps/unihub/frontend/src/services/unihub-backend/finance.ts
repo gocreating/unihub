@@ -183,6 +183,113 @@ export function getNetWorth(sheetId: string): Promise<NetWorthResult> {
   return fetchJson<NetWorthResult>(`/api/v1/finance/balance-sheets/${sheetId}/net-worth/`);
 }
 
+// ── Assets ───────────────────────────────────────────────────────────
+
+export interface Asset {
+  id: string;
+  name: string;
+  category: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export function listAssets(params?: EntityListParams): Promise<OffsetPaginatedResponse<Asset>> {
+  return fetchJson<OffsetPaginatedResponse<Asset>>(`/api/v1/finance/assets/${buildEntityListQs(params)}`);
+}
+
+export function createAsset(data: Pick<Asset, 'name' | 'category'>): Promise<Asset> {
+  return fetchJson<Asset>('/api/v1/finance/assets/', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateAsset(id: string, data: Partial<Pick<Asset, 'name' | 'category'>>): Promise<Asset> {
+  return fetchJson<Asset>(`/api/v1/finance/assets/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export function deleteAsset(id: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/finance/assets/${id}/`, { method: 'DELETE' });
+}
+
+// ── Portfolios ───────────────────────────────────────────────────────
+
+export interface Portfolio {
+  id: string;
+  name: string;
+  base_currency: string;
+  state: 'active' | 'closed';
+  first_transaction_time: string | null;
+  last_transaction_time: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function listPortfolios(params?: EntityListParams): Promise<OffsetPaginatedResponse<Portfolio>> {
+  return fetchJson<OffsetPaginatedResponse<Portfolio>>(`/api/v1/finance/portfolios/${buildEntityListQs(params)}`);
+}
+
+export function createPortfolio(data: Pick<Portfolio, 'name' | 'base_currency' | 'state'>): Promise<Portfolio> {
+  return fetchJson<Portfolio>('/api/v1/finance/portfolios/', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updatePortfolio(id: string, data: Partial<Pick<Portfolio, 'name' | 'state'>>): Promise<Portfolio> {
+  return fetchJson<Portfolio>(`/api/v1/finance/portfolios/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export function deletePortfolio(id: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/finance/portfolios/${id}/`, { method: 'DELETE' });
+}
+
+// ── Transactions ─────────────────────────────────────────────────────
+
+export interface Transfer {
+  id: string;
+  asset: string;
+  asset_name: string;
+  asset_change_amount: string;
+  value_change: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Transaction {
+  id: string;
+  portfolio: string;
+  portfolio_name: string;
+  timestamp: string;
+  description: string;
+  transfers: Transfer[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TransferInput {
+  asset: string;
+  asset_change_amount: string;
+  value_change?: string | null;
+}
+
+export interface TransactionInput {
+  portfolio: string;
+  timestamp: string;
+  description?: string;
+  transfers: TransferInput[];
+}
+
+export function listTransactions(params?: EntityListParams): Promise<OffsetPaginatedResponse<Transaction>> {
+  return fetchJson<OffsetPaginatedResponse<Transaction>>(`/api/v1/finance/transactions/${buildEntityListQs(params)}`);
+}
+
+export function createTransaction(data: TransactionInput): Promise<Transaction> {
+  return fetchJson<Transaction>('/api/v1/finance/transactions/', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateTransaction(id: string, data: Partial<Omit<TransactionInput, 'portfolio'>>): Promise<Transaction> {
+  return fetchJson<Transaction>(`/api/v1/finance/transactions/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export function deleteTransaction(id: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/finance/transactions/${id}/`, { method: 'DELETE' });
+}
+
 // ── Exchange Rates ────────────────────────────────────────────────────
 
 export function listExchangeRates(

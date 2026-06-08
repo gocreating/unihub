@@ -226,6 +226,10 @@ export function listPortfolios(params?: EntityListParams): Promise<OffsetPaginat
   return fetchJson<OffsetPaginatedResponse<Portfolio>>(`/api/v1/finance/portfolios/${buildEntityListQs(params)}`);
 }
 
+export function getPortfolio(id: string): Promise<Portfolio> {
+  return fetchJson<Portfolio>(`/api/v1/finance/portfolios/${id}/`);
+}
+
 export function createPortfolio(data: Pick<Portfolio, 'name' | 'base_currency' | 'state'>): Promise<Portfolio> {
   return fetchJson<Portfolio>('/api/v1/finance/portfolios/', { method: 'POST', body: JSON.stringify(data) });
 }

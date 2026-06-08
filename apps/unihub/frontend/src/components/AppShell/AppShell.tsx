@@ -53,7 +53,6 @@ export function AppShell({ children }: AppShellProps) {
           { path: '/finance/balance-sheets', name: t({ id: 'menu.finance.balanceSheets' }) },
           { path: '/finance/assets', name: t({ id: 'menu.finance.assets' }) },
           { path: '/finance/portfolios', name: t({ id: 'menu.finance.portfolios' }) },
-          { path: '/finance/transactions', name: t({ id: 'menu.finance.transactions' }) },
         ],
       },
       {

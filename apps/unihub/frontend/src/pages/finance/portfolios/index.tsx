@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Modal, Select, Space, Tag, Typography, message } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
+import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import dayjs from 'dayjs';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
@@ -38,6 +39,7 @@ function formatTransactionTime(val: string | null | undefined) {
 }
 
 export function PortfoliosPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
   const [modalOpen, setModalOpen] = useState(false);
@@ -211,6 +213,9 @@ export function PortfoliosPage() {
           render: (_, record) => (
             <span data-actions-col>
               <Space>
+                <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/finance/portfolios/${record.id}`)}>
+                  {t({ id: 'common.view' })}
+                </Button>
                 <Button size="small" onClick={() => toggleState(record)}>
                   {record.state === 'active'
                     ? t({ id: 'pages.finance.portfolios.action.close' })

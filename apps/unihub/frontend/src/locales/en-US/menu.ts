@@ -6,7 +6,6 @@ export default {
   'menu.finance.exchangeRates': 'Exchange Rates',
   'menu.finance.assets': 'Assets',
   'menu.finance.portfolios': 'Portfolios',
-  'menu.finance.transactions': 'Transactions',
   'menu.inventory': 'Inventory',
   'menu.inventory.items': 'Items',
   'menu.inventory.acquisitions': 'Acquisitions',

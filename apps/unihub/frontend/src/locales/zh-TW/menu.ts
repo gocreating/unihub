@@ -6,7 +6,6 @@ export default {
   'menu.finance.exchangeRates': '匯率',
   'menu.finance.assets': '資產',
   'menu.finance.portfolios': '投資組合',
-  'menu.finance.transactions': '交易記錄',
   'menu.inventory': '物品庫存',
   'menu.inventory.items': '物品',
   'menu.inventory.acquisitions': '取得紀錄',

@@ -1,23 +1,28 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Tag, Typography, message } from 'antd';
-import { DeleteOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  Button, DatePicker, Form, Input, InputNumber, Modal,
+  Select, Space, Spin, Tag, Typography, message,
+} from 'antd';
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { ProCard } from '@ant-design/pro-components';
 import type { ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import dayjs from 'dayjs';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
-import type { Portfolio, Transaction, TransferInput } from '@/services/unihub-backend/finance';
+import type { Transaction, TransferInput } from '@/services/unihub-backend/finance';
 import {
   createTransaction,
   deleteTransaction,
+  getPortfolio,
   listAssets,
-  listPortfolios,
   listTransactions,
   updateTransaction,
 } from '@/services/unihub-backend/finance';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
-import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import type { ColumnDef, EntityListParams, FilterableAttribute } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 const EMPTY_CELL = <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
@@ -29,48 +34,39 @@ interface TransferFormRow {
 }
 
 interface TransactionFormValues {
-  portfolio: string;
   timestamp: dayjs.Dayjs;
   description?: string;
   transfers: TransferFormRow[];
 }
 
-export function TransactionsPage() {
+function formatTransactionTime(val: string | null | undefined) {
+  if (!val) return EMPTY_CELL;
+  return (
+    <span title={dayjs(val).format('YYYY-MM-DD HH:mm')}>
+      {dayjs(val).format('YYYY-MM-DD HH:mm')}
+      <Typography.Text type="secondary" style={{ marginLeft: 6, fontSize: 12 }}>
+        ({dayjs(val).fromNow()})
+      </Typography.Text>
+    </span>
+  );
+}
+
+export function PortfolioDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [form] = Form.useForm<TransactionFormValues>();
-  const selectedPortfolioId = Form.useWatch('portfolio', form);
 
-  const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
-    { key: 'portfolio', label: t({ id: 'pages.finance.transactions.col.portfolio' }), dataType: 'text' },
-    { key: 'description', label: t({ id: 'pages.finance.transactions.col.description' }), dataType: 'text' },
-    { key: 'timestamp', label: t({ id: 'pages.finance.transactions.col.timestamp' }), dataType: 'date' },
-  ], [t]);
-
-  const columnDefs = useMemo<ColumnDef[]>(() => [
-    { key: 'portfolio_name', label: t({ id: 'pages.finance.transactions.col.portfolio' }), dataType: 'text', visible: true, order: 0 },
-    { key: 'timestamp', label: t({ id: 'pages.finance.transactions.col.timestamp' }), dataType: 'text', visible: true, order: 1 },
-    { key: 'description', label: t({ id: 'pages.finance.transactions.col.description' }), dataType: 'text', visible: true, order: 2 },
-    { key: 'transfer_count', label: t({ id: 'pages.finance.transactions.col.transferCount' }), dataType: 'text', visible: true, order: 3 },
-    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 4 },
-  ], [t]);
-
-  const table = useEntityTable({ key: 'transactions', filterableAttrs, columnDefs });
-
-  const { data: transactionsData, isLoading } = useQuery({
-    queryKey: ['finance', 'transactions', table.queryParams],
-    queryFn: () => listTransactions(table.queryParams),
-    meta: { errorMessage: t({ id: 'pages.finance.transactions.loadError' }) },
+  const { data: portfolio, isLoading: portfolioLoading } = useQuery({
+    queryKey: ['finance', 'portfolios', id],
+    queryFn: () => getPortfolio(id!),
+    enabled: !!id,
   });
-  const transactions = useMemo(() => transactionsData?.results ?? [], [transactionsData]);
 
-  const { data: portfoliosData } = useQuery({
-    queryKey: ['finance', 'portfolios', { limit: 200 }],
-    queryFn: () => listPortfolios({ limit: 200 }),
-  });
-  const portfolios = useMemo(() => portfoliosData?.results ?? [], [portfoliosData]);
+  const baseCurrency = portfolio?.base_currency ?? '???';
 
   const { data: assetsData } = useQuery({
     queryKey: ['finance', 'assets', { limit: 500 }],
@@ -78,17 +74,46 @@ export function TransactionsPage() {
   });
   const assets = useMemo(() => assetsData?.results ?? [], [assetsData]);
 
-  const selectedPortfolio = useMemo<Portfolio | undefined>(
-    () => portfolios.find((p) => p.id === selectedPortfolioId),
-    [portfolios, selectedPortfolioId],
-  );
-  const baseCurrency = selectedPortfolio?.base_currency ?? '???';
+  const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
+    { key: 'description', label: t({ id: 'pages.finance.transactions.col.description' }), dataType: 'text' },
+    { key: 'timestamp', label: t({ id: 'pages.finance.transactions.col.timestamp' }), dataType: 'date' },
+  ], [t]);
+
+  const columnDefs = useMemo<ColumnDef[]>(() => [
+    { key: 'timestamp', label: t({ id: 'pages.finance.transactions.col.timestamp' }), dataType: 'text', visible: true, order: 0 },
+    { key: 'description', label: t({ id: 'pages.finance.transactions.col.description' }), dataType: 'text', visible: true, order: 1 },
+    { key: 'transfer_count', label: t({ id: 'pages.finance.transactions.col.transferCount' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 3 },
+  ], [t]);
+
+  const table = useEntityTable({ key: `portfolio-transactions-${id}`, filterableAttrs, columnDefs });
+
+  const queryParams = useMemo((): EntityListParams => {
+    const portfolioCondition = { attr: 'portfolio', op: 'eq' as const, val: id ?? '' };
+    const userGroups = table.queryParams.filters?.groups ?? [];
+    const groups = userGroups.length === 0
+      ? [{ logic: 'and' as const, conditions: [portfolioCondition] }]
+      : userGroups.map((g) => ({ ...g, conditions: [portfolioCondition, ...g.conditions] }));
+    return { ...table.queryParams, filters: { groups } };
+  }, [table.queryParams, id]);
+
+  const { data: transactionsData, isLoading: txnLoading } = useQuery({
+    queryKey: ['finance', 'transactions', queryParams],
+    queryFn: () => listTransactions(queryParams),
+    enabled: !!id,
+    meta: { errorMessage: t({ id: 'pages.finance.transactions.loadError' }) },
+  });
+  const transactions = useMemo(() => transactionsData?.results ?? [], [transactionsData]);
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['finance', 'transactions'] });
+    queryClient.invalidateQueries({ queryKey: ['finance', 'portfolios'] });
+  };
 
   const createMutation = useMutation({
     mutationFn: createTransaction,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['finance', 'transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['finance', 'portfolios'] });
+      invalidate();
       setModalOpen(false);
       form.resetFields();
       message.success(t({ id: 'pages.finance.transactions.created' }));
@@ -97,11 +122,10 @@ export function TransactionsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateTransaction>[1] }) =>
-      updateTransaction(id, data),
+    mutationFn: ({ id: txnId, data }: { id: string; data: Parameters<typeof updateTransaction>[1] }) =>
+      updateTransaction(txnId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['finance', 'transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['finance', 'portfolios'] });
+      invalidate();
       setModalOpen(false);
       form.resetFields();
       message.success(t({ id: 'pages.finance.transactions.updated' }));
@@ -112,8 +136,7 @@ export function TransactionsPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteTransaction,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['finance', 'transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['finance', 'portfolios'] });
+      invalidate();
       message.success(t({ id: 'pages.finance.transactions.deleted' }));
     },
     onError: () => message.error(t({ id: 'pages.finance.transactions.deleteError' })),
@@ -129,7 +152,6 @@ export function TransactionsPage() {
   const openEdit = (txn: Transaction) => {
     setEditingTransaction(txn);
     form.setFieldsValue({
-      portfolio: txn.portfolio,
       timestamp: dayjs(txn.timestamp),
       description: txn.description,
       transfers: txn.transfers.map((tr) => ({
@@ -150,15 +172,11 @@ export function TransactionsPage() {
     if (editingTransaction) {
       updateMutation.mutate({
         id: editingTransaction.id,
-        data: {
-          timestamp: values.timestamp.toISOString(),
-          description: values.description ?? '',
-          transfers,
-        },
+        data: { timestamp: values.timestamp.toISOString(), description: values.description ?? '', transfers },
       });
     } else {
       createMutation.mutate({
-        portfolio: values.portfolio,
+        portfolio: id!,
         timestamp: values.timestamp.toISOString(),
         description: values.description ?? '',
         transfers,
@@ -169,9 +187,8 @@ export function TransactionsPage() {
   const actionsColWidth = useActionsColWidth(transactions);
 
   const dataWidths = useMemo(() => {
-    const w = { portfolio_name: 0, description: 0 };
+    const w = { description: 0 };
     for (const txn of transactions) {
-      w.portfolio_name = Math.max(w.portfolio_name, measureTextWidth(txn.portfolio_name));
       w.description = Math.max(w.description, measureTextWidth(txn.description));
     }
     return w;
@@ -184,12 +201,6 @@ export function TransactionsPage() {
           : table.cols.visibleColumns.at(-1)?.key === key ? table.cols.lastColumnFixed
           : undefined;
       return {
-        portfolio_name: {
-          dataIndex: 'portfolio_name',
-          ...widthForHeader(t({ id: 'pages.finance.transactions.col.portfolio' }), dataWidths.portfolio_name),
-          fixed: getFixed('portfolio_name'),
-          render: (val) => val ? <Tag>{String(val)}</Tag> : EMPTY_CELL,
-        },
         timestamp: {
           dataIndex: 'timestamp',
           width: 200,
@@ -258,13 +269,73 @@ export function TransactionsPage() {
     [table.cols.visibleColumns, colDefMap],
   );
 
+  if (portfolioLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  const transferCols: ProColumns[] = [
+    {
+      title: t({ id: 'pages.finance.transactions.transfer.asset' }),
+      dataIndex: 'asset_name',
+      render: (val) => val ? <Tag>{String(val)}</Tag> : EMPTY_CELL,
+    },
+    {
+      title: t({ id: 'pages.finance.transactions.transfer.assetChange' }),
+      dataIndex: 'asset_change_amount',
+    },
+    {
+      title: t({ id: 'pages.finance.transactions.transfer.valueChange' }, { currency: baseCurrency }),
+      dataIndex: 'value_change',
+      render: (val) => val != null ? String(val) : EMPTY_CELL,
+    },
+  ];
+
   return (
     <>
+      <div style={{ marginBottom: 16 }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/finance/portfolios')}>
+          {t({ id: 'pages.finance.portfolios.title' })}
+        </Button>
+      </div>
+
+      <ProCard style={{ marginBottom: 16 }}>
+        <Space size="large" wrap>
+          <Typography.Title level={4} style={{ margin: 0 }}>
+            {portfolio?.name}
+          </Typography.Title>
+          <Tag>{portfolio?.base_currency}</Tag>
+          <Tag color={portfolio?.state === 'active' ? 'green' : 'default'}>
+            {portfolio?.state === 'active'
+              ? t({ id: 'pages.finance.portfolios.state.active' })
+              : t({ id: 'pages.finance.portfolios.state.closed' })}
+          </Tag>
+        </Space>
+        <div style={{ marginTop: 12, display: 'flex', gap: 32 }}>
+          <div>
+            <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.firstTransactionTime' })}</Typography.Text>
+            <div>{formatTransactionTime(portfolio?.first_transaction_time)}</div>
+          </div>
+          <div>
+            <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.lastTransactionTime' })}</Typography.Text>
+            <div>{formatTransactionTime(portfolio?.last_transaction_time)}</div>
+          </div>
+        </div>
+      </ProCard>
+
       <PageTable<Transaction>
         key={`${table.cols.visibleColumns[0]?.key ?? ''}-${table.cols.visibleColumns.at(-1)?.key ?? ''}-${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
         pageTitle={t({ id: 'pages.finance.transactions.title' })}
         action={
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={openCreate}
+            disabled={portfolio?.state !== 'active'}
+          >
             {t({ id: 'pages.finance.transactions.new' })}
           </Button>
         }
@@ -278,44 +349,24 @@ export function TransactionsPage() {
         rowKey="id"
         columns={columns}
         dataSource={transactions}
-        loading={isLoading}
+        loading={txnLoading}
         scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
         footer={() => <EntityOffsetFooter {...table.paginationProps(transactionsData?.count)} />}
         expandable={{
-          expandedRowRender: (record) => {
-            const txnPortfolio = portfolios.find((p) => p.id === record.portfolio);
-            const currency = txnPortfolio?.base_currency ?? '???';
-            const transferCols: ProColumns[] = [
-              {
-                title: t({ id: 'pages.finance.transactions.transfer.asset' }),
-                dataIndex: 'asset_name',
-                render: (val) => val ? <Tag>{String(val)}</Tag> : EMPTY_CELL,
-              },
-              {
-                title: t({ id: 'pages.finance.transactions.transfer.assetChange' }),
-                dataIndex: 'asset_change_amount',
-              },
-              {
-                title: t({ id: 'pages.finance.transactions.transfer.valueChange' }, { currency }),
-                dataIndex: 'value_change',
-                render: (val) => val != null ? String(val) : EMPTY_CELL,
-              },
-            ];
-            return (
-              <ProTable
-                ghost
-                dataSource={record.transfers}
-                columns={transferCols}
-                rowKey="id"
-                search={false}
-                toolBarRender={false}
-                pagination={false}
-                size="small"
-              />
-            );
-          },
+          expandedRowRender: (record) => (
+            <ProTable
+              ghost
+              dataSource={record.transfers}
+              columns={transferCols}
+              rowKey="id"
+              search={false}
+              toolBarRender={false}
+              pagination={false}
+              size="small"
+            />
+          ),
           rowExpandable: (record) => record.transfers.length > 0,
         }}
       />
@@ -329,27 +380,6 @@ export function TransactionsPage() {
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
         <Form form={form} layout="vertical" onFinish={onFinish}>
-          <Form.Item
-            name="portfolio"
-            label={t({ id: 'pages.finance.transactions.form.portfolio' })}
-            rules={[{ required: true }]}
-          >
-            <Select
-              placeholder={t({ id: 'pages.finance.transactions.form.portfolioPlaceholder' })}
-              disabled={!!editingTransaction}
-              showSearch
-              optionFilterProp="children"
-            >
-              {portfolios
-                .filter((p) => p.state === 'active' || (editingTransaction && p.id === editingTransaction.portfolio))
-                .map((p) => (
-                  <Select.Option key={p.id} value={p.id}>
-                    {p.name} ({p.base_currency})
-                  </Select.Option>
-                ))}
-            </Select>
-          </Form.Item>
-
           <Form.Item
             name="timestamp"
             label={t({ id: 'pages.finance.transactions.form.timestamp' })}

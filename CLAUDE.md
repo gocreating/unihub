@@ -169,9 +169,9 @@ When connecting a new dimension to the hub:
 <!-- SPECKIT START -->
 ## Active Feature
 
-**Branch**: `012-refine-docs` | **Plan**: [specs/012-refine-docs/plan.md](specs/012-refine-docs/plan.md)
+**Branch**: `014-inventory-app` | **Plan**: [specs/014-inventory-app/plan.md](specs/014-inventory-app/plan.md)
 
-Repository documentation overhaul from GitHub issue #30: rewrite README.md with logo, slogan, badges, feature list, screenshots, and getting-started guide; correct CLAUDE.md accuracy; add MIT LICENSE. Documentation assets only — no application source code changes. See plan for content design and research decisions.
+Inventory domain from GitHub issue #33: a new entity-centric Django app (`inventory`) + frontend section for cataloging stockable/consumable **Items**, recording how each was obtained (**Acquisition** — renamed from "Order"; optional typed method, optional linkage), and per-situation planning via **Scenario** (preparation checklists), **Constraint** (mutual-exclusive / required / weight-limit, evaluated server-side), item-in-item **containment** (per-scenario, cycle-checked), and position review. Follows the Finance reference pattern: concrete models + seeded system AttributeDefinitions, `ModelViewSet`s on `core/` filter/order/pagination, PageTable + EntityToolbar frontend. See plan and [research.md](specs/014-inventory-app/research.md) for resolved decisions.
 <!-- SPECKIT END -->
 
 ## Active Technologies

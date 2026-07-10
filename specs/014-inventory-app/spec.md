@@ -15,6 +15,10 @@
 - Q: The purchase-record entity was named "Order", but items can be gifts, hand-me-downs, transfers, or found — what should it be renamed to? → A: Rename "Order" to **Acquisition**; its "store" attribute becomes **source** (a store, seller, or person).
 - Q: Should an acquisition record a typed method (purchase, gift, transfer, found, other), and is it required? → A: The method is a **typed** field, but it is **optional** — and linking an item to an acquisition at all is optional. A blank/absent record means the user does not recall how the item was obtained, or the item predates their use of the system.
 
+### Session 2026-07-11
+
+- Q: Should the catalog entity be renamed from "Item" to "SKU"? → A: **Keep "Item"**. The entity represents an individual owned/consumed thing (per-instance identity via serial number, storage location, containment), not a retail product type. "SKU" (a product-type identifier implying a product→units split) is a deliberate non-goal for v1; no product-type/variant layer is introduced.
+
 ## User Scenarios & Testing *(mandatory)*
 
 The Inventory domain is a new section of the unihub dashboard where a user catalogs everything they own or consume, records how those things were acquired, and plans which items to take and how to pack them for real-world situations (a trip, a shoot, an event). Each user story below is an independently shippable slice.
@@ -172,6 +176,7 @@ The user organizes items into a physical containment plan for a scenario — ass
 
 - **Single-user, personal scope**: Inventory data belongs to the authenticated user, mirroring the personal-hub model of existing unihub domains; no multi-user sharing, lending, or team collaboration is in scope for this feature.
 - **Item type model**: Items are classified as either stockable/durable (tracked as discrete possessions) or consumable (tracked by a quantity on hand that the user adjusts). Automatic consumption/depletion driven by usage events is out of scope; quantity changes are manual.
+- **Item is an individual possession, not a product type (SKU)**: The catalog entity is called **Item** and represents a specific owned thing. A retail-style product-type/variant layer ("SKU" with multiple interchangeable units beneath it) is explicitly out of scope for v1; if two identical products are owned, they are two Items.
 - **Containment is scenario-scoped**: The "which item is packed inside which" plan is defined per scenario (packing for a situation), not as a permanent global storage graph. A separate "storage location" attribute captures where an item lives when not packed. If a permanent global containment model is desired instead, that is a future refinement.
 - **Constraint set for v1**: Constraints support mutual exclusivity, required item/category selection, and total-weight limit. Additional constraint types (volume/size fit, temperature, custom expressions) are out of scope for the initial version.
 - **Checklist is preparation-oriented**: The checklist reflects preparation/packing readiness for a scenario; it is not a real-time stock ledger or barcode-scanning workflow.

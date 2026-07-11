@@ -127,7 +127,9 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
       >
         <Button
           icon={<SortAscendingOutlined />}
-          type={!sortProps.hook.isDefault ? 'primary' : 'default'}
+          // Active whenever ANY sort rule applies — including a page's seeded
+          // default — matching the Filter button's isActive semantics.
+          type={sortProps.hook.isActive ? 'primary' : 'default'}
         >
           {t({ id: 'common.entityOps.sort' })}
         </Button>

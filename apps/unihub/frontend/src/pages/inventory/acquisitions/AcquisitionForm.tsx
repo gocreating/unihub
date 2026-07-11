@@ -14,6 +14,7 @@ import {
   Select,
   Space,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd';
@@ -371,7 +372,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     setFactors((prev) => prev.map((f) => (f.key === key ? { ...f, ...patch } : f)));
 
   const addFactor = () =>
-    setFactors((prev) => [...prev, { key: nextKey(), value: '0', currency: '', type: 'other', kind: 'manual' }]);
+    setFactors((prev) => [...prev, { key: nextKey(), value: '0', currency: '', type: '', kind: 'manual' }]);
 
   const removeFactor = (key: string) => setFactors((prev) => prev.filter((f) => f.key !== key));
 
@@ -480,11 +481,21 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
                   <DeleteOutlined key="del" onClick={() => removeCard(idx)} />,
                 ]}
               >
-                <Space size={[4, 4]} wrap>
+                <Space size={[4, 4]} wrap style={{ maxWidth: '100%' }}>
                   {itemCardBadges(card.data).map((badge, i) => (
-                    <Tag key={i} style={{ marginInlineEnd: 0 }}>
-                      {badge}
-                    </Tag>
+                    <Tooltip key={i} title={badge}>
+                      <Tag
+                        style={{
+                          marginInlineEnd: 0,
+                          maxWidth: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {badge}
+                      </Tag>
+                    </Tooltip>
                   ))}
                 </Space>
               </Card>

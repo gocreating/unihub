@@ -607,13 +607,27 @@ Completed 2026-07-12 (builds on iteration 10, commit `341c11a`). **No schema cha
 
 **Input**: plan.md "Iteration 12"; spec session 2026-07-12. Builds on iteration 11 (`1548a25`). **Frontend only.**
 
-- [ ] T120 `catalog/index.tsx`: remove ALL arbitrary width floors from the `w()` helper and per-column `min` args — width = `widthForHeader(title, dataWidths[key])` only
-- [ ] T121 `EntityToolbar.tsx`: Sort button `type` driven by **`sortProps.hook.isActive`** (was `!isDefault`) so a seeded default sort lights it; verify finance pages unaffected (no seeded defaults ⇒ same visual behavior)
-- [ ] T122 [P] Breadcrumbs: `acquisitions/new.tsx` last crumb → `common.new`; `acquisitions/edit.tsx` last crumb → `common.edit`; prune `pages.inventory.acquisitions.form.editCrumb` key (BOTH locales)
-- [ ] T123 [P] `ItemFormModal.tsx`: first-row spans Name 12 / Quantity 4 / SKU Price 8 (narrow stacking unchanged)
-- [ ] T124 [P] `AcquisitionForm.tsx`: card badges `<Tag>` with `maxWidth:'100%'` + ellipsis + `Tooltip` (full text); new factor `type: ''` default (placeholder shows; payload already falls back to `other`)
-- [ ] T125 [P] Tests: RTL — Sort button primary on catalog load (seeded default), ItemFormModal spans 12/4/8, badge Tooltip/ellipsis; e2e — sort button active on load
-- [ ] T126 Quality loops (lint/typecheck/**build**/vitest; backend ruff/pytest untouched but run); mark tasks + notes
+- [X] T120 `catalog/index.tsx`: remove ALL arbitrary width floors from the `w()` helper and per-column `min` args — width = `widthForHeader(title, dataWidths[key])` only
+- [X] T121 `EntityToolbar.tsx`: Sort button `type` driven by **`sortProps.hook.isActive`** (was `!isDefault`) so a seeded default sort lights it; verify finance pages unaffected (no seeded defaults ⇒ same visual behavior)
+- [X] T122 [P] Breadcrumbs: `acquisitions/new.tsx` last crumb → `common.new`; `acquisitions/edit.tsx` last crumb → `common.edit`; prune `pages.inventory.acquisitions.form.editCrumb` key (BOTH locales)
+- [X] T123 [P] `ItemFormModal.tsx`: first-row spans Name 12 / Quantity 4 / SKU Price 8 (narrow stacking unchanged)
+- [X] T124 [P] `AcquisitionForm.tsx`: card badges `<Tag>` with `maxWidth:'100%'` + ellipsis + `Tooltip` (full text); new factor `type: ''` default (placeholder shows; payload already falls back to `other`)
+- [X] T125 [P] Tests: RTL — Sort button primary on catalog load (seeded default), ItemFormModal spans 12/4/8, badge Tooltip/ellipsis; e2e — sort button active on load
+- [X] T126 Quality loops (lint/typecheck/**build**/vitest; backend ruff/pytest untouched but run); mark tasks + notes
 
 ## Implementation Strategy
 Two root-cause fixes (width floors, isActive semantics) + four cosmetic corrections, all regression-tested.
+
+---
+
+## Implementation Notes (iteration 12)
+
+Completed 2026-07-12 (builds on iteration 11, commit `1548a25`). **Frontend only.**
+
+- **Width floors removed** (`catalog/index.tsx`): `w()` no longer stacks arbitrary per-column minimums (Net Cost had a 140px floor) — width = `widthForHeader(title, measuredContent)`; header remains the only floor.
+- **Sort button semantics** (`EntityToolbar.tsx`): lights on **`isActive`** (any rule applied, incl. a page's seeded default) instead of `!isDefault`; the toolbar unit test updated to encode the new semantics (+ a stays-default case). Pages without seeded defaults are visually unchanged.
+- **Breadcrumbs**: Catalog / **New** and Catalog / {id} / **Edit** (reuse `common.new`/`common.edit`; `form.editCrumb` key pruned from both locales).
+- **Add-Item modal**: first row **Name 12 / Quantity 4 / SKU Price 8** — the currency select no longer clips; RTL asserts the spans.
+- **Item-card badges**: `<Tag>` capped at card width with **ellipsis + Tooltip** (full text) — badges can no longer break the card layout.
+- **New cost factor**: `type` starts **empty** (placeholder shown; falls back to `other` at submit via the existing payload mapping).
+- Tests: RTL — modal spans 12/4/8, catalog Sort-button primary on load (seeded default); e2e — Sort button active on load. **Frontend 368 vitest / lint / typecheck / build clean; backend 274 pytest / ruff clean; locale parity OK; 119 e2e specs compile.**

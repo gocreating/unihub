@@ -464,7 +464,6 @@ export default {
   'pages.inventory.acquisitions.col.netCost': 'Net Cost',
   'pages.inventory.acquisitions.new.untitled': '(unnamed item)',
   'pages.inventory.acquisitions.form.title': 'Acquisition',
-  'pages.inventory.acquisitions.form.editCrumb': 'Edit Acquisition',
   'pages.inventory.acquisitions.items': 'Items',
   // Cost panel
   'pages.inventory.acquisitions.cost': 'Cost',

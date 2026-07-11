@@ -86,10 +86,18 @@ describe('EntityToolbar button variant', () => {
     expect(isPrimary(screen.getByRole('button', { name: /filter/i }))).toBe(true);
   });
 
-  // T-04: sort differs from default → primary
-  it('sort button is primary when sort differs from default', () => {
-    renderToolbar({ sortProps: { attrs: [], hook: makeSort({ isDefault: false }) } });
+  // T-04: any sort rule applied (including a page's seeded default) → primary.
+  // Semantics changed in iteration 12: previously !isDefault, which never lit
+  // the button for pages with a seeded default sort (e.g. the inventory Catalog).
+  it('sort button is primary when any sort rule is active', () => {
+    renderToolbar({ sortProps: { attrs: [], hook: makeSort({ isActive: true }) } });
     expect(isPrimary(screen.getByRole('button', { name: /sort/i }))).toBe(true);
+  });
+
+  // T-04b: no active sort rules → default styling.
+  it('sort button stays default when no sort rule is active', () => {
+    renderToolbar({ sortProps: { attrs: [], hook: makeSort({ isActive: false }) } });
+    expect(isPrimary(screen.getByRole('button', { name: /sort/i }))).toBe(false);
   });
 
   // T-05: opening columns panel must NOT change button style

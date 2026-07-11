@@ -94,10 +94,14 @@ describe('ItemFormModal (Principle VI)', () => {
     const gridCol = (label: string) =>
       screen.getByLabelText(label).closest('[class*="ant-col-"]') as HTMLElement;
 
-    // Wide: the Name field sits in a half-width column.
+    // Wide: first row spans Name 12 / Quantity 4 / SKU Price 8 (the currency
+    // select clipped when SKU Price sat at span 6 — regression).
     mockWidth(container, 900);
     await act(async () => instance!.trigger());
     expect(gridCol('Name').className).toContain('ant-col-12');
+    expect(gridCol('Quantity').className).toContain('ant-col-4');
+    const skuCol = screen.getByText('SKU Price').closest('[class*="ant-col-"]') as HTMLElement;
+    expect(skuCol.className).toContain('ant-col-8');
 
     // Narrow: every field stacks to a full-width column.
     mockWidth(container, 400);

@@ -464,7 +464,6 @@ export default {
   'pages.inventory.acquisitions.col.netCost': '淨額',
   'pages.inventory.acquisitions.new.untitled': '（未命名物品）',
   'pages.inventory.acquisitions.form.title': '取得紀錄',
-  'pages.inventory.acquisitions.form.editCrumb': '編輯取得紀錄',
   'pages.inventory.acquisitions.items': '物品',
   // Cost panel
   'pages.inventory.acquisitions.cost': '費用',

@@ -363,12 +363,14 @@ export function CatalogPage() {
           : cols.visibleColumns.at(-1)?.key === key
             ? cols.lastColumnFixed
             : undefined;
-      const w = (key: string, labelId: string, min = 90) =>
-        widthForHeader(t({ id: labelId }), Math.max(min, dataWidths[key] ?? 0));
-      const itemText = (key: string, labelId: string, get: (it: Item) => string, min = 120): ProColumns<CatalogRow> => ({
+      // Width = max(measured content, header) + padding — NO arbitrary floors
+      // (a 140px floor previously inflated Net Cost beyond its content).
+      const w = (key: string, labelId: string) =>
+        widthForHeader(t({ id: labelId }), dataWidths[key] ?? 0);
+      const itemText = (key: string, labelId: string, get: (it: Item) => string): ProColumns<CatalogRow> => ({
         key,
         title: t({ id: labelId }),
-        ...w(key, labelId, min),
+        ...w(key, labelId),
         fixed: getFixed(key),
         ...makeSortProps(key, t({ id: labelId }), sort),
         render: (_, r) => (!isAcquisition(r) ? (get(r) || EMPTY) : EMPTY),
@@ -376,7 +378,7 @@ export function CatalogPage() {
       const measureCol = (key: 'weight' | 'length' | 'width' | 'height', canonKey: string, labelId: string): ProColumns<CatalogRow> => ({
         key: canonKey,
         title: t({ id: labelId }),
-        ...w(canonKey, labelId, 100),
+        ...w(canonKey, labelId),
         fixed: getFixed(canonKey),
         ...makeSortProps(canonKey, t({ id: labelId }), sort),
         render: (_, r) => (!isAcquisition(r) ? (measureText(r[key]) || EMPTY) : EMPTY),
@@ -385,7 +387,7 @@ export function CatalogPage() {
         acquisition__source: {
           key: 'acquisition__source',
           title: t({ id: 'pages.inventory.acquisitions.col.source' }),
-          ...w('acquisition__source', 'pages.inventory.acquisitions.col.source', 160),
+          ...w('acquisition__source', 'pages.inventory.acquisitions.col.source'),
           fixed: getFixed('acquisition__source'),
           ...makeSortProps('acquisition__source', t({ id: 'pages.inventory.acquisitions.col.source' }), sort),
           render: (_, r) =>
@@ -398,7 +400,7 @@ export function CatalogPage() {
         name: {
           key: 'name',
           title: t({ id: 'common.name' }),
-          ...w('name', 'common.name', 160),
+          ...w('name', 'common.name'),
           fixed: getFixed('name'),
           ...makeSortProps('name', t({ id: 'common.name' }), sort),
           render: (_, r) =>
@@ -412,17 +414,17 @@ export function CatalogPage() {
               r.name
             ),
         },
-        spec: { ...itemText('spec', 'pages.inventory.items.col.spec', (it) => it.spec, 160), ellipsis: true },
-        size: itemText('size', 'pages.inventory.items.col.size', (it) => it.size, 90),
+        spec: { ...itemText('spec', 'pages.inventory.items.col.spec', (it) => it.spec), ellipsis: true },
+        size: itemText('size', 'pages.inventory.items.col.size', (it) => it.size),
         quantity: {
           key: 'quantity',
           title: t({ id: 'pages.inventory.items.col.quantity' }),
-          ...w('quantity', 'pages.inventory.items.col.quantity', 90),
+          ...w('quantity', 'pages.inventory.items.col.quantity'),
           fixed: getFixed('quantity'),
           ...makeSortProps('quantity', t({ id: 'pages.inventory.items.col.quantity' }), sort),
           render: (_, r) => (!isAcquisition(r) ? r.quantity : EMPTY),
         },
-        sku_price: { ...itemText('sku_price', 'pages.inventory.items.col.skuPrice', (it) => skuText(it), 120), align: 'right' },
+        sku_price: { ...itemText('sku_price', 'pages.inventory.items.col.skuPrice', (it) => skuText(it)), align: 'right' },
         weight_canonical: measureCol('weight', 'weight_canonical', 'pages.inventory.items.col.weight'),
         length_canonical: measureCol('length', 'length_canonical', 'pages.inventory.items.col.length'),
         width_canonical: measureCol('width', 'width_canonical', 'pages.inventory.items.col.width'),
@@ -430,7 +432,7 @@ export function CatalogPage() {
         status: {
           key: 'status',
           title: t({ id: 'pages.inventory.items.col.status' }),
-          ...w('status', 'pages.inventory.items.col.status', 110),
+          ...w('status', 'pages.inventory.items.col.status'),
           fixed: getFixed('status'),
           render: (_, r) =>
             isAcquisition(r) ? (
@@ -445,14 +447,14 @@ export function CatalogPage() {
           key: 'net_cost',
           align: 'right',
           title: t({ id: 'pages.inventory.acquisitions.col.netCost' }),
-          ...w('net_cost', 'pages.inventory.acquisitions.col.netCost', 140),
+          ...w('net_cost', 'pages.inventory.acquisitions.col.netCost'),
           fixed: getFixed('net_cost'),
           render: (_, r) => (isAcquisition(r) ? (formatNetCost(r.net_cost) || EMPTY) : EMPTY),
         },
         acquisition__request_time: {
           key: 'acquisition__request_time',
           title: t({ id: 'pages.inventory.acquisitions.col.requestTime' }),
-          ...w('acquisition__request_time', 'pages.inventory.acquisitions.col.requestTime', 200),
+          ...w('acquisition__request_time', 'pages.inventory.acquisitions.col.requestTime'),
           fixed: getFixed('acquisition__request_time'),
           ...makeSortProps('acquisition__request_time', t({ id: 'pages.inventory.acquisitions.col.requestTime' }), sort),
           render: (_, r) =>
@@ -465,7 +467,7 @@ export function CatalogPage() {
         acquisition__obtained_at: {
           key: 'acquisition__obtained_at',
           title: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }),
-          ...w('acquisition__obtained_at', 'pages.inventory.acquisitions.col.obtainedAt', 200),
+          ...w('acquisition__obtained_at', 'pages.inventory.acquisitions.col.obtainedAt'),
           fixed: getFixed('acquisition__obtained_at'),
           ...makeSortProps('acquisition__obtained_at', t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), sort),
           render: (_, r) =>

@@ -118,6 +118,9 @@ describe('CatalogPage', () => {
     expect(headers).toEqual(['Net Cost', 'Name', 'SKU Price', 'Source', 'Requested', 'Obtained']);
     // Page action is "New", not "New Acquisition".
     expect(screen.getByRole('button', { name: /New/ }).textContent).toBe('New');
+    // The seeded default sort (Obtained desc nulls-first) lights the Sort button.
+    const sortBtn = screen.getByRole('button', { name: /Sort/ });
+    expect(sortBtn.className).toContain('ant-btn-primary');
   });
 
   it('right-aligns Net cost and SKU price cells and shows date-only Requested/Obtained', async () => {

@@ -20,7 +20,7 @@ export function AcquisitionEditPage() {
         items={[
           { title: <Link to="/inventory/catalog">{t({ id: 'menu.inventory.catalog' })}</Link> },
           { title: id },
-          { title: t({ id: 'pages.inventory.acquisitions.form.editCrumb' }) },
+          { title: t({ id: 'common.edit' }) },
         ]}
       />
       {isLoading || !data ? <Spin /> : <AcquisitionForm initial={data} />}

@@ -87,7 +87,8 @@ export function ItemFormModal({
   const { ref, isNarrow } = useContainerWidth(560);
   const half = isNarrow ? 24 : 12;
   const third = isNarrow ? 24 : 8;
-  const quarter = isNarrow ? 24 : 6;
+  // First row: Name 12 / Quantity 4 / SKU Price 8 — the currency select clipped at 6.
+  const sixth = isNarrow ? 24 : 4;
 
   useEffect(() => {
     if (!open) return;
@@ -192,12 +193,12 @@ export function ItemFormModal({
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={quarter}>
+            <Col span={sixth}>
               <Form.Item name="quantity" label={t({ id: 'pages.inventory.items.col.quantity' })} rules={[{ required: true }]}>
                 <InputNumber min={0} precision={0} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
-            <Col span={quarter}>
+            <Col span={third}>
               <Form.Item label={t({ id: 'pages.inventory.items.col.skuPrice' })}>
                 <Space.Compact block>
                   <Form.Item name="sku_price" noStyle>

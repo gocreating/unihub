@@ -11,7 +11,7 @@ export function AcquisitionNewPage() {
         style={{ marginBottom: 16 }}
         items={[
           { title: <Link to="/inventory/catalog">{t({ id: 'menu.inventory.catalog' })}</Link> },
-          { title: t({ id: 'pages.inventory.acquisitions.new' }) },
+          { title: t({ id: 'common.new' }) },
         ]}
       />
       <AcquisitionForm />

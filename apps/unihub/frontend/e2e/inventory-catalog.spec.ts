@@ -112,6 +112,8 @@ test('default sort is Obtained desc NULLS FIRST and the action button says "New"
   // Page action label is "New" (not "New Acquisition").
   const action = page.getByRole('button', { name: /^New$/ });
   await expect(action).toBeVisible();
+  // The seeded default sort lights the Sort toolbar button (isActive).
+  await expect(page.getByRole('button', { name: /Sort/ })).toHaveClass(/ant-btn-primary/);
   // Default order: any pending acquisition (empty Obtained cell "—") sorts before dated ones.
   const obtainedCells = await page
     .locator('.ant-table-tbody tr.ant-table-row-level-0 td:nth-last-child(2)')

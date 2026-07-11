@@ -19,70 +19,55 @@ from inventory.services import build_checklist, would_create_cycle
 
 
 class ItemViewSet(viewsets.ModelViewSet):
+    """Items are created via the Acquisition endpoint, not directly (no POST)."""
+
     queryset = Item.objects.all()
     serializer_class = ItemSerializer
     filter_backends = [EntityFilterBackend, NullsOrderingFilter]
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
         "item_type": {"lookup": "item_type", "type": "single_select"},
-        "category": {"lookup": "category", "type": "text"},
         "model": {"lookup": "model", "type": "text"},
         "serial_number": {"lookup": "serial_number", "type": "text"},
-        "weight": {"lookup": "weight", "type": "number"},
+        "spec": {"lookup": "spec", "type": "text"},
+        "size": {"lookup": "size", "type": "text"},
+        "weight": {"lookup": "weight_canonical", "type": "number"},
+        "length": {"lookup": "length_canonical", "type": "number"},
+        "width": {"lookup": "width_canonical", "type": "number"},
+        "height": {"lookup": "height_canonical", "type": "number"},
         "price": {"lookup": "price", "type": "number"},
         "cost": {"lookup": "cost", "type": "number"},
-        "purchase_time": {"lookup": "purchase_time", "type": "date"},
+        "color": {"lookup": "color", "type": "text"},
         "status": {"lookup": "status", "type": "single_select"},
-        "storage_location": {"lookup": "storage_location", "type": "text"},
+        "archived": {"lookup": "archived_at", "type": "date"},
+        "obtained_at": {"lookup": "acquisition__obtained_at", "type": "date"},
     }
     ordering_fields = [
         "name",
         "item_type",
-        "category",
         "model",
         "serial_number",
-        "weight",
+        "size",
+        "weight_canonical",
+        "length_canonical",
+        "width_canonical",
+        "height_canonical",
         "price",
         "cost",
-        "purchase_time",
         "status",
+        "acquisition__obtained_at",
     ]
-    ordering = ["name"]
+    ordering = ["-acquisition__obtained_at"]
     pagination_class = EntityOffsetPagination
-    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        """Exclude archived items by default; include them with ?archived=true."""
-        qs = super().get_queryset().select_related("acquisition")
-        archived = self.request.query_params.get("archived")
-        if archived == "true":
-            return qs.filter(archived_at__isnull=False)
-        return qs.filter(archived_at__isnull=True)
+        # No implicit archived exclusion — archived is a normal filterable attribute.
+        return super().get_queryset().select_related("acquisition")
 
     def destroy(self, request, *args, **kwargs):
-        """Guarded delete: block when the item is still referenced unless confirmed."""
+        """Delete a single item from its acquisition."""
         item = self.get_object()
-        if request.query_params.get("confirm") != "true":
-            acquisitions = 1 if item.acquisition_id else 0
-            scenarios = item.scenario_items.count()
-            containers = (
-                ScenarioItem.objects.filter(item=item).exclude(contained_items__isnull=True).count()
-            )
-            if acquisitions or scenarios or containers:
-                return Response(
-                    {
-                        "reference_summary": {
-                            "acquisitions": acquisitions,
-                            "scenarios": scenarios,
-                            "containers": containers,
-                        },
-                        "message": (
-                            "This item is referenced by other records. "
-                            "Add ?confirm=true to delete it anyway."
-                        ),
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
         item.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -95,10 +80,8 @@ class AcquisitionViewSet(viewsets.ModelViewSet):
         "source": {"lookup": "source", "type": "text"},
         "method": {"lookup": "method", "type": "single_select"},
         "obtained_at": {"lookup": "obtained_at", "type": "date"},
-        "arrived_at": {"lookup": "arrived_at", "type": "date"},
-        "cost": {"lookup": "cost", "type": "number"},
     }
-    ordering_fields = ["source", "method", "obtained_at", "arrived_at", "cost"]
+    ordering_fields = ["source", "method", "obtained_at"]
     ordering = ["-obtained_at"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]

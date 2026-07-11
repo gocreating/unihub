@@ -2,14 +2,13 @@
 
 import pytest
 
-ITEMS = "/api/v1/inventory/items/"
+from tests.conftest import create_item
+
 SCEN = "/api/v1/inventory/scenarios/"
 
 
 def _item(client, name):
-    return client.post(
-        ITEMS, {"name": name, "item_type": "stockable"}, content_type="application/json"
-    ).json()
+    return create_item(client, name=name)
 
 
 def _scenario(client, name="Trip"):

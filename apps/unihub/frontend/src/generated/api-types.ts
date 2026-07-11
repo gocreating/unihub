@@ -349,9 +349,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Items are created via the Acquisition endpoint, not directly (no POST). */
         get: operations["v1_inventory_items_list"];
         put?: never;
-        post: operations["v1_inventory_items_create"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -365,13 +366,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Items are created via the Acquisition endpoint, not directly (no POST). */
         get: operations["v1_inventory_items_retrieve"];
         put?: never;
         post?: never;
-        /** @description Guarded delete: block when the item is still referenced unless confirmed. */
+        /** @description Delete a single item from its acquisition. */
         delete: operations["v1_inventory_items_destroy"];
         options?: never;
         head?: never;
+        /** @description Items are created via the Acquisition endpoint, not directly (no POST). */
         patch: operations["v1_inventory_items_partial_update"];
         trace?: never;
     };
@@ -780,16 +783,13 @@ export interface components {
             method?: components["schemas"]["MethodEnum"] | components["schemas"]["BlankEnum"];
             /** Format: date-time */
             obtained_at?: string | null;
-            /** Format: date-time */
-            arrived_at?: string | null;
-            /** Format: decimal */
-            cost?: string | null;
-            notes?: string;
-            item_ids?: string[];
-            readonly items: components["schemas"]["Item"][];
+            remark?: string;
+            items?: components["schemas"]["Item"][];
             readonly item_count: number;
-            readonly total_item_cost: string;
-            readonly has_arrived: boolean;
+            /** @description Aggregate item cost grouped by currency (no cross-currency sum). */
+            readonly total_item_cost: {
+                [key: string]: unknown;
+            }[];
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -800,6 +800,8 @@ export interface components {
             readonly id: string;
             source?: string;
             method?: components["schemas"]["MethodEnum"] | components["schemas"]["BlankEnum"];
+            /** Format: date-time */
+            obtained_at?: string | null;
         };
         AttributeDefinition: {
             readonly id: string;
@@ -830,7 +832,6 @@ export interface components {
             readonly items: {
                 [key: string]: unknown;
             }[];
-            target_category?: string;
             /** Format: decimal */
             limit_value?: string | null;
             /** Format: date-time */
@@ -872,31 +873,23 @@ export interface components {
             readonly id: string;
             name: string;
             item_type?: components["schemas"]["ItemTypeEnum"];
-            category?: string;
             model?: string;
             serial_number?: string;
+            spec?: string;
+            remark?: string;
             /** Format: decimal */
             quantity?: string | null;
-            /** Format: decimal */
-            length?: string | null;
-            /** Format: decimal */
-            width?: string | null;
-            /** Format: decimal */
-            height?: string | null;
             size?: string;
             /** Format: decimal */
-            weight?: string | null;
-            /** Format: decimal */
             price?: string | null;
+            price_currency?: string;
             /** Format: decimal */
             cost?: string | null;
-            /** Format: date-time */
-            purchase_time?: string | null;
-            storage_location?: string;
-            status?: string;
-            acquisition?: string | null;
-            readonly acquisition_detail: components["schemas"]["AcquisitionSummary"];
-            readonly origin_known: boolean;
+            cost_currency?: string;
+            color?: string;
+            url?: string;
+            status?: components["schemas"]["StatusEnum"];
+            readonly acquisition: components["schemas"]["AcquisitionSummary"];
             /** Format: date-time */
             archived_at?: string | null;
             /** Format: date-time */
@@ -1044,16 +1037,13 @@ export interface components {
             method?: components["schemas"]["MethodEnum"] | components["schemas"]["BlankEnum"];
             /** Format: date-time */
             obtained_at?: string | null;
-            /** Format: date-time */
-            arrived_at?: string | null;
-            /** Format: decimal */
-            cost?: string | null;
-            notes?: string;
-            item_ids?: string[];
-            readonly items?: components["schemas"]["Item"][];
+            remark?: string;
+            items?: components["schemas"]["Item"][];
             readonly item_count?: number;
-            readonly total_item_cost?: string;
-            readonly has_arrived?: boolean;
+            /** @description Aggregate item cost grouped by currency (no cross-currency sum). */
+            readonly total_item_cost?: {
+                [key: string]: unknown;
+            }[];
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -1086,7 +1076,6 @@ export interface components {
             readonly items?: {
                 [key: string]: unknown;
             }[];
-            target_category?: string;
             /** Format: decimal */
             limit_value?: string | null;
             /** Format: date-time */
@@ -1111,31 +1100,23 @@ export interface components {
             readonly id?: string;
             name?: string;
             item_type?: components["schemas"]["ItemTypeEnum"];
-            category?: string;
             model?: string;
             serial_number?: string;
+            spec?: string;
+            remark?: string;
             /** Format: decimal */
             quantity?: string | null;
-            /** Format: decimal */
-            length?: string | null;
-            /** Format: decimal */
-            width?: string | null;
-            /** Format: decimal */
-            height?: string | null;
             size?: string;
             /** Format: decimal */
-            weight?: string | null;
-            /** Format: decimal */
             price?: string | null;
+            price_currency?: string;
             /** Format: decimal */
             cost?: string | null;
-            /** Format: date-time */
-            purchase_time?: string | null;
-            storage_location?: string;
-            status?: string;
-            acquisition?: string | null;
-            readonly acquisition_detail?: components["schemas"]["AcquisitionSummary"];
-            readonly origin_known?: boolean;
+            cost_currency?: string;
+            color?: string;
+            url?: string;
+            status?: components["schemas"]["StatusEnum"];
+            readonly acquisition?: components["schemas"]["AcquisitionSummary"];
             /** Format: date-time */
             archived_at?: string | null;
             /** Format: date-time */
@@ -1201,6 +1182,12 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `active` - Active
+         *     * `deprecated` - Deprecated
+         * @enum {string}
+         */
+        StatusEnum: "active" | "deprecated";
     };
     responses: never;
     parameters: never;
@@ -2170,31 +2157,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedItemList"];
-                };
-            };
-        };
-    };
-    v1_inventory_items_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Item"];
-                "application/x-www-form-urlencoded": components["schemas"]["Item"];
-                "multipart/form-data": components["schemas"]["Item"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Item"];
                 };
             };
         };

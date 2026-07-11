@@ -1,12 +1,46 @@
-"""DRF serializers for the Inventory domain."""
+"""DRF serializers for the Inventory domain (refinement iteration)."""
 
 from decimal import Decimal
 
+from django.db import transaction
 from rest_framework import serializers
 
+from inventory import units
 from inventory.models import Acquisition, Constraint, Item, Scenario, ScenarioItem
 
-_NON_NEGATIVE_FIELDS = ["quantity", "length", "width", "height", "weight", "price", "cost"]
+# measure name → (canonical field, unit field, to_canonical, from_canonical, unit table)
+_MEASURES = {
+    "length": (
+        "length_canonical",
+        "length_unit",
+        units.length_to_canonical,
+        units.length_from_canonical,
+        units.LENGTH_UNITS,
+    ),
+    "width": (
+        "width_canonical",
+        "width_unit",
+        units.length_to_canonical,
+        units.length_from_canonical,
+        units.LENGTH_UNITS,
+    ),
+    "height": (
+        "height_canonical",
+        "height_unit",
+        units.length_to_canonical,
+        units.length_from_canonical,
+        units.LENGTH_UNITS,
+    ),
+    "weight": (
+        "weight_canonical",
+        "weight_unit",
+        units.weight_to_canonical,
+        units.weight_from_canonical,
+        units.WEIGHT_UNITS,
+    ),
+}
+
+_NON_NEGATIVE = ["quantity", "price", "cost"]
 
 
 class AcquisitionSummarySerializer(serializers.ModelSerializer):
@@ -14,12 +48,11 @@ class AcquisitionSummarySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Acquisition
-        fields = ["id", "source", "method"]
+        fields = ["id", "source", "method", "obtained_at"]
 
 
 class ItemSerializer(serializers.ModelSerializer):
-    acquisition_detail = AcquisitionSummarySerializer(source="acquisition", read_only=True)
-    origin_known = serializers.SerializerMethodField()
+    acquisition = AcquisitionSummarySerializer(read_only=True)
 
     class Meta:
         model = Item
@@ -27,39 +60,83 @@ class ItemSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "item_type",
-            "category",
             "model",
             "serial_number",
+            "spec",
+            "remark",
             "quantity",
-            "length",
-            "width",
-            "height",
             "size",
-            "weight",
             "price",
+            "price_currency",
             "cost",
-            "purchase_time",
-            "storage_location",
+            "cost_currency",
+            "color",
+            "url",
             "status",
             "acquisition",
-            "acquisition_detail",
-            "origin_known",
             "archived_at",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "acquisition", "created_at", "updated_at"]
 
-    def get_origin_known(self, obj: Item) -> bool:
-        return obj.acquisition_id is not None
+    # ── Measurement objects ({value, unit}) handled outside declared fields ──
+
+    @staticmethod
+    def _fmt(value: Decimal) -> str:
+        """Format a decimal without trailing zeros or scientific notation."""
+        normalized = value.normalize()
+        return format(normalized, "f")
+
+    def to_representation(self, instance: Item) -> dict:
+        data = super().to_representation(instance)
+        for name, (canon_f, unit_f, _to, _from, _tbl) in _MEASURES.items():
+            canonical = getattr(instance, canon_f)
+            unit = getattr(instance, unit_f)
+            if canonical is None:
+                data[name] = None
+            else:
+                value = _from(canonical, unit)
+                data[name] = {"value": self._fmt(value), "unit": unit}
+        return data
+
+    def to_internal_value(self, data: dict) -> dict:
+        measures = {}
+        for name, (canon_f, unit_f, to_canon, _from, table) in _MEASURES.items():
+            if name in data:
+                raw = data.get(name)
+                if raw in (None, ""):
+                    measures[canon_f] = None
+                    continue
+                if not isinstance(raw, dict) or "value" not in raw or "unit" not in raw:
+                    raise serializers.ValidationError({name: "Expected an object {value, unit}."})
+                unit = raw["unit"]
+                if unit not in table:
+                    raise serializers.ValidationError({name: f"Unsupported unit {unit!r}."})
+                try:
+                    value = Decimal(str(raw["value"]))
+                except (TypeError, ValueError):
+                    raise serializers.ValidationError({name: "value must be a number."})
+                if value < 0:
+                    raise serializers.ValidationError({name: f"{name} must be >= 0."})
+                measures[canon_f] = to_canon(value, unit)
+                measures[unit_f] = unit
+        validated = super().to_internal_value(data)
+        validated.update(measures)
+        return validated
 
     def validate_name(self, value: str) -> str:
         if not value or not value.strip():
             raise serializers.ValidationError("Name is required.")
         return value
 
+    def validate_status(self, value: str) -> str:
+        if value not in {"active", "deprecated"}:
+            raise serializers.ValidationError("status must be 'active' or 'deprecated'.")
+        return value
+
     def validate(self, attrs: dict) -> dict:
-        for field in _NON_NEGATIVE_FIELDS:
+        for field in _NON_NEGATIVE:
             value = attrs.get(field)
             if value is not None and value < Decimal("0"):
                 raise serializers.ValidationError({field: f"{field} must be >= 0."})
@@ -67,11 +144,9 @@ class ItemSerializer(serializers.ModelSerializer):
 
 
 class AcquisitionSerializer(serializers.ModelSerializer):
-    item_ids = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
-    items = ItemSerializer(many=True, read_only=True)
+    items = ItemSerializer(many=True, required=False)
     item_count = serializers.SerializerMethodField()
     total_item_cost = serializers.SerializerMethodField()
-    has_arrived = serializers.SerializerMethodField()
 
     class Meta:
         model = Acquisition
@@ -80,14 +155,10 @@ class AcquisitionSerializer(serializers.ModelSerializer):
             "source",
             "method",
             "obtained_at",
-            "arrived_at",
-            "cost",
-            "notes",
-            "item_ids",
+            "remark",
             "items",
             "item_count",
             "total_item_cost",
-            "has_arrived",
             "created_at",
             "updated_at",
         ]
@@ -96,31 +167,38 @@ class AcquisitionSerializer(serializers.ModelSerializer):
     def get_item_count(self, obj: Acquisition) -> int:
         return obj.items.count()
 
-    def get_total_item_cost(self, obj: Acquisition) -> str:
-        total = sum((item.cost or Decimal("0")) for item in obj.items.all()) or Decimal("0")
-        return str(total.quantize(Decimal("0.0001")))
+    def get_total_item_cost(self, obj: Acquisition) -> list[dict]:
+        """Aggregate item cost grouped by currency (no cross-currency sum)."""
+        totals: dict[str, Decimal] = {}
+        for item in obj.items.all():
+            if item.cost is None:
+                continue
+            key = item.cost_currency or ""
+            totals[key] = totals.get(key, Decimal("0")) + item.cost
+        return [
+            {"currency": cur, "total": str(total.quantize(Decimal("0.0001")))}
+            for cur, total in sorted(totals.items())
+        ]
 
-    def get_has_arrived(self, obj: Acquisition) -> bool:
-        return obj.arrived_at is not None
-
-    def _apply_item_links(self, acquisition: Acquisition, item_ids: list[str]) -> None:
-        # Detach items no longer linked, then link the given set.
-        acquisition.items.exclude(id__in=item_ids).update(acquisition=None)
-        Item.objects.filter(id__in=item_ids).update(acquisition=acquisition)
-
+    @transaction.atomic
     def create(self, validated_data: dict) -> Acquisition:
-        item_ids = validated_data.pop("item_ids", [])
-        acquisition = super().create(validated_data)
-        if item_ids:
-            Item.objects.filter(id__in=item_ids).update(acquisition=acquisition)
+        items_data = validated_data.pop("items", [])
+        acquisition = Acquisition.objects.create(**validated_data)
+        for item_data in items_data:
+            Item.objects.create(acquisition=acquisition, **item_data)
         return acquisition
 
     def update(self, instance: Acquisition, validated_data: dict) -> Acquisition:
-        item_ids = validated_data.pop("item_ids", None)
-        acquisition = super().update(instance, validated_data)
-        if item_ids is not None:
-            self._apply_item_links(acquisition, item_ids)
-        return acquisition
+        items_data = validated_data.pop("items", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        # New item rows (no id) are appended; editing/removing existing items
+        # is done through the item endpoints (PATCH/DELETE /items/{id}/).
+        if items_data:
+            for item_data in items_data:
+                Item.objects.create(acquisition=instance, **item_data)
+        return instance
 
 
 class ScenarioSerializer(serializers.ModelSerializer):
@@ -194,9 +272,9 @@ class ScenarioItemSerializer(serializers.ModelSerializer):
         return {"id": obj.container_id, "item_name": obj.container.item.name}
 
     def get_shortfall(self, obj: ScenarioItem) -> str | None:
-        from inventory.services import _consumable_shortfall
+        from inventory.services import consumable_shortfall
 
-        shortfall = _consumable_shortfall(obj)
+        shortfall = consumable_shortfall(obj)
         return str(shortfall) if shortfall and shortfall > 0 else None
 
 
@@ -212,7 +290,6 @@ class ConstraintSerializer(serializers.ModelSerializer):
             "constraint_type",
             "item_ids",
             "items",
-            "target_category",
             "limit_value",
             "created_at",
         ]
@@ -227,18 +304,15 @@ class ConstraintSerializer(serializers.ModelSerializer):
         if item_ids is None and self.instance is not None:
             item_ids = list(self.instance.items.values_list("id", flat=True))
         item_ids = item_ids or []
-        target_category = attrs.get(
-            "target_category", getattr(self.instance, "target_category", "")
-        )
         limit_value = attrs.get("limit_value", getattr(self.instance, "limit_value", None))
 
         if ctype == "mutual_exclusive" and len(item_ids) < 2:
             raise serializers.ValidationError(
                 {"item_ids": "A mutual-exclusivity constraint needs at least 2 items."}
             )
-        if ctype == "required" and not item_ids and not target_category:
+        if ctype == "required" and len(item_ids) < 1:
             raise serializers.ValidationError(
-                {"item_ids": "A required constraint needs an item set or a target category."}
+                {"item_ids": "A required constraint needs at least 1 item."}
             )
         if ctype == "weight_limit" and (limit_value is None or limit_value <= Decimal("0")):
             raise serializers.ValidationError(

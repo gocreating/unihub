@@ -20,6 +20,7 @@ import { CurrenciesPage } from '@/pages/finance/currencies/index';
 import { ExchangeRatesPage } from '@/pages/finance/exchange-rates/index';
 import { ItemsPage } from '@/pages/inventory/items/index';
 import { AcquisitionsPage } from '@/pages/inventory/acquisitions/index';
+import { AcquisitionNewPage } from '@/pages/inventory/acquisitions/new';
 import { ScenariosPage } from '@/pages/inventory/scenarios/index';
 import { ScenarioDetailPage } from '@/pages/inventory/scenarios/detail';
 import { LanguagePage } from '@/pages/language/LanguagePage';
@@ -81,6 +82,7 @@ function AppRoutes() {
                 <Route path="/finance/exchange-rates" element={<ExchangeRatesPage />} />
                 <Route path="/inventory/items" element={<ItemsPage />} />
                 <Route path="/inventory/acquisitions" element={<AcquisitionsPage />} />
+                <Route path="/inventory/acquisitions/new" element={<AcquisitionNewPage />} />
                 <Route path="/inventory/scenarios" element={<ScenariosPage />} />
                 <Route path="/inventory/scenarios/:id" element={<ScenarioDetailPage />} />
                 <Route path="/language" element={<LanguagePage />} />

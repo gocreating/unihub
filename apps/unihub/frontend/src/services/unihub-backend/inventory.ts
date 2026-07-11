@@ -4,64 +4,102 @@ import type { EntityListParams, OffsetPaginatedResponse } from '@/components/Ent
 // ── Types ────────────────────────────────────────────────────────────
 
 export type ItemType = 'stockable' | 'consumable';
+export type ItemStatus = 'active' | 'deprecated';
 export type AcquisitionMethod = 'purchase' | 'gift' | 'transfer' | 'found' | 'other' | '';
 export type ConstraintType = 'mutual_exclusive' | 'required' | 'weight_limit';
+
+export type LengthUnit = 'mm' | 'cm' | 'm' | 'in';
+export type WeightUnit = 'g' | 'kg' | 'lb';
+export const LENGTH_UNITS: LengthUnit[] = ['mm', 'cm', 'm', 'in'];
+export const WEIGHT_UNITS: WeightUnit[] = ['g', 'kg', 'lb'];
+
+export interface Measurement {
+  value: string;
+  unit: string;
+}
 
 export interface AcquisitionSummary {
   id: string;
   source: string;
   method: AcquisitionMethod;
+  obtained_at: string | null;
 }
 
 export interface Item {
   id: string;
   name: string;
   item_type: ItemType;
-  category: string;
   model: string;
   serial_number: string;
+  spec: string;
+  remark: string;
   quantity: string | null;
-  length: string | null;
-  width: string | null;
-  height: string | null;
   size: string;
-  weight: string | null;
+  length: Measurement | null;
+  width: Measurement | null;
+  height: Measurement | null;
+  weight: Measurement | null;
   price: string | null;
+  price_currency: string;
   cost: string | null;
-  purchase_time: string | null;
-  storage_location: string;
-  status: string;
-  acquisition: string | null;
-  acquisition_detail: AcquisitionSummary | null;
-  origin_known: boolean;
+  cost_currency: string;
+  color: string;
+  url: string;
+  status: ItemStatus;
+  acquisition: AcquisitionSummary | null;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type ItemWrite = Partial<
-  Omit<Item, 'id' | 'acquisition_detail' | 'origin_known' | 'created_at' | 'updated_at'>
-> & { name: string };
+export interface ItemWrite {
+  name: string;
+  item_type?: ItemType;
+  model?: string;
+  serial_number?: string;
+  spec?: string;
+  remark?: string;
+  quantity?: string | null;
+  size?: string;
+  length?: Measurement | null;
+  width?: Measurement | null;
+  height?: Measurement | null;
+  weight?: Measurement | null;
+  price?: string | null;
+  price_currency?: string;
+  cost?: string | null;
+  cost_currency?: string;
+  color?: string;
+  url?: string;
+  status?: ItemStatus;
+  archived_at?: string | null;
+}
+
+export interface CostTotal {
+  currency: string;
+  total: string;
+}
 
 export interface Acquisition {
   id: string;
   source: string;
   method: AcquisitionMethod;
   obtained_at: string | null;
-  arrived_at: string | null;
-  cost: string | null;
-  notes: string;
+  remark: string;
   items: Item[];
   item_count: number;
-  total_item_cost: string;
-  has_arrived: boolean;
+  total_item_cost: CostTotal[];
   created_at: string;
   updated_at: string;
 }
 
-export type AcquisitionWrite = Partial<
-  Pick<Acquisition, 'source' | 'method' | 'obtained_at' | 'arrived_at' | 'cost' | 'notes'>
-> & { item_ids?: string[] };
+export interface AcquisitionWrite {
+  source?: string;
+  method?: AcquisitionMethod;
+  obtained_at?: string | null;
+  remark?: string;
+  items?: ItemWrite[];
+}
 
 export interface Scenario {
   id: string;
@@ -104,7 +142,6 @@ export interface Constraint {
   name: string;
   constraint_type: ConstraintType;
   items: { id: string; name: string }[];
-  target_category: string;
   limit_value: string | null;
   created_at: string;
 }
@@ -113,7 +150,6 @@ export interface ConstraintWrite {
   name?: string;
   constraint_type: ConstraintType;
   item_ids?: string[];
-  target_category?: string;
   limit_value?: string | null;
 }
 
@@ -136,19 +172,9 @@ export interface ChecklistViolation {
 
 export interface Checklist {
   scenario_id: string;
-  progress: {
-    prepared_count: number;
-    outstanding_count: number;
-    total: number;
-    complete: boolean;
-  };
+  progress: { prepared_count: number; outstanding_count: number; total: number; complete: boolean };
   lines: ChecklistLine[];
   violations: ChecklistViolation[];
-}
-
-export interface ItemReferenceError {
-  reference_summary: { acquisitions: number; scenarios: number; containers: number };
-  message: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -189,11 +215,9 @@ function buildEntityListQs(params?: EntityListParams): string {
 
 const BASE = '/api/v1/inventory';
 
-// ── Items ────────────────────────────────────────────────────────────
+// ── Items (read/edit only — creation via acquisitions) ────────────────
 
-export function listItems(
-  params?: EntityListParams & { archived?: boolean },
-): Promise<OffsetPaginatedResponse<Item>> {
+export function listItems(params?: EntityListParams): Promise<OffsetPaginatedResponse<Item>> {
   return fetchJson<OffsetPaginatedResponse<Item>>(`${BASE}/items/${buildEntityListQs(params)}`);
 }
 
@@ -201,20 +225,15 @@ export function getItem(id: string): Promise<Item> {
   return fetchJson<Item>(`${BASE}/items/${id}/`);
 }
 
-export function createItem(data: ItemWrite): Promise<Item> {
-  return fetchJson<Item>(`${BASE}/items/`, { method: 'POST', body: JSON.stringify(data) });
-}
-
 export function updateItem(id: string, data: Partial<ItemWrite>): Promise<Item> {
   return fetchJson<Item>(`${BASE}/items/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
-export function deleteItem(id: string, confirm = false): Promise<void> {
-  const qs = confirm ? '?confirm=true' : '';
-  return fetchJson<void>(`${BASE}/items/${id}/${qs}`, { method: 'DELETE' });
+export function deleteItem(id: string): Promise<void> {
+  return fetchJson<void>(`${BASE}/items/${id}/`, { method: 'DELETE' });
 }
 
-// ── Acquisitions ─────────────────────────────────────────────────────
+// ── Acquisitions (creation entry point) ──────────────────────────────
 
 export function listAcquisitions(
   params?: EntityListParams,
@@ -248,9 +267,7 @@ export function deleteAcquisition(id: string): Promise<void> {
 
 // ── Scenarios ────────────────────────────────────────────────────────
 
-export function listScenarios(
-  params?: EntityListParams,
-): Promise<OffsetPaginatedResponse<Scenario>> {
+export function listScenarios(params?: EntityListParams): Promise<OffsetPaginatedResponse<Scenario>> {
   return fetchJson<OffsetPaginatedResponse<Scenario>>(
     `${BASE}/scenarios/${buildEntityListQs(params)}`,
   );

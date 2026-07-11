@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
+  Breadcrumb,
   Button,
   Card,
   Checkbox,
@@ -16,8 +17,8 @@ import {
   Typography,
   message,
 } from 'antd';
-import { ArrowLeftOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { useNavigate, useParams } from 'react-router-dom';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { Link, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import type { ConstraintType } from '@/services/unihub-backend/inventory';
 import {
@@ -39,13 +40,11 @@ interface ConstraintFormValues {
   constraint_type: ConstraintType;
   name?: string;
   item_ids?: string[];
-  target_category?: string;
   limit_value?: number | null;
 }
 
 export function ScenarioDetailPage() {
   const { id = '' } = useParams();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
   const [addItemId, setAddItemId] = useState<string | undefined>();
@@ -110,7 +109,6 @@ export function ScenarioDetailPage() {
         constraint_type: values.constraint_type,
         name: values.name ?? '',
         item_ids: values.item_ids ?? [],
-        target_category: values.target_category ?? '',
         limit_value: values.limit_value != null ? String(values.limit_value) : null,
       }),
     onSuccess: () => {
@@ -166,14 +164,16 @@ export function ScenarioDetailPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Space style={{ marginBottom: 16 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/inventory/scenarios')}>
-          {t({ id: 'pages.inventory.scenarios.detail.back' })}
-        </Button>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          {scenario?.name ?? ''}
-        </Typography.Title>
-      </Space>
+      <Breadcrumb
+        style={{ marginBottom: 12 }}
+        items={[
+          { title: <Link to="/inventory/scenarios">{t({ id: 'menu.inventory.scenarios' })}</Link> },
+          { title: scenario?.name ?? '' },
+        ]}
+      />
+      <Typography.Title level={4} style={{ marginTop: 0, marginBottom: 16 }}>
+        {scenario?.name ?? ''}
+      </Typography.Title>
 
       {progress && (
         <Card style={{ marginBottom: 16 }}>
@@ -352,7 +352,7 @@ export function ScenarioDetailPage() {
                       <Tag color={violation ? 'red' : 'default'}>
                         {t({ id: `pages.inventory.constraints.type.${c.constraint_type}` })}
                       </Tag>
-                      <span>{c.name || c.items.map((i) => i.name).join(', ') || c.target_category}</span>
+                      <span>{c.name || c.items.map((i) => i.name).join(', ')}</span>
                     </Space>
                   }
                   description={
@@ -402,21 +402,6 @@ export function ScenarioDetailPage() {
           {(constraintType === 'mutual_exclusive' || constraintType === 'required') && (
             <Form.Item name="item_ids" label={t({ id: 'pages.inventory.constraints.col.items' })}>
               <Select mode="multiple" showSearch optionFilterProp="label" options={scenarioItemOptions} />
-            </Form.Item>
-          )}
-          {constraintType === 'required' && (
-            <Form.Item
-              name="target_category"
-              label={t({ id: 'pages.inventory.constraints.col.category' })}
-            >
-              <Select
-                allowClear
-                showSearch
-                options={[...new Set(allItems.map((i) => i.category).filter(Boolean))].map((c) => ({
-                  value: c,
-                  label: c,
-                }))}
-              />
             </Form.Item>
           )}
           {constraintType === 'weight_limit' && (

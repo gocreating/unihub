@@ -1,26 +1,31 @@
 """Integration tests for Inventory scenarios and checklists (US3)."""
 
+import json
+
 import pytest
 
-ITEMS = "/api/v1/inventory/items/"
+from tests.conftest import create_item
+
 SCEN = "/api/v1/inventory/scenarios/"
 
 
 def _item(client, name="Tent", item_type="stockable", quantity=None):
-    payload = {"name": name, "item_type": item_type}
+    fields = {"name": name, "item_type": item_type}
     if quantity is not None:
-        payload["quantity"] = quantity
-    return client.post(ITEMS, payload, content_type="application/json").json()
+        fields["quantity"] = quantity
+    return create_item(client, **fields)
 
 
 def _scenario(client, name="Camping"):
-    return client.post(SCEN, {"name": name}, content_type="application/json").json()
+    return client.post(SCEN, json.dumps({"name": name}), content_type="application/json").json()
 
 
 def _add_item(client, scenario_id, item_id, **extra):
     payload = {"item_id": item_id}
     payload.update(extra)
-    return client.post(f"{SCEN}{scenario_id}/items/", payload, content_type="application/json")
+    return client.post(
+        f"{SCEN}{scenario_id}/items/", json.dumps(payload), content_type="application/json"
+    )
 
 
 @pytest.mark.django_db

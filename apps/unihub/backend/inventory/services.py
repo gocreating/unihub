@@ -5,7 +5,7 @@ from decimal import Decimal
 from inventory.models import Scenario, ScenarioItem
 
 
-def _consumable_shortfall(line: ScenarioItem) -> Decimal | None:
+def consumable_shortfall(line: ScenarioItem) -> Decimal | None:
     """Return the on-hand shortfall for a consumable line, else None.
 
     Args:
@@ -54,25 +54,20 @@ def evaluate_constraints(scenario: Scenario) -> list[dict]:
                 )
 
         elif constraint.constraint_type == "required":
-            satisfied = bool(target_ids & selected_ids)
-            if not satisfied and constraint.target_category:
-                satisfied = any(
-                    line.item.category == constraint.target_category for line in selected_lines
-                )
-            if not satisfied:
+            if not (target_ids & selected_ids):
                 violations.append(
                     {
                         "constraint_id": constraint.id,
                         "type": constraint.constraint_type,
-                        "message": "A required item or category is not selected.",
+                        "message": "A required item is not selected.",
                     }
                 )
 
         elif constraint.constraint_type == "weight_limit":
             limit = constraint.limit_value if constraint.limit_value is not None else Decimal("0")
-            total = sum((line.item.weight or Decimal("0")) for line in selected_lines) or Decimal(
-                "0"
-            )
+            total = sum(
+                (line.item.weight_canonical or Decimal("0")) for line in selected_lines
+            ) or Decimal("0")
             if total > limit:
                 violations.append(
                     {
@@ -102,7 +97,7 @@ def build_checklist(scenario: Scenario) -> dict:
 
     line_payloads = []
     for line in lines:
-        shortfall = _consumable_shortfall(line)
+        shortfall = consumable_shortfall(line)
         line_payloads.append(
             {
                 "id": line.id,

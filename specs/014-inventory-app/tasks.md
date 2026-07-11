@@ -171,14 +171,14 @@ Completed 2026-07-11.
 
 ## Phase 1: Setup (iteration 5)
 
-- [ ] T031 [P] Add drag-and-drop deps in `apps/unihub/frontend/package.json`: `@dnd-kit/core` + `@dnd-kit/sortable` (+`@dnd-kit/utilities`); run `pnpm install`; confirm `pnpm typecheck` still passes
+- [X] T031 [P] Add drag-and-drop deps in `apps/unihub/frontend/package.json`: `@dnd-kit/core` + `@dnd-kit/sortable` (+`@dnd-kit/utilities`); run `pnpm install`; confirm `pnpm typecheck` still passes
 
 ## Phase 2: Foundational (iteration 5) — blocks US2
 
-- [ ] T032 Update `apps/unihub/backend/inventory/models.py`: `CostFactor` — add `display_order = IntegerField(default=0)`; change `type` to a plain `CharField(max_length=20)` (**remove `choices`**); `Meta.ordering = ["display_order", "created_at"]`; add `Meta.constraints = [UniqueConstraint(fields=["acquisition","currency"], condition=Q(type="accumulated"), name="uniq_accumulated_per_currency")]`
-- [ ] T033 Create migration `apps/unihub/backend/inventory/migrations/0009_costfactor_order_freeform.py`: `AddField(display_order)` → RunPython backfill `display_order` from per-acquisition `created_at` order (+ optional guarded merge of any duplicate `(acquisition, currency)` accumulated) → `AlterField(type → CharField no choices)` → `AddConstraint(uniq_accumulated_per_currency)` → `AlterModelOptions(ordering)`; `atomic = False` if the constraint add follows the backfill on Postgres
-- [ ] T034 Add migration `apps/unihub/backend/inventory/migrations/0010_reseed_costfactor_type.py`: reseed the CostFactor `type` system AttributeDefinition from `single_select` → `text` (drop options); reversible
-- [ ] T035 Run `uv run python manage.py makemigrations inventory --check` (expect "No changes detected") and `uv run python manage.py migrate` on a fresh DB; confirm `0009`/`0010` apply cleanly
+- [X] T032 Update `apps/unihub/backend/inventory/models.py`: `CostFactor` — add `display_order = IntegerField(default=0)`; change `type` to a plain `CharField(max_length=20)` (**remove `choices`**); `Meta.ordering = ["display_order", "created_at"]`; add `Meta.constraints = [UniqueConstraint(fields=["acquisition","currency"], condition=Q(type="accumulated"), name="uniq_accumulated_per_currency")]`
+- [X] T033 Create migration `apps/unihub/backend/inventory/migrations/0009_costfactor_order_freeform.py`: `AddField(display_order)` → RunPython backfill `display_order` from per-acquisition `created_at` order (+ optional guarded merge of any duplicate `(acquisition, currency)` accumulated) → `AlterField(type → CharField no choices)` → `AddConstraint(uniq_accumulated_per_currency)` → `AlterModelOptions(ordering)`; `atomic = False` if the constraint add follows the backfill on Postgres
+- [X] T034 Add migration `apps/unihub/backend/inventory/migrations/0010_reseed_costfactor_type.py`: reseed the CostFactor `type` system AttributeDefinition from `single_select` → `text` (drop options); reversible
+- [X] T035 Run `uv run python manage.py makemigrations inventory --check` (expect "No changes detected") and `uv run python manage.py migrate` on a fresh DB; confirm `0009`/`0010` apply cleanly
 
 ## Phase 3: US2 — Cost panel & per-currency accumulated (Priority: P1)
 
@@ -186,14 +186,14 @@ Completed 2026-07-11.
 
 **Independent test**: create an acquisition whose items span two currencies → two `accumulated` factors auto-derive; add a free-text-typed factor and a discount, reorder them, save, reload → order + values persist; the panel footer shows per-currency Totals.
 
-- [ ] T036 [P] [US2] Update `apps/unihub/backend/tests/test_inventory_acquisitions.py` (tests-first): `test_accumulated_one_per_item_currency` (items USD+TWD → 2 accumulated), `test_client_cannot_create_accumulated_type` (400), `test_duplicate_accumulated_currency_rejected` (400), `test_cost_factor_type_accepts_free_text` (e.g. `"customs"`), `test_cost_factors_preserve_display_order` (round-trip), `test_reset_accumulated_recomputes_from_items`
-- [ ] T037 [US2] Update `CostFactorSerializer` + `AcquisitionSerializer` in `apps/unihub/backend/inventory/serializers.py`: expose `display_order`; free-form `type` (non-empty); **reject** client `type="accumulated"` and a duplicate accumulated currency (400); on create-with-omitted `cost_factors`, derive **one `accumulated` per distinct item `sku_price_currency`** (`value` = Σ `sku_price × quantity`); persist `display_order` = array index with accumulated normalised to the front; keep `net_cost` per-currency; run T036 to green
-- [ ] T038 [US2] Regenerate OpenAPI schema + frontend types into `apps/unihub/frontend/src/generated/api-types.ts`
-- [ ] T039 [P] [US2] Update `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`: `CostFactor` + `CostFactorWrite` add `display_order`; keep `CostFactorType` as the suggestion union but type the field as `string` (free-form)
-- [ ] T040 [US2] Rebuild the **Cost** panel in `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionForm.tsx`: rename "Cost Factors" → **"Cost"** and move the panel **below the Items panel**; header **Add**; each row `[drag] · type (AutoComplete w/ built-in suggestions) · value+currency composed (`Space.Compact`, `InputNumber` right-aligned) · reset (accumulated) | remove (manual)`; **accumulated rows: one per currency, pinned top, non-removable, per-row reset**; enforce **at most one accumulated per currency** client-side; rows full-width with vertical gap when narrow (`useContainerWidth`); **net cost in a "Total" footer** (per currency)
-- [ ] T041 [US2] Add drag reordering to the Cost panel (`AcquisitionForm.tsx`) using `@dnd-kit/sortable`: only manual (non-accumulated) rows are sortable; on drop, update local order and send `cost_factors` in display order (server persists `display_order`)
-- [ ] T042 [P] [US2] In `AcquisitionForm.tsx`: default `obtained_at` to **today 00:00** on create (like `request_time`); rename the items panel heading to **"Items"**; make each **item card render every non-empty attribute** (quantity, sku_price+currency, size, spec, color, length/width/height, weight, volume, url)
-- [ ] T043 [P] [US2] Update locale keys in BOTH `en-US` and `zh-TW` (`menu.ts`/`pages.ts`): `Cost`, `Total`, `Add`, `reset`, cost-factor built-in type suggestions; rename the items-panel heading key to "Items"
+- [X] T036 [P] [US2] Update `apps/unihub/backend/tests/test_inventory_acquisitions.py` (tests-first): `test_accumulated_one_per_item_currency` (items USD+TWD → 2 accumulated), `test_client_cannot_create_accumulated_type` (400), `test_duplicate_accumulated_currency_rejected` (400), `test_cost_factor_type_accepts_free_text` (e.g. `"customs"`), `test_cost_factors_preserve_display_order` (round-trip), `test_reset_accumulated_recomputes_from_items`
+- [X] T037 [US2] Update `CostFactorSerializer` + `AcquisitionSerializer` in `apps/unihub/backend/inventory/serializers.py`: expose `display_order`; free-form `type` (non-empty); **reject** client `type="accumulated"` and a duplicate accumulated currency (400); on create-with-omitted `cost_factors`, derive **one `accumulated` per distinct item `sku_price_currency`** (`value` = Σ `sku_price × quantity`); persist `display_order` = array index with accumulated normalised to the front; keep `net_cost` per-currency; run T036 to green
+- [X] T038 [US2] Regenerate OpenAPI schema + frontend types into `apps/unihub/frontend/src/generated/api-types.ts`
+- [X] T039 [P] [US2] Update `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`: `CostFactor` + `CostFactorWrite` add `display_order`; keep `CostFactorType` as the suggestion union but type the field as `string` (free-form)
+- [X] T040 [US2] Rebuild the **Cost** panel in `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionForm.tsx`: rename "Cost Factors" → **"Cost"** and move the panel **below the Items panel**; header **Add**; each row `[drag] · type (AutoComplete w/ built-in suggestions) · value+currency composed (`Space.Compact`, `InputNumber` right-aligned) · reset (accumulated) | remove (manual)`; **accumulated rows: one per currency, pinned top, non-removable, per-row reset**; enforce **at most one accumulated per currency** client-side; rows full-width with vertical gap when narrow (`useContainerWidth`); **net cost in a "Total" footer** (per currency)
+- [X] T041 [US2] Add drag reordering to the Cost panel (`AcquisitionForm.tsx`) using `@dnd-kit/sortable`: only manual (non-accumulated) rows are sortable; on drop, update local order and send `cost_factors` in display order (server persists `display_order`)
+- [X] T042 [P] [US2] In `AcquisitionForm.tsx`: default `obtained_at` to **today 00:00** on create (like `request_time`); rename the items panel heading to **"Items"**; make each **item card render every non-empty attribute** (quantity, sku_price+currency, size, spec, color, length/width/height, weight, volume, url)
+- [X] T043 [P] [US2] Update locale keys in BOTH `en-US` and `zh-TW` (`menu.ts`/`pages.ts`): `Cost`, `Total`, `Add`, `reset`, cost-factor built-in type suggestions; rename the items-panel heading key to "Items"
 
 ## Phase 4: US1 — Catalog table refinements (Priority: P2)
 
@@ -201,17 +201,17 @@ Completed 2026-07-11.
 
 **Independent test**: open `/inventory/catalog`; parent rows show an arrow toggle and a **Source** value (Name blank); expanding shows item rows with a **Name** value (Source blank); the Actions buttons never clip; no "Acquisition" badge is shown.
 
-- [ ] T044 [US1] In `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx`: use an **arrow expand icon** (`expandable.expandIcon`, ▸/▾); **split the Name/Source column** into a `source` column (acquisition rows) and a `name` column (item rows); **size the Actions column to fit content**; **remove the "Acquisition" badge**
-- [ ] T045 [P] [US1] Update the Catalog columns i18n in BOTH locales (`pages.ts`): add `Source`/`Name` column headers; drop the `catalog.col.nameSource` / `catalog.acquisitionRow` (badge) keys
-- [ ] T046 [P] [US1] Update the Catalog test `apps/unihub/frontend/src/pages/inventory/catalog/CatalogPage.test.tsx`: assert separate Source & Name columns and **no "Acquisition" badge**
+- [X] T044 [US1] In `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx`: use an **arrow expand icon** (`expandable.expandIcon`, ▸/▾); **split the Name/Source column** into a `source` column (acquisition rows) and a `name` column (item rows); **size the Actions column to fit content**; **remove the "Acquisition" badge**
+- [X] T045 [P] [US1] Update the Catalog columns i18n in BOTH locales (`pages.ts`): add `Source`/`Name` column headers; drop the `catalog.col.nameSource` / `catalog.acquisitionRow` (badge) keys
+- [X] T046 [P] [US1] Update the Catalog test `apps/unihub/frontend/src/pages/inventory/catalog/CatalogPage.test.tsx`: assert separate Source & Name columns and **no "Acquisition" badge**
 
 ## Phase 5: Polish & cross-cutting (iteration 5)
 
-- [ ] T047 Backend quality loop from `apps/unihub/backend/`: `uv run ruff format . && uv run ruff check . --fix && uv run pytest` — full suite green (only inventory files reformatted)
-- [ ] T048 Frontend quality loop from `apps/unihub/frontend/`: `pnpm lint` (0 warnings) `&& pnpm typecheck` `&& pnpm test`
-- [ ] T049 [P] Locale parity check (identical key sets both locales; pruned keys gone) and Principle II grep (no `finance` model import in `inventory/`; `@dnd-kit` is UI-only)
+- [X] T047 Backend quality loop from `apps/unihub/backend/`: `uv run ruff format . && uv run ruff check . --fix && uv run pytest` — full suite green (only inventory files reformatted)
+- [X] T048 Frontend quality loop from `apps/unihub/frontend/`: `pnpm lint` (0 warnings) `&& pnpm typecheck` `&& pnpm test`
+- [X] T049 [P] Locale parity check (identical key sets both locales; pruned keys gone) and Principle II grep (no `finance` model import in `inventory/`; `@dnd-kit` is UI-only)
 - [ ] T050 [P] Rebuild Docker + run [quickstart.md](quickstart.md) additions on Postgres: per-currency accumulated (2 currencies → 2 "Items" rows), free-text type, drag-reorder persistence, Total footer, arrow/split-column Catalog, item-card attributes; verify `0009`/`0010` on the pre-existing DB
-- [ ] T051 [P] Mark iteration-5 tasks complete + append Implementation Notes (migration `0009`/`0010`, `@dnd-kit` choice, per-currency accumulated derivation, any deviations) to this file
+- [X] T051 [P] Mark iteration-5 tasks complete + append Implementation Notes (migration `0009`/`0010`, `@dnd-kit` choice, per-currency accumulated derivation, any deviations) to this file
 
 ---
 
@@ -232,3 +232,24 @@ Completed 2026-07-11.
 ## Implementation Strategy (iteration 5)
 
 MVP = **US2** (the cost-model change is the substantive one; blocks correct data). Ship US2, then US1 (pure UI polish). Backend behavior is test-first; regenerate types after the serializer change (Principle IV); update both locales in the same commit (Principle VIII).
+
+---
+
+## Implementation Notes (iteration 5)
+
+Completed 2026-07-11 (builds on iteration 4, commit `57441be`).
+
+### Backend
+- **CostFactor**: added `display_order` (int); `type` is now a plain `CharField` (choices dropped — free-form, `accumulated` reserved); `Meta.ordering = ["display_order","created_at"]`; partial `UniqueConstraint(acquisition, currency) where type='accumulated'`.
+- **Migrations**: `0009_costfactor_order_freeform` (`atomic=False`) — add `display_order` → RunPython backfill order + collapse any duplicate accumulated-per-currency → drop `type` choices → add unique constraint; `0010_reseed_costfactor_type` — reseed the `type` AttributeDefinition `single_select → text`.
+- **Serializer**: on **create**, `accumulated` is derived **per item currency** (Σ `sku_price × quantity`); clients may not send `type=accumulated` (400) and only supply manual factors, which are appended after the derived ones with `display_order` = index. On **update**, `cost_factors` replaces the whole set in payload order, with ≤1 accumulated per currency enforced (400). `net_cost` unchanged (per-currency).
+- Full backend suite green: **260 passed**, ruff clean.
+
+### Frontend
+- **`@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`** added for drag reordering.
+- **AcquisitionForm** rebuilt: **Cost** panel moved below the **Items** panel; accumulated rows are per-currency, pinned to the top, non-removable, currency-locked, with a per-row **Reset** (recomputes from items); manual rows are drag-sortable (`@dnd-kit`), free-text `type` via `AutoComplete`, `value`+`currency` composed in a `Space.Compact` (value right-aligned); a **Total** footer shows per-currency net. On create the accumulated is server-derived (only manual factors are sent); on edit the full set (accumulated overrides + manual, in order) is sent. `obtained_at` now defaults to today 00:00; item cards render every non-empty attribute.
+- **Catalog**: arrow (▸/▾) expand icon; the single Name/Source column split into separate **Source** (acquisition) and **Name** (item) columns; Actions column widened to a fixed 220 so item-row buttons never clip; the "Acquisition" badge removed. Obsolete `catalog.col.nameSource`/`catalog.acquisitionRow` i18n keys pruned; `Cost`/`Total`/`Items` keys added (both locales, parity verified).
+- Frontend green: **lint 0 warnings, typecheck clean, 358 tests passed** (`vitest run`).
+
+### Not run this session
+- **T050 (Docker end-to-end on Postgres)** — migrations `0009`/`0010` are exercised on a fresh DB by pytest (SQLite); the display_order backfill + duplicate-accumulated collapse + `type→text` reseed against a pre-existing **Postgres** DB should still be verified via `docker compose` + quickstart before release.

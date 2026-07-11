@@ -154,8 +154,9 @@ class ItemSerializer(serializers.ModelSerializer):
 class CostFactorSerializer(serializers.ModelSerializer):
     class Meta:
         model = CostFactor
-        fields = ["id", "value", "currency", "type"]
-        read_only_fields = ["id"]
+        fields = ["id", "value", "currency", "type", "display_order"]
+        # display_order is assigned server-side from the payload order.
+        read_only_fields = ["id", "display_order"]
 
 
 class AcquisitionSerializer(serializers.ModelSerializer):
@@ -196,46 +197,73 @@ class AcquisitionSerializer(serializers.ModelSerializer):
         ]
 
     @staticmethod
-    def _accumulated_default(items_data: list[dict]) -> tuple[Decimal, str]:
-        """Derive the accumulated factor value (Σ item total_price) and its currency."""
-        total = Decimal("0")
-        currency = ""
+    def _derive_accumulated(items_data: list[dict]) -> list[dict]:
+        """One accumulated factor per distinct item currency (Σ sku_price × quantity)."""
+        totals: dict[str, Decimal] = {}
         for item in items_data:
             sku_price = item.get("sku_price")
             if sku_price is not None:
-                total += sku_price * item.get("quantity", 1)
-                currency = currency or item.get("sku_price_currency", "")
-        return total, currency
+                currency = item.get("sku_price_currency", "") or ""
+                totals[currency] = totals.get(currency, Decimal("0")) + sku_price * item.get(
+                    "quantity", 1
+                )
+        if not totals:
+            # No priced items → keep the ≥1-factor invariant with a zero accumulated.
+            return [{"value": Decimal("0"), "currency": "", "type": "accumulated"}]
+        return [
+            {"value": total, "currency": currency, "type": "accumulated"}
+            for currency, total in sorted(totals.items())
+        ]
+
+    @staticmethod
+    def _reject_duplicate_accumulated(factors: list[dict]) -> None:
+        currencies = [f["currency"] for f in factors if f.get("type") == "accumulated"]
+        if len(currencies) != len(set(currencies)):
+            raise serializers.ValidationError(
+                {"cost_factors": "At most one accumulated factor per currency."}
+            )
 
     def validate(self, attrs: dict) -> dict:
+        factors = attrs.get("cost_factors")
         if self.instance is None:
             if not attrs.get("items"):
                 raise serializers.ValidationError(
                     {"items": "An acquisition needs at least 1 item."}
                 )
-            # cost_factors may be omitted on create → an accumulated factor is auto-added.
+            # accumulated is system-derived on create; clients may only send manual factors.
+            if factors and any(f.get("type") == "accumulated" for f in factors):
+                raise serializers.ValidationError(
+                    {"cost_factors": "The accumulated factor is system-managed."}
+                )
         else:
             if "cost_factors" in attrs and not attrs["cost_factors"]:
                 raise serializers.ValidationError(
                     {"cost_factors": "An acquisition needs at least 1 cost factor."}
                 )
+            if factors:
+                self._reject_duplicate_accumulated(factors)
         return attrs
+
+    @staticmethod
+    def _write_factors(acquisition: Acquisition, factors: list[dict]) -> None:
+        for order, factor in enumerate(factors):
+            CostFactor.objects.create(
+                acquisition=acquisition,
+                value=factor["value"],
+                currency=factor.get("currency", ""),
+                type=factor.get("type", "other"),
+                display_order=order,
+            )
 
     @transaction.atomic
     def create(self, validated_data: dict) -> Acquisition:
         items_data = validated_data.pop("items", [])
-        factors_data = validated_data.pop("cost_factors", None)
+        factors_data = validated_data.pop("cost_factors", None) or []
         acquisition = Acquisition.objects.create(**validated_data)
         for item_data in items_data:
             Item.objects.create(acquisition=acquisition, **item_data)
-        if factors_data:
-            for factor in factors_data:
-                CostFactor.objects.create(acquisition=acquisition, **factor)
-        else:
-            value, currency = self._accumulated_default(items_data)
-            CostFactor.objects.create(
-                acquisition=acquisition, value=value, currency=currency, type="accumulated"
-            )
+        # Derived accumulated (per currency) first, then any manual factors.
+        self._write_factors(acquisition, self._derive_accumulated(items_data) + list(factors_data))
         return acquisition
 
     @transaction.atomic
@@ -249,11 +277,10 @@ class AcquisitionSerializer(serializers.ModelSerializer):
         if items_data:
             for item_data in items_data:
                 Item.objects.create(acquisition=instance, **item_data)
-        # cost_factors, when provided, replace the whole set (must remain >= 1).
+        # cost_factors, when provided, replace the whole set in payload order (must remain ≥1).
         if factors_data is not None:
             instance.cost_factors.all().delete()
-            for factor in factors_data:
-                CostFactor.objects.create(acquisition=instance, **factor)
+            self._write_factors(instance, factors_data)
         return instance
 
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AutoComplete,
@@ -6,6 +6,7 @@ import {
   Card,
   Col,
   DatePicker,
+  Divider,
   Form,
   Input,
   InputNumber,
@@ -15,17 +16,33 @@ import {
   Typography,
   message,
 } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  HolderOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import type {
-  Acquisition,
-  CostFactorType,
-  CostFactorWrite,
-  Item,
-  ItemWrite,
-} from '@/services/unihub-backend/inventory';
+import type { Acquisition, CostFactorWrite, Item, ItemWrite } from '@/services/unihub-backend/inventory';
 import {
   COST_FACTOR_TYPES,
   createAcquisition,
@@ -45,10 +62,19 @@ interface AcquisitionFieldValues {
   remark?: string;
 }
 
-// A card is either an already-persisted item (has `id`) or a new local one.
 interface Card {
   id?: string;
   data: ItemWrite;
+}
+
+// A cost-factor row in the editor. Accumulated rows are system-managed (one per
+// currency, pinned, reset-only); manual rows are user-added and drag-sortable.
+interface FactorRow {
+  key: string;
+  value: string;
+  currency: string;
+  type: string;
+  kind: 'accumulated' | 'manual';
 }
 
 function itemToWrite(item: Item): ItemWrite {
@@ -74,22 +100,44 @@ function emptyCard(): Card {
   return { data: { name: '', quantity: 1 } };
 }
 
-// Σ (sku_price × quantity) across item cards, plus the first non-empty currency.
-function accumulatedDefault(cards: Card[]): { value: string; currency: string } {
-  let total = 0;
-  let currency = '';
+// Σ (sku_price × quantity) per item currency.
+function deriveAccumulated(cards: Card[]): { currency: string; value: string }[] {
+  const totals = new Map<string, number>();
   for (const c of cards) {
-    if (c.data.sku_price != null && c.data.sku_price !== '') {
-      total += Number(c.data.sku_price) * (c.data.quantity ?? 1);
-      currency = currency || c.data.sku_price_currency || '';
+    const p = c.data.sku_price;
+    if (p != null && p !== '') {
+      const cur = c.data.sku_price_currency || '';
+      totals.set(cur, (totals.get(cur) ?? 0) + Number(p) * (c.data.quantity ?? 1));
     }
   }
-  return { value: String(total), currency };
+  if (totals.size === 0) return [{ currency: '', value: '0' }];
+  return [...totals.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, value]) => ({ currency, value: String(value) }));
+}
+
+// Non-empty item attributes to preview on a card.
+function itemCardLines(d: ItemWrite): string[] {
+  const lines: string[] = [];
+  if (d.quantity != null && d.quantity !== 1) lines.push(`× ${d.quantity}`);
+  if (d.sku_price) lines.push(`${d.sku_price} ${d.sku_price_currency ?? ''}`.trim());
+  if (d.size) lines.push(`Size: ${d.size}`);
+  if (d.color) lines.push(`Color: ${d.color}`);
+  const dim = [d.length, d.width, d.height].filter(Boolean) as { value: string; unit: string }[];
+  if (dim.length) lines.push(dim.map((m) => `${m.value}${m.unit}`).join(' × '));
+  if (d.weight) lines.push(`${d.weight.value} ${d.weight.unit}`);
+  if (d.volume) lines.push(`${d.volume.value} ${d.volume.unit}`);
+  if (d.url) lines.push(d.url);
+  if (d.spec) lines.push(d.spec);
+  return lines;
 }
 
 interface AcquisitionFormProps {
-  initial?: Acquisition; // present ⇒ edit mode
+  initial?: Acquisition;
 }
+
+let factorKeySeq = 0;
+const nextKey = () => `m:${factorKeySeq++}`;
 
 export function AcquisitionForm({ initial }: AcquisitionFormProps) {
   const navigate = useNavigate();
@@ -104,14 +152,53 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
   const [cards, setCards] = useState<Card[]>(() =>
     initial ? initial.items.map((i) => ({ id: i.id, data: itemToWrite(i) })) : [emptyCard()],
   );
-  const [factors, setFactors] = useState<CostFactorWrite[]>(() =>
+  const [factors, setFactors] = useState<FactorRow[]>(() =>
     initial
-      ? initial.cost_factors.map((f) => ({ value: f.value, currency: f.currency, type: f.type }))
-      : [{ value: '0', currency: '', type: 'accumulated' }],
+      ? initial.cost_factors.map((f) => ({
+          key: f.type === 'accumulated' ? `acc:${f.currency}` : nextKey(),
+          value: f.value,
+          currency: f.currency,
+          type: f.type,
+          kind: f.type === 'accumulated' ? 'accumulated' : 'manual',
+        }))
+      : deriveAccumulated([emptyCard()]).map((a) => ({
+          key: `acc:${a.currency}`,
+          value: a.value,
+          currency: a.currency,
+          type: 'accumulated',
+          kind: 'accumulated',
+        })),
   );
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [sourceOptions, setSourceOptions] = useState<{ value: string }[]>([]);
+
+  // Reconcile accumulated rows with the items' currencies as cards change:
+  // add a row for each new currency (at the derived value), drop currencies with
+  // no priced item, and preserve any overridden value for currencies that remain.
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return; // keep the initial factor set on first render
+    }
+    const desired = deriveAccumulated(cards);
+    setFactors((prev) => {
+      const manual = prev.filter((f) => f.kind === 'manual');
+      const prevAcc = new Map(prev.filter((f) => f.kind === 'accumulated').map((f) => [f.currency, f]));
+      const acc: FactorRow[] = desired.map((d) => {
+        const existing = prevAcc.get(d.currency);
+        return existing ?? {
+          key: `acc:${d.currency}`,
+          value: d.value,
+          currency: d.currency,
+          type: 'accumulated',
+          kind: 'accumulated',
+        };
+      });
+      return [...acc, ...manual];
+    });
+  }, [cards]);
 
   useEffect(() => {
     if (initial) {
@@ -122,8 +209,8 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
         remark: initial.remark,
       });
     } else {
-      // New acquisition: request_time defaults to today at 00:00.
-      form.setFieldsValue({ request_time: dayjs().startOf('day') });
+      // New acquisition: request_time and obtained_at default to today at 00:00.
+      form.setFieldsValue({ request_time: dayjs().startOf('day'), obtained_at: dayjs().startOf('day') });
     }
   }, [initial, form]);
 
@@ -135,21 +222,19 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     () => (currenciesData?.results ?? []).map((c) => ({ value: c.code, label: c.code })),
     [currenciesData],
   );
-
-  const factorTypeOptions = COST_FACTOR_TYPES.map((ct) => ({
-    value: ct,
-    label: t({ id: `pages.inventory.costFactors.type.${ct}` }),
+  const typeOptions = COST_FACTOR_TYPES.filter((tp) => tp !== 'accumulated').map((tp) => ({
+    value: tp,
+    label: t({ id: `pages.inventory.costFactors.type.${tp}` }),
   }));
 
-  // Net cost = per-currency sum of factor values (value carries its own sign).
-  const netByCurrency = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const f of factors) {
-      const cur = f.currency || '';
-      totals.set(cur, (totals.get(cur) ?? 0) + Number(f.value || 0));
-    }
-    return [...totals.entries()].sort(([a], [b]) => a.localeCompare(b));
+  // Total = per-currency sum across every factor (accumulated + manual).
+  const totals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const f of factors) map.set(f.currency || '', (map.get(f.currency || '') ?? 0) + Number(f.value || 0));
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [factors]);
+
+  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor));
 
   const onSourceSearch = async (q: string) => {
     const results = await listSources(q).catch(() => []);
@@ -172,20 +257,24 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     };
   };
 
-  const factorsPayload = (): CostFactorWrite[] =>
-    factors.map((f) => ({
-      value: String(f.value ?? '0'),
-      currency: f.currency ?? '',
-      type: f.type ?? 'other',
-    }));
+  const manualPayload = (): CostFactorWrite[] =>
+    factors
+      .filter((f) => f.kind === 'manual')
+      .map((f) => ({ value: String(f.value ?? '0'), currency: f.currency ?? '', type: f.type || 'other' }));
+
+  const fullPayload = (): CostFactorWrite[] =>
+    factors.map((f) => ({ value: String(f.value ?? '0'), currency: f.currency ?? '', type: f.type }));
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      createAcquisition({
+    mutationFn: () => {
+      const manual = manualPayload();
+      return createAcquisition({
         ...scalarPayload(),
-        cost_factors: factorsPayload(),
+        // accumulated is server-derived on create; send only manual factors.
+        ...(manual.length ? { cost_factors: manual } : {}),
         items: cards.map((c) => c.data),
-      }),
+      });
+    },
     onSuccess: () => {
       invalidate();
       message.success(t({ id: 'pages.inventory.acquisitions.saved' }));
@@ -199,7 +288,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
       const newItems = cards.filter((c) => !c.id).map((c) => c.data);
       return updateAcquisition(initial!.id, {
         ...scalarPayload(),
-        cost_factors: factorsPayload(),
+        cost_factors: fullPayload(),
         items: newItems,
       });
     },
@@ -215,10 +304,6 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     const hasName = cards.every((c) => c.data.name.trim().length > 0);
     if (cards.length === 0 || !hasName) {
       message.warning(t({ id: 'pages.inventory.acquisitions.new.needItem' }));
-      return;
-    }
-    if (factors.length === 0) {
-      message.warning(t({ id: 'pages.inventory.acquisitions.costFactors.needOne' }));
       return;
     }
     if (isEdit) editSaveMutation.mutate();
@@ -240,7 +325,6 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     } else {
       const card = cards[editingIndex];
       if (isEdit && card?.id) {
-        // Persist the edit immediately; existing items are not resent on save.
         const updated = await updateItem(card.id, data).catch(() => {
           message.error(t({ id: 'pages.inventory.items.saveError' }));
           return null;
@@ -262,28 +346,58 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     setCards((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const updateFactor = (idx: number, patch: Partial<CostFactorWrite>) =>
-    setFactors((prev) => prev.map((f, i) => (i === idx ? { ...f, ...patch } : f)));
+  const updateFactor = (key: string, patch: Partial<FactorRow>) =>
+    setFactors((prev) => prev.map((f) => (f.key === key ? { ...f, ...patch } : f)));
 
   const addFactor = () =>
-    setFactors((prev) => [...prev, { value: '0', currency: '', type: 'other' }]);
+    setFactors((prev) => [...prev, { key: nextKey(), value: '0', currency: '', type: 'other', kind: 'manual' }]);
 
-  const removeFactor = (idx: number) => setFactors((prev) => prev.filter((_, i) => i !== idx));
+  const removeFactor = (key: string) => setFactors((prev) => prev.filter((f) => f.key !== key));
 
-  // Recompute (or add) the accumulated factor from the current item prices.
-  const resetAccumulated = () => {
-    const { value, currency } = accumulatedDefault(cards);
+  // Reset one accumulated row's value to the derived Σ for its currency.
+  const resetAccumulated = (currency: string) => {
+    const derived = deriveAccumulated(cards).find((d) => d.currency === currency);
+    if (derived) updateFactor(`acc:${currency}`, { value: derived.value });
+  };
+
+  const onDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
     setFactors((prev) => {
-      const idx = prev.findIndex((f) => f.type === 'accumulated');
-      if (idx === -1) return [{ value, currency, type: 'accumulated' }, ...prev];
-      return prev.map((f, i) => (i === idx ? { ...f, value, currency } : f));
+      const manual = prev.filter((f) => f.kind === 'manual');
+      const acc = prev.filter((f) => f.kind === 'accumulated');
+      const from = manual.findIndex((f) => f.key === active.id);
+      const to = manual.findIndex((f) => f.key === over.id);
+      if (from < 0 || to < 0) return prev;
+      return [...acc, ...arrayMove(manual, from, to)];
     });
   };
 
-  // Build a minimal Item-like object from an ItemWrite so the edit modal pre-fills
-  // from the *current* card data (fixes edits not being reflected on reopen).
   const modalInitial: Item | null =
     editingIndex !== null ? writeToItemLike(cards[editingIndex]?.data) : null;
+
+  const accumulatedRows = factors.filter((f) => f.kind === 'accumulated');
+  const manualRows = factors.filter((f) => f.kind === 'manual');
+
+  const valueCurrency = (f: FactorRow, currencyDisabled: boolean) => (
+    <Space.Compact style={{ width: '100%' }}>
+      <InputNumber
+        style={{ width: '55%', textAlign: 'right' }}
+        value={f.value === '' || f.value == null ? null : Number(f.value)}
+        onChange={(v) => updateFactor(f.key, { value: v == null ? '0' : String(v) })}
+      />
+      <Select
+        style={{ width: '45%' }}
+        showSearch
+        allowClear
+        disabled={currencyDisabled}
+        value={f.currency || undefined}
+        onChange={(v) => updateFactor(f.key, { currency: v ?? '' })}
+        options={currencyOptions}
+        placeholder={t({ id: 'pages.inventory.acquisitions.costFactors.currency' })}
+      />
+    </Space.Compact>
+  );
 
   return (
     <div ref={ref}>
@@ -317,78 +431,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
       </Card>
 
       <Card
-        title={t({ id: 'pages.inventory.acquisitions.costFactors' })}
-        extra={
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={resetAccumulated}>
-              {t({ id: 'pages.inventory.acquisitions.costFactors.reset' })}
-            </Button>
-            <Button icon={<PlusOutlined />} onClick={addFactor}>
-              {t({ id: 'pages.inventory.acquisitions.costFactors.add' })}
-            </Button>
-          </Space>
-        }
-        style={{ marginBottom: 16 }}
-      >
-        <Space direction="vertical" style={{ width: '100%' }} size={8}>
-          {factors.map((f, idx) => (
-            <Row gutter={8} key={idx} align="middle">
-              <Col span={isNarrow ? 24 : 7}>
-                <InputNumber
-                  style={{ width: '100%' }}
-                  value={f.value === '' || f.value == null ? null : Number(f.value)}
-                  onChange={(v) => updateFactor(idx, { value: v == null ? '0' : String(v) })}
-                  placeholder={t({ id: 'pages.inventory.acquisitions.costFactors.value' })}
-                />
-              </Col>
-              <Col span={isNarrow ? 12 : 6}>
-                <Select
-                  style={{ width: '100%' }}
-                  showSearch
-                  allowClear
-                  value={f.currency || undefined}
-                  onChange={(v) => updateFactor(idx, { currency: v ?? '' })}
-                  options={currencyOptions}
-                  placeholder={t({ id: 'pages.inventory.acquisitions.costFactors.currency' })}
-                />
-              </Col>
-              <Col span={isNarrow ? 10 : 8}>
-                <Select
-                  style={{ width: '100%' }}
-                  value={f.type}
-                  onChange={(v) => updateFactor(idx, { type: v as CostFactorType })}
-                  options={factorTypeOptions}
-                />
-              </Col>
-              <Col span={isNarrow ? 2 : 3}>
-                <Button
-                  type="text"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={() => removeFactor(idx)}
-                />
-              </Col>
-            </Row>
-          ))}
-        </Space>
-        <div style={{ marginTop: 12 }}>
-          <Typography.Text type="secondary">
-            {t({ id: 'pages.inventory.acquisitions.col.netCost' })}:{' '}
-          </Typography.Text>
-          {netByCurrency.length === 0 ? (
-            <Typography.Text>—</Typography.Text>
-          ) : (
-            netByCurrency.map(([cur, total]) => (
-              <Typography.Text strong key={cur} style={{ marginRight: 12 }}>
-                {total.toLocaleString()} {cur}
-              </Typography.Text>
-            ))
-          )}
-        </div>
-      </Card>
-
-      <Card
-        title={t({ id: 'pages.inventory.acquisitions.new.items' })}
+        title={t({ id: 'pages.inventory.acquisitions.items' })}
         extra={
           <Button icon={<PlusOutlined />} onClick={openAddCard}>
             {t({ id: 'pages.inventory.acquisitions.new.addItem' })}
@@ -407,25 +450,90 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
                   <DeleteOutlined key="del" onClick={() => removeCard(idx)} />,
                 ]}
               >
-                <Space direction="vertical" size={2}>
-                  {card.data.quantity != null && card.data.quantity !== 1 && (
-                    <span>× {card.data.quantity}</span>
-                  )}
-                  {card.data.sku_price && (
-                    <span>
-                      {card.data.sku_price} {card.data.sku_price_currency}
-                    </span>
-                  )}
-                  {card.data.spec && (
-                    <Typography.Text type="secondary" ellipsis>
-                      {card.data.spec}
+                <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                  {itemCardLines(card.data).map((line, i) => (
+                    <Typography.Text key={i} type={i === 0 ? undefined : 'secondary'} ellipsis>
+                      {line}
                     </Typography.Text>
-                  )}
+                  ))}
                 </Space>
               </Card>
             </Col>
           ))}
         </Row>
+      </Card>
+
+      <Card
+        title={t({ id: 'pages.inventory.acquisitions.cost' })}
+        extra={
+          <Button icon={<PlusOutlined />} onClick={addFactor}>
+            {t({ id: 'pages.inventory.acquisitions.costFactors.add' })}
+          </Button>
+        }
+        style={{ marginBottom: 16 }}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size={8}>
+          {accumulatedRows.map((f) => (
+            <Row gutter={8} key={f.key} align="middle" wrap={false}>
+              <Col flex="24px" />
+              <Col flex="130px">
+                <Typography.Text>{t({ id: 'pages.inventory.costFactors.type.accumulated' })}</Typography.Text>
+              </Col>
+              <Col flex="auto">{valueCurrency(f, true)}</Col>
+              <Col flex="90px">
+                <Button size="small" icon={<ReloadOutlined />} onClick={() => resetAccumulated(f.currency)}>
+                  {t({ id: 'pages.inventory.acquisitions.costFactors.reset' })}
+                </Button>
+              </Col>
+            </Row>
+          ))}
+
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={manualRows.map((f) => f.key)} strategy={verticalListSortingStrategy}>
+              <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                {manualRows.map((f) => (
+                  <SortableFactorRow key={f.key} id={f.key}>
+                    <Col flex="130px">
+                      <AutoComplete
+                        style={{ width: '100%' }}
+                        value={f.type}
+                        options={typeOptions}
+                        onChange={(v) => updateFactor(f.key, { type: v })}
+                        placeholder={t({ id: 'pages.inventory.acquisitions.costFactors.factorType' })}
+                      />
+                    </Col>
+                    <Col flex="auto">{valueCurrency(f, false)}</Col>
+                    <Col flex="90px">
+                      <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeFactor(f.key)} />
+                    </Col>
+                  </SortableFactorRow>
+                ))}
+              </Space>
+            </SortableContext>
+          </DndContext>
+
+          <Divider style={{ margin: '8px 0' }} />
+          <Row gutter={8} align="top" wrap={false}>
+            <Col flex="24px" />
+            <Col flex="130px">
+              <Typography.Text strong>{t({ id: 'pages.inventory.acquisitions.total' })}</Typography.Text>
+            </Col>
+            <Col flex="auto">
+              {totals.length === 0 ? (
+                <Typography.Text>—</Typography.Text>
+              ) : (
+                <Space direction="vertical" size={0}>
+                  {totals.map(([cur, total]) => (
+                    <Typography.Text strong key={cur}>
+                      {total.toLocaleString()} {cur}
+                    </Typography.Text>
+                  ))}
+                </Space>
+              )}
+            </Col>
+            <Col flex="90px" />
+          </Row>
+        </Space>
       </Card>
 
       <Space>
@@ -434,9 +542,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
           loading={createMutation.isPending || editSaveMutation.isPending}
           onClick={handleSubmit}
         >
-          {isEdit
-            ? t({ id: 'common.save' })
-            : t({ id: 'pages.inventory.acquisitions.new.create' })}
+          {isEdit ? t({ id: 'common.save' }) : t({ id: 'pages.inventory.acquisitions.new.create' })}
         </Button>
       </Space>
 
@@ -455,7 +561,25 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
   );
 }
 
-// Build a minimal Item-like object from an ItemWrite so the edit modal can pre-fill.
+// A drag-sortable manual cost-factor row (accumulated rows are not sortable).
+function SortableFactorRow({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  return (
+    <Row ref={setNodeRef} style={style} gutter={8} align="middle" wrap={false}>
+      <Col flex="24px">
+        <span {...attributes} {...listeners} style={{ cursor: 'grab' }}>
+          <HolderOutlined />
+        </span>
+      </Col>
+      {children}
+    </Row>
+  );
+}
+
 function writeToItemLike(data?: ItemWrite): Item | null {
   if (!data) return null;
   return {

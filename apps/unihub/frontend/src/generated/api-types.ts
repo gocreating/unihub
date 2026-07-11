@@ -865,7 +865,8 @@ export interface components {
             /** Format: decimal */
             value: string;
             currency?: string;
-            type?: components["schemas"]["TypeEnum"];
+            type?: string;
+            readonly display_order: number;
         };
         Currency: {
             code: string;
@@ -1178,16 +1179,6 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
-        /**
-         * @description * `accumulated` - Accumulated
-         *     * `shipping` - Shipping
-         *     * `discount` - Discount
-         *     * `tax_refund` - Tax refund
-         *     * `paid_by_other` - Paid by other
-         *     * `other` - Other
-         * @enum {string}
-         */
-        TypeEnum: "accumulated" | "shipping" | "discount" | "tax_refund" | "paid_by_other" | "other";
     };
     responses: never;
     parameters: never;

@@ -30,15 +30,20 @@ class Acquisition(models.Model):
 
 
 class CostFactor(models.Model):
-    """A signed line of an acquisition's payment (net_cost = per-currency sum)."""
+    """A signed line of an acquisition's payment (net_cost = per-currency sum).
 
-    TYPE_CHOICES = [
-        ("accumulated", "Accumulated"),
-        ("shipping", "Shipping"),
-        ("discount", "Discount"),
-        ("tax_refund", "Tax refund"),
-        ("paid_by_other", "Paid by other"),
-        ("other", "Other"),
+    ``type`` is a free-form label (the constants below are UI suggestions only);
+    ``accumulated`` is system-managed — one per currency, derived from item prices.
+    """
+
+    # UI suggestions only — not enforced as DB choices.
+    TYPE_SUGGESTIONS = [
+        "accumulated",
+        "shipping",
+        "discount",
+        "tax_refund",
+        "paid_by_other",
+        "other",
     ]
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
@@ -47,11 +52,19 @@ class CostFactor(models.Model):
     )
     value = models.DecimalField(max_digits=20, decimal_places=4)  # signed; negative reduces
     currency = models.CharField(max_length=3, blank=True)
-    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="accumulated")
+    type = models.CharField(max_length=20, default="accumulated")  # free-form label
+    display_order = models.IntegerField(default=0)  # user-defined ordering
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["created_at"]
+        ordering = ["display_order", "created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["acquisition", "currency"],
+                condition=models.Q(type="accumulated"),
+                name="uniq_accumulated_per_currency",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.type} {self.value} {self.currency}".strip()

@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, DatePicker, Modal, Space, Tag, Typography, message } from 'antd';
 import {
   DeleteOutlined,
+  DownOutlined,
   EditOutlined,
   PlusOutlined,
+  RightOutlined,
   StopOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
@@ -15,7 +17,6 @@ import { useIntl } from 'react-intl';
 import PageTable, {
   computeScrollX,
   measureTextWidth,
-  useActionsColWidth,
   widthForHeader,
 } from '@/components/PageTable';
 import type { Acquisition, Item, Measurement, NetCostEntry } from '@/services/unihub-backend/inventory';
@@ -75,15 +76,16 @@ export function CatalogPage() {
 
   const columnDefs = useMemo<ColumnDef[]>(
     () => [
-      { key: 'nameSource', label: t({ id: 'pages.inventory.catalog.col.nameSource' }), dataType: 'text', visible: true, order: 0 },
-      { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text', visible: true, order: 1 },
-      { key: 'size', label: t({ id: 'pages.inventory.items.col.size' }), dataType: 'text', visible: true, order: 2 },
-      { key: 'weight', label: t({ id: 'pages.inventory.items.col.weight' }), dataType: 'number', visible: true, order: 3 },
-      { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select', visible: true, order: 4 },
-      { key: 'item_count', label: t({ id: 'pages.inventory.acquisitions.col.itemCount' }), dataType: 'number', visible: true, order: 5 },
-      { key: 'net_cost', label: t({ id: 'pages.inventory.acquisitions.col.netCost' }), dataType: 'text', visible: true, order: 6 },
-      { key: 'obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date', visible: true, order: 7 },
-      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 8 },
+      { key: 'source', label: t({ id: 'pages.inventory.acquisitions.col.source' }), dataType: 'text', visible: true, order: 0 },
+      { key: 'name', label: t({ id: 'common.name' }), dataType: 'text', visible: true, order: 1 },
+      { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text', visible: true, order: 2 },
+      { key: 'size', label: t({ id: 'pages.inventory.items.col.size' }), dataType: 'text', visible: true, order: 3 },
+      { key: 'weight', label: t({ id: 'pages.inventory.items.col.weight' }), dataType: 'number', visible: true, order: 4 },
+      { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select', visible: true, order: 5 },
+      { key: 'item_count', label: t({ id: 'pages.inventory.acquisitions.col.itemCount' }), dataType: 'number', visible: true, order: 6 },
+      { key: 'net_cost', label: t({ id: 'pages.inventory.acquisitions.col.netCost' }), dataType: 'text', visible: true, order: 7 },
+      { key: 'obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date', visible: true, order: 8 },
+      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 9 },
     ],
     [t],
   );
@@ -169,13 +171,14 @@ export function CatalogPage() {
     setDeprecateDate(dayjs().startOf('day'));
   };
 
-  const actionsColWidth = useActionsColWidth(acquisitions);
+  // Fixed width sized to the widest action set (item rows: Deprecate + Delete).
+  const actionsColWidth = 220;
+  const sourceWidth = useMemo(
+    () => rows.reduce((m, r) => (isAcquisition(r) ? Math.max(m, measureTextWidth(r.source ?? '')) : m), 0),
+    [rows],
+  );
   const nameWidth = useMemo(
-    () =>
-      rows.reduce((m, r) => {
-        const label = isAcquisition(r) ? r.source : r.name;
-        return Math.max(m, measureTextWidth(label ?? ''));
-      }, 0),
+    () => rows.reduce((m, r) => (!isAcquisition(r) ? Math.max(m, measureTextWidth(r.name ?? '')) : m), 0),
     [rows],
   );
 
@@ -188,22 +191,20 @@ export function CatalogPage() {
             ? cols.lastColumnFixed
             : undefined;
       return {
-        nameSource: {
-          key: 'nameSource',
-          title: t({ id: 'pages.inventory.catalog.col.nameSource' }),
-          ...widthForHeader(t({ id: 'pages.inventory.catalog.col.nameSource' }), Math.max(200, nameWidth)),
-          fixed: getFixed('nameSource'),
-          render: (_, r) => {
-            if (isAcquisition(r)) {
-              return (
-                <Space>
-                  <Tag color="blue">{t({ id: 'pages.inventory.catalog.acquisitionRow' })}</Tag>
-                  <span>{r.source || t({ id: 'pages.inventory.acquisitions.new.untitled' })}</span>
-                </Space>
-              );
-            }
-            return <span>{r.name}</span>;
-          },
+        source: {
+          key: 'source',
+          title: t({ id: 'pages.inventory.acquisitions.col.source' }),
+          ...widthForHeader(t({ id: 'pages.inventory.acquisitions.col.source' }), Math.max(180, sourceWidth)),
+          fixed: getFixed('source'),
+          render: (_, r) =>
+            isAcquisition(r) ? (r.source || t({ id: 'pages.inventory.acquisitions.new.untitled' })) : EMPTY,
+        },
+        name: {
+          key: 'name',
+          title: t({ id: 'common.name' }),
+          ...widthForHeader(t({ id: 'common.name' }), Math.max(180, nameWidth)),
+          fixed: getFixed('name'),
+          render: (_, r) => (!isAcquisition(r) ? r.name : EMPTY),
         },
         spec: {
           key: 'spec',
@@ -309,7 +310,7 @@ export function CatalogPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, nameWidth, actionsColWidth, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns, navigate],
+    [t, sourceWidth, nameWidth, actionsColWidth, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns, navigate],
   );
 
   const columns = useMemo<ProColumns<CatalogRow>[]>(
@@ -342,6 +343,20 @@ export function CatalogPage() {
         dataSource={rows}
         loading={isLoading}
         columnEmptyText={false}
+        expandable={{
+          // Arrow disclosure (▸/▾) instead of the default plus/minus.
+          expandIcon: ({ expanded, onExpand, record }) =>
+            isAcquisition(record) && record.children.length > 0 ? (
+              <span
+                onClick={(e) => onExpand(record, e)}
+                style={{ cursor: 'pointer', marginRight: 8 }}
+              >
+                {expanded ? <DownOutlined /> : <RightOutlined />}
+              </span>
+            ) : (
+              <span style={{ marginRight: 8, display: 'inline-block', width: 14 }} />
+            ),
+        }}
         scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}

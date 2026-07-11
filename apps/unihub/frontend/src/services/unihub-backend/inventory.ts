@@ -85,13 +85,14 @@ export interface CostFactor {
   id: string;
   value: string; // signed decimal
   currency: string;
-  type: CostFactorType;
+  type: string; // free-form; CostFactorType values are suggestions
+  display_order: number;
 }
 
 export interface CostFactorWrite {
   value: string;
   currency?: string;
-  type?: CostFactorType;
+  type?: string; // free-form; sent in display order (server assigns display_order)
 }
 
 /** Per-currency net cost = sum of cost-factor values (value carries its sign). */

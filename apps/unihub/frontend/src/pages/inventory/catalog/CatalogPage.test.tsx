@@ -39,7 +39,9 @@ const ACQ = {
   request_time: null,
   obtained_at: '2026-07-11T00:00:00Z',
   remark: '',
-  cost_factors: [{ id: 'cf-1', value: '10', currency: 'USD', type: 'accumulated' as const }],
+  cost_factors: [
+    { id: 'cf-1', value: '10', currency: 'USD', type: 'accumulated', display_order: 0 },
+  ],
   net_cost: [{ currency: 'USD', total: '10.0000' }],
   items: [ITEM],
   item_count: 1,
@@ -70,12 +72,16 @@ describe('CatalogPage', () => {
     });
   });
 
-  it('renders acquisition parent rows with net cost per currency', async () => {
+  it('renders separate Source/Name columns, net cost, and no Acquisition badge', async () => {
     renderPage();
+    // Source column shows the acquisition source.
     await screen.findByText('Shop');
     // Net cost shows the per-currency total.
     expect(screen.getByText('10 USD')).toBeInTheDocument();
-    // The acquisition row is tagged as such.
-    expect(screen.getByText('Acquisition')).toBeInTheDocument();
+    // Separate Source and Name column headers exist.
+    expect(screen.getAllByText('Source').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Name').length).toBeGreaterThan(0);
+    // The "Acquisition" badge is gone.
+    expect(screen.queryByText('Acquisition')).not.toBeInTheDocument();
   });
 });

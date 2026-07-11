@@ -28,21 +28,111 @@ class TestAcquisitions:
         assert resp.json()["item_count"] == 2
 
     def test_cost_factors_net_cost_grouped_by_currency(self, auth_client):
+        # accumulated (USD 3300) is derived from the item; discount/shipping are manual.
         acq = _post(
             auth_client,
             ACQ,
             {
                 "source": "Shop",
                 "cost_factors": [
-                    {"value": "3300", "currency": "USD", "type": "accumulated"},
                     {"value": "-100", "currency": "USD", "type": "discount"},
                     {"value": "50", "currency": "EUR", "type": "shipping"},
                 ],
-                "items": [{"name": "Thing"}],
+                "items": [{"name": "Thing", "sku_price": "3300", "sku_price_currency": "USD"}],
             },
         ).json()
         net = {row["currency"]: row["total"] for row in acq["net_cost"]}
         assert net == {"USD": "3200.0000", "EUR": "50.0000"}
+
+    def test_accumulated_one_per_item_currency(self, auth_client):
+        acq = _post(
+            auth_client,
+            ACQ,
+            {
+                "source": "Multi",
+                "items": [
+                    {"name": "A", "quantity": 2, "sku_price": "10", "sku_price_currency": "USD"},
+                    {"name": "B", "quantity": 1, "sku_price": "5", "sku_price_currency": "TWD"},
+                ],
+            },
+        ).json()
+        acc = [f for f in acq["cost_factors"] if f["type"] == "accumulated"]
+        by_cur = {f["currency"]: f["value"] for f in acc}
+        assert by_cur == {"USD": "20.0000", "TWD": "5.0000"}
+
+    def test_client_cannot_create_accumulated_type(self, auth_client):
+        resp = _post(
+            auth_client,
+            ACQ,
+            {
+                "source": "X",
+                "cost_factors": [{"type": "accumulated", "value": "99", "currency": "USD"}],
+                "items": [{"name": "A"}],
+            },
+        )
+        assert resp.status_code == 400
+
+    def test_cost_factor_type_accepts_free_text(self, auth_client):
+        acq = _post(
+            auth_client,
+            ACQ,
+            {
+                "source": "X",
+                "cost_factors": [{"type": "customs", "value": "7", "currency": "USD"}],
+                "items": [{"name": "A", "sku_price": "10", "sku_price_currency": "USD"}],
+            },
+        ).json()
+        assert "customs" in [f["type"] for f in acq["cost_factors"]]
+
+    def test_cost_factors_preserve_display_order(self, auth_client):
+        acq = _post(auth_client, ACQ, {"source": "X", "items": [{"name": "A"}]}).json()
+        resp = auth_client.patch(
+            f"{ACQ}{acq['id']}/",
+            json.dumps(
+                {
+                    "cost_factors": [
+                        {"type": "shipping", "value": "5", "currency": "USD"},
+                        {"type": "discount", "value": "-2", "currency": "USD"},
+                        {"type": "customs", "value": "1", "currency": "USD"},
+                    ]
+                }
+            ),
+            content_type="application/json",
+        )
+        assert resp.status_code == 200, resp.content
+        factors = resp.json()["cost_factors"]
+        assert [f["type"] for f in factors] == ["shipping", "discount", "customs"]
+        assert [f["display_order"] for f in factors] == [0, 1, 2]
+
+    def test_duplicate_accumulated_currency_rejected(self, auth_client):
+        acq = _post(auth_client, ACQ, {"source": "X", "items": [{"name": "A"}]}).json()
+        resp = auth_client.patch(
+            f"{ACQ}{acq['id']}/",
+            json.dumps(
+                {
+                    "cost_factors": [
+                        {"type": "accumulated", "value": "10", "currency": "USD"},
+                        {"type": "accumulated", "value": "20", "currency": "USD"},
+                    ]
+                }
+            ),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+
+    def test_reset_accumulated_recomputes_from_items(self, auth_client):
+        acq = _post(
+            auth_client,
+            ACQ,
+            {
+                "source": "X",
+                "items": [
+                    {"name": "A", "quantity": 3, "sku_price": "10", "sku_price_currency": "USD"}
+                ],
+            },
+        ).json()
+        acc = next(f for f in acq["cost_factors"] if f["type"] == "accumulated")
+        assert acc["value"] == "30.0000"
 
     def test_accumulated_factor_auto_derived_when_omitted(self, auth_client):
         acq = _post(

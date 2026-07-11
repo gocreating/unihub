@@ -463,7 +463,10 @@ export default {
   'pages.inventory.acquisitions.new.untitled': '（未命名物品）',
   'pages.inventory.acquisitions.form.title': '取得紀錄',
   'pages.inventory.acquisitions.form.editCrumb': '編輯取得紀錄',
-  // Cost factors
+  'pages.inventory.acquisitions.items': '物品',
+  // Cost panel
+  'pages.inventory.acquisitions.cost': '費用',
+  'pages.inventory.acquisitions.total': '總計',
   'pages.inventory.acquisitions.costFactors': '費用項目',
   'pages.inventory.acquisitions.costFactors.add': '新增費用項目',
   'pages.inventory.acquisitions.costFactors.reset': '重設累計金額',
@@ -481,8 +484,6 @@ export default {
   // Inventory > Catalog (merged items + acquisitions)
   'pages.inventory.catalog.title': '物品清單',
   'pages.inventory.catalog.loadError': '載入清單失敗',
-  'pages.inventory.catalog.col.nameSource': '名稱 / 來源',
-  'pages.inventory.catalog.acquisitionRow': '取得紀錄',
 
   // Inventory > Scenarios
   'pages.inventory.scenarios.title': '情境',

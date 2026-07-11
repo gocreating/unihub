@@ -463,7 +463,10 @@ export default {
   'pages.inventory.acquisitions.new.untitled': '(unnamed item)',
   'pages.inventory.acquisitions.form.title': 'Acquisition',
   'pages.inventory.acquisitions.form.editCrumb': 'Edit Acquisition',
-  // Cost factors
+  'pages.inventory.acquisitions.items': 'Items',
+  // Cost panel
+  'pages.inventory.acquisitions.cost': 'Cost',
+  'pages.inventory.acquisitions.total': 'Total',
   'pages.inventory.acquisitions.costFactors': 'Cost Factors',
   'pages.inventory.acquisitions.costFactors.add': 'Add Factor',
   'pages.inventory.acquisitions.costFactors.reset': 'Reset accumulated',
@@ -481,8 +484,6 @@ export default {
   // Inventory > Catalog (merged items + acquisitions)
   'pages.inventory.catalog.title': 'Catalog',
   'pages.inventory.catalog.loadError': 'Failed to load catalog',
-  'pages.inventory.catalog.col.nameSource': 'Name / Source',
-  'pages.inventory.catalog.acquisitionRow': 'Acquisition',
 
   // Inventory > Scenarios
   'pages.inventory.scenarios.title': 'Scenarios',

@@ -564,3 +564,20 @@ Completed 2026-07-11 (builds on iteration 9, commit `1be2fd3`). **No schema chan
 - Backend: `test_ordering_nullsfirst_and_nullslast_take_effect`, `test_default_ordering_is_obtained_desc_nulls_first` — **267 pytest**, ruff clean.
 - RTL: `ItemFormModal.test.tsx` (footer space-between order, exact 13-field order, **narrow stacking via mocked ResizeObserver — proves the callback-ref fix**); `CatalogPage.test.tsx` (+2: default column order + "New", right-aligned Net cost/SKU cells, date-only). `useContainerWidth.test.tsx` (2). **Frontend 367 vitest**, lint/typecheck clean, locale parity OK.
 - e2e (20 specs compile): computed `text-align:right` on number inputs (cost panel + modal), modal stacking at 480px, footer Cancel-left/Save-right geometry, catalog nulls-first default + "New" label. Not executed headlessly (needs `pnpm dev` + Docker backend).
+
+---
+
+# Tasks: Iteration 11 (HTML legacy import + item duplicate)
+
+**Input**: plan.md "Iteration 11"; spec session iteration 11; migration-import.md Format v2. Builds on iteration 10 (`341c11a`). **No schema change.**
+
+- [ ] T113 Extend `specs/014-inventory-app/scripts/preview_legacy_import.py`: `build_html(path)` (stdlib HTMLParser, **colspan expansion**, `<br>`→newlines, name `<a href>`→item url); extend 備註 map (規格→spec, size/Size→size, 款式→color, 容量→volume, 官網連結→url, simple `運費<amount>`→shipping factor); unresolved→remark
+- [ ] T114 Update `apps/unihub/backend/inventory/management/commands/import_legacy_csv.py`: route `.html` files to `build_html`; `_item_payload` passes **spec + url**
+- [ ] T115 [P] Add `apps/unihub/backend/tests/test_import_legacy_html.py`: inline HTML fixture → url from href, 規格→spec, 原價→sku_price, AxBxC→dims, 運費→shipping factor, unresolvable lines→remark, colspan-shifted row parsed correctly
+- [ ] T116 Run for 2026: delete the CSV-imported 2026 acquisitions (keep the pre-existing manual one), `import_legacy_csv "data/財產們/2026.html" --commit`; verify net (199.9 CNY / 687 TWD / 186.22 USD) and that items carry URLs
+- [ ] T117 [US2] `AcquisitionForm.tsx`: item-card **Duplicate** action (CopyOutlined) appending a copy (no id) to the end of the list
+- [ ] T118 [P] e2e `inventory-acquisition.spec.ts`: Duplicate appends a new card with the same name
+- [ ] T119 Quality loops incl. **`pnpm build`** (tsc -b — stricter than typecheck; broke CI in iter 10) + backend ruff/pytest; mark tasks + notes
+
+## Implementation Strategy
+Parser first (single source of truth), command routing, fixture test, then the one-off 2026 re-import; Duplicate button + e2e; loops with pnpm build.

@@ -83,3 +83,22 @@ Once the dry-run output looks right, the parser is promoted to a Django manageme
 command `inventory/management/commands/import_legacy_csv.py` that posts through
 `AcquisitionSerializer` (respects validation, per-currency accumulated, Principle II)
 with a `--dry-run` flag reusing this same parser.
+
+---
+
+## Format v2: Google-Sheets HTML export (2026-07-11)
+
+The legacy source changed from per-year CSVs to a **Google-Sheets HTML export**:
+`data/財產們/<year>.html` (2015–2026) + `resources/` images (ignored).
+
+- Same six logical columns (項目, 實際支付價錢, 貨幣, 購買地點, 購買日期, 備註) behind a
+  row-number column; the parser MUST expand **`colspan`** (empty cells are merged, so raw
+  cell positions shift) and treat `<br>` as the 備註 line separator.
+- **Item name `<a href>` → `Item.url`** — the new detail preserved by this format.
+- 備註 key map (evidence from all 12 years): 尺寸/size/Size→size; 規格→spec; 顏色/款式→color;
+  原價/單價→sku_price(+currency; yen/円/¥/￥→JPY, NT→TWD); 數量→quantity; 重量/淨重→weight;
+  長度→length; `AxBxC`→l/w/h; 容量→volume; 官網連結→url; `運費<amount>`(simple)→shipping factor.
+  **Unresolvable lines → `remark`** (型號/序號/商品編號/材質/吊牌名/複合運費折抵/書名副標 …).
+- Grouping/classification/currency-alias (RMB→CNY) rules unchanged from v1.
+- **Scope decision**: replace the CSV-imported **2026** now (delete + re-import from
+  `2026.html`, gaining URLs); **2015–2025 imported later on request**.

@@ -356,3 +356,25 @@ Reuse the two existing server-paginated viewsets (Acquisition=tree, Item=flat) b
 
 ## Structure Decision (delta)
 Frontend-only + two backend default-ordering strings + one additive toolbar-hook option. The container-width hook becomes callback-ref-based (shared infra fix benefiting all future modals).
+
+---
+
+# Iteration 11 (HTML legacy import + item duplicate) — delta plan
+
+**Date**: 2026-07-11 | Builds on iteration 10 (commit `341c11a`). Spec: `### Session 2026-07-11 (HTML legacy import + item duplicate, iteration 11)`; migration-import.md "Format v2". **No schema change.**
+
+## Importer (HTML v2)
+- Extend `specs/014-inventory-app/scripts/preview_legacy_import.py` with an **HTML parser** (`build_html(path)`) producing the same Acquisition/Item/CostFactor structures as the CSV path: stdlib `HTMLParser`, **colspan expansion** (empty cells are merged), `<br>` → 備註 newlines, **name `<a href>` → item url**.
+- Extend 備註 resolution: **規格→spec**, **size/Size→size**, **款式→color**, **容量→volume**, **官網連結→url**, simple **`運費<amount>` → shipping cost factor** (complex 運費+折抵 combos → remark); existing keys unchanged; **all unresolved lines → remark**.
+- `import_legacy_csv` command: detect `.html` and route to `build_html`; `_item_payload` gains **`spec` + `url`** passthrough.
+- **Run**: delete the 67 CSV-imported 2026 acquisitions (keep the 1 pre-existing manual acquisition, identified by import-batch `created_at`), re-import `data/財產們/2026.html` (`--commit`), verify per-currency net unchanged (199.9 CNY / 687 TWD / 186.22 USD) + **items now carry URLs**.
+
+## Frontend
+- Item cards gain a **Duplicate** action (`CopyOutlined`, between Edit and Delete) appending `{ data: {...card.data} }` (no id) to the end — new unsaved card in create AND edit flows.
+
+## Tests
+- Backend `tests/test_import_legacy_html.py`: inline HTML fixture (colspan-merged row, href name, 備註 with 規格/原價/尺寸/AxBxC/運費/unresolvable) → assert parsed url/spec/sku/dims/shipping-factor/remark.
+- e2e: item-card Duplicate appends a card.
+
+## Structure Decision (delta)
+The parser script stays the single source of truth (CSV v1 + HTML v2 entry points); the command routes by extension. 2015–2025 import deferred until requested.

@@ -38,9 +38,16 @@ _MEASURES = {
         units.weight_from_canonical,
         units.WEIGHT_UNITS,
     ),
+    "volume": (
+        "volume_canonical",
+        "volume_unit",
+        units.volume_to_canonical,
+        units.volume_from_canonical,
+        units.VOLUME_UNITS,
+    ),
 }
 
-_NON_NEGATIVE = ["quantity", "price", "cost"]
+_NON_NEGATIVE = ["quantity", "sku_price"]
 
 
 class AcquisitionSummarySerializer(serializers.ModelSerializer):
@@ -48,11 +55,13 @@ class AcquisitionSummarySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Acquisition
-        fields = ["id", "source", "method", "obtained_at"]
+        fields = ["id", "source", "obtained_at"]
 
 
 class ItemSerializer(serializers.ModelSerializer):
     acquisition = AcquisitionSummarySerializer(read_only=True)
+    total_price = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
 
     class Meta:
         model = Item
@@ -60,25 +69,30 @@ class ItemSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "item_type",
-            "model",
-            "serial_number",
+            "quantity",
             "spec",
             "remark",
-            "quantity",
             "size",
-            "price",
-            "price_currency",
-            "cost",
-            "cost_currency",
+            "sku_price",
+            "sku_price_currency",
+            "total_price",
             "color",
             "url",
             "status",
+            "deprecate_time",
             "acquisition",
-            "archived_at",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "acquisition", "created_at", "updated_at"]
+
+    def get_total_price(self, obj: Item) -> str | None:
+        if obj.sku_price is None:
+            return None
+        return str((obj.sku_price * obj.quantity).quantize(Decimal("0.0001")))
+
+    def get_status(self, obj: Item) -> str:
+        return "deprecated" if obj.deprecate_time is not None else "active"
 
     # ── Measurement objects ({value, unit}) handled outside declared fields ──
 
@@ -130,11 +144,6 @@ class ItemSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Name is required.")
         return value
 
-    def validate_status(self, value: str) -> str:
-        if value not in {"active", "deprecated"}:
-            raise serializers.ValidationError("status must be 'active' or 'deprecated'.")
-        return value
-
     def validate(self, attrs: dict) -> dict:
         for field in _NON_NEGATIVE:
             value = attrs.get(field)
@@ -146,19 +155,23 @@ class ItemSerializer(serializers.ModelSerializer):
 class AcquisitionSerializer(serializers.ModelSerializer):
     items = ItemSerializer(many=True, required=False)
     item_count = serializers.SerializerMethodField()
-    total_item_cost = serializers.SerializerMethodField()
+    net_cost = serializers.SerializerMethodField()
 
     class Meta:
         model = Acquisition
         fields = [
             "id",
             "source",
-            "method",
+            "request_time",
             "obtained_at",
             "remark",
+            "cost",
+            "cost_currency",
+            "discount",
+            "tax_refund",
+            "net_cost",
             "items",
             "item_count",
-            "total_item_cost",
             "created_at",
             "updated_at",
         ]
@@ -167,18 +180,18 @@ class AcquisitionSerializer(serializers.ModelSerializer):
     def get_item_count(self, obj: Acquisition) -> int:
         return obj.items.count()
 
-    def get_total_item_cost(self, obj: Acquisition) -> list[dict]:
-        """Aggregate item cost grouped by currency (no cross-currency sum)."""
-        totals: dict[str, Decimal] = {}
-        for item in obj.items.all():
-            if item.cost is None:
-                continue
-            key = item.cost_currency or ""
-            totals[key] = totals.get(key, Decimal("0")) + item.cost
-        return [
-            {"currency": cur, "total": str(total.quantize(Decimal("0.0001")))}
-            for cur, total in sorted(totals.items())
-        ]
+    def get_net_cost(self, obj: Acquisition) -> str | None:
+        """net_cost = cost - discount - tax_refund (None when no cost recorded)."""
+        if obj.cost is None:
+            return None
+        net = obj.cost - (obj.discount or Decimal("0")) - (obj.tax_refund or Decimal("0"))
+        return str(net.quantize(Decimal("0.0001")))
+
+    def validate(self, attrs: dict) -> dict:
+        # On create, at least one item is required.
+        if self.instance is None and not attrs.get("items"):
+            raise serializers.ValidationError({"items": "An acquisition needs at least 1 item."})
+        return attrs
 
     @transaction.atomic
     def create(self, validated_data: dict) -> Acquisition:

@@ -27,34 +27,28 @@ class ItemViewSet(viewsets.ModelViewSet):
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
         "item_type": {"lookup": "item_type", "type": "single_select"},
-        "model": {"lookup": "model", "type": "text"},
-        "serial_number": {"lookup": "serial_number", "type": "text"},
         "spec": {"lookup": "spec", "type": "text"},
         "size": {"lookup": "size", "type": "text"},
         "weight": {"lookup": "weight_canonical", "type": "number"},
         "length": {"lookup": "length_canonical", "type": "number"},
         "width": {"lookup": "width_canonical", "type": "number"},
         "height": {"lookup": "height_canonical", "type": "number"},
-        "price": {"lookup": "price", "type": "number"},
-        "cost": {"lookup": "cost", "type": "number"},
+        "volume": {"lookup": "volume_canonical", "type": "number"},
+        "sku_price": {"lookup": "sku_price", "type": "number"},
         "color": {"lookup": "color", "type": "text"},
-        "status": {"lookup": "status", "type": "single_select"},
-        "archived": {"lookup": "archived_at", "type": "date"},
+        "deprecated": {"lookup": "deprecate_time", "type": "date"},
         "obtained_at": {"lookup": "acquisition__obtained_at", "type": "date"},
     }
     ordering_fields = [
         "name",
         "item_type",
-        "model",
-        "serial_number",
         "size",
         "weight_canonical",
         "length_canonical",
         "width_canonical",
         "height_canonical",
-        "price",
-        "cost",
-        "status",
+        "volume_canonical",
+        "sku_price",
         "acquisition__obtained_at",
     ]
     ordering = ["-acquisition__obtained_at"]
@@ -62,7 +56,7 @@ class ItemViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        # No implicit archived exclusion — archived is a normal filterable attribute.
+        # No implicit exclusion — deprecate_time is a normal filterable attribute.
         return super().get_queryset().select_related("acquisition")
 
     def destroy(self, request, *args, **kwargs):
@@ -78,13 +72,24 @@ class AcquisitionViewSet(viewsets.ModelViewSet):
     filter_backends = [EntityFilterBackend, NullsOrderingFilter]
     filterable_fields = {
         "source": {"lookup": "source", "type": "text"},
-        "method": {"lookup": "method", "type": "single_select"},
+        "request_time": {"lookup": "request_time", "type": "date"},
         "obtained_at": {"lookup": "obtained_at", "type": "date"},
+        "cost": {"lookup": "cost", "type": "number"},
     }
-    ordering_fields = ["source", "method", "obtained_at"]
+    ordering_fields = ["source", "request_time", "obtained_at", "cost"]
     ordering = ["-obtained_at"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    @action(detail=False, methods=["get"], url_path="sources")
+    def sources(self, request):
+        """Return distinct previously-used source values for auto-complete."""
+        q = request.query_params.get("q", "")
+        qs = Acquisition.objects.exclude(source="").values_list("source", flat=True)
+        if q:
+            qs = qs.filter(source__icontains=q)
+        distinct = sorted(set(qs))[:20]
+        return Response(distinct)
 
 
 class ScenarioViewSet(viewsets.ModelViewSet):

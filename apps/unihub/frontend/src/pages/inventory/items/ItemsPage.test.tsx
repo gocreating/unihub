@@ -15,25 +15,23 @@ const ITEM = {
   id: 'itm-1',
   name: 'Backpack',
   item_type: 'stockable' as const,
-  model: 'X100',
-  serial_number: '',
+  quantity: '1',
   spec: '',
   remark: '',
-  quantity: null,
   size: '',
   length: null,
   width: null,
   height: null,
   weight: { value: '0.5', unit: 'kg' },
-  price: null,
-  price_currency: '',
-  cost: null,
-  cost_currency: '',
+  volume: null,
+  sku_price: '10',
+  sku_price_currency: 'USD',
+  total_price: '10.0000',
   color: '',
   url: '',
   status: 'active' as const,
-  acquisition: { id: 'acq-1', source: 'Shop', method: 'purchase' as const, obtained_at: null },
-  archived_at: null,
+  deprecate_time: null,
+  acquisition: { id: 'acq-1', source: 'Shop', obtained_at: '2026-07-11T00:00:00Z' },
   created_at: '2026-07-11T00:00:00Z',
   updated_at: '2026-07-11T00:00:00Z',
 };
@@ -64,18 +62,13 @@ describe('ItemsPage', () => {
     vi.mocked(financeService.listCurrencies).mockResolvedValue(EMPTY_PAGE as never);
   });
 
-  it('renders items with a measurement value+unit and a status tag', async () => {
+  it('renders items with measurement value+unit and a Deprecate action', async () => {
     renderPage();
     await screen.findByText('Backpack');
-    // weight rendered as "0.5 kg"
     expect(screen.getByText('0.5 kg')).toBeInTheDocument();
-    // status tag localized
     expect(screen.getByText('Active')).toBeInTheDocument();
-  });
-
-  it('does not offer a standalone New Item button (creation is via acquisitions)', async () => {
-    renderPage();
-    await screen.findByText('Backpack');
+    // active item offers Deprecate (not Restore); no standalone New Item button
+    expect(screen.getByText('Deprecate')).toBeInTheDocument();
     expect(screen.queryByText('New Item')).not.toBeInTheDocument();
   });
 });

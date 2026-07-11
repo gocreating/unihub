@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Modal, Space, Tag, Typography, message } from 'antd';
-import { DeleteOutlined, EditOutlined, InboxOutlined } from '@ant-design/icons';
+import { Button, DatePicker, Modal, Space, Tag, Typography, message } from 'antd';
+import { DeleteOutlined, EditOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
+import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
 import PageTable, {
   computeScrollX,
@@ -28,40 +29,43 @@ function measureText(m: Measurement | null | undefined): string | null {
   return m ? `${m.value} ${m.unit}` : null;
 }
 
+function formatDateRelative(val: string | null | undefined) {
+  if (!val) return null;
+  return `${dayjs(val).format('YYYY-MM-DD HH:mm')} (${dayjs(val).fromNow()})`;
+}
+
 export function ItemsPage() {
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
   const [editing, setEditing] = useState<Item | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [deprecateTarget, setDeprecateTarget] = useState<Item | null>(null);
+  const [deprecateDate, setDeprecateDate] = useState<dayjs.Dayjs | null>(null);
 
   const filterableAttrs = useMemo<FilterableAttribute[]>(
     () => [
       { key: 'name', label: t({ id: 'common.name' }), dataType: 'text' },
       { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text' },
-      { key: 'model', label: t({ id: 'pages.inventory.items.col.model' }), dataType: 'text' },
-      { key: 'serial_number', label: t({ id: 'pages.inventory.items.col.serial' }), dataType: 'text' },
       { key: 'item_type', label: t({ id: 'pages.inventory.items.col.type' }), dataType: 'single_select' },
-      { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select' },
       { key: 'weight', label: t({ id: 'pages.inventory.items.col.weight' }), dataType: 'number' },
-      { key: 'archived', label: t({ id: 'pages.inventory.items.col.archived' }), dataType: 'date' },
+      { key: 'deprecated', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'date' },
     ],
     [t],
   );
 
-  // Default column order per spec: name, spec, model, serial, size, weight, length, width, height.
+  // Default column order per spec: name, spec, size, weight, length, width, height, status, obtained.
   const columnDefs = useMemo<ColumnDef[]>(
     () => [
       { key: 'name', label: t({ id: 'common.name' }), dataType: 'text', visible: true, order: 0 },
       { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text', visible: true, order: 1 },
-      { key: 'model', label: t({ id: 'pages.inventory.items.col.model' }), dataType: 'text', visible: true, order: 2 },
-      { key: 'serial_number', label: t({ id: 'pages.inventory.items.col.serial' }), dataType: 'text', visible: true, order: 3 },
-      { key: 'size', label: t({ id: 'pages.inventory.items.col.size' }), dataType: 'text', visible: true, order: 4 },
-      { key: 'weight', label: t({ id: 'pages.inventory.items.col.weight' }), dataType: 'number', visible: true, order: 5 },
-      { key: 'length', label: t({ id: 'pages.inventory.items.col.length' }), dataType: 'number', visible: true, order: 6 },
-      { key: 'width', label: t({ id: 'pages.inventory.items.col.width' }), dataType: 'number', visible: true, order: 7 },
-      { key: 'height', label: t({ id: 'pages.inventory.items.col.height' }), dataType: 'number', visible: true, order: 8 },
-      { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select', visible: true, order: 9 },
-      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 10 },
+      { key: 'size', label: t({ id: 'pages.inventory.items.col.size' }), dataType: 'text', visible: true, order: 2 },
+      { key: 'weight', label: t({ id: 'pages.inventory.items.col.weight' }), dataType: 'number', visible: true, order: 3 },
+      { key: 'length', label: t({ id: 'pages.inventory.items.col.length' }), dataType: 'number', visible: true, order: 4 },
+      { key: 'width', label: t({ id: 'pages.inventory.items.col.width' }), dataType: 'number', visible: true, order: 5 },
+      { key: 'height', label: t({ id: 'pages.inventory.items.col.height' }), dataType: 'number', visible: true, order: 6 },
+      { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select', visible: true, order: 7 },
+      { key: 'obtained_at', label: t({ id: 'pages.inventory.items.col.obtainedAt' }), dataType: 'date', visible: true, order: 8 },
+      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 9 },
     ],
     [t],
   );
@@ -102,11 +106,13 @@ export function ItemsPage() {
     onError: () => message.error(t({ id: 'pages.inventory.items.saveError' })),
   });
 
-  const archiveMutation = useMutation({
-    mutationFn: (item: Item) => updateItem(item.id, { archived_at: new Date().toISOString() }),
+  const deprecateMutation = useMutation({
+    mutationFn: ({ id, ts }: { id: string; ts: string | null }) =>
+      updateItem(id, { deprecate_time: ts }),
     onSuccess: () => {
       invalidate();
-      message.success(t({ id: 'pages.inventory.items.archived' }));
+      setDeprecateTarget(null);
+      message.success(t({ id: 'pages.inventory.items.deprecated' }));
     },
   });
 
@@ -118,17 +124,6 @@ export function ItemsPage() {
     },
   });
 
-  const confirmArchive = (item: Item) => {
-    Modal.confirm({
-      title: t({ id: 'pages.inventory.items.archive.title' }),
-      content: t({ id: 'pages.inventory.items.archive.confirm' }),
-      okText: t({ id: 'pages.inventory.items.archive' }),
-      okType: 'danger',
-      cancelText: t({ id: 'common.cancel' }),
-      onOk: () => archiveMutation.mutate(item),
-    });
-  };
-
   const confirmDelete = (item: Item) => {
     Modal.confirm({
       title: t({ id: 'pages.inventory.items.delete.title' }),
@@ -138,6 +133,11 @@ export function ItemsPage() {
       cancelText: t({ id: 'common.cancel' }),
       onOk: () => deleteMutation.mutate(item.id),
     });
+  };
+
+  const openDeprecate = (item: Item) => {
+    setDeprecateTarget(item);
+    setDeprecateDate(dayjs().startOf('day'));
   };
 
   const openEdit = (item: Item) => {
@@ -159,15 +159,9 @@ export function ItemsPage() {
           : cols.visibleColumns.at(-1)?.key === key
             ? cols.lastColumnFixed
             : undefined;
-      const textCol = (key: keyof Item, labelId: string, min = 120): ProColumns<Item> => ({
-        dataIndex: key as string,
-        ...widthForHeader(t({ id: labelId }), min),
-        fixed: getFixed(key as string),
-        render: (val) => (val ? (val as string) : EMPTY),
-        ...makeSortProps(key as string, t({ id: labelId }), sort),
-      });
       const measureCol = (key: 'weight' | 'length' | 'width' | 'height', labelId: string): ProColumns<Item> => ({
         key,
+        title: t({ id: labelId }),
         ...widthForHeader(t({ id: labelId }), 110),
         fixed: getFixed(key),
         render: (_, r) => measureText(r[key]) ?? EMPTY,
@@ -181,20 +175,26 @@ export function ItemsPage() {
         },
         spec: {
           dataIndex: 'spec',
-          ...widthForHeader(t({ id: 'pages.inventory.items.col.spec' }), 160),
+          title: t({ id: 'pages.inventory.items.col.spec' }),
+          ...widthForHeader(t({ id: 'pages.inventory.items.col.spec' }), 180),
           fixed: getFixed('spec'),
           ellipsis: true,
           render: (val) => (val ? (val as string) : EMPTY),
         },
-        model: textCol('model', 'pages.inventory.items.col.model'),
-        serial_number: textCol('serial_number', 'pages.inventory.items.col.serial'),
-        size: textCol('size', 'pages.inventory.items.col.size', 90),
+        size: {
+          dataIndex: 'size',
+          ...widthForHeader(t({ id: 'pages.inventory.items.col.size' }), 90),
+          fixed: getFixed('size'),
+          render: (val) => (val ? (val as string) : EMPTY),
+          ...makeSortProps('size', t({ id: 'pages.inventory.items.col.size' }), sort),
+        },
         weight: measureCol('weight', 'pages.inventory.items.col.weight'),
         length: measureCol('length', 'pages.inventory.items.col.length'),
         width: measureCol('width', 'pages.inventory.items.col.width'),
         height: measureCol('height', 'pages.inventory.items.col.height'),
         status: {
           dataIndex: 'status',
+          title: t({ id: 'pages.inventory.items.col.status' }),
           ...widthForHeader(t({ id: 'pages.inventory.items.col.status' }), 120),
           fixed: getFixed('status'),
           render: (val) => (
@@ -202,7 +202,14 @@ export function ItemsPage() {
               {t({ id: `pages.inventory.items.status.${val as string}` })}
             </Tag>
           ),
-          ...makeSortProps('status', t({ id: 'pages.inventory.items.col.status' }), sort),
+        },
+        obtained_at: {
+          key: 'obtained_at',
+          title: t({ id: 'pages.inventory.items.col.obtainedAt' }),
+          ...widthForHeader(t({ id: 'pages.inventory.items.col.obtainedAt' }), 220),
+          fixed: getFixed('obtained_at'),
+          render: (_, r) => formatDateRelative(r.acquisition?.obtained_at) ?? EMPTY,
+          ...makeSortProps('obtained_at', t({ id: 'pages.inventory.items.col.obtainedAt' }), sort),
         },
         actions: {
           title: t({ id: 'common.actions' }),
@@ -215,9 +222,17 @@ export function ItemsPage() {
                 <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
                   {t({ id: 'common.edit' })}
                 </Button>
-                {!record.archived_at && (
-                  <Button size="small" onClick={() => confirmArchive(record)}>
-                    {t({ id: 'pages.inventory.items.archive' })}
+                {record.deprecate_time ? (
+                  <Button
+                    size="small"
+                    icon={<UndoOutlined />}
+                    onClick={() => deprecateMutation.mutate({ id: record.id, ts: null })}
+                  >
+                    {t({ id: 'pages.inventory.items.restore' })}
+                  </Button>
+                ) : (
+                  <Button size="small" icon={<StopOutlined />} onClick={() => openDeprecate(record)}>
+                    {t({ id: 'pages.inventory.items.deprecate' })}
                   </Button>
                 )}
                 <Button size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDelete(record)}>
@@ -246,11 +261,6 @@ export function ItemsPage() {
       <PageTable<Item>
         key={`${cols.visibleColumns[0]?.key ?? ''}-${cols.visibleColumns.at(-1)?.key ?? ''}-${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
         pageTitle={t({ id: 'pages.inventory.items.title' })}
-        action={
-          <Typography.Text type="secondary">
-            <InboxOutlined /> {t({ id: 'pages.inventory.items.createHint' })}
-          </Typography.Text>
-        }
         headerTitle={
           <EntityToolbar
             filterProps={{ attrs: filterableAttrs, hook: filter }}
@@ -282,6 +292,31 @@ export function ItemsPage() {
           if (editing) updateMutation.mutate({ id: editing.id, data: itemData });
         }}
       />
+
+      <Modal
+        title={t({ id: 'pages.inventory.items.deprecate.title' })}
+        open={!!deprecateTarget}
+        okText={t({ id: 'pages.inventory.items.deprecate' })}
+        okButtonProps={{ danger: true }}
+        cancelText={t({ id: 'common.cancel' })}
+        confirmLoading={deprecateMutation.isPending}
+        onCancel={() => setDeprecateTarget(null)}
+        onOk={() =>
+          deprecateTarget &&
+          deprecateMutation.mutate({
+            id: deprecateTarget.id,
+            ts: (deprecateDate ?? dayjs().startOf('day')).toISOString(),
+          })
+        }
+      >
+        <p>{t({ id: 'pages.inventory.items.deprecate.confirm' })}</p>
+        <DatePicker
+          showTime
+          style={{ width: '100%' }}
+          value={deprecateDate}
+          onChange={setDeprecateDate}
+        />
+      </Modal>
     </>
   );
 }

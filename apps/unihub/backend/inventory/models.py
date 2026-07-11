@@ -4,28 +4,26 @@ from core.nanoid import generate_id
 
 LENGTH_UNIT_CHOICES = [("mm", "mm"), ("cm", "cm"), ("m", "m"), ("in", "in")]
 WEIGHT_UNIT_CHOICES = [("g", "g"), ("kg", "kg"), ("lb", "lb")]
+VOLUME_UNIT_CHOICES = [("mL", "mL"), ("L", "L")]
 
 
 class Acquisition(models.Model):
-    """A record of how a batch of one or more items was obtained.
+    """A record of how a batch of one or more items was obtained and paid for.
 
     This is the sole creation path for items (an item always belongs to one
-    acquisition). A blank method/source represents unknown/pre-existing origin.
+    acquisition). A blank source represents unknown/pre-existing origin.
     """
-
-    METHOD_CHOICES = [
-        ("purchase", "Purchase"),
-        ("gift", "Gift"),
-        ("transfer", "Transfer"),
-        ("found", "Found"),
-        ("other", "Other"),
-    ]
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     source = models.CharField(max_length=200, blank=True)  # store, seller, or person
-    method = models.CharField(max_length=20, choices=METHOD_CHOICES, blank=True)
-    obtained_at = models.DateTimeField(null=True, blank=True)
+    request_time = models.DateTimeField(null=True, blank=True)  # when the order was initiated
+    obtained_at = models.DateTimeField(null=True, blank=True)  # when received
     remark = models.TextField(blank=True)
+    # Order payment: net_cost = cost - discount - tax_refund (derived in serializer).
+    cost = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
+    cost_currency = models.CharField(max_length=3, blank=True)
+    discount = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
+    tax_refund = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -33,7 +31,7 @@ class Acquisition(models.Model):
         ordering = ["-obtained_at", "-created_at"]
 
     def __str__(self) -> str:
-        return f"{self.source or 'Acquisition'} ({self.method or 'unknown'})"
+        return self.source or "Acquisition"
 
 
 class Item(models.Model):
@@ -43,19 +41,13 @@ class Item(models.Model):
         ("stockable", "Stockable"),
         ("consumable", "Consumable"),
     ]
-    STATUS_CHOICES = [
-        ("active", "Active"),
-        ("deprecated", "Deprecated"),
-    ]
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     name = models.CharField(max_length=200)
     item_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="stockable")
-    model = models.CharField(max_length=200, blank=True)
-    serial_number = models.CharField(max_length=200, blank=True)
+    quantity = models.DecimalField(max_digits=20, decimal_places=4, default=1)
     spec = models.TextField(blank=True)
     remark = models.TextField(blank=True)
-    quantity = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
     # Dimensions: canonical value stored in millimetres + the display unit.
     length_canonical = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
     length_unit = models.CharField(max_length=4, choices=LENGTH_UNIT_CHOICES, default="mm")
@@ -67,19 +59,20 @@ class Item(models.Model):
     # Weight: canonical value stored in grams + the display unit.
     weight_canonical = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
     weight_unit = models.CharField(max_length=4, choices=WEIGHT_UNIT_CHOICES, default="g")
-    price = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    price_currency = models.CharField(max_length=3, blank=True)
-    cost = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    cost_currency = models.CharField(max_length=3, blank=True)
+    # Volume: canonical value stored in millilitres + the display unit.
+    volume_canonical = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    volume_unit = models.CharField(max_length=4, choices=VOLUME_UNIT_CHOICES, default="mL")
+    sku_price = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
+    sku_price_currency = models.CharField(max_length=3, blank=True)
     color = models.CharField(max_length=50, blank=True)
     url = models.CharField(max_length=500, blank=True)
-    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="active")
+    # Lifecycle: deprecated when deprecate_time is set (status is derived, not stored).
+    deprecate_time = models.DateTimeField(null=True, blank=True)
     acquisition = models.ForeignKey(
         Acquisition,
         on_delete=models.CASCADE,
         related_name="items",
     )
-    archived_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

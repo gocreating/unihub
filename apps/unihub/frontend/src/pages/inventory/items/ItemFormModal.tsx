@@ -1,31 +1,20 @@
-import { useEffect } from 'react';
-import { Col, Form, Input, InputNumber, Modal, Row, Select } from 'antd';
+import { useEffect, useState } from 'react';
+import { Button, Col, Form, Input, InputNumber, Modal, Row, Select, Space } from 'antd';
 import { useIntl } from 'react-intl';
-import type {
-  Item,
-  ItemStatus,
-  ItemType,
-  ItemWrite,
-  Measurement,
-} from '@/services/unihub-backend/inventory';
-import { LENGTH_UNITS, WEIGHT_UNITS } from '@/services/unihub-backend/inventory';
+import type { Item, ItemType, ItemWrite, Measurement } from '@/services/unihub-backend/inventory';
+import { LENGTH_UNITS, VOLUME_UNITS, WEIGHT_UNITS } from '@/services/unihub-backend/inventory';
 
-export interface ItemFormValues {
+interface ItemFormValues {
   name: string;
   item_type: ItemType;
-  status: ItemStatus;
-  model?: string;
-  serial_number?: string;
+  quantity: number;
   spec?: string;
   remark?: string;
   size?: string;
   color?: string;
   url?: string;
-  quantity?: number | null;
-  price?: number | null;
-  price_currency?: string;
-  cost?: number | null;
-  cost_currency?: string;
+  sku_price?: number | null;
+  sku_price_currency?: string;
   length_value?: number | null;
   length_unit: string;
   width_value?: number | null;
@@ -34,6 +23,8 @@ export interface ItemFormValues {
   height_unit: string;
   weight_value?: number | null;
   weight_unit: string;
+  volume_value?: number | null;
+  volume_unit: string;
 }
 
 interface CurrencyOption {
@@ -64,23 +55,19 @@ function formValuesToItemWrite(v: ItemFormValues): ItemWrite {
   return {
     name: v.name,
     item_type: v.item_type,
-    status: v.status,
-    model: v.model ?? '',
-    serial_number: v.serial_number ?? '',
+    quantity: String(v.quantity ?? 1),
     spec: v.spec ?? '',
     remark: v.remark ?? '',
     size: v.size ?? '',
     color: v.color ?? '',
     url: v.url ?? '',
-    quantity: v.quantity != null ? String(v.quantity) : null,
-    price: v.price != null ? String(v.price) : null,
-    price_currency: v.price_currency ?? '',
-    cost: v.cost != null ? String(v.cost) : null,
-    cost_currency: v.cost_currency ?? '',
+    sku_price: v.sku_price != null ? String(v.sku_price) : null,
+    sku_price_currency: v.sku_price_currency ?? '',
     length: measure(v.length_value, v.length_unit),
     width: measure(v.width_value, v.width_unit),
     height: measure(v.height_value, v.height_unit),
     weight: measure(v.weight_value, v.weight_unit),
+    volume: measure(v.volume_value, v.volume_unit),
   };
 }
 
@@ -95,26 +82,23 @@ export function ItemFormModal({
 }: ItemFormModalProps) {
   const { formatMessage: t } = useIntl();
   const [form] = Form.useForm<ItemFormValues>();
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    setDirty(false);
     if (initial) {
       form.setFieldsValue({
         name: initial.name,
         item_type: initial.item_type,
-        status: initial.status,
-        model: initial.model,
-        serial_number: initial.serial_number,
+        quantity: Number(initial.quantity ?? 1),
         spec: initial.spec,
         remark: initial.remark,
         size: initial.size,
         color: initial.color,
         url: initial.url,
-        quantity: initial.quantity != null ? Number(initial.quantity) : null,
-        price: initial.price != null ? Number(initial.price) : null,
-        price_currency: initial.price_currency || undefined,
-        cost: initial.cost != null ? Number(initial.cost) : null,
-        cost_currency: initial.cost_currency || undefined,
+        sku_price: initial.sku_price != null ? Number(initial.sku_price) : null,
+        sku_price_currency: initial.sku_price_currency || undefined,
         length_value: toMeasureValue(initial.length),
         length_unit: initial.length?.unit ?? 'mm',
         width_value: toMeasureValue(initial.width),
@@ -123,55 +107,46 @@ export function ItemFormModal({
         height_unit: initial.height?.unit ?? 'mm',
         weight_value: toMeasureValue(initial.weight),
         weight_unit: initial.weight?.unit ?? 'g',
+        volume_value: toMeasureValue(initial.volume),
+        volume_unit: initial.volume?.unit ?? 'mL',
       });
     } else {
       form.resetFields();
       form.setFieldsValue({
         item_type: 'stockable',
-        status: 'active',
+        quantity: 1,
         length_unit: 'mm',
         width_unit: 'mm',
         height_unit: 'mm',
         weight_unit: 'g',
+        volume_unit: 'mL',
       });
     }
   }, [open, initial, form]);
 
+  // Disable the currency selector when sku_price is empty or zero.
+  const skuPrice = Form.useWatch('sku_price', form);
+  const currencyDisabled = skuPrice == null || Number(skuPrice) === 0;
+
   const lengthUnitOptions = LENGTH_UNITS.map((u) => ({ value: u, label: u }));
   const weightUnitOptions = WEIGHT_UNITS.map((u) => ({ value: u, label: u }));
+  const volumeUnitOptions = VOLUME_UNITS.map((u) => ({ value: u, label: u }));
 
-  const dimensionField = (name: 'length' | 'width' | 'height', label: string) => (
-    <Col span={8}>
+  const measureField = (
+    name: 'length' | 'width' | 'height' | 'weight' | 'volume',
+    label: string,
+    unitOptions: { value: string; label: string }[],
+  ) => (
+    <Col xs={24} sm={8}>
       <Form.Item label={label}>
-        <Input.Group compact>
+        <Space.Compact block>
           <Form.Item name={`${name}_value`} noStyle>
             <InputNumber min={0} style={{ width: '65%' }} />
           </Form.Item>
           <Form.Item name={`${name}_unit`} noStyle>
-            <Select style={{ width: '35%' }} options={lengthUnitOptions} />
+            <Select style={{ width: '35%' }} options={unitOptions} />
           </Form.Item>
-        </Input.Group>
-      </Form.Item>
-    </Col>
-  );
-
-  const moneyField = (name: 'price' | 'cost', label: string) => (
-    <Col span={12}>
-      <Form.Item label={label}>
-        <Input.Group compact>
-          <Form.Item name={name} noStyle>
-            <InputNumber min={0} style={{ width: '60%' }} />
-          </Form.Item>
-          <Form.Item name={`${name}_currency`} noStyle>
-            <Select
-              style={{ width: '40%' }}
-              showSearch
-              allowClear
-              placeholder="CUR"
-              options={currencyOptions}
-            />
-          </Form.Item>
-        </Input.Group>
+        </Space.Compact>
       </Form.Item>
     </Col>
   );
@@ -181,22 +156,31 @@ export function ItemFormModal({
       title={title}
       open={open}
       onCancel={onCancel}
-      onOk={() => form.submit()}
-      confirmLoading={confirmLoading}
+      maskClosable={!dirty}
+      keyboard={!dirty}
       width={720}
+      footer={[
+        <Button key="cancel" onClick={onCancel}>
+          {t({ id: 'common.cancel' })}
+        </Button>,
+        <Button key="ok" type="primary" loading={confirmLoading} onClick={() => form.submit()}>
+          {t({ id: 'common.save' })}
+        </Button>,
+      ]}
     >
       <Form
         form={form}
         layout="vertical"
+        onValuesChange={() => setDirty(true)}
         onFinish={(values) => onOk(formValuesToItemWrite(values))}
       >
         <Row gutter={12}>
-          <Col span={12}>
+          <Col xs={24} sm={12}>
             <Form.Item name="name" label={t({ id: 'common.name' })} rules={[{ required: true }]}>
               <Input />
             </Form.Item>
           </Col>
-          <Col span={6}>
+          <Col xs={12} sm={6}>
             <Form.Item name="item_type" label={t({ id: 'pages.inventory.items.col.type' })} rules={[{ required: true }]}>
               <Select
                 options={[
@@ -206,30 +190,20 @@ export function ItemFormModal({
               />
             </Form.Item>
           </Col>
-          <Col span={6}>
-            <Form.Item name="status" label={t({ id: 'pages.inventory.items.col.status' })} rules={[{ required: true }]}>
-              <Select
-                options={[
-                  { value: 'active', label: t({ id: 'pages.inventory.items.status.active' }) },
-                  { value: 'deprecated', label: t({ id: 'pages.inventory.items.status.deprecated' }) },
-                ]}
-              />
+          <Col xs={12} sm={6}>
+            <Form.Item name="quantity" label={t({ id: 'pages.inventory.items.col.quantity' })} rules={[{ required: true }]}>
+              <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
         </Row>
         <Row gutter={12}>
-          <Col span={8}>
-            <Form.Item name="model" label={t({ id: 'pages.inventory.items.col.model' })}>
-              <Input />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="serial_number" label={t({ id: 'pages.inventory.items.col.serial' })}>
-              <Input />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
+          <Col xs={24} sm={12}>
             <Form.Item name="size" label={t({ id: 'pages.inventory.items.col.size' })}>
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="color" label={t({ id: 'pages.inventory.items.col.color' })}>
               <Input />
             </Form.Item>
           </Col>
@@ -238,37 +212,32 @@ export function ItemFormModal({
           <Input.TextArea rows={2} />
         </Form.Item>
         <Row gutter={12}>
-          {dimensionField('length', t({ id: 'pages.inventory.items.col.length' }))}
-          {dimensionField('width', t({ id: 'pages.inventory.items.col.width' }))}
-          {dimensionField('height', t({ id: 'pages.inventory.items.col.height' }))}
+          {measureField('length', t({ id: 'pages.inventory.items.col.length' }), lengthUnitOptions)}
+          {measureField('width', t({ id: 'pages.inventory.items.col.width' }), lengthUnitOptions)}
+          {measureField('height', t({ id: 'pages.inventory.items.col.height' }), lengthUnitOptions)}
         </Row>
         <Row gutter={12}>
-          <Col span={8}>
-            <Form.Item label={t({ id: 'pages.inventory.items.col.weight' })}>
-              <Input.Group compact>
-                <Form.Item name="weight_value" noStyle>
-                  <InputNumber min={0} style={{ width: '65%' }} />
+          {measureField('weight', t({ id: 'pages.inventory.items.col.weight' }), weightUnitOptions)}
+          {measureField('volume', t({ id: 'pages.inventory.items.col.volume' }), volumeUnitOptions)}
+          <Col xs={24} sm={8}>
+            <Form.Item label={t({ id: 'pages.inventory.items.col.skuPrice' })}>
+              <Space.Compact block>
+                <Form.Item name="sku_price" noStyle>
+                  <InputNumber min={0} style={{ width: '60%' }} />
                 </Form.Item>
-                <Form.Item name="weight_unit" noStyle>
-                  <Select style={{ width: '35%' }} options={weightUnitOptions} />
+                <Form.Item name="sku_price_currency" noStyle>
+                  <Select
+                    style={{ width: '40%' }}
+                    showSearch
+                    allowClear
+                    disabled={currencyDisabled}
+                    placeholder={currencyDisabled ? '—' : 'CUR'}
+                    options={currencyOptions}
+                  />
                 </Form.Item>
-              </Input.Group>
+              </Space.Compact>
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item name="quantity" label={t({ id: 'pages.inventory.items.col.quantity' })}>
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="color" label={t({ id: 'pages.inventory.items.col.color' })}>
-              <Input />
-            </Form.Item>
-          </Col>
-        </Row>
-        <Row gutter={12}>
-          {moneyField('price', t({ id: 'pages.inventory.items.col.price' }))}
-          {moneyField('cost', t({ id: 'pages.inventory.items.col.cost' }))}
         </Row>
         <Form.Item name="url" label={t({ id: 'pages.inventory.items.col.url' })}>
           <Input />

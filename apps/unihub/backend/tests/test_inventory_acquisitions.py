@@ -1,4 +1,4 @@
-"""Integration tests for acquisition-first item creation (US2)."""
+"""Integration tests for acquisition payment, items, and sources (US2)."""
 
 import json
 
@@ -20,33 +20,45 @@ class TestAcquisitions:
             ACQ,
             {
                 "source": "B&H",
-                "method": "purchase",
                 "obtained_at": "2026-01-04T00:00:00Z",
-                "items": [
-                    {"name": "Camera", "cost": "2200", "cost_currency": "USD"},
-                    {"name": "Lens", "cost": "1100", "cost_currency": "USD"},
-                ],
+                "items": [{"name": "Camera"}, {"name": "Lens"}],
             },
         )
         assert resp.status_code == 201, resp.content
-        body = resp.json()
-        assert body["item_count"] == 2
-        assert {i["name"] for i in body["items"]} == {"Camera", "Lens"}
+        assert resp.json()["item_count"] == 2
 
-    def test_create_acquisition_item_missing_name_rolls_back(self, auth_client):
-        before = auth_client.get(ACQ).json()["count"]
-        resp = _post(
+    def test_acquisition_cost_discount_tax_refund_net_cost(self, auth_client):
+        acq = _post(
             auth_client,
             ACQ,
-            {"source": "X", "items": [{"name": "Ok"}, {"item_type": "stockable"}]},
-        )
-        assert resp.status_code == 400
-        after = auth_client.get(ACQ).json()["count"]
-        assert after == before  # transactional: nothing created
+            {
+                "source": "Shop",
+                "cost": "3300",
+                "cost_currency": "USD",
+                "discount": "100",
+                "tax_refund": "0",
+                "items": [{"name": "Thing"}],
+            },
+        ).json()
+        assert acq["net_cost"] == "3200.0000"
 
-    def test_item_requires_acquisition_no_direct_post(self, auth_client):
-        resp = _post(auth_client, ITEMS, {"name": "Orphan", "item_type": "stockable"})
-        assert resp.status_code == 405  # POST not allowed on items
+    def test_acquisition_requires_at_least_one_item(self, auth_client):
+        resp = _post(auth_client, ACQ, {"source": "Empty", "items": []})
+        assert resp.status_code == 400
+        resp2 = _post(auth_client, ACQ, {"source": "Empty2"})
+        assert resp2.status_code == 400
+
+    def test_acquisition_no_method_field(self, auth_client):
+        acq = _post(auth_client, ACQ, {"source": "S", "items": [{"name": "X"}]}).json()
+        assert "method" not in acq
+
+    def test_acquisition_request_time_persisted(self, auth_client):
+        acq = _post(
+            auth_client,
+            ACQ,
+            {"source": "S", "request_time": "2026-01-01T00:00:00Z", "items": [{"name": "X"}]},
+        ).json()
+        assert acq["request_time"] == "2026-01-01T00:00:00Z"
 
     def test_delete_acquisition_cascades_items(self, auth_client):
         acq = _post(auth_client, ACQ, {"source": "Shop", "items": [{"name": "Thing"}]}).json()
@@ -54,34 +66,19 @@ class TestAcquisitions:
         auth_client.delete(f"{ACQ}{acq['id']}/")
         assert auth_client.get(f"{ITEMS}{item_id}/").status_code == 404
 
-    def test_acquisition_total_cost_grouped_by_currency(self, auth_client):
-        acq = _post(
-            auth_client,
-            ACQ,
-            {
-                "source": "Trip",
-                "items": [
-                    {"name": "A", "cost": "100", "cost_currency": "USD"},
-                    {"name": "B", "cost": "50", "cost_currency": "USD"},
-                    {"name": "C", "cost": "30", "cost_currency": "EUR"},
-                ],
-            },
-        ).json()
-        totals = {row["currency"]: row["total"] for row in acq["total_item_cost"]}
-        assert totals["USD"] == "150.0000"
-        assert totals["EUR"] == "30.0000"
+    def test_item_requires_acquisition_no_direct_post(self, auth_client):
+        resp = _post(auth_client, ITEMS, {"name": "Orphan"})
+        assert resp.status_code == 405
 
-    def test_blank_method_acquisition_reads_unknown_origin(self, auth_client):
-        acq = _post(auth_client, ACQ, {"items": [{"name": "Heirloom"}]}).json()
-        assert acq["method"] == ""
-        item = auth_client.get(f"{ITEMS}{acq['items'][0]['id']}/").json()
-        assert item["acquisition"]["method"] == ""
+    def test_sources_endpoint_returns_distinct_used_sources(self, auth_client):
+        _post(auth_client, ACQ, {"source": "Amazon", "items": [{"name": "A"}]})
+        _post(auth_client, ACQ, {"source": "Amazon", "items": [{"name": "B"}]})
+        _post(auth_client, ACQ, {"source": "B&H", "items": [{"name": "C"}]})
+        sources = auth_client.get(f"{ACQ}sources/").json()
+        assert sorted(sources) == ["Amazon", "B&H"]  # distinct
 
-    def test_append_item_via_patch(self, auth_client):
-        acq = _post(auth_client, ACQ, {"source": "S", "items": [{"name": "One"}]}).json()
-        auth_client.patch(
-            f"{ACQ}{acq['id']}/",
-            json.dumps({"items": [{"name": "Two"}]}),
-            content_type="application/json",
-        )
-        assert auth_client.get(f"{ACQ}{acq['id']}/").json()["item_count"] == 2
+    def test_sources_endpoint_filters_by_q(self, auth_client):
+        _post(auth_client, ACQ, {"source": "Amazon", "items": [{"name": "A"}]})
+        _post(auth_client, ACQ, {"source": "B&H", "items": [{"name": "C"}]})
+        sources = auth_client.get(f"{ACQ}sources/?q=ama").json()
+        assert sources == ["Amazon"]

@@ -28,7 +28,7 @@ def create_item(client, **fields) -> dict:
     payload.update(fields)
     resp = client.post(
         ACQ,
-        json.dumps({"source": "seed", "method": "purchase", "items": [payload]}),
+        json.dumps({"source": "seed", "items": [payload]}),
         content_type="application/json",
     )
     assert resp.status_code == 201, resp.content

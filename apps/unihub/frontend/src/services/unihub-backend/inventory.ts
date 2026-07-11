@@ -5,13 +5,14 @@ import type { EntityListParams, OffsetPaginatedResponse } from '@/components/Ent
 
 export type ItemType = 'stockable' | 'consumable';
 export type ItemStatus = 'active' | 'deprecated';
-export type AcquisitionMethod = 'purchase' | 'gift' | 'transfer' | 'found' | 'other' | '';
 export type ConstraintType = 'mutual_exclusive' | 'required' | 'weight_limit';
 
 export type LengthUnit = 'mm' | 'cm' | 'm' | 'in';
 export type WeightUnit = 'g' | 'kg' | 'lb';
+export type VolumeUnit = 'mL' | 'L';
 export const LENGTH_UNITS: LengthUnit[] = ['mm', 'cm', 'm', 'in'];
 export const WEIGHT_UNITS: WeightUnit[] = ['g', 'kg', 'lb'];
+export const VOLUME_UNITS: VolumeUnit[] = ['mL', 'L'];
 
 export interface Measurement {
   value: string;
@@ -21,7 +22,6 @@ export interface Measurement {
 export interface AcquisitionSummary {
   id: string;
   source: string;
-  method: AcquisitionMethod;
   obtained_at: string | null;
 }
 
@@ -29,25 +29,23 @@ export interface Item {
   id: string;
   name: string;
   item_type: ItemType;
-  model: string;
-  serial_number: string;
+  quantity: string;
   spec: string;
   remark: string;
-  quantity: string | null;
   size: string;
   length: Measurement | null;
   width: Measurement | null;
   height: Measurement | null;
   weight: Measurement | null;
-  price: string | null;
-  price_currency: string;
-  cost: string | null;
-  cost_currency: string;
+  volume: Measurement | null;
+  sku_price: string | null;
+  sku_price_currency: string;
+  total_price: string | null;
   color: string;
   url: string;
   status: ItemStatus;
+  deprecate_time: string | null;
   acquisition: AcquisitionSummary | null;
-  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -55,49 +53,48 @@ export interface Item {
 export interface ItemWrite {
   name: string;
   item_type?: ItemType;
-  model?: string;
-  serial_number?: string;
+  quantity?: string;
   spec?: string;
   remark?: string;
-  quantity?: string | null;
   size?: string;
   length?: Measurement | null;
   width?: Measurement | null;
   height?: Measurement | null;
   weight?: Measurement | null;
-  price?: string | null;
-  price_currency?: string;
-  cost?: string | null;
-  cost_currency?: string;
+  volume?: Measurement | null;
+  sku_price?: string | null;
+  sku_price_currency?: string;
   color?: string;
   url?: string;
-  status?: ItemStatus;
-  archived_at?: string | null;
-}
-
-export interface CostTotal {
-  currency: string;
-  total: string;
+  deprecate_time?: string | null;
 }
 
 export interface Acquisition {
   id: string;
   source: string;
-  method: AcquisitionMethod;
+  request_time: string | null;
   obtained_at: string | null;
   remark: string;
+  cost: string | null;
+  cost_currency: string;
+  discount: string | null;
+  tax_refund: string | null;
+  net_cost: string | null;
   items: Item[];
   item_count: number;
-  total_item_cost: CostTotal[];
   created_at: string;
   updated_at: string;
 }
 
 export interface AcquisitionWrite {
   source?: string;
-  method?: AcquisitionMethod;
+  request_time?: string | null;
   obtained_at?: string | null;
   remark?: string;
+  cost?: string | null;
+  cost_currency?: string;
+  discount?: string | null;
+  tax_refund?: string | null;
   items?: ItemWrite[];
 }
 
@@ -233,7 +230,7 @@ export function deleteItem(id: string): Promise<void> {
   return fetchJson<void>(`${BASE}/items/${id}/`, { method: 'DELETE' });
 }
 
-// ── Acquisitions (creation entry point) ──────────────────────────────
+// ── Acquisitions (creation entry point + payment) ─────────────────────
 
 export function listAcquisitions(
   params?: EntityListParams,
@@ -263,6 +260,11 @@ export function updateAcquisition(id: string, data: AcquisitionWrite): Promise<A
 
 export function deleteAcquisition(id: string): Promise<void> {
   return fetchJson<void>(`${BASE}/acquisitions/${id}/`, { method: 'DELETE' });
+}
+
+export function listSources(q?: string): Promise<string[]> {
+  const qs = q ? `?q=${encodeURIComponent(q)}` : '';
+  return fetchJson<string[]>(`${BASE}/acquisitions/sources/${qs}`);
 }
 
 // ── Scenarios ────────────────────────────────────────────────────────

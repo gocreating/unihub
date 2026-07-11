@@ -342,6 +342,23 @@ export interface paths {
         patch: operations["v1_inventory_acquisitions_partial_update"];
         trace?: never;
     };
+    "/api/v1/inventory/acquisitions/sources/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Return distinct previously-used source values for auto-complete. */
+        get: operations["v1_inventory_acquisitions_sources_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inventory/items/": {
         parameters: {
             query?: never;
@@ -780,16 +797,22 @@ export interface components {
         Acquisition: {
             readonly id: string;
             source?: string;
-            method?: components["schemas"]["MethodEnum"] | components["schemas"]["BlankEnum"];
+            /** Format: date-time */
+            request_time?: string | null;
             /** Format: date-time */
             obtained_at?: string | null;
             remark?: string;
+            /** Format: decimal */
+            cost?: string | null;
+            cost_currency?: string;
+            /** Format: decimal */
+            discount?: string | null;
+            /** Format: decimal */
+            tax_refund?: string | null;
+            /** @description net_cost = cost - discount - tax_refund (None when no cost recorded). */
+            readonly net_cost: string | null;
             items?: components["schemas"]["Item"][];
             readonly item_count: number;
-            /** @description Aggregate item cost grouped by currency (no cross-currency sum). */
-            readonly total_item_cost: {
-                [key: string]: unknown;
-            }[];
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -799,7 +822,6 @@ export interface components {
         AcquisitionSummary: {
             readonly id: string;
             source?: string;
-            method?: components["schemas"]["MethodEnum"] | components["schemas"]["BlankEnum"];
             /** Format: date-time */
             obtained_at?: string | null;
         };
@@ -822,8 +844,6 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
-        /** @enum {unknown} */
-        BlankEnum: "";
         Constraint: {
             readonly id: string;
             name?: string;
@@ -873,25 +893,21 @@ export interface components {
             readonly id: string;
             name: string;
             item_type?: components["schemas"]["ItemTypeEnum"];
-            model?: string;
-            serial_number?: string;
+            /** Format: decimal */
+            quantity?: string;
             spec?: string;
             remark?: string;
-            /** Format: decimal */
-            quantity?: string | null;
             size?: string;
             /** Format: decimal */
-            price?: string | null;
-            price_currency?: string;
-            /** Format: decimal */
-            cost?: string | null;
-            cost_currency?: string;
+            sku_price?: string | null;
+            sku_price_currency?: string;
+            readonly total_price: string | null;
             color?: string;
             url?: string;
-            status?: components["schemas"]["StatusEnum"];
-            readonly acquisition: components["schemas"]["AcquisitionSummary"];
+            readonly status: string;
             /** Format: date-time */
-            archived_at?: string | null;
+            deprecate_time?: string | null;
+            readonly acquisition: components["schemas"]["AcquisitionSummary"];
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -903,15 +919,6 @@ export interface components {
          * @enum {string}
          */
         ItemTypeEnum: "stockable" | "consumable";
-        /**
-         * @description * `purchase` - Purchase
-         *     * `gift` - Gift
-         *     * `transfer` - Transfer
-         *     * `found` - Found
-         *     * `other` - Other
-         * @enum {string}
-         */
-        MethodEnum: "purchase" | "gift" | "transfer" | "found" | "other";
         PaginatedAccountList: {
             /** @example 123 */
             count: number;
@@ -1034,16 +1041,22 @@ export interface components {
         PatchedAcquisition: {
             readonly id?: string;
             source?: string;
-            method?: components["schemas"]["MethodEnum"] | components["schemas"]["BlankEnum"];
+            /** Format: date-time */
+            request_time?: string | null;
             /** Format: date-time */
             obtained_at?: string | null;
             remark?: string;
+            /** Format: decimal */
+            cost?: string | null;
+            cost_currency?: string;
+            /** Format: decimal */
+            discount?: string | null;
+            /** Format: decimal */
+            tax_refund?: string | null;
+            /** @description net_cost = cost - discount - tax_refund (None when no cost recorded). */
+            readonly net_cost?: string | null;
             items?: components["schemas"]["Item"][];
             readonly item_count?: number;
-            /** @description Aggregate item cost grouped by currency (no cross-currency sum). */
-            readonly total_item_cost?: {
-                [key: string]: unknown;
-            }[];
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -1100,25 +1113,21 @@ export interface components {
             readonly id?: string;
             name?: string;
             item_type?: components["schemas"]["ItemTypeEnum"];
-            model?: string;
-            serial_number?: string;
+            /** Format: decimal */
+            quantity?: string;
             spec?: string;
             remark?: string;
-            /** Format: decimal */
-            quantity?: string | null;
             size?: string;
             /** Format: decimal */
-            price?: string | null;
-            price_currency?: string;
-            /** Format: decimal */
-            cost?: string | null;
-            cost_currency?: string;
+            sku_price?: string | null;
+            sku_price_currency?: string;
+            readonly total_price?: string | null;
             color?: string;
             url?: string;
-            status?: components["schemas"]["StatusEnum"];
-            readonly acquisition?: components["schemas"]["AcquisitionSummary"];
+            readonly status?: string;
             /** Format: date-time */
-            archived_at?: string | null;
+            deprecate_time?: string | null;
+            readonly acquisition?: components["schemas"]["AcquisitionSummary"];
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -1182,12 +1191,6 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
-        /**
-         * @description * `active` - Active
-         *     * `deprecated` - Deprecated
-         * @enum {string}
-         */
-        StatusEnum: "active" | "deprecated";
     };
     responses: never;
     parameters: never;
@@ -2124,6 +2127,25 @@ export interface operations {
                 "multipart/form-data": components["schemas"]["PatchedAcquisition"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Acquisition"];
+                };
+            };
+        };
+    };
+    v1_inventory_acquisitions_sources_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

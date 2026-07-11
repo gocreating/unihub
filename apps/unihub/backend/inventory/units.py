@@ -1,8 +1,8 @@
 """Measurement unit conversion for Inventory items.
 
-Lengths are normalized to millimetres (mm); weights to grams (g). The canonical
-value is what the database stores and sorts/filters on; the display unit is kept
-so the user's chosen unit round-trips.
+Lengths are normalized to millimetres (mm); weights to grams (g); volumes to
+millilitres (mL). The canonical value is what the database stores and
+sorts/filters on; the display unit is kept so the user's chosen unit round-trips.
 """
 
 from decimal import Decimal
@@ -20,8 +20,14 @@ WEIGHT_UNITS: dict[str, Decimal] = {
     "lb": Decimal("453.592"),
 }
 
+VOLUME_UNITS: dict[str, Decimal] = {
+    "mL": Decimal("1"),
+    "L": Decimal("1000"),
+}
+
 DEFAULT_LENGTH_UNIT = "mm"
 DEFAULT_WEIGHT_UNIT = "g"
+DEFAULT_VOLUME_UNIT = "mL"
 
 
 def _factor(unit: str, table: dict[str, Decimal]) -> Decimal:
@@ -94,3 +100,13 @@ def weight_to_canonical(value: Decimal | None, unit: str) -> Decimal | None:
 def weight_from_canonical(canonical: Decimal | None, unit: str) -> Decimal | None:
     """Convert a gram value to a weight in ``unit``."""
     return from_canonical(canonical, unit, WEIGHT_UNITS)
+
+
+def volume_to_canonical(value: Decimal | None, unit: str) -> Decimal | None:
+    """Convert a volume value in ``unit`` to millilitres."""
+    return to_canonical(value, unit, VOLUME_UNITS)
+
+
+def volume_from_canonical(canonical: Decimal | None, unit: str) -> Decimal | None:
+    """Convert a millilitre value to a volume in ``unit``."""
+    return from_canonical(canonical, unit, VOLUME_UNITS)

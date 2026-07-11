@@ -297,3 +297,34 @@ Amended to **v1.17.0** — Principle I now requires every concrete model to regi
 ## Structure Decision (delta)
 
 Pure backend integration: one `ready()` in `inventory/apps.py` registering 5 descriptors + tests. No models, migrations, serializers, or frontend changes. Constraint's M2M is explicitly deferred (recorded, not silently omitted).
+
+---
+
+# Iteration 9 (catalog: server-side pagination + width fix + URL→Name) — delta plan
+
+**Date**: 2026-07-11 | Builds on iteration 8 (commit `ddb2a82`). Spec: `### Session 2026-07-11 (catalog width/pagination/URL — reuse canonical patterns, iteration 9)` + FR-003. Constitution **v1.17.0**. **No schema change.**
+
+## Root causes being fixed
+1. **Width**: the canonical `dataWidths` (`measureTextWidth`→`widthForHeader`) was measured only over top-level acquisition rows; item **child rows were never measured**, so Name/Spec/etc. fell back to fixed `min`. → Measure over the **displayed rows incl. items**.
+2. **Pagination**: replaced the standard `EntityOffsetFooter` with an ad-hoc AntD `pagination` object. → Restore `EntityOffsetFooter` + **server-side** offset pagination (finance pattern).
+3. **URL**: a separate URL column. → Remove it; make the **Name cell a link**.
+
+## Backend (`inventory/views.py`)
+- Extend **`ItemViewSet`** `filterable_fields` + `ordering_fields` for **flat mode** server-side filter/sort:
+  add `quantity` (number), `source → acquisition__source` (text), `request_time → acquisition__request_time` (date); add `spec`/`color`/`quantity`/`deprecate_time`/`acquisition__source`/`acquisition__request_time` to `ordering_fields`. (`obtained_at → acquisition__obtained_at` already present.)
+- `AcquisitionViewSet` already serves **tree mode** (server offset pagination + source/request_time/obtained_at filter+sort). Unchanged.
+- `net_cost` + derived `status` stay display-only (documented non-sortable exception).
+
+## Frontend (`catalog/index.tsx` — reworked to server-side)
+- `useEntityTable` server-side `queryParams`; standard footer `pagination={false}` + `footer={() => <EntityOffsetFooter {...table.paginationProps(total)} />}`.
+- **Mode**: item-level active filter/sort (`ITEM_KEYS`) ⇒ **flat mode** → `listItems(queryParams)` (`total=data.count`); else **tree mode** → `listAcquisitions(queryParams)` (parents + nested items, `total=data.count`).
+- **Widths**: finance `dataWidths` pattern, measuring the page's acquisitions **AND their items** (tree) or the page's items (flat) → `widthForHeader`; Actions via `useActionsColWidth`.
+- **Name**: `<a href={url} target="_blank" rel="noopener">` when set, else plain; **remove URL column** + its attr.
+- Remove iteration-7 fetch-all (`limit:1000`, `keepPreviousData`) + the client filter/sort/flatten matcher.
+- Keep caret column, default-expanded (tree), SKU trailing zeros, actions, `columnEmptyText={false}`, single "—".
+
+## Tests
+- Backend: `test_item_filter_sort_quantity`, `test_item_sort_by_source` (acquisition__source). Frontend RTL: no URL column, Name anchor when url set, `EntityOffsetFooter` present. e2e: standard pagination footer + Name link.
+
+## Structure Decision (delta)
+Reuse the two existing server-paginated viewsets (Acquisition=tree, Item=flat) behind one Catalog page following the finance pagination/width patterns exactly. No client-side fetch-all, no new endpoint, no schema change.

@@ -444,3 +444,36 @@ Completed 2026-07-11 (builds on iteration 7, commit `0a49717`). **Backend only, 
 - **Tests** (`tests/test_inventory_io.py`, 3): the 5 tables appear in `GET /api/v1/io/tables/` (Constraint absent), FK `depends_on` wired correctly, and a full **export → wipe → import** round-trip restores an acquisition + item + cost factor.
 - `manage.py check` clean; **263 pytest** passed (ruff clean); the one-off `import_legacy_csv` still works (dry-run 199.9 CNY / 687 TWD / 186.22 USD).
 - Inventory data now participates in the standard `data_io` CSV backup/restore/change-preview flow, closing the integration gap.
+
+---
+
+# Tasks: Iteration 9 (catalog server-side pagination + width fix + URL→Name)
+
+**Input**: plan.md "Iteration 9" delta; spec `### Session 2026-07-11 (catalog width/pagination/URL …, iteration 9)` + FR-003. Builds on iteration 8 (`ddb2a82`). **No schema change.**
+
+## Phase 1: Backend (flat-mode filter/sort)
+
+- [ ] T089 Extend `ItemViewSet` in `apps/unihub/backend/inventory/views.py`: add to `filterable_fields` — `quantity` (number), `source → acquisition__source` (text), `request_time → acquisition__request_time` (date); add to `ordering_fields` — `spec`, `color`, `quantity`, `deprecate_time`, `acquisition__source`, `acquisition__request_time`
+- [ ] T090 [P] Add `apps/unihub/backend/tests/test_inventory_items.py` cases: `test_item_filter_by_quantity`, `test_item_order_by_source` (`ordering=acquisition__source`) — assert server-side filter/sort works
+
+## Phase 2: Frontend (server-side catalog)
+
+- [ ] T091 Rework `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx` to **server-side**: `useEntityTable` queryParams; **tree mode** → `listAcquisitions(queryParams)` (parents + nested items); **flat mode** (any active filter/sort in `ITEM_KEYS`) → `listItems(queryParams)`; standard **`EntityOffsetFooter`** (`pagination={false}` + `footer={() => <EntityOffsetFooter {...table.paginationProps(data?.count)} />}`); remove the iteration-7 fetch-all (`limit:1000`, `keepPreviousData`) + client filter/sort/flatten matcher
+- [ ] T092 In `catalog/index.tsx`: fix widths with the canonical `dataWidths` pattern measured over the page's **acquisitions AND their item children** (tree) / **items** (flat) → `widthForHeader`; Actions via `useActionsColWidth`
+- [ ] T093 In `catalog/index.tsx`: **remove the URL column** (+ its filterable attr/columnDef); render the **Name cell as `<a target="_blank" rel="noopener">`** when the item has a `url`, else plain text
+- [ ] T094 [P] Update `catalog/CatalogPage.test.tsx`: assert no URL column, Name renders an anchor when url is set, and the `EntityOffsetFooter` (per-page selector) is present
+
+## Phase 3: e2e + Polish
+
+- [ ] T095 [P] Update `e2e/inventory-catalog.spec.ts`: standard pagination footer (per-page selector + total), Name cell is a link to the item URL, item columns (Name/Spec) size to content (not clipped)
+- [ ] T096 Quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test`; backend `uv run ruff check . && uv run pytest`
+- [ ] T097 [P] Mark iteration-9 tasks complete + append Implementation Notes to this file
+
+---
+
+## Dependencies (iteration 9)
+- T089 (backend fields) → T090 (backend tests) and → T091 (flat mode relies on them).
+- T091 → T092/T093 (same file, sequential) → T094 (RTL) → T095 (e2e).
+
+## Implementation Strategy (iteration 9)
+Extend `ItemViewSet` for flat-mode filter/sort, then rewrite the Catalog to server-side dual-mode (Acquisition tree / Item flat) using the standard `EntityOffsetFooter` + `dataWidths` patterns; remove the URL column and make Name a link. Reuse, don't reinvent.

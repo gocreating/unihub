@@ -1,71 +1,56 @@
-# Phase 0 Research: Inventory App
+# Phase 0 Research: Inventory App (Refinement Iteration)
 
-**Feature**: 014-inventory-app | **Date**: 2026-07-10
+**Feature**: 014-inventory-app | **Date**: 2026-07-11
 
-This document resolves the open decisions carried from the spec's Assumptions and the `/speckit-clarify` session, plus the technical unknowns raised by the Technical Context. All items below are **Resolved**; none remain as NEEDS CLARIFICATION.
+This refreshes the Phase 0 decisions for the 2026-07-11 clarification refinements. Original decisions R1–R10 from the first iteration still hold except where superseded below. All items are **Resolved**.
 
 ---
 
-## R1. Domain wiring pattern (concrete models vs. pure entity/attribute)
+## R1. Cross-domain currency reference (Principle II)
 
-- **Decision**: Implement each Inventory entity as a **concrete Django model** with its own DRF `ModelViewSet`, and additionally **seed system `AttributeDefinition`s** (one per user-facing field) via a data migration. This is the exact hybrid the reference domain (Finance) uses.
-- **Rationale**: The codebase reality (verified in `finance/models.py`, `finance/views.py`, `finance/migrations/0002_seed_account_system_attrs.py`) is that concrete models hold the structured fields while the shared `core.AttributeDefinition`/`AttributeValue` infrastructure provides (a) the system-attribute registry that IO/export and the attribute UI consume, and (b) user-defined custom attributes. Principle I is satisfied because attributes flow through the shared infra; Principle III requires alignment with Finance.
-- **Alternatives considered**: (a) Pure `AttributeValue`-only storage with no concrete fields — rejected: no reference domain does this, filtering/ordering/relationships would be far harder, and it breaks Principle III alignment. (b) Concrete models with no attribute seeding — rejected: violates Principle I and the Domain Addition Protocol step 3.
+- **Decision**: Store currency on Item as a plain **code string** per money field (`price_currency`, `cost_currency`). The frontend populates the currency picker by calling the existing finance endpoint `GET /api/v1/finance/currencies/`. Inventory backend performs **no** import of `finance.models`, adds **no** database foreign key to `finance_currency`, and shares no serializers.
+- **Rationale**: Constitution Principle II forbids a domain importing/depending on another domain's internal code. A loose string code + frontend API read is the compliant way to "let the user pick a finance currency" — the domains stay independently deployable. Mirrors how the currency code already travels as a bare string in the finance `Account`/`Balance` serializers.
+- **Alternatives considered**: (a) DB FK `Item.price_currency → finance.Currency` — rejected: hard cross-domain coupling, violates Principle II, breaks "adding/refactoring a domain requires no change to another". (b) Duplicate a currency table inside inventory — rejected: data duplication and drift. (c) Backend proxy of finance currencies through an inventory endpoint — rejected: unnecessary; the frontend can call finance directly.
 
-## R2. Order → Acquisition rename & cardinality
+## R2. Units on measurements (enum + normalization)
 
-- **Decision**: Name the acquisition entity **`Acquisition`**. An `Item` links to **at most one** Acquisition via a nullable FK (`Item.acquisition`). An Acquisition may group **zero or more** items. `Acquisition.method` is an optional `single_select` (`purchase`, `gift`, `transfer`, `found`, `other`); `Acquisition.source` is free text (store/seller/person). Recording an acquisition is optional — an item with `acquisition = null` displays "unknown origin".
-- **Rationale**: Matches the clarification session (2026-07-10). An item is obtained once, so FK (not M2M) is correct and keeps the "which acquisition did this come from" lookup a simple join. Optional method + optional linkage supports gifts and pre-existing items.
-- **Alternatives considered**: M2M item↔acquisition — rejected: an item is not acquired multiple times; M2M adds needless complexity. Required method — rejected by clarification (blank = unknown/pre-existing).
+- **Decision**: Each measurement stores a **canonical base value** plus a **display unit**:
+  - Length fields (`length`, `width`, `height`): canonical in **mm**; unit ∈ {mm, cm, m, in}. Factors → mm: mm 1, cm 10, m 1000, in 25.4.
+  - Weight (`weight`): canonical in **g**; unit ∈ {g, kg, lb}. Factors → g: g 1, kg 1000, lb 453.592.
+  - DB columns per measure: `<m>_canonical` (Decimal, base unit) + `<m>_unit` (CharField enum). The serializer accepts `{value, unit}`, computes canonical on write, and returns both the display `value` (canonical ÷ factor) and `unit` on read.
+- **Rationale**: Sorting/filtering by weight or a dimension must be comparable across items entered in different units (SC-002 intent). Storing a canonical column makes ORM ordering/filtering correct and index-friendly; keeping the unit preserves the user's chosen display.
+- **Alternatives considered**: (a) Store raw value + unit, compare raw — rejected: mixes units, misleading sort. (b) Free-text unit string — rejected: no normalization, no validation. (c) Single global metric/imperial toggle — rejected: too coarse; users mix units per item.
 
-## R3. Cost model
+## R3. Per-currency cost aggregation
 
-- **Decision**: Keep `Item.cost` and `Item.price` as optional decimals on the item. The Acquisition's **aggregated total cost is derived** as the sum of its linked items' `cost`. `Acquisition.cost` remains an optional lump-sum field for cases where the user records a single bundle price instead of per-item costs; the derived per-item total is what the UI shows as "total".
-- **Rationale**: Spec Assumption "Acquisition-cost aggregation uses each linked item's recorded cost"; FR-006 allows an optional acquisition cost. Both notions coexist without ambiguity because the derived total is always displayed and the lump-sum is clearly labeled.
-- **Alternatives considered**: Store cost only on the acquisition — rejected: the spec item schema explicitly lists per-item `price`/`cost`, and per-item cost is needed for scenarios/reporting independent of acquisitions.
+- **Decision**: With per-field currencies, an Acquisition's aggregated cost is reported **grouped by currency**: `total_item_cost` becomes a list of `{currency, total}` (summing each item's `cost` within its `cost_currency`). No cross-currency summation or FX conversion is performed in Inventory. `Acquisition.cost` (the old optional lump-sum) is **removed**.
+- **Rationale**: Summing amounts in different currencies is meaningless without FX, and Principle IX (base-currency valuation) is finance-only. Grouping by currency is the same transparency approach finance uses for per-currency net worth. Most real acquisitions use one currency, so the list usually has a single entry.
+- **Alternatives considered**: (a) Single scalar total — rejected: wrong across mixed currencies. (b) Convert to a base currency in inventory — rejected: pulls FX/rate logic across the domain boundary (Principle II/IX).
 
-## R4. Containment scope (per-scenario vs. global)
+## R4. Acquisition-first composition & lifecycle
 
-- **Decision**: Containment is **per-scenario**. A `ScenarioItem` (the join between a Scenario and an Item) carries a nullable self-referential FK `container` pointing at **another `ScenarioItem` in the same scenario**. Top-level (unpacked) lines have `container = null`. A separate `Item.storage_location` free-text field records where an item lives when not packed.
-- **Rationale**: Spec Assumption "Containment is scenario-scoped"; the same item can be packed differently for different situations. Anchoring the parent on `ScenarioItem` (not `Item`) guarantees the container is itself part of the scenario and lets the same physical item be a container in one scenario and packed loose in another.
-- **Alternatives considered**: Global `Item.parent` graph — rejected by the assumption; would force one universal packing arrangement. Free-text location only — rejected: cannot express multi-level nesting (camera → case → backpack) required by User Story 5.
-- **Cycle prevention**: On assigning `container`, the backend walks the parent chain and rejects (400) if the target is the line itself or already a descendant. Enforced in the serializer/viewset and covered by a dedicated test (`test_set_container_rejects_cycle`).
+- **Decision**: `Item.acquisition` is a **required** FK with `on_delete=CASCADE`. Items are created **only** through the Acquisition create flow (one request creates the acquisition and its item rows). Deleting an acquisition deletes its items (composition) behind a count-stating confirmation. The standalone item-create endpoint/UI is removed; `Item` remains independently editable and deletable-through-its-acquisition. "Unknown/pre-existing origin" is modeled by an acquisition with blank method/source (not by a null FK).
+- **Rationale**: Directly implements the clarified acquisition-first decision, which supersedes the earlier "linking optional / null acquisition" model. CASCADE enforces the "no item without an acquisition" invariant at the DB level.
+- **Alternatives considered**: (a) Keep nullable FK + optional standalone create — rejected: contradicts the clarification. (b) `PROTECT` on delete — rejected: the spec allows cascade-with-warning; PROTECT would block the common "remove this whole purchase" action.
+- **Note (data migration)**: existing rows created in the first iteration may have `acquisition = NULL`. The `0003` migration backfills a synthetic "unknown origin" acquisition (blank method/source) for any orphan items before making the column non-null.
 
-## R5. Constraint types & evaluation
+## R5. Item creation via nested write on Acquisition
 
-- **Decision**: Support exactly three `constraint_type` values in v1: **`mutual_exclusive`** (at most one of a target item set may be selected), **`required`** (a specific item, or an item whose category/type matches `target_category`, must be selected), and **`weight_limit`** (summed `weight` of selected items must not exceed `limit_value`). A `Constraint` belongs to a `Scenario`, has an M2M `items` target set, an optional `target_category` (text), and an optional `limit_value` (decimal). Evaluation is **computed server-side** and returned by the scenario checklist endpoint as a list of violations (`{constraint_id, type, message, offending_item_ids, overage?}`).
-- **Rationale**: Spec Assumption "Constraint set for v1"; FR-013/FR-014. Server-side evaluation keeps the rule logic unit-testable (Principle V) and consistent regardless of client. A small closed enum keeps the UI (a `single_select`) and the type generation simple.
-- **Alternatives considered**: Free-form constraint expressions / a rule DSL — rejected: out of scope for v1, untestable-by-default, over-engineered. Client-side evaluation — rejected: duplicates logic, not unit-testable in the backend suite, risks divergence.
+- **Decision**: `POST /acquisitions/` accepts an `items: [ …itemFields ]` array and creates the acquisition and all items atomically. `PATCH /acquisitions/{id}/` supports adding new item rows and editing/removing existing ones. Individual item edits still go through `PATCH /items/{id}/`.
+- **Rationale**: Matches the "add one or more items at once" flow on a single page; a nested writable serializer keeps it one round-trip and transactional.
+- **Alternatives considered**: Separate calls (create acquisition, then create each item) — rejected: non-atomic, worse UX, partial-failure states.
 
-## R6. Checklist & preparation state
+## R6. Item list default view
 
-- **Decision**: Preparation state lives on `ScenarioItem`: `required_quantity` (number, default 1) and `prepared` (boolean, default false). The scenario **checklist endpoint** (`GET /scenarios/{id}/checklist/`) returns, in one response: each checklist line (item, required qty, prepared, container, on-hand shortfall for consumables), aggregate progress (`prepared_count`, `outstanding_count`, `complete`), and the evaluated constraint violations (R5). Marking prepared is a `PATCH` on the `ScenarioItem`.
-- **Rationale**: FR-011/FR-012. One computed endpoint gives the frontend everything the Scenario detail view needs (progress + violations + shortfalls) without multiple round-trips, matching SC-008 (glanceable readiness).
-- **Alternatives considered**: Compute progress on the client — rejected: shortfall and constraint evaluation are server concerns and must be testable server-side.
+- **Decision**: `ItemViewSet.ordering = ['-acquisition__obtained_at']` (default). `archived_at` becomes a filterable attribute; there is **no** implicit archived exclusion and **no** dedicated toggle — the default view lists all items and the user filters. Default column order (frontend): name, spec, model, serial, size, weight, length, width, height. `ordering_fields` gains `acquisition__obtained_at` (aliased).
+- **Rationale**: Implements the clarified list defaults. The related-field sort is safe and index-friendly because every item now has an acquisition (no null join).
+- **Alternatives considered**: Keep the toggle / default-exclude archived — rejected by the clarification ("use filter instead").
 
-## R7. Archive vs. hard delete & referential safety
+## R7. Constraint `required` becomes item-set-only
 
-- **Decision**: **Archiving** (`Item.archived_at` timestamp) is the normal retirement path; archived items are excluded from the default list and retrievable via an `archived` filter. **Hard delete** is guarded: `ItemViewSet.destroy` returns a reference-count summary and requires `?confirm=true` when the item is linked to an acquisition, a scenario, or used as a container — mirroring `AccountViewSet.destroy`. Deleting an Acquisition or a ScenarioItem never deletes the underlying Item (FKs use `SET_NULL`/`CASCADE` on the join only).
-- **Rationale**: Spec Assumption "Deletion vs archive"; FR-002, FR-009, FR-018; Dev Constraint delete-confirmation. Prevents dangling references (edge cases) while keeping the common case (retire an item) non-destructive.
-- **Alternatives considered**: Hard delete with cascade — rejected: silently destroys acquisition/scenario history. Archive-only, no delete — rejected: users need a way to remove mistaken entries; FR-018 anticipates guarded deletion.
-
-## R8. Consumable quantity & shortfall
-
-- **Decision**: `Item.item_type` is a `single_select` (`stockable`, `consumable`). `Item.quantity` (number) is the on-hand quantity, editable for consumables. In a scenario, if a consumable line's `required_quantity` exceeds the item's on-hand `quantity`, the checklist line is flagged with a `shortfall` amount. Quantity changes are manual (no automatic depletion in v1).
-- **Rationale**: Spec Assumption "Item type model"; FR-004; User Story 3 scenario 5. Manual quantity keeps v1 free of a consumption-event ledger.
-- **Alternatives considered**: Auto-decrement on scenario completion — rejected: out of scope; scenarios are preparation plans, not stock transactions.
-
-## R9. API namespace & pagination
-
-- **Decision**: Mount the app at **`/api/v1/inventory/`** (matching the `/api/v1/finance/` convention in `unihub/urls.py`). Use `EntityOffsetPagination`, `EntityFilterBackend`, and `NullsOrderingFilter` from `core/`. `http_method_names` restricted to `get, post, patch, delete, head, options` (no `put` on collection resources), as Finance does.
-- **Rationale**: Principle III alignment; the newer `/api/<domain>/` prefixes (visiting/language/people/music) are un-versioned, but Finance — the fully-wired MVP reference — uses `/api/v1/`. We follow the fully-wired reference.
-- **Alternatives considered**: `/api/inventory/` (un-versioned like music) — rejected: those domains are not fully wired; Finance is the authoritative wired pattern.
-
-## R10. Frontend page shape
-
-- **Decision**: Three `PageTable` list pages under a collapsible **Inventory** nav section: **Items**, **Acquisitions**, **Scenarios**. The **Scenario detail** page (`/inventory/scenarios/:id`) is a non-table composite: a checklist panel (progress + prepared toggles), a constraints panel (add/evaluate, violations surfaced), and a containment tree. Any table embedded inside a card on the detail page uses `ProTable ghost` (Principle XI), not `PageTable`.
-- **Rationale**: Principle VII (list pages) + the composite detail view parallels Finance's balance-sheet detail. Enum/relational cells use `<Tag>` (Principle VI).
-- **Alternatives considered**: A single mega-page — rejected: three distinct entities each warrant a list; the scenario workflow needs a dedicated detail surface.
+- **Decision**: Remove `Constraint.target_category` and `Item.category`. A `required` constraint validates on its M2M `items` set only (≥1 item required); evaluation flags a violation when none of the set is selected.
+- **Rationale**: `item.category` is removed per the clarification, so category-based matching has no backing field; the explicit item set is the remaining, well-defined semantic.
+- **Alternatives considered**: Retain `category` just for constraints — rejected by the clarification.
 
 ---
 
@@ -73,13 +58,16 @@ This document resolves the open decisions carried from the spec's Assumptions an
 
 | # | Topic | Decision |
 |---|-------|----------|
-| R1 | Domain wiring | Concrete models + seeded system AttributeDefinitions (Finance pattern) |
-| R2 | Acquisition | Rename from Order; `Item.acquisition` nullable FK; optional typed method |
-| R3 | Cost | Per-item cost/price; acquisition total = sum of item costs; optional lump-sum |
-| R4 | Containment | Per-scenario `ScenarioItem.container` self-FK; cycle-checked |
-| R5 | Constraints | `mutual_exclusive`, `required`, `weight_limit`; evaluated server-side |
-| R6 | Checklist | Progress + violations + shortfalls from one `/checklist/` endpoint |
-| R7 | Delete/archive | Archive default; guarded hard delete with `?confirm=true` |
-| R8 | Consumables | `item_type` enum; manual on-hand `quantity`; shortfall flag |
-| R9 | API | `/api/v1/inventory/`; core filter/order/pagination backends |
-| R10 | Frontend | 3 list pages + 1 scenario detail; Tags for enums/relations |
+| R1 | Currency | Per-field code string; picker via finance API; no import/FK (Principle II) |
+| R2 | Units | Canonical base value (mm/g) + display unit enum per measure |
+| R3 | Cost totals | Aggregate grouped by currency; drop `Acquisition.cost` |
+| R4 | Composition | `Item.acquisition` required + CASCADE; acquisition-first; blank acq = unknown origin |
+| R5 | Nested create | `POST /acquisitions/` writes acquisition + items atomically |
+| R6 | List defaults | Default sort ↓`acquisition__obtained_at`; archived filterable, no toggle; fixed column order |
+| R7 | Required constraint | Item-set-only; drop `target_category`/`item.category` |
+
+### Superseded from iteration 1
+- Item↔Acquisition **optional nullable FK** → now **required + CASCADE** (R4 supersedes old R2/R7-archive).
+- `Acquisition.cost` lump-sum and single scalar `total_item_cost` → **per-currency grouping**, lump-sum removed (R3).
+- `item.category` + `required`-by-category → **removed** (R7 supersedes old I1 resolution).
+- Default-exclude-archived + toggle → **archived filterable, no toggle** (R6).

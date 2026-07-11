@@ -4,6 +4,8 @@
 
 This guide walks a developer through building and exercising the Inventory domain. It assumes the unihub monorepo is checked out and Docker (or local uv/pnpm) is available.
 
+> **Refinement iteration (2026-07-11)**: The domain shipped at commit `49159dd`; this iteration applies the clarified changes — acquisition-first creation, per-field currency (via finance API), units with normalization, field churn, and list defaults. See [plan.md](plan.md) and [research.md](research.md). The migrations for this iteration are `0003_refine_fields` and `0004_reseed_system_attrs`.
+
 ## 1. Bring up the stack
 
 ```bash
@@ -85,11 +87,12 @@ pnpm test
 
 ## 7. Manual acceptance walkthrough (maps to spec user stories)
 
-1. **Items (US1)**: Go to *Inventory → Items*. Create "Backpack" (stockable) and "AA batteries" (consumable, quantity 4). Edit, then archive one item; confirm it leaves the default list and returns under the archived filter. Search/sort/filter the table.
-2. **Acquisitions (US2)**: Go to *Inventory → Acquisitions*. Create a `purchase` from "B&H" and a `gift` (no cost) from a person; link items. Open an item with no acquisition → origin shows "unknown". Delete an acquisition → items remain.
-3. **Scenario checklist (US3)**: Go to *Inventory → Scenarios*, create "Weekend camping", add several items. Toggle `prepared` on the checklist; watch the outstanding count fall to 0 → complete. Set battery `required_quantity` above on-hand → shortfall flagged.
-4. **Constraints (US4)**: Add a `mutual_exclusive` constraint over two battery items → select both → violation appears; remove one → clears. Add a `weight_limit` → exceed it → overage amount shown.
-5. **Packing & positions (US5)**: Assign the camera line's `container` to the "Backpack" line; review the containment tree. Try to make Backpack contain itself → rejected with a message.
+1. **Acquire items (US2 — creation entry point)**: Go to *Inventory → Acquisitions → New Acquisition*. Set method `purchase`, source "B&H", obtained date, then add two item rows in the same form ("Camera" cost 2200 USD, weight 0.658 kg; "Lens" cost 1100 USD). Save → both items are created and appear in the catalog, each linked to this acquisition. Create a second acquisition with **blank** method/source and one item → its origin reads "unknown/pre-existing". Confirm there is **no** standalone "New Item" button.
+2. **Items list (US1)**: Go to *Inventory → Items*. Confirm the default sort is descending by acquisition obtained date and the default column order (name, spec, model, serial, size, weight, length, width, height). Edit an item: change weight unit kg→g and confirm sorting stays correct; set `price_currency` from the finance currency picker; set `status` to `deprecated`; archive one and find it via the **archived filter** (no toggle).
+3. **Scenario checklist (US3)**: *Inventory → Scenarios*, create "Weekend camping", add items. Toggle `prepared`; watch outstanding fall to 0 → complete. Set a consumable's `required_quantity` above on-hand → shortfall flagged.
+4. **Constraints (US4)**: Add a `mutual_exclusive` over two items → select both → violation; remove one → clears. Add a `required` constraint over an item set (no category field) → omit all → violation. Add a `weight_limit` → exceed it → overage shown.
+5. **Packing & positions (US5)**: Assign the camera line's container to the "Backpack" line; review the containment tree. Try to make Backpack contain itself → rejected. Confirm the Scenario detail page uses a **breadcrumb** (Scenarios → name), not a back button.
+6. **Delete acquisition (composition)**: Delete the first acquisition → a confirm dialog states the item count → confirm → its items are removed from the catalog (no item is left acquisition-less).
 
 ## Reference files
 

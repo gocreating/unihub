@@ -1,26 +1,26 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.14.0 → 1.15.0 (minor — Principle VI (UI/UX Reference: ov-fleet)
-  materially expanded with a new non-negotiable "Form field layout" convention:
-  forms MUST use a responsive grid where fields stretch to fill and together fill
-  each row; fields MUST stack to a single full-width column on a narrow *content*
-  area (content-width based, not viewport); number inputs MUST right-align their
-  content. Applies immediately to ALL existing forms. Sourced from a UX
-  consistency directive on 2026-07-11.)
+Version change: 1.15.0 → 1.16.0 (minor — Principle VI (UI/UX Reference: ov-fleet)
+  modal-controls rule expanded with an explicit footer action-placement
+  requirement: the primary action MUST sit on the right-hand side of the modal
+  footer and all other actions (Cancel + secondary/tertiary) on the left, with
+  Cancel remaining left-most. Sourced from a UX consistency directive on
+  2026-07-11.)
 Modified principles:
-  - VI. UI/UX Reference: ov-fleet — added the Form field layout (grid, responsive,
-    right-aligned numbers) rule; rationale extended
-Added sections: none (bullet added within Principle VI)
+  - VI. UI/UX Reference: ov-fleet — modal form-controls rule now specifies footer
+    action placement (primary right; other actions left; Cancel left-most)
+Added sections: none (existing Principle VI bullet expanded)
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check is
     generic and already gates all principles)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: Retrofit existing forms to the grid/right-aligned-number rule
-  (tracked as feature work, not a constitution change). Audit any `InputNumber`
-  not right-aligned and any fixed-px field widths in finance/inventory forms.
+Follow-up TODOs: Retrofit existing modals to the primary-right / others-left footer
+  layout. AntD's default footer already renders [Cancel][OK] (primary right), so
+  compliant by default — audit any modal with a custom `footer` array or extra
+  buttons (e.g. dirty-guarded item/constraint modals).
 -->
 
 # UniHub Constitution
@@ -208,7 +208,10 @@ reference implementation to follow.
   affordance), not a page-level Cancel control. A single primary action (e.g.
   Save / Create) is permitted; a redundant Cancel next to it is a violation.
 - **Modal form controls**: Modal (dialog) forms are the exception — they MUST keep
-  a Cancel button, positioned **left-most** in the modal footer. A modal MUST NOT
+  a Cancel button. **Footer action placement**: the **primary action** (e.g.
+  Save / Create / OK) MUST be on the **right-hand side** of the footer, and **all
+  other actions** (Cancel and any secondary/tertiary buttons) MUST be grouped on
+  the **left-hand side**. Cancel remains the **left-most** control. A modal MUST NOT
   close on outside/overlay click (or `Esc`) while its form is **dirty** (has unsaved
   changes); it may close on outside click only when the form is pristine. This
   prevents accidental loss of in-progress input. On narrow screens, modal form
@@ -638,4 +641,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.15.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-11
+**Version**: 1.16.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-11

@@ -253,3 +253,53 @@ Completed 2026-07-11 (builds on iteration 4, commit `57441be`).
 
 ### Not run this session
 - **T050 (Docker end-to-end on Postgres)** — migrations `0009`/`0010` are exercised on a fresh DB by pytest (SQLite); the display_order backfill + duplicate-accumulated collapse + `type→text` reseed against a pre-existing **Postgres** DB should still be verified via `docker compose` + quickstart before release.
+
+---
+
+# Tasks: Iteration 6 (catalog polish, cost panel fixes, e2e, legacy import)
+
+**Input**: plan.md "Iteration 6" delta; spec `### Session 2026-07-11 (catalog & cost UI polish, iteration 6)` + FR-003/006/006c/021/024. Builds on iteration 5 (commit `e979bb3`). Frontend-only feature work + one Django management command. Regression behaviours locked by **Playwright e2e**.
+
+## Phase 1: US1 — Catalog polish (Priority: P1)
+
+- [ ] T052 [US1] In `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx`: replace the arrow expand icon with a **caret** (`CaretRightOutlined`/`CaretDownOutlined`) via `expandable.expandIcon`; make the tree **expanded by default** (`expandable.expandedRowKeys` = all acquisition ids, or `defaultExpandAllRows`)
+- [ ] T053 [US1] In `catalog/index.tsx`: compute **dynamic content-fit widths** per column (a `useMemo` over `rows` measuring each column's rendered text with `measureTextWidth`, fed into `widthForHeader(title, maxContentWidth)`); apply to every column incl. Actions so nothing clips or is over-narrow
+- [ ] T054 [US1] In `catalog/index.tsx`: add columns — acquisition **`request_time` ("Requested")**; item **`quantity`**, **`sku_price` (+currency)**, **`url`** (rendered as a clickable `<a target="_blank" rel="noopener">`), and **Length/Width/Height**; parent rows blank the item columns and vice-versa; `columnEmptyText={false}` retained
+- [ ] T055 [US1] In `catalog/index.tsx`: make **every column filterable + sortable** via the `EntityToolbar` (extend `filterableAttrs`/`columnDefs`); implement **flatten-on-item-filter/sort** — when any item-level filter/sort is active, render a **flat `Item[]`** (`acquisitions.flatMap(a => a.items)`) un-nested and sorted/filtered client-side by that column; when only acquisition-level filters/sorts are active, render the tree (default acquisitions ↓ `obtained_at`)
+- [ ] T056 [P] [US1] Add/verify Catalog column i18n in BOTH locales (`pages.ts`): `Requested`, `Quantity`, `SKU price`, `URL`, `Length`/`Width`/`Height` (reuse existing item keys where present)
+- [ ] T057 [P] [US1] Update `apps/unihub/frontend/src/pages/inventory/catalog/CatalogPage.test.tsx` (RTL): assert the **Requested** column header, item columns (Quantity/SKU price/URL), a **caret** toggle, and default-expanded rows (item text visible without clicking)
+
+## Phase 2: US2 — Acquisition & cost panel fixes (Priority: P1)
+
+- [ ] T058 [P] [US2] Update `apps/unihub/frontend/src/pages/inventory/acquisitions/new.tsx` and `edit.tsx`: breadcrumb first crumb **"Catalog"** linking to `/inventory/catalog` (create = Catalog / New Acquisition; edit = Catalog / {id} / Edit Acquisition)
+- [ ] T059 [US2] In `AcquisitionForm.tsx`: when an item card's `url` is set, render the **card `title` as an `<a href={url} target="_blank" rel="noopener">`** (opens a new tab); no link when url is empty
+- [ ] T060 [US2] In `AcquisitionForm.tsx` cost panel: make the accumulated **reset an icon-only `Button`** (`ReloadOutlined`, no text) so it never overflows; drive each factor row's `Col`s off `useContainerWidth` `isNarrow` so rows **stack to one column when narrow** (matching the Acquisition panel); render the accumulated rows' label as **"Items"**
+- [ ] T061 [P] [US2] i18n (BOTH locales): add `pages.inventory.acquisitions.costFactors.accumulatedLabel` = "Items"/「物品」 (used for accumulated rows); keep the `costFactors.type.accumulated` suggestion key as-is
+
+## Phase 3: Regression e2e (Playwright, FR-024)
+
+- [ ] T062 [P] Add `apps/unihub/frontend/e2e/inventory-catalog.spec.ts`: caret toggle present; tree expanded by default (item row visible on load); Requested column present; column widths fit content (Actions buttons not clipped); item-column filter/sort flattens to a flat list. (login root/root, `/inventory/catalog`)
+- [ ] T063 [P] Add `apps/unihub/frontend/e2e/inventory-acquisition.spec.ts`: breadcrumb first crumb is "Catalog"; an item card with a URL has a header link with `target=_blank`; cost reset is an icon-only button (no text); cost rows stack at a narrow viewport; accumulated row label reads "Items"
+
+## Phase 4: Legacy CSV importer
+
+- [ ] T064 Create `apps/unihub/backend/inventory/management/commands/import_legacy_csv.py`: port the parse/group/classify/備註-parse logic from `specs/014-inventory-app/scripts/preview_legacy_import.py`; build `AcquisitionWrite`-shaped payloads and save through `AcquisitionSerializer` (respects validation, per-currency accumulated, Principle II); flags `--dry-run` (default; prints the grouped plan + unmapped rows) and `--commit` (writes); warn on currencies absent from Finance
+- [ ] T065 Run the importer for **2026** data: `uv run python manage.py import_legacy_csv "data/財產們 - 2026.csv" --dry-run` then, once the plan looks right and the DB is up, `--commit`; record the result (acquisitions/items/factors created, per-currency total vs the sheet's 總支出)
+
+## Phase 5: Polish
+
+- [ ] T066 Quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test`; backend `uv run ruff check . && uv run pytest`; run the new Playwright specs against the live stack where available
+- [ ] T067 [P] Mark iteration-6 tasks complete + append Implementation Notes (flatten approach, dynamic-width method, importer usage, e2e run status) to this file
+
+---
+
+## Dependencies (iteration 6)
+
+- US1 (T052–T057) and US2 (T058–T061) are independent frontend slices (different files) → parallelizable.
+- e2e (T062–T063) after the UI changes land.
+- Importer (T064) is backend-only, independent of the frontend; T065 (run) needs the DB up.
+- Polish (T066–T067) last.
+
+## Implementation Strategy (iteration 6)
+
+Ship US1 (Catalog) + US2 (cost panel) — the visible fixes — then lock them with Playwright e2e (FR-024). The importer is a separate backend deliverable run against the 2026 CSV. No schema/migration changes this iteration.

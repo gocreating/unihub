@@ -164,3 +164,54 @@ No new violations. `@dnd-kit` is a UI primitive (no domain coupling; Principle I
 ## Structure Decision (delta)
 
 In-place refinement of iteration 4. Backend: one migration (`0009`) + serializer changes (per-currency accumulated, free-form type, ordering). Frontend: Catalog column/icon tweaks and an AcquisitionForm cost-panel rebuild with drag-sortable manual rows. Legacy-CSV import is tracked **separately** (see `migration-import.md`), not folded into this iteration.
+
+---
+
+# Iteration 6 (catalog polish, cost panel fixes, e2e, legacy import) — delta plan
+
+**Date**: 2026-07-11 | Builds on iteration 5 (commit `e979bb3`). Spec: `### Session 2026-07-11 (catalog & cost UI polish, iteration 6)` + FR-003/006/006c/021/024.
+
+## Summary
+
+Pure frontend polish + regression e2e + the legacy-CSV importer. **No backend schema change.**
+
+**Catalog** (`catalog/index.tsx`):
+- Caret toggle (`CaretRightOutlined`/`CaretDownOutlined`) via `expandable.expandIcon`; **expanded by default** (`expandedRowKeys` = all acquisition ids, or `defaultExpandAllRows`).
+- **Dynamic content-fit column widths** — measure each column's content across rows (reuse `measureTextWidth`/`widthForHeader`, per-column max), replacing fixed widths; Actions column included.
+- Add columns: acquisition **Requested** (`request_time`); item **Quantity**, **SKU price** (+currency), **URL** (clickable, new tab), **Length/Width/Height**.
+- **All columns filterable + sortable** via the toolbar. Level-aware: acquisition columns act on the parent tree; an **item-column filter/sort flattens** to a flat item list (client transform over the loaded acquisitions' items), restored when item filters/sorts clear.
+
+**Acquisition form** (`AcquisitionForm.tsx`, `new.tsx`, `edit.tsx`):
+- Breadcrumb first crumb **"Catalog"** → `/inventory/catalog`.
+- Item card header becomes an **anchor** (`target="_blank" rel="noopener"`) when `url` is set.
+- **Cost panel**: reset is an **icon-only** `Button` (no label); rows **stack to one column when narrow** (drive the row `Col`s off `useContainerWidth` `isNarrow`, like the Acquisition panel — the current fixed `flex` px is the bug); accumulated rows labelled **"Items"** (`costFactors.type.accumulated` → "Items", or a dedicated `costFactors.accumulatedLabel`).
+
+**e2e** (`apps/unihub/frontend/e2e/inventory-catalog.spec.ts`, `inventory-acquisition.spec.ts`):
+- Playwright specs (existing infra; run against Docker backend + `pnpm dev`, login root/root) asserting every FR-024 behaviour.
+
+**Legacy importer** (`inventory/management/commands/import_legacy_csv.py`):
+- Promote `scripts/preview_legacy_import.py` into a management command reusing the same parse/group/classify logic; posts through `AcquisitionSerializer` (respects validation, per-currency accumulated, Principle II). Flags: `--dry-run` (default preview), `--commit` (write). Run for `data/財產們 - 2026.csv`.
+
+## Technical Context (delta)
+
+- **No new deps** (Playwright + @dnd-kit already present).
+- **Flatten transform**: when an item-column sort/filter is active, derive a flat `Item[]` from `acquisitions.flatMap(a => a.items)` and render an un-nested table; otherwise render the tree. Toolbar column set stays the union.
+- **Dynamic widths**: compute a per-column max content width in a `useMemo` over `rows`; feed into `widthForHeader(title, maxContentWidth)`.
+- **Importer**: currency codes must exist in Finance (`RMB`/`USD`/`TWD`/`JPY`) — the command warns on unknown currencies; multi-line 備註 parsed per `migration-import.md`.
+
+## Constitution re-check (delta)
+
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| III. Reference Alignment | ✅ PASS | Catalog stays `PageTable`; flatten toggles the tree, still one table. |
+| VI. UI/UX (v1.14.0) | ✅ PASS | Content-width stacking now also applied to cost rows; single "—"; caret is still a disclosure affordance. |
+| VII. PageTable | ✅ PASS | Both tree and flat modes render through `PageTable`. |
+| VIII. i18n | ✅ PASS | New keys (Requested reused; "Items" accumulated label; column headers) in BOTH locales. |
+| II. Domain Independence | ✅ PASS | Importer resolves currency as a string; no finance FK/import. |
+| V. Quality Loop | ✅ PASS | Adds Playwright e2e regression specs (FR-024) on top of unit/RTL + backend suites. |
+
+No new violations.
+
+## Structure Decision (delta)
+
+Frontend-only feature work + one Django management command for the legacy import. Catalog gains a flat/tree mode switch and dynamic widths; the cost panel becomes responsive with an icon reset. Regression e2e specs lock the repeatedly-reported behaviours.

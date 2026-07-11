@@ -69,6 +69,25 @@ test('Actions column fits its content (buttons not clipped)', async ({ page }) =
   }
 });
 
+test('caret has its own dedicated column (not merged into a data column)', async ({ page }) => {
+  // The caret sits in the leading cell; the first data column cell holds no caret.
+  const firstBodyRow = page.locator('.ant-table-tbody tr.ant-table-row').first();
+  const caretCell = firstBodyRow.locator('td').first();
+  await expect(caretCell.locator('.anticon-caret-down, .anticon-caret-right')).toHaveCount(1);
+});
+
+test('has no item-count ("Items") column and shows pagination', async ({ page }) => {
+  const headers = await page.locator('.ant-table-thead th').allInnerTexts();
+  expect(headers).not.toContain('Items');
+  await expect(page.locator('.ant-pagination')).toBeVisible();
+});
+
+test('SKU price drops trailing zeros', async ({ page }) => {
+  // No rendered SKU cell should show a trailing-zero decimal like "10.0000".
+  const cells = await page.locator('.ant-table-tbody td').allInnerTexts();
+  expect(cells.some((c) => /\.\d*0{3,}\b/.test(c))).toBe(false);
+});
+
 test('sorting an item column flattens the tree to a flat item list', async ({ page }) => {
   // Baseline: tree mode shows parent (level-0) + child (level-1) rows.
   await expect(page.locator('.ant-table-row-level-1').first()).toBeVisible();

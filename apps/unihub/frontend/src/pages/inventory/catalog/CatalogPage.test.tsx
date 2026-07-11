@@ -91,4 +91,18 @@ describe('CatalogPage', () => {
     // The "Acquisition" badge is gone.
     expect(screen.queryByText('Acquisition')).not.toBeInTheDocument();
   });
+
+  it('has a dedicated caret column, pagination, and no item-count column', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Shop');
+    // A caret disclosure icon is rendered (dedicated column).
+    expect(container.querySelector('.anticon-caret-down, .anticon-caret-right')).toBeTruthy();
+    // Pagination is restored.
+    expect(container.querySelector('.ant-pagination')).toBeTruthy();
+    // The item-count ("Items") column header is gone (only item/acq data columns remain).
+    const headers = Array.from(container.querySelectorAll('.ant-table-thead th')).map(
+      (th) => th.textContent,
+    );
+    expect(headers).not.toContain('Items');
+  });
 });

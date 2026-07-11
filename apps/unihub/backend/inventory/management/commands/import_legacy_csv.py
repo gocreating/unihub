@@ -38,6 +38,15 @@ def _load_parser():
     return module
 
 
+# unihub's canonical currency codes — the legacy sheet uses colloquial aliases.
+CURRENCY_ALIASES = {"RMB": "CNY"}
+
+
+def _norm_currency(code: str | None) -> str:
+    code = (code or "")[:3]
+    return CURRENCY_ALIASES.get(code, code)
+
+
 def _iso(date_str: str | None) -> str | None:
     """The parser yields YYYY-MM-DD; DRF wants a datetime — pin to 00:00 UTC."""
     return f"{date_str}T00:00:00Z" if date_str else None
@@ -55,7 +64,7 @@ def _item_payload(item) -> dict:
     if f.get("sku_price") is not None:
         payload["sku_price"] = str(f["sku_price"])
         if f.get("sku_price_currency"):
-            payload["sku_price_currency"] = str(f["sku_price_currency"])[:3]
+            payload["sku_price_currency"] = _norm_currency(str(f["sku_price_currency"]))
     for measure in ("weight", "length", "width", "height", "volume"):
         if measure in f and isinstance(f[measure], dict):
             payload[measure] = {"value": str(f[measure]["value"]), "unit": f[measure]["unit"]}
@@ -74,7 +83,7 @@ def _factor_payloads(acq) -> tuple[list[dict], list[dict]]:
     accumulated, manual = [], []
     for cf in acq.cost_factors:
         value = Decimal(str(cf.value)) if cf.value is not None else Decimal("0")
-        row = {"type": cf.type, "value": str(value), "currency": (cf.currency or "")[:3]}
+        row = {"type": cf.type, "value": str(value), "currency": _norm_currency(cf.currency)}
         (accumulated if cf.type == "accumulated" else manual).append(row)
     if not accumulated:
         accumulated.append({"type": "accumulated", "value": "0", "currency": ""})
@@ -116,9 +125,8 @@ class Command(BaseCommand):
         for a in planned:
             for cf in a.cost_factors:
                 if cf.value is not None:
-                    totals[cf.currency or "?"] = totals.get(
-                        cf.currency or "?", Decimal("0")
-                    ) + Decimal(str(cf.value))
+                    cur = _norm_currency(cf.currency) or "?"
+                    totals[cur] = totals.get(cur, Decimal("0")) + Decimal(str(cf.value))
         self.stdout.write(
             "Per-currency net (should match 總支出): "
             + ", ".join(f"{v} {k}" for k, v in sorted(totals.items()))

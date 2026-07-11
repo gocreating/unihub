@@ -343,30 +343,30 @@ Completed 2026-07-11 (builds on iteration 5, commit `e979bb3`). Frontend-only fe
 
 ## Phase 1: US1 — Catalog fit & stability (Priority: P1)
 
-- [ ] T068 [US1] `catalog/index.tsx`: give the expand **caret its own dedicated narrow column** (custom leading column toggling controlled `expandedRowKeys`; hide the default inline tree expand icon); **remove the item-count ("Items") column**
-- [ ] T069 [US1] `catalog/index.tsx`: **eliminate flash/jitter** — React Query `staleTime: Infinity` + `placeholderData: keepPreviousData`; derive `expandedRowKeys` **synchronously** (memoised default = all acquisition ids, no post-mount `useEffect`)
-- [ ] T070 [US1] `catalog/index.tsx`: **content-fit widths that account for tree expansion** — add caret-column + per-level indentation to the first content column's measured width, and **measure the Actions column** from its button labels; verify no clip expanded/collapsed
-- [ ] T071 [US1] `catalog/index.tsx`: **drop SKU price trailing zeros** (shared `formatDecimal`); **restore pagination** (client-side over the fetched set via `EntityOffsetFooter` + page/pageSize slice)
-- [ ] T072 [P] [US1] Update `catalog/CatalogPage.test.tsx` (RTL): assert no "Items"/item-count column, a dedicated caret column, SKU price without trailing zeros, and pagination footer present
+- [X] T068 [US1] `catalog/index.tsx`: give the expand **caret its own dedicated narrow column** (custom leading column toggling controlled `expandedRowKeys`; hide the default inline tree expand icon); **remove the item-count ("Items") column**
+- [X] T069 [US1] `catalog/index.tsx`: **eliminate flash/jitter** — React Query `staleTime: Infinity` + `placeholderData: keepPreviousData`; derive `expandedRowKeys` **synchronously** (memoised default = all acquisition ids, no post-mount `useEffect`)
+- [X] T070 [US1] `catalog/index.tsx`: **content-fit widths that account for tree expansion** — add caret-column + per-level indentation to the first content column's measured width, and **measure the Actions column** from its button labels; verify no clip expanded/collapsed
+- [X] T071 [US1] `catalog/index.tsx`: **drop SKU price trailing zeros** (shared `formatDecimal`); **restore pagination** (client-side over the fetched set via `EntityOffsetFooter` + page/pageSize slice)
+- [X] T072 [P] [US1] Update `catalog/CatalogPage.test.tsx` (RTL): assert no "Items"/item-count column, a dedicated caret column, SKU price without trailing zeros, and pagination footer present
 
 ## Phase 2: US2 — Cost panel & item modal (Priority: P1)
 
-- [ ] T073 [US2] `AcquisitionForm.tsx`: cost-factor **`type` field shows the localized label** while storing the key (searchable/creatable `Select`, `optionLabelProp="label"`, free-text via `onSearch`); add a shared `costFactorTypeLabel(key, t)` used in the editor and any display
-- [ ] T074 [US2] `AcquisitionForm.tsx`: bring the **Cost panel fields into Principle-VI compliance** — `Row`/`Col` grid, fields stretch to fill + fill the row, stack to one column on narrow content width, number inputs right-aligned
-- [ ] T075 [US2] `AcquisitionForm.tsx`: **item cards render available attributes as `<Tag>` badges** in the card body (only non-empty; sku_price trailing zeros dropped)
-- [ ] T076 [US2] `ItemFormModal.tsx`: **reorder fields** to Name, quantity, SKU price, spec, URL, remark, color, size, weight, length, width, height, volume; ensure grid + content-width stacking + right-aligned numbers (Principle VI); Cancel left / primary right
-- [ ] T077 [P] [US2] i18n check (BOTH locales): cost-factor type labels exist for all built-ins; any new copy added
+- [X] T073 [US2] `AcquisitionForm.tsx`: cost-factor **`type` field shows the localized label** while storing the key (searchable/creatable `Select`, `optionLabelProp="label"`, free-text via `onSearch`); add a shared `costFactorTypeLabel(key, t)` used in the editor and any display
+- [X] T074 [US2] `AcquisitionForm.tsx`: bring the **Cost panel fields into Principle-VI compliance** — `Row`/`Col` grid, fields stretch to fill + fill the row, stack to one column on narrow content width, number inputs right-aligned
+- [X] T075 [US2] `AcquisitionForm.tsx`: **item cards render available attributes as `<Tag>` badges** in the card body (only non-empty; sku_price trailing zeros dropped)
+- [X] T076 [US2] `ItemFormModal.tsx`: **reorder fields** to Name, quantity, SKU price, spec, URL, remark, color, size, weight, length, width, height, volume; ensure grid + content-width stacking + right-aligned numbers (Principle VI); Cancel left / primary right
+- [X] T077 [P] [US2] i18n check (BOTH locales): cost-factor type labels exist for all built-ins; any new copy added
 
 ## Phase 3: Legacy import — CNY
 
-- [ ] T078 `import_legacy_csv.py`: add a currency alias map **`RMB → CNY`** (applied to item `sku_price_currency` + factor `currency`); dry-run shows CNY
-- [ ] T079 Re-import 2026 as CNY: **delete** the previously-imported 2026 acquisitions, then `import_legacy_csv "data/財產們 - 2026.csv" --commit`; verify DB net = 199.9 CNY / 687 TWD / 186.22 USD
+- [X] T078 `import_legacy_csv.py`: add a currency alias map **`RMB → CNY`** (applied to item `sku_price_currency` + factor `currency`); dry-run shows CNY
+- [X] T079 Re-import 2026 as CNY: **delete** the previously-imported 2026 acquisitions, then `import_legacy_csv "data/財產們 - 2026.csv" --commit`; verify DB net = 199.9 CNY / 687 TWD / 186.22 USD
 
 ## Phase 4: e2e + Polish
 
-- [ ] T080 [P] Extend `e2e/inventory-catalog.spec.ts` (caret own column, no item-count column, pagination present) and `e2e/inventory-acquisition.spec.ts` (type shows label, item-card badges)
-- [ ] T081 Quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test`; backend `uv run ruff check . && uv run pytest`
-- [ ] T082 [P] Mark iteration-7 tasks complete + append Implementation Notes to this file
+- [X] T080 [P] Extend `e2e/inventory-catalog.spec.ts` (caret own column, no item-count column, pagination present) and `e2e/inventory-acquisition.spec.ts` (type shows label, item-card badges)
+- [X] T081 Quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test`; backend `uv run ruff check . && uv run pytest`
+- [X] T082 [P] Mark iteration-7 tasks complete + append Implementation Notes to this file
 
 ---
 
@@ -377,3 +377,29 @@ Completed 2026-07-11 (builds on iteration 5, commit `e979bb3`). Frontend-only fe
 
 ## Implementation Strategy (iteration 7)
 Stabilise + fit the Catalog (US1) and bring the cost panel + item modal into Principle-VI compliance (US2), then fix the importer currency and re-import 2026 as CNY. No schema/migration changes.
+
+---
+
+## Implementation Notes (iteration 7)
+
+Completed 2026-07-11 (builds on iteration 6, commit `4ed51c0`). Frontend fixes + importer currency + re-import. **No schema change.**
+
+### Catalog (`catalog/index.tsx`)
+- **Caret in its own dedicated column** (44px leading col toggling `collapsedIds`); AntD's default inline tree icon hidden (`expandable.showExpandColumn:false`, `indentSize={0}`) so expansion never resizes data columns.
+- **No flash/jitter**: React Query `staleTime: Infinity` + `placeholderData: keepPreviousData` (cached across navigations); expansion derived **synchronously** from `collapsedIds` (no post-mount effect).
+- **Content-fit widths accounting for tree expansion**: caret has its own fixed column + `indentSize 0`, so data columns don't shift; the **Actions column is now measured** from its button labels (was unbounded/clipping).
+- **SKU price trailing zeros dropped** (`formatDecimal`); **item-count ("Items") column removed**; **pagination restored** (AntD client-side pagination, 50/page).
+
+### Acquisition form
+- **Cost `type` shows the localized label** while storing the key: the type `AutoComplete` displays `typeLabel(key)` and filters by label; built-ins store keys, free text verbatim.
+- **Cost-panel grid**: type + value fields use flex-grow (`1 1 0` / `2 1 0`) so they stretch and fill the row; stack to one column when narrow; numbers right-aligned (global CSS).
+- **Item cards**: available attributes render as `<Tag>` badges in the card body (`itemCardBadges`, sku_price trailing zeros dropped).
+- **ItemFormModal**: fields reordered to Name, quantity, SKU price, spec, URL, remark, color, size, weight, length, width, height, volume; grid + content-width stacking + right-aligned numbers (Principle VI); Cancel-left / primary-right.
+
+### Legacy importer + re-import
+- `import_legacy_csv.py` **normalizes `RMB → CNY`** (`CURRENCY_ALIASES`, extensible) for item + factor currencies.
+- **Re-imported 2026 as CNY**: deleted the 67 prior (non-CNY) imported acquisitions (kept the 1 pre-existing CNY acquisition), then `--commit`. DB 2026 net = **199.9 CNY / 687 TWD / 186.22 USD**; **no RMB remaining**.
+
+### Tests
+- Catalog RTL: caret column, pagination, no "Items" column. e2e (`--list` = 14 specs): caret-own-column, no-item-count, pagination, SKU trailing zeros, type-label, item-card badges. Backend 260 pytest, ruff clean; frontend lint/typecheck clean, 359 vitest; locale parity OK.
+- e2e not executed headlessly (needs `pnpm dev` + Docker backend).

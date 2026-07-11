@@ -13,6 +13,7 @@ import {
   Row,
   Select,
   Space,
+  Tag,
   Typography,
   message,
 } from 'antd';
@@ -116,20 +117,27 @@ function deriveAccumulated(cards: Card[]): { currency: string; value: string }[]
     .map(([currency, value]) => ({ currency, value: String(value) }));
 }
 
-// Non-empty item attributes to preview on a card.
-function itemCardLines(d: ItemWrite): string[] {
-  const lines: string[] = [];
-  if (d.quantity != null && d.quantity !== 1) lines.push(`× ${d.quantity}`);
-  if (d.sku_price) lines.push(`${d.sku_price} ${d.sku_price_currency ?? ''}`.trim());
-  if (d.size) lines.push(`Size: ${d.size}`);
-  if (d.color) lines.push(`Color: ${d.color}`);
-  const dim = [d.length, d.width, d.height].filter(Boolean) as { value: string; unit: string }[];
-  if (dim.length) lines.push(dim.map((m) => `${m.value}${m.unit}`).join(' × '));
-  if (d.weight) lines.push(`${d.weight.value} ${d.weight.unit}`);
-  if (d.volume) lines.push(`${d.volume.value} ${d.volume.unit}`);
-  if (d.url) lines.push(d.url);
-  if (d.spec) lines.push(d.spec);
-  return lines;
+// Drop trailing zeros: "10.0000" → "10", "59.9000" → "59.9".
+function formatDecimal(v: string | number | null | undefined): string {
+  if (v == null || v === '') return '';
+  const n = Number(v);
+  return Number.isFinite(n) ? String(n) : String(v);
+}
+
+// Available (non-empty) item attributes to show as badges on a card body.
+function itemCardBadges(d: ItemWrite): string[] {
+  const b: string[] = [];
+  if (d.quantity != null && d.quantity !== 1) b.push(`× ${d.quantity}`);
+  if (d.sku_price) b.push(`${formatDecimal(d.sku_price)} ${d.sku_price_currency ?? ''}`.trim());
+  if (d.size) b.push(d.size);
+  if (d.color) b.push(d.color);
+  if (d.length) b.push(`L ${d.length.value}${d.length.unit}`);
+  if (d.width) b.push(`W ${d.width.value}${d.width.unit}`);
+  if (d.height) b.push(`H ${d.height.value}${d.height.unit}`);
+  if (d.weight) b.push(`${d.weight.value} ${d.weight.unit}`);
+  if (d.volume) b.push(`${d.volume.value} ${d.volume.unit}`);
+  if (d.spec) b.push(d.spec);
+  return b;
 }
 
 interface AcquisitionFormProps {
@@ -226,6 +234,11 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     value: tp,
     label: t({ id: `pages.inventory.costFactors.type.${tp}` }),
   }));
+  // Built-in types store a stable key but display their localized label; free text shows verbatim.
+  const typeLabel = (type: string) =>
+    (COST_FACTOR_TYPES as string[]).includes(type)
+      ? t({ id: `pages.inventory.costFactors.type.${type}` })
+      : type;
 
   // Total = per-currency sum across every factor (accumulated + manual).
   const totals = useMemo(() => {
@@ -458,11 +471,11 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
                   <DeleteOutlined key="del" onClick={() => removeCard(idx)} />,
                 ]}
               >
-                <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                  {itemCardLines(card.data).map((line, i) => (
-                    <Typography.Text key={i} type={i === 0 ? undefined : 'secondary'} ellipsis>
-                      {line}
-                    </Typography.Text>
+                <Space size={[4, 4]} wrap>
+                  {itemCardBadges(card.data).map((badge, i) => (
+                    <Tag key={i} style={{ marginInlineEnd: 0 }}>
+                      {badge}
+                    </Tag>
                   ))}
                 </Space>
               </Card>
@@ -506,16 +519,19 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
               <Space direction="vertical" style={{ width: '100%' }} size={8}>
                 {manualRows.map((f) => (
                   <SortableFactorRow key={f.key} id={f.key} isNarrow={isNarrow}>
-                    <Col flex={isNarrow ? '100%' : '130px'}>
+                    <Col flex={isNarrow ? '100%' : '1 1 0'}>
                       <AutoComplete
                         style={{ width: '100%' }}
-                        value={f.type}
+                        value={typeLabel(f.type)}
                         options={typeOptions}
+                        filterOption={(input, option) =>
+                          String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                        }
                         onChange={(v) => updateFactor(f.key, { type: v })}
                         placeholder={t({ id: 'pages.inventory.acquisitions.costFactors.factorType' })}
                       />
                     </Col>
-                    <Col flex={isNarrow ? '100%' : 'auto'}>{valueCurrency(f, false)}</Col>
+                    <Col flex={isNarrow ? '100%' : '2 1 0'}>{valueCurrency(f, false)}</Col>
                     <Col flex={isNarrow ? '100%' : '90px'}>
                       <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeFactor(f.key)} />
                     </Col>

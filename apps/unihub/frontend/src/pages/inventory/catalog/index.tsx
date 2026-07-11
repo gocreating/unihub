@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, DatePicker, Modal, Space, Tag, Typography, message } from 'antd';
 import {
   CaretDownOutlined,
@@ -70,8 +70,15 @@ function formatDateRelative(val: string | null | undefined) {
   return `${dayjs(val).format('YYYY-MM-DD HH:mm')} (${dayjs(val).fromNow()})`;
 }
 
+// Drop trailing zeros: "10.0000" → "10", "59.9000" → "59.9".
+function formatDecimal(v: string | number | null | undefined): string {
+  if (v == null || v === '') return '';
+  const n = Number(v);
+  return Number.isFinite(n) ? String(n) : String(v);
+}
+
 function skuText(it: Item): string | null {
-  return it.sku_price != null ? `${it.sku_price} ${it.sku_price_currency}`.trim() : null;
+  return it.sku_price != null ? `${formatDecimal(it.sku_price)} ${it.sku_price_currency}`.trim() : null;
 }
 
 // A single comparable/display value for a row+column (item OR acquisition rows).
@@ -181,8 +188,9 @@ export function CatalogPage() {
   const { formatMessage: t } = useIntl();
   const [deprecateTarget, setDeprecateTarget] = useState<Item | null>(null);
   const [deprecateDate, setDeprecateDate] = useState<dayjs.Dayjs | null>(null);
-  const [expandedKeys, setExpandedKeys] = useState<readonly string[]>([]);
-  const [userToggledExpand, setUserToggledExpand] = useState(false);
+  // Default-expanded: track only the acquisition ids the user has collapsed, so
+  // expandedRowKeys is derived synchronously (no post-mount effect → no jitter).
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
   const filterableAttrs = useMemo<FilterableAttribute[]>(
     () => [
@@ -198,7 +206,6 @@ export function CatalogPage() {
       { key: 'sku_price', label: t({ id: 'pages.inventory.items.col.skuPrice' }), dataType: 'number' },
       { key: 'url', label: t({ id: 'pages.inventory.items.col.url' }), dataType: 'text' },
       { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select' },
-      { key: 'item_count', label: t({ id: 'pages.inventory.acquisitions.col.itemCount' }), dataType: 'number' },
       { key: 'request_time', label: t({ id: 'pages.inventory.acquisitions.col.requestTime' }), dataType: 'date' },
       { key: 'obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date' },
     ],
@@ -219,11 +226,10 @@ export function CatalogPage() {
       { key: 'height', label: t({ id: 'pages.inventory.items.col.height' }), dataType: 'number', visible: true, order: 9 },
       { key: 'url', label: t({ id: 'pages.inventory.items.col.url' }), dataType: 'text', visible: true, order: 10 },
       { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select', visible: true, order: 11 },
-      { key: 'item_count', label: t({ id: 'pages.inventory.acquisitions.col.itemCount' }), dataType: 'number', visible: true, order: 12 },
-      { key: 'net_cost', label: t({ id: 'pages.inventory.acquisitions.col.netCost' }), dataType: 'text', visible: true, order: 13 },
-      { key: 'request_time', label: t({ id: 'pages.inventory.acquisitions.col.requestTime' }), dataType: 'date', visible: true, order: 14 },
-      { key: 'obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date', visible: true, order: 15 },
-      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 16 },
+      { key: 'net_cost', label: t({ id: 'pages.inventory.acquisitions.col.netCost' }), dataType: 'text', visible: true, order: 12 },
+      { key: 'request_time', label: t({ id: 'pages.inventory.acquisitions.col.requestTime' }), dataType: 'date', visible: true, order: 13 },
+      { key: 'obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date', visible: true, order: 14 },
+      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 15 },
     ],
     [t],
   );
@@ -231,10 +237,14 @@ export function CatalogPage() {
   const table = useEntityTable({ key: 'inventory-catalog', filterableAttrs, columnDefs });
   const { filter, sort, cols } = table;
 
-  // Fully client-side: fetch all acquisitions, then filter/sort/flatten locally.
+  // Fully client-side: fetch all acquisitions (joined with items on the backend)
+  // ONCE, then filter/sort/flatten locally. Cache indefinitely + keep previous
+  // data so navigating to this page does not refetch → no flash/jitter.
   const { data, isLoading, isError } = useQuery({
     queryKey: ['inventory', 'catalog', 'all'],
     queryFn: () => listAcquisitions({ limit: 1000 }),
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
   });
   const acquisitions = useMemo(() => data?.results ?? [], [data]);
 
@@ -284,11 +294,18 @@ export function CatalogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acquisitions, conditions, sortRules, itemModeActive]);
 
-  // Expand all acquisition rows by default (until the user collapses one).
-  useEffect(() => {
-    if (userToggledExpand || itemModeActive) return;
-    setExpandedKeys(acquisitions.map((a) => a.id));
-  }, [acquisitions, userToggledExpand, itemModeActive]);
+  // Expanded = every acquisition except the ones the user collapsed (synchronous).
+  const expandedKeys = useMemo(
+    () => acquisitions.map((a) => a.id).filter((id) => !collapsedIds.has(id)),
+    [acquisitions, collapsedIds],
+  );
+  const toggleExpand = (id: string) =>
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   useEffect(() => {
     if (isError) message.error(t({ id: 'pages.inventory.catalog.loadError' }));
@@ -375,6 +392,16 @@ export function CatalogPage() {
       for (const r of rows) max = Math.max(max, measureTextWidth(displayText(r, def.key)));
       widths[def.key] = max;
     }
+    // Actions: fit the widest button set — acquisition (Edit + Delete) vs item
+    // (Deprecate/Restore + Delete). Two small buttons + icons + gaps + td padding.
+    const acqActions =
+      measureTextWidth(t({ id: 'common.edit' })) + measureTextWidth(t({ id: 'common.delete' }));
+    const itemActions =
+      Math.max(
+        measureTextWidth(t({ id: 'pages.inventory.items.deprecate' })),
+        measureTextWidth(t({ id: 'pages.inventory.items.restore' })),
+      ) + measureTextWidth(t({ id: 'common.delete' }));
+    widths.actions = Math.max(acqActions, itemActions) + 130;
     return widths;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, columnDefs, t]);
@@ -475,14 +502,6 @@ export function CatalogPage() {
               </Tag>
             ),
         },
-        item_count: {
-          key: 'item_count',
-          title: t({ id: 'pages.inventory.acquisitions.col.itemCount' }),
-          ...w('item_count', 'pages.inventory.acquisitions.col.itemCount', 80),
-          fixed: getFixed('item_count'),
-          ...makeSortProps('item_count', t({ id: 'pages.inventory.acquisitions.col.itemCount' }), sort),
-          render: (_, r) => (isAcquisition(r) ? r.item_count : EMPTY),
-        },
         net_cost: {
           key: 'net_cost',
           title: t({ id: 'pages.inventory.acquisitions.col.netCost' }),
@@ -510,6 +529,7 @@ export function CatalogPage() {
         actions: {
           title: t({ id: 'common.actions' }),
           key: 'actions',
+          width: contentWidths.actions,
           fixed: getFixed('actions'),
           render: (_, r) => (
             <span data-actions-col>
@@ -555,13 +575,30 @@ export function CatalogPage() {
     [t, contentWidths, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns, navigate],
   );
 
-  const columns = useMemo<ProColumns<CatalogRow>[]>(
-    () =>
-      cols.visibleColumns
-        .map((c) => colDefMap[c.key])
-        .filter((c): c is ProColumns<CatalogRow> => Boolean(c)),
-    [cols.visibleColumns, colDefMap],
+  // Dedicated caret column (tree mode only) so the disclosure has its own cell
+  // and never changes the width of the data columns when expanded/collapsed.
+  const caretColumn = useMemo<ProColumns<CatalogRow>>(
+    () => ({
+      key: '__caret',
+      title: '',
+      width: 44,
+      fixed: cols.firstColumnFixed ? 'left' : undefined,
+      render: (_, r) =>
+        isAcquisition(r) && r.children.length > 0 ? (
+          <span style={{ cursor: 'pointer' }} onClick={() => toggleExpand(r.id)}>
+            {collapsedIds.has(r.id) ? <CaretRightOutlined /> : <CaretDownOutlined />}
+          </span>
+        ) : null,
+    }),
+    [collapsedIds, cols.firstColumnFixed],
   );
+
+  const columns = useMemo<ProColumns<CatalogRow>[]>(() => {
+    const visible = cols.visibleColumns
+      .map((c) => colDefMap[c.key])
+      .filter((c): c is ProColumns<CatalogRow> => Boolean(c));
+    return itemModeActive ? visible : [caretColumn, ...visible];
+  }, [cols.visibleColumns, colDefMap, itemModeActive, caretColumn]);
 
   return (
     <>
@@ -585,33 +622,14 @@ export function CatalogPage() {
         dataSource={rows}
         loading={isLoading}
         columnEmptyText={false}
-        expandable={
-          itemModeActive
-            ? { showExpandColumn: false }
-            : {
-                expandedRowKeys: expandedKeys,
-                onExpandedRowsChange: (keys) => {
-                  setUserToggledExpand(true);
-                  setExpandedKeys(keys.map(String));
-                },
-                // Caret disclosure; blank spacer on leaf (item) rows.
-                expandIcon: ({ expanded, onExpand, record }) =>
-                  isAcquisition(record) && record.children.length > 0 ? (
-                    <span onClick={(e) => onExpand(record, e)} style={{ cursor: 'pointer', marginRight: 8 }}>
-                      {expanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
-                    </span>
-                  ) : (
-                    <span style={{ marginRight: 8, display: 'inline-block', width: 14 }} />
-                  ),
-              }
-        }
+        indentSize={0}
+        expandable={{
+          // The caret lives in its own column; hide AntD's default inline toggle.
+          showExpandColumn: false,
+          expandedRowKeys: itemModeActive ? [] : expandedKeys,
+        }}
         scroll={{ x: computeScrollX(columns) }}
-        pagination={false}
-        footer={() => (
-          <Typography.Text type="secondary">
-            {t({ id: 'pages.inventory.catalog.rowCount' }, { count: rows.length })}
-          </Typography.Text>
-        )}
+        pagination={{ pageSize: 50, showSizeChanger: true, pageSizeOptions: [25, 50, 100, 200] }}
       />
 
       <Modal

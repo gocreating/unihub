@@ -139,8 +139,9 @@ export function ItemFormModal({
     name: 'length' | 'width' | 'height' | 'weight' | 'volume',
     label: string,
     unitOptions: { value: string; label: string }[],
+    span: number = third,
   ) => (
-    <Col span={third}>
+    <Col span={span}>
       <Form.Item label={label}>
         <Space.Compact block>
           <Form.Item name={`${name}_value`} noStyle>
@@ -178,6 +179,8 @@ export function ItemFormModal({
           onValuesChange={() => setDirty(true)}
           onFinish={(values) => onOk(formValuesToItemWrite(values))}
         >
+          {/* Order (Principle VI grid): Name, quantity, SKU price, spec, URL,
+              remark, color, size, weight, length, width, height, volume. */}
           <Row gutter={12}>
             <Col span={half}>
               <Form.Item name="name" label={t({ id: 'common.name' })} rules={[{ required: true }]}>
@@ -189,31 +192,7 @@ export function ItemFormModal({
                 <InputNumber min={0} precision={0} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
-          </Row>
-          <Row gutter={12}>
-            <Col span={half}>
-              <Form.Item name="size" label={t({ id: 'pages.inventory.items.col.size' })}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={half}>
-              <Form.Item name="color" label={t({ id: 'pages.inventory.items.col.color' })}>
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="spec" label={t({ id: 'pages.inventory.items.col.spec' })}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          <Row gutter={12}>
-            {measureField('length', t({ id: 'pages.inventory.items.col.length' }), lengthUnitOptions)}
-            {measureField('width', t({ id: 'pages.inventory.items.col.width' }), lengthUnitOptions)}
-            {measureField('height', t({ id: 'pages.inventory.items.col.height' }), lengthUnitOptions)}
-          </Row>
-          <Row gutter={12}>
-            {measureField('weight', t({ id: 'pages.inventory.items.col.weight' }), weightUnitOptions)}
-            {measureField('volume', t({ id: 'pages.inventory.items.col.volume' }), volumeUnitOptions)}
-            <Col span={third}>
+            <Col span={quarter}>
               <Form.Item label={t({ id: 'pages.inventory.items.col.skuPrice' })}>
                 <Space.Compact block>
                   <Form.Item name="sku_price" noStyle>
@@ -233,12 +212,36 @@ export function ItemFormModal({
               </Form.Item>
             </Col>
           </Row>
+          <Form.Item name="spec" label={t({ id: 'pages.inventory.items.col.spec' })}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
           <Form.Item name="url" label={t({ id: 'pages.inventory.items.col.url' })}>
             <Input />
           </Form.Item>
           <Form.Item name="remark" label={t({ id: 'pages.inventory.items.col.remark' })}>
             <Input.TextArea rows={2} />
           </Form.Item>
+          <Row gutter={12}>
+            <Col span={half}>
+              <Form.Item name="color" label={t({ id: 'pages.inventory.items.col.color' })}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={half}>
+              <Form.Item name="size" label={t({ id: 'pages.inventory.items.col.size' })}>
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={12}>
+            {measureField('weight', t({ id: 'pages.inventory.items.col.weight' }), weightUnitOptions)}
+            {measureField('length', t({ id: 'pages.inventory.items.col.length' }), lengthUnitOptions)}
+            {measureField('width', t({ id: 'pages.inventory.items.col.width' }), lengthUnitOptions)}
+          </Row>
+          <Row gutter={12}>
+            {measureField('height', t({ id: 'pages.inventory.items.col.height' }), lengthUnitOptions, half)}
+            {measureField('volume', t({ id: 'pages.inventory.items.col.volume' }), volumeUnitOptions, half)}
+          </Row>
         </Form>
       </div>
     </Modal>

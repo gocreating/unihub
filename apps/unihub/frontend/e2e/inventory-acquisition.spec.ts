@@ -68,6 +68,32 @@ test('item card header opens the URL in a new tab when a URL is set', async ({ p
   await expect(link).toHaveAttribute('href', 'https://example.com/widget');
 });
 
+test('a manual cost-factor type shows its localized label, not the raw key', async ({ page }) => {
+  await gotoNewAcquisition(page);
+  const cost = page.locator('.ant-card', { hasText: 'Cost' }).last();
+  await cost.getByRole('button', { name: /Add Factor/i }).click();
+  await page.waitForTimeout(300);
+  // Pick the "Shipping" suggestion; the field must display the label "Shipping",
+  // never the raw key "shipping".
+  const typeInput = cost.locator('.ant-select-selection-search input, input.ant-input').first();
+  await typeInput.click();
+  await page.getByText('Shipping', { exact: true }).first().click();
+  await expect(cost.locator('input[value="Shipping"], input').first()).toHaveValue(/Shipping/);
+});
+
+test('item cards render available attributes as Tag badges', async ({ page }) => {
+  await gotoNewAcquisition(page);
+  await page.getByRole('button', { name: /Add Item/i }).click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.locator('.ant-modal input[id$="name"]').first().fill('Badged item');
+  const colorItem = page.locator('.ant-modal .ant-form-item', { hasText: 'Color' }).first();
+  await colorItem.locator('input').fill('Blue');
+  await page.locator('.ant-modal button', { hasText: /Save/i }).click();
+  await page.waitForTimeout(400);
+  const card = page.locator('.ant-card-small', { hasText: 'Badged item' }).first();
+  await expect(card.locator('.ant-card-body .ant-tag', { hasText: 'Blue' })).toBeVisible();
+});
+
 test('cost-factor rows stack on a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 560, height: 900 });
   await gotoNewAcquisition(page);

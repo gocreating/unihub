@@ -470,6 +470,7 @@ export default {
   'pages.inventory.acquisitions.costFactors': '費用項目',
   'pages.inventory.acquisitions.costFactors.add': '新增費用項目',
   'pages.inventory.acquisitions.costFactors.reset': '重設累計金額',
+  'pages.inventory.acquisitions.costFactors.accumulatedLabel': '物品',
   'pages.inventory.acquisitions.costFactors.value': '金額',
   'pages.inventory.acquisitions.costFactors.currency': '幣別',
   'pages.inventory.acquisitions.costFactors.factorType': '類型',
@@ -484,6 +485,7 @@ export default {
   // Inventory > Catalog (merged items + acquisitions)
   'pages.inventory.catalog.title': '物品清單',
   'pages.inventory.catalog.loadError': '載入清單失敗',
+  'pages.inventory.catalog.rowCount': '{count} 列',
 
   // Inventory > Scenarios
   'pages.inventory.scenarios.title': '情境',

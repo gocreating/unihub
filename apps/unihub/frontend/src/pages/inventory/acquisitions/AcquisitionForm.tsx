@@ -444,7 +444,15 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
             <Col span={third} key={card.id ?? `new-${idx}`}>
               <Card
                 size="small"
-                title={card.data.name || t({ id: 'pages.inventory.acquisitions.new.untitled' })}
+                title={
+                  card.data.url ? (
+                    <a href={card.data.url} target="_blank" rel="noopener noreferrer">
+                      {card.data.name || t({ id: 'pages.inventory.acquisitions.new.untitled' })}
+                    </a>
+                  ) : (
+                    card.data.name || t({ id: 'pages.inventory.acquisitions.new.untitled' })
+                  )
+                }
                 actions={[
                   <EditOutlined key="edit" onClick={() => openEditCard(idx)} />,
                   <DeleteOutlined key="del" onClick={() => removeCard(idx)} />,
@@ -474,16 +482,21 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
       >
         <Space direction="vertical" style={{ width: '100%' }} size={8}>
           {accumulatedRows.map((f) => (
-            <Row gutter={8} key={f.key} align="middle" wrap={false}>
-              <Col flex="24px" />
-              <Col flex="130px">
-                <Typography.Text>{t({ id: 'pages.inventory.costFactors.type.accumulated' })}</Typography.Text>
+            <Row gutter={[8, 8]} key={f.key} align="middle" wrap={isNarrow}>
+              {!isNarrow && <Col flex="24px" />}
+              <Col flex={isNarrow ? '100%' : '130px'}>
+                <Typography.Text>
+                  {t({ id: 'pages.inventory.acquisitions.costFactors.accumulatedLabel' })}
+                </Typography.Text>
               </Col>
-              <Col flex="auto">{valueCurrency(f, true)}</Col>
-              <Col flex="90px">
-                <Button size="small" icon={<ReloadOutlined />} onClick={() => resetAccumulated(f.currency)}>
-                  {t({ id: 'pages.inventory.acquisitions.costFactors.reset' })}
-                </Button>
+              <Col flex={isNarrow ? '100%' : 'auto'}>{valueCurrency(f, true)}</Col>
+              <Col flex={isNarrow ? '100%' : '90px'}>
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  title={t({ id: 'pages.inventory.acquisitions.costFactors.reset' })}
+                  onClick={() => resetAccumulated(f.currency)}
+                />
               </Col>
             </Row>
           ))}
@@ -492,8 +505,8 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
             <SortableContext items={manualRows.map((f) => f.key)} strategy={verticalListSortingStrategy}>
               <Space direction="vertical" style={{ width: '100%' }} size={8}>
                 {manualRows.map((f) => (
-                  <SortableFactorRow key={f.key} id={f.key}>
-                    <Col flex="130px">
+                  <SortableFactorRow key={f.key} id={f.key} isNarrow={isNarrow}>
+                    <Col flex={isNarrow ? '100%' : '130px'}>
                       <AutoComplete
                         style={{ width: '100%' }}
                         value={f.type}
@@ -502,8 +515,8 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
                         placeholder={t({ id: 'pages.inventory.acquisitions.costFactors.factorType' })}
                       />
                     </Col>
-                    <Col flex="auto">{valueCurrency(f, false)}</Col>
-                    <Col flex="90px">
+                    <Col flex={isNarrow ? '100%' : 'auto'}>{valueCurrency(f, false)}</Col>
+                    <Col flex={isNarrow ? '100%' : '90px'}>
                       <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeFactor(f.key)} />
                     </Col>
                   </SortableFactorRow>
@@ -562,15 +575,24 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
 }
 
 // A drag-sortable manual cost-factor row (accumulated rows are not sortable).
-function SortableFactorRow({ id, children }: { id: string; children: React.ReactNode }) {
+// On a narrow content area the fields wrap to a single column (with a vertical gap).
+function SortableFactorRow({
+  id,
+  isNarrow,
+  children,
+}: {
+  id: string;
+  isNarrow: boolean;
+  children: React.ReactNode;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
   return (
-    <Row ref={setNodeRef} style={style} gutter={8} align="middle" wrap={false}>
-      <Col flex="24px">
+    <Row ref={setNodeRef} style={style} gutter={[8, 8]} align="middle" wrap={isNarrow}>
+      <Col flex={isNarrow ? '100%' : '24px'}>
         <span {...attributes} {...listeners} style={{ cursor: 'grab' }}>
           <HolderOutlined />
         </span>

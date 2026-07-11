@@ -18,7 +18,7 @@ export function AcquisitionEditPage() {
       <Breadcrumb
         style={{ marginBottom: 16 }}
         items={[
-          { title: <Link to="/inventory/catalog">{t({ id: 'menu.inventory.acquisitions' })}</Link> },
+          { title: <Link to="/inventory/catalog">{t({ id: 'menu.inventory.catalog' })}</Link> },
           { title: id },
           { title: t({ id: 'pages.inventory.acquisitions.form.editCrumb' }) },
         ]}

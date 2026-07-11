@@ -262,34 +262,34 @@ Completed 2026-07-11 (builds on iteration 4, commit `57441be`).
 
 ## Phase 1: US1 — Catalog polish (Priority: P1)
 
-- [ ] T052 [US1] In `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx`: replace the arrow expand icon with a **caret** (`CaretRightOutlined`/`CaretDownOutlined`) via `expandable.expandIcon`; make the tree **expanded by default** (`expandable.expandedRowKeys` = all acquisition ids, or `defaultExpandAllRows`)
-- [ ] T053 [US1] In `catalog/index.tsx`: compute **dynamic content-fit widths** per column (a `useMemo` over `rows` measuring each column's rendered text with `measureTextWidth`, fed into `widthForHeader(title, maxContentWidth)`); apply to every column incl. Actions so nothing clips or is over-narrow
-- [ ] T054 [US1] In `catalog/index.tsx`: add columns — acquisition **`request_time` ("Requested")**; item **`quantity`**, **`sku_price` (+currency)**, **`url`** (rendered as a clickable `<a target="_blank" rel="noopener">`), and **Length/Width/Height**; parent rows blank the item columns and vice-versa; `columnEmptyText={false}` retained
-- [ ] T055 [US1] In `catalog/index.tsx`: make **every column filterable + sortable** via the `EntityToolbar` (extend `filterableAttrs`/`columnDefs`); implement **flatten-on-item-filter/sort** — when any item-level filter/sort is active, render a **flat `Item[]`** (`acquisitions.flatMap(a => a.items)`) un-nested and sorted/filtered client-side by that column; when only acquisition-level filters/sorts are active, render the tree (default acquisitions ↓ `obtained_at`)
-- [ ] T056 [P] [US1] Add/verify Catalog column i18n in BOTH locales (`pages.ts`): `Requested`, `Quantity`, `SKU price`, `URL`, `Length`/`Width`/`Height` (reuse existing item keys where present)
-- [ ] T057 [P] [US1] Update `apps/unihub/frontend/src/pages/inventory/catalog/CatalogPage.test.tsx` (RTL): assert the **Requested** column header, item columns (Quantity/SKU price/URL), a **caret** toggle, and default-expanded rows (item text visible without clicking)
+- [X] T052 [US1] In `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx`: replace the arrow expand icon with a **caret** (`CaretRightOutlined`/`CaretDownOutlined`) via `expandable.expandIcon`; make the tree **expanded by default** (`expandable.expandedRowKeys` = all acquisition ids, or `defaultExpandAllRows`)
+- [X] T053 [US1] In `catalog/index.tsx`: compute **dynamic content-fit widths** per column (a `useMemo` over `rows` measuring each column's rendered text with `measureTextWidth`, fed into `widthForHeader(title, maxContentWidth)`); apply to every column incl. Actions so nothing clips or is over-narrow
+- [X] T054 [US1] In `catalog/index.tsx`: add columns — acquisition **`request_time` ("Requested")**; item **`quantity`**, **`sku_price` (+currency)**, **`url`** (rendered as a clickable `<a target="_blank" rel="noopener">`), and **Length/Width/Height**; parent rows blank the item columns and vice-versa; `columnEmptyText={false}` retained
+- [X] T055 [US1] In `catalog/index.tsx`: make **every column filterable + sortable** via the `EntityToolbar` (extend `filterableAttrs`/`columnDefs`); implement **flatten-on-item-filter/sort** — when any item-level filter/sort is active, render a **flat `Item[]`** (`acquisitions.flatMap(a => a.items)`) un-nested and sorted/filtered client-side by that column; when only acquisition-level filters/sorts are active, render the tree (default acquisitions ↓ `obtained_at`)
+- [X] T056 [P] [US1] Add/verify Catalog column i18n in BOTH locales (`pages.ts`): `Requested`, `Quantity`, `SKU price`, `URL`, `Length`/`Width`/`Height` (reuse existing item keys where present)
+- [X] T057 [P] [US1] Update `apps/unihub/frontend/src/pages/inventory/catalog/CatalogPage.test.tsx` (RTL): assert the **Requested** column header, item columns (Quantity/SKU price/URL), a **caret** toggle, and default-expanded rows (item text visible without clicking)
 
 ## Phase 2: US2 — Acquisition & cost panel fixes (Priority: P1)
 
-- [ ] T058 [P] [US2] Update `apps/unihub/frontend/src/pages/inventory/acquisitions/new.tsx` and `edit.tsx`: breadcrumb first crumb **"Catalog"** linking to `/inventory/catalog` (create = Catalog / New Acquisition; edit = Catalog / {id} / Edit Acquisition)
-- [ ] T059 [US2] In `AcquisitionForm.tsx`: when an item card's `url` is set, render the **card `title` as an `<a href={url} target="_blank" rel="noopener">`** (opens a new tab); no link when url is empty
-- [ ] T060 [US2] In `AcquisitionForm.tsx` cost panel: make the accumulated **reset an icon-only `Button`** (`ReloadOutlined`, no text) so it never overflows; drive each factor row's `Col`s off `useContainerWidth` `isNarrow` so rows **stack to one column when narrow** (matching the Acquisition panel); render the accumulated rows' label as **"Items"**
-- [ ] T061 [P] [US2] i18n (BOTH locales): add `pages.inventory.acquisitions.costFactors.accumulatedLabel` = "Items"/「物品」 (used for accumulated rows); keep the `costFactors.type.accumulated` suggestion key as-is
+- [X] T058 [P] [US2] Update `apps/unihub/frontend/src/pages/inventory/acquisitions/new.tsx` and `edit.tsx`: breadcrumb first crumb **"Catalog"** linking to `/inventory/catalog` (create = Catalog / New Acquisition; edit = Catalog / {id} / Edit Acquisition)
+- [X] T059 [US2] In `AcquisitionForm.tsx`: when an item card's `url` is set, render the **card `title` as an `<a href={url} target="_blank" rel="noopener">`** (opens a new tab); no link when url is empty
+- [X] T060 [US2] In `AcquisitionForm.tsx` cost panel: make the accumulated **reset an icon-only `Button`** (`ReloadOutlined`, no text) so it never overflows; drive each factor row's `Col`s off `useContainerWidth` `isNarrow` so rows **stack to one column when narrow** (matching the Acquisition panel); render the accumulated rows' label as **"Items"**
+- [X] T061 [P] [US2] i18n (BOTH locales): add `pages.inventory.acquisitions.costFactors.accumulatedLabel` = "Items"/「物品」 (used for accumulated rows); keep the `costFactors.type.accumulated` suggestion key as-is
 
 ## Phase 3: Regression e2e (Playwright, FR-024)
 
-- [ ] T062 [P] Add `apps/unihub/frontend/e2e/inventory-catalog.spec.ts`: caret toggle present; tree expanded by default (item row visible on load); Requested column present; column widths fit content (Actions buttons not clipped); item-column filter/sort flattens to a flat list. (login root/root, `/inventory/catalog`)
-- [ ] T063 [P] Add `apps/unihub/frontend/e2e/inventory-acquisition.spec.ts`: breadcrumb first crumb is "Catalog"; an item card with a URL has a header link with `target=_blank`; cost reset is an icon-only button (no text); cost rows stack at a narrow viewport; accumulated row label reads "Items"
+- [X] T062 [P] Add `apps/unihub/frontend/e2e/inventory-catalog.spec.ts`: caret toggle present; tree expanded by default (item row visible on load); Requested column present; column widths fit content (Actions buttons not clipped); item-column filter/sort flattens to a flat list. (login root/root, `/inventory/catalog`)
+- [X] T063 [P] Add `apps/unihub/frontend/e2e/inventory-acquisition.spec.ts`: breadcrumb first crumb is "Catalog"; an item card with a URL has a header link with `target=_blank`; cost reset is an icon-only button (no text); cost rows stack at a narrow viewport; accumulated row label reads "Items"
 
 ## Phase 4: Legacy CSV importer
 
-- [ ] T064 Create `apps/unihub/backend/inventory/management/commands/import_legacy_csv.py`: port the parse/group/classify/備註-parse logic from `specs/014-inventory-app/scripts/preview_legacy_import.py`; build `AcquisitionWrite`-shaped payloads and save through `AcquisitionSerializer` (respects validation, per-currency accumulated, Principle II); flags `--dry-run` (default; prints the grouped plan + unmapped rows) and `--commit` (writes); warn on currencies absent from Finance
-- [ ] T065 Run the importer for **2026** data: `uv run python manage.py import_legacy_csv "data/財產們 - 2026.csv" --dry-run` then, once the plan looks right and the DB is up, `--commit`; record the result (acquisitions/items/factors created, per-currency total vs the sheet's 總支出)
+- [X] T064 Create `apps/unihub/backend/inventory/management/commands/import_legacy_csv.py`: port the parse/group/classify/備註-parse logic from `specs/014-inventory-app/scripts/preview_legacy_import.py`; build `AcquisitionWrite`-shaped payloads and save through `AcquisitionSerializer` (respects validation, per-currency accumulated, Principle II); flags `--dry-run` (default; prints the grouped plan + unmapped rows) and `--commit` (writes); warn on currencies absent from Finance
+- [X] T065 Run the importer for **2026** data: `uv run python manage.py import_legacy_csv "data/財產們 - 2026.csv" --dry-run` then, once the plan looks right and the DB is up, `--commit`; record the result (acquisitions/items/factors created, per-currency total vs the sheet's 總支出)
 
 ## Phase 5: Polish
 
-- [ ] T066 Quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test`; backend `uv run ruff check . && uv run pytest`; run the new Playwright specs against the live stack where available
-- [ ] T067 [P] Mark iteration-6 tasks complete + append Implementation Notes (flatten approach, dynamic-width method, importer usage, e2e run status) to this file
+- [X] T066 Quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test`; backend `uv run ruff check . && uv run pytest`; run the new Playwright specs against the live stack where available
+- [X] T067 [P] Mark iteration-6 tasks complete + append Implementation Notes (flatten approach, dynamic-width method, importer usage, e2e run status) to this file
 
 ---
 
@@ -303,3 +303,34 @@ Completed 2026-07-11 (builds on iteration 4, commit `57441be`).
 ## Implementation Strategy (iteration 6)
 
 Ship US1 (Catalog) + US2 (cost panel) — the visible fixes — then lock them with Playwright e2e (FR-024). The importer is a separate backend deliverable run against the 2026 CSV. No schema/migration changes this iteration.
+
+---
+
+## Implementation Notes (iteration 6)
+
+Completed 2026-07-11 (builds on iteration 5, commit `e979bb3`). Frontend-only feature work + one management command. **No schema change.**
+
+### Catalog (`catalog/index.tsx`)
+- **Caret** toggle (`CaretRight`/`CaretDown`) via `expandable.expandIcon`; tree **expanded by default** (controlled `expandedRowKeys` = all acquisition ids until the user collapses one).
+- **Fully client-side**: fetches all acquisitions (`limit: 1000`) and does filter/sort/flatten locally (a generic comparable + `matchCondition` matcher over the union columns). This makes **every column filterable + sortable** via the toolbar. **Flatten-on-item-filter/sort**: when any active filter/sort targets an item-level column, the view renders a **flat, ungrouped `Item[]`**; otherwise it renders the acquisition tree (default ↓ `obtained_at`). Footer shows a simple row count.
+- **Dynamic content-fit widths**: a `useMemo` measures each column's displayed text across rows (`measureTextWidth`) and feeds `widthForHeader(title, maxContent)`; Actions column included.
+- Added columns: **Requested** (`request_time`), **Quantity**, **SKU price** (+currency), **URL** (clickable `<a target=_blank>`), **Length/Width/Height**.
+
+### Acquisition form
+- Breadcrumb first crumb **"Catalog"** → `/inventory/catalog` (create + edit).
+- Item **card header is a link** (`target=_blank rel=noopener`) when the item has a `url`.
+- **Cost panel**: reset is an **icon-only** button (`title` tooltip, no text — fixes overflow); factor rows (accumulated + manual/`SortableFactorRow`) **stack to one column when narrow** via `useContainerWidth`; accumulated rows labelled **"Items"** (new `costFactors.accumulatedLabel` key, both locales).
+
+### Regression e2e (Playwright, FR-024)
+- `e2e/inventory-catalog.spec.ts` (5 tests) + `e2e/inventory-acquisition.spec.ts` (4 tests) — 9 specs, all collected/compile via `playwright test --list`. They assert every FR-024 behaviour and **run against the live stack** (Docker backend + `pnpm dev`, login root/root), like the existing e2e specs. Not executed headlessly this session (no dev server running).
+
+### Legacy importer (`inventory/management/commands/import_legacy_csv.py`)
+- Loads the dry-run parser via `importlib` (single source of truth), builds item + factor payloads, and writes through `AcquisitionSerializer` (create with items → PATCH `cost_factors` to set the legacy actual-paid as the accumulated override + 退稅/折價/運費 as manual factors). `--dry-run` (default) / `--commit`.
+- **Ran for 2026 on the local Docker Postgres** (`localhost:5433`): imported **67 acquisitions / 89 items / 66 factors**; DB per-currency net = **199.9 RMB / 687 TWD / 186.22 USD**, matching the sheet's 總支出 exactly.
+- Known parse gap carried from the analysis: the JPY 折價 `−￥1,450` (value only in the remark, `￥` symbol) imports as `0 JPY` — flagged, not silently correct.
+
+### Quality
+- Backend: ruff clean, **260 pytest passed**. Frontend: **lint 0 warnings, typecheck clean, 358 vitest passed**; locale parity OK.
+
+### Not run this session
+- **T029 / T050 (Docker quickstart end-to-end)** — the local Postgres already had all inventory migrations (incl. `0009`/`0010`) applied and the importer ran against it, but the full quickstart UI walkthrough was not executed.

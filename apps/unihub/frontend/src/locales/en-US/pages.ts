@@ -470,6 +470,7 @@ export default {
   'pages.inventory.acquisitions.costFactors': 'Cost Factors',
   'pages.inventory.acquisitions.costFactors.add': 'Add Factor',
   'pages.inventory.acquisitions.costFactors.reset': 'Reset accumulated',
+  'pages.inventory.acquisitions.costFactors.accumulatedLabel': 'Items',
   'pages.inventory.acquisitions.costFactors.value': 'Value',
   'pages.inventory.acquisitions.costFactors.currency': 'Currency',
   'pages.inventory.acquisitions.costFactors.factorType': 'Type',
@@ -484,6 +485,7 @@ export default {
   // Inventory > Catalog (merged items + acquisitions)
   'pages.inventory.catalog.title': 'Catalog',
   'pages.inventory.catalog.loadError': 'Failed to load catalog',
+  'pages.inventory.catalog.rowCount': '{count} rows',
 
   // Inventory > Scenarios
   'pages.inventory.scenarios.title': 'Scenarios',

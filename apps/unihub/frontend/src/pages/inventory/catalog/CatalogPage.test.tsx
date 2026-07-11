@@ -72,15 +72,22 @@ describe('CatalogPage', () => {
     });
   });
 
-  it('renders separate Source/Name columns, net cost, and no Acquisition badge', async () => {
+  it('renders Source/Name + the Requested and item columns; tree expanded by default', async () => {
     renderPage();
     // Source column shows the acquisition source.
     await screen.findByText('Shop');
     // Net cost shows the per-currency total.
-    expect(screen.getByText('10 USD')).toBeInTheDocument();
+    expect(screen.getAllByText('10 USD').length).toBeGreaterThan(0);
     // Separate Source and Name column headers exist.
     expect(screen.getAllByText('Source').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Name').length).toBeGreaterThan(0);
+    // The Requested column (request_time) was added this iteration.
+    expect(screen.getAllByText('Requested').length).toBeGreaterThan(0);
+    // Item columns are present.
+    expect(screen.getAllByText('Quantity').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('URL').length).toBeGreaterThan(0);
+    // Tree is expanded by default → the child item name is visible without a click.
+    expect(screen.getByText('Backpack')).toBeInTheDocument();
     // The "Acquisition" badge is gone.
     expect(screen.queryByText('Acquisition')).not.toBeInTheDocument();
   });

@@ -412,18 +412,18 @@ Completed 2026-07-11 (builds on iteration 6, commit `4ed51c0`). Frontend fixes +
 
 ## Phase 1: Registration
 
-- [ ] T083 Add `InventoryConfig.ready()` in `apps/unihub/backend/inventory/apps.py` registering `data_io` `TableDescriptor`s for `inventory.acquisition` (order 1), `inventory.item` (order 2, fk `acquisition_id→inventory.acquisition`), `inventory.costfactor` (order 2, fk `acquisition_id→inventory.acquisition`), `inventory.scenario` (order 3), `inventory.scenarioitem` (order 4, fk `scenario_id→inventory.scenario`, `item_id→inventory.item`, `container_id→inventory.scenarioitem`); all `has_user_attributes=False` via `auto_system_fields(Model, fk_overrides=…)`; add a comment documenting **Constraint deferred (M2M unsupported)**
+- [X] T083 Add `InventoryConfig.ready()` in `apps/unihub/backend/inventory/apps.py` registering `data_io` `TableDescriptor`s for `inventory.acquisition` (order 1), `inventory.item` (order 2, fk `acquisition_id→inventory.acquisition`), `inventory.costfactor` (order 2, fk `acquisition_id→inventory.acquisition`), `inventory.scenario` (order 3), `inventory.scenarioitem` (order 4, fk `scenario_id→inventory.scenario`, `item_id→inventory.item`, `container_id→inventory.scenarioitem`); all `has_user_attributes=False` via `auto_system_fields(Model, fk_overrides=…)`; add a comment documenting **Constraint deferred (M2M unsupported)**
 
 ## Phase 2: Tests
 
-- [ ] T084 [P] Add `apps/unihub/backend/tests/test_inventory_io.py`: `test_inventory_tables_registered` — `GET /api/v1/io/tables/` includes the 5 inventory tables with correct `depends_on` (item/costfactor→acquisition; scenarioitem→scenario/item/self); Constraint NOT present
-- [ ] T085 [US-IO] Add `test_inventory_io_export_import_roundtrip` in `tests/test_inventory_io.py`: create an acquisition (+1 item, +1 cost factor), export the inventory tables to CSV, delete the rows, import the CSV, assert the acquisition/item/cost-factor are restored (mirror the finance io round-trip test)
+- [X] T084 [P] Add `apps/unihub/backend/tests/test_inventory_io.py`: `test_inventory_tables_registered` — `GET /api/v1/io/tables/` includes the 5 inventory tables with correct `depends_on` (item/costfactor→acquisition; scenarioitem→scenario/item/self); Constraint NOT present
+- [X] T085 [US-IO] Add `test_inventory_io_export_import_roundtrip` in `tests/test_inventory_io.py`: create an acquisition (+1 item, +1 cost factor), export the inventory tables to CSV, delete the rows, import the CSV, assert the acquisition/item/cost-factor are restored (mirror the finance io round-trip test)
 
 ## Phase 3: Verify + Polish
 
-- [ ] T086 Run `uv run python manage.py check` and confirm registration loads (no `already registered` / import errors); confirm `import_legacy_csv` still works (dry-run)
-- [ ] T087 Backend quality loop: `uv run ruff check . && uv run pytest` — full suite green (incl. the new io tests + existing data_io tests)
-- [ ] T088 [P] Mark iteration-8 tasks complete + append Implementation Notes (descriptors, deferred Constraint, round-trip result) to this file
+- [X] T086 Run `uv run python manage.py check` and confirm registration loads (no `already registered` / import errors); confirm `import_legacy_csv` still works (dry-run)
+- [X] T087 Backend quality loop: `uv run ruff check . && uv run pytest` — full suite green (incl. the new io tests + existing data_io tests)
+- [X] T088 [P] Mark iteration-8 tasks complete + append Implementation Notes (descriptors, deferred Constraint, round-trip result) to this file
 
 ---
 
@@ -432,3 +432,15 @@ Completed 2026-07-11 (builds on iteration 6, commit `4ed51c0`). Frontend fixes +
 
 ## Implementation Strategy (iteration 8)
 Register the 5 inventory descriptors in `apps.py ready()`, prove it via `/io/tables/` + an export→import round-trip test, and keep the legacy importer. Constraint's M2M stays explicitly deferred until the registry supports it.
+
+---
+
+## Implementation Notes (iteration 8)
+
+Completed 2026-07-11 (builds on iteration 7, commit `0a49717`). **Backend only, no schema change.** Constitution **v1.17.0** (Principle I data-portability).
+
+- **`inventory/apps.py` `ready()`** registers five `data_io` `TableDescriptor`s: `inventory.acquisition` (order 1), `inventory.item` (order 2, fk `acquisition_id→inventory.acquisition`), `inventory.costfactor` (order 2, fk `acquisition_id→inventory.acquisition`), `inventory.scenario` (order 3), `inventory.scenarioitem` (order 4, fk `scenario_id→inventory.scenario`, `item_id→inventory.item`, self-fk `container_id→inventory.scenarioitem`). All `has_user_attributes=False`; currency stays a plain string column (Principle II — no FK).
+- **`Constraint` deferred** (documented in `apps.py` + FR-025): its `items` M2M is not representable by the registry.
+- **Tests** (`tests/test_inventory_io.py`, 3): the 5 tables appear in `GET /api/v1/io/tables/` (Constraint absent), FK `depends_on` wired correctly, and a full **export → wipe → import** round-trip restores an acquisition + item + cost factor.
+- `manage.py check` clean; **263 pytest** passed (ruff clean); the one-off `import_legacy_csv` still works (dry-run 199.9 CNY / 687 TWD / 186.22 USD).
+- Inventory data now participates in the standard `data_io` CSV backup/restore/change-preview flow, closing the integration gap.

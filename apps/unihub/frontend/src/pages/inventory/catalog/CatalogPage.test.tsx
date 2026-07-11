@@ -25,10 +25,15 @@ const ITEM = {
   sku_price_currency: 'USD',
   total_price: '10.0000',
   color: '',
-  url: '',
+  url: 'https://example.com/backpack',
   status: 'active' as const,
   deprecate_time: null,
-  acquisition: { id: 'acq-1', source: 'Shop', obtained_at: '2026-07-11T00:00:00Z' },
+  acquisition: {
+    id: 'acq-1',
+    source: 'Shop',
+    request_time: null,
+    obtained_at: '2026-07-11T00:00:00Z',
+  },
   created_at: '2026-07-11T00:00:00Z',
   updated_at: '2026-07-11T00:00:00Z',
 };
@@ -70,39 +75,46 @@ describe('CatalogPage', () => {
       previous: null,
       results: [ACQ],
     });
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [ITEM],
+    });
   });
 
-  it('renders Source/Name + the Requested and item columns; tree expanded by default', async () => {
+  it('renders Source/Name + Requested and item columns; tree expanded by default', async () => {
     renderPage();
-    // Source column shows the acquisition source.
     await screen.findByText('Shop');
-    // Net cost shows the per-currency total.
     expect(screen.getAllByText('10 USD').length).toBeGreaterThan(0);
-    // Separate Source and Name column headers exist.
     expect(screen.getAllByText('Source').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Name').length).toBeGreaterThan(0);
-    // The Requested column (request_time) was added this iteration.
     expect(screen.getAllByText('Requested').length).toBeGreaterThan(0);
-    // Item columns are present.
     expect(screen.getAllByText('Quantity').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('URL').length).toBeGreaterThan(0);
-    // Tree is expanded by default → the child item name is visible without a click.
+    // Tree expanded by default → the child item name is visible without a click.
     expect(screen.getByText('Backpack')).toBeInTheDocument();
-    // The "Acquisition" badge is gone.
     expect(screen.queryByText('Acquisition')).not.toBeInTheDocument();
   });
 
-  it('has a dedicated caret column, pagination, and no item-count column', async () => {
+  it('has no URL column; the Name cell links to the item URL', async () => {
+    renderPage();
+    await screen.findByText('Shop');
+    // No standalone URL column.
+    const headers = Array.from(document.querySelectorAll('.ant-table-thead th')).map((th) => th.textContent);
+    expect(headers).not.toContain('URL');
+    // The Name cell is an anchor to the item URL, opening a new tab.
+    const link = screen.getByText('Backpack').closest('a');
+    expect(link).toHaveAttribute('href', 'https://example.com/backpack');
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
+  it('has a caret column and the standard EntityOffsetFooter pagination', async () => {
     const { container } = renderPage();
     await screen.findByText('Shop');
-    // A caret disclosure icon is rendered (dedicated column).
     expect(container.querySelector('.anticon-caret-down, .anticon-caret-right')).toBeTruthy();
-    // Pagination is restored.
-    expect(container.querySelector('.ant-pagination')).toBeTruthy();
-    // The item-count ("Items") column header is gone (only item/acq data columns remain).
-    const headers = Array.from(container.querySelectorAll('.ant-table-thead th')).map(
-      (th) => th.textContent,
-    );
+    // Standard footer pagination (Ant Pagination inside the table footer).
+    expect(container.querySelector('.ant-table-footer .ant-pagination')).toBeTruthy();
+    const headers = Array.from(container.querySelectorAll('.ant-table-thead th')).map((th) => th.textContent);
     expect(headers).not.toContain('Items');
   });
 });

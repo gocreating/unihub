@@ -454,20 +454,20 @@ Completed 2026-07-11 (builds on iteration 7, commit `0a49717`). **Backend only, 
 ## Phase 1: Backend (flat-mode filter/sort)
 
 - [ ] T089 Extend `ItemViewSet` in `apps/unihub/backend/inventory/views.py`: add to `filterable_fields` — `quantity` (number), `source → acquisition__source` (text), `request_time → acquisition__request_time` (date); add to `ordering_fields` — `spec`, `color`, `quantity`, `deprecate_time`, `acquisition__source`, `acquisition__request_time`
-- [ ] T090 [P] Add `apps/unihub/backend/tests/test_inventory_items.py` cases: `test_item_filter_by_quantity`, `test_item_order_by_source` (`ordering=acquisition__source`) — assert server-side filter/sort works
+- [X] T090 [P] Add `apps/unihub/backend/tests/test_inventory_items.py` cases: `test_item_filter_by_quantity`, `test_item_order_by_source` (`ordering=acquisition__source`) — assert server-side filter/sort works
 
 ## Phase 2: Frontend (server-side catalog)
 
-- [ ] T091 Rework `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx` to **server-side**: `useEntityTable` queryParams; **tree mode** → `listAcquisitions(queryParams)` (parents + nested items); **flat mode** (any active filter/sort in `ITEM_KEYS`) → `listItems(queryParams)`; standard **`EntityOffsetFooter`** (`pagination={false}` + `footer={() => <EntityOffsetFooter {...table.paginationProps(data?.count)} />}`); remove the iteration-7 fetch-all (`limit:1000`, `keepPreviousData`) + client filter/sort/flatten matcher
-- [ ] T092 In `catalog/index.tsx`: fix widths with the canonical `dataWidths` pattern measured over the page's **acquisitions AND their item children** (tree) / **items** (flat) → `widthForHeader`; Actions via `useActionsColWidth`
-- [ ] T093 In `catalog/index.tsx`: **remove the URL column** (+ its filterable attr/columnDef); render the **Name cell as `<a target="_blank" rel="noopener">`** when the item has a `url`, else plain text
-- [ ] T094 [P] Update `catalog/CatalogPage.test.tsx`: assert no URL column, Name renders an anchor when url is set, and the `EntityOffsetFooter` (per-page selector) is present
+- [X] T091 Rework `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx` to **server-side**: `useEntityTable` queryParams; **tree mode** → `listAcquisitions(queryParams)` (parents + nested items); **flat mode** (any active filter/sort in `ITEM_KEYS`) → `listItems(queryParams)`; standard **`EntityOffsetFooter`** (`pagination={false}` + `footer={() => <EntityOffsetFooter {...table.paginationProps(data?.count)} />}`); remove the iteration-7 fetch-all (`limit:1000`, `keepPreviousData`) + client filter/sort/flatten matcher
+- [X] T092 In `catalog/index.tsx`: fix widths with the canonical `dataWidths` pattern measured over the page's **acquisitions AND their item children** (tree) / **items** (flat) → `widthForHeader`; Actions via `useActionsColWidth`
+- [X] T093 In `catalog/index.tsx`: **remove the URL column** (+ its filterable attr/columnDef); render the **Name cell as `<a target="_blank" rel="noopener">`** when the item has a `url`, else plain text
+- [X] T094 [P] Update `catalog/CatalogPage.test.tsx`: assert no URL column, Name renders an anchor when url is set, and the `EntityOffsetFooter` (per-page selector) is present
 
 ## Phase 3: e2e + Polish
 
-- [ ] T095 [P] Update `e2e/inventory-catalog.spec.ts`: standard pagination footer (per-page selector + total), Name cell is a link to the item URL, item columns (Name/Spec) size to content (not clipped)
-- [ ] T096 Quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test`; backend `uv run ruff check . && uv run pytest`
-- [ ] T097 [P] Mark iteration-9 tasks complete + append Implementation Notes to this file
+- [X] T095 [P] Update `e2e/inventory-catalog.spec.ts`: standard pagination footer (per-page selector + total), Name cell is a link to the item URL, item columns (Name/Spec) size to content (not clipped)
+- [X] T096 Quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test`; backend `uv run ruff check . && uv run pytest`
+- [X] T097 [P] Mark iteration-9 tasks complete + append Implementation Notes to this file
 
 ---
 
@@ -477,3 +477,23 @@ Completed 2026-07-11 (builds on iteration 7, commit `0a49717`). **Backend only, 
 
 ## Implementation Strategy (iteration 9)
 Extend `ItemViewSet` for flat-mode filter/sort, then rewrite the Catalog to server-side dual-mode (Acquisition tree / Item flat) using the standard `EntityOffsetFooter` + `dataWidths` patterns; remove the URL column and make Name a link. Reuse, don't reinvent.
+
+---
+
+## Implementation Notes (iteration 9)
+
+Completed 2026-07-11 (builds on iteration 8, commit `ddb2a82`). **No schema change.**
+
+### Root causes fixed
+- **Width**: the canonical `dataWidths` measurement previously ran over the top-level acquisition rows only; item child rows (nested `children`) were never measured, so item columns (Name/Spec/…) fell back to their fixed `min`. **Fix**: measure over `measuredRows` = the page's **acquisitions AND their items** (tree) / **items** (flat), exactly the finance `measureTextWidth → widthForHeader` pattern.
+- **Pagination**: replaced the ad-hoc AntD `pagination` object with the standard **`EntityOffsetFooter`** (`pagination={false}` + `footer={() => <EntityOffsetFooter {...table.paginationProps(total)} />}`) — server-side offset pagination, identical UI/UX to finance.
+- **URL**: removed the URL column; the **Name cell is now an `<a target="_blank" rel="noopener">`** to the item's url (plain text when absent).
+
+### Server-side dual-mode Catalog
+- `useEntityTable` + server queryParams. **Tree mode** → `listAcquisitions` (acquisition parents + nested items) after stripping the `acquisition__` prefix from filter/sort fields; **flat mode** (any active filter/sort in `ITEM_KEYS`) → `listItems`. Both server-paginated with `EntityOffsetFooter`; toolbar keys are real field paths so one key drives both filter and sort.
+- **Backend**: `ItemViewSet` `filterable_fields`/`ordering_fields` extended to every catalog column (name, spec, size, color, quantity, sku_price, weight/length/width/height_canonical, deprecate_time, `acquisition__source`/`request_time`/`obtained_at`); `AcquisitionSummarySerializer` gained `request_time` so flat rows show Requested. `net_cost` + derived `status` are display-only (documented exception).
+- Removed the iteration-7 client-side fetch-all (`limit:1000`, `keepPreviousData`) + the client filter/sort/flatten matcher.
+
+### Tests
+- Backend: `test_item_filter_by_quantity`, `test_item_order_by_source` (server-side). Catalog RTL (3): no URL column, Name links to url, standard `EntityOffsetFooter`. e2e (10): standard footer pagination, Name link, Name/Spec size-to-content.
+- **frontend 360 vitest / lint / typecheck clean; backend 265 pytest / ruff clean.**

@@ -100,3 +100,27 @@ class TestItems:
             content_type="application/json",
         )
         assert resp.status_code == 400
+
+    def test_item_filter_by_quantity(self, auth_client):
+        """Catalog flat mode filters items server-side by quantity."""
+        create_item(auth_client, name="One", quantity=1)
+        create_item(auth_client, name="Five", quantity=5)
+        filters = json.dumps({"groups": [{"logic": "and", "conditions": [
+            {"attr": "quantity", "op": "eq", "val": "5"}
+        ]}]})
+        results = auth_client.get(f"{ITEMS}?filters={filters}").json()["results"]
+        assert [r["name"] for r in results] == ["Five"]
+
+    def test_item_order_by_source(self, auth_client):
+        """Catalog flat mode sorts items server-side by acquisition source."""
+        for src in ("Zeta", "Alpha"):
+            auth_client.post(
+                "/api/v1/inventory/acquisitions/",
+                json.dumps({"source": src, "items": [{"name": f"i-{src}"}]}),
+                content_type="application/json",
+            )
+        names = [
+            r["acquisition"]["source"]
+            for r in auth_client.get(f"{ITEMS}?ordering=acquisition__source").json()["results"]
+        ]
+        assert names == ["Alpha", "Zeta"]

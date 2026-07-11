@@ -819,6 +819,8 @@ export interface components {
             readonly id: string;
             source?: string;
             /** Format: date-time */
+            request_time?: string | null;
+            /** Format: date-time */
             obtained_at?: string | null;
         };
         AttributeDefinition: {

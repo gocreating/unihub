@@ -36,6 +36,7 @@ export interface Measurement {
 export interface AcquisitionSummary {
   id: string;
   source: string;
+  request_time: string | null;
   obtained_at: string | null;
 }
 

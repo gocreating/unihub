@@ -55,7 +55,7 @@ class AcquisitionSummarySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Acquisition
-        fields = ["id", "source", "obtained_at"]
+        fields = ["id", "source", "request_time", "obtained_at"]
 
 
 class ItemSerializer(serializers.ModelSerializer):

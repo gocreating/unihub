@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, DatePicker, Modal, Space, Tag, Typography, message } from 'antd';
 import {
   CaretDownOutlined,
@@ -14,16 +14,27 @@ import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, measureTextWidth, widthForHeader } from '@/components/PageTable';
+import PageTable, {
+  computeScrollX,
+  measureTextWidth,
+  useActionsColWidth,
+  widthForHeader,
+} from '@/components/PageTable';
 import type { Acquisition, Item, Measurement, NetCostEntry } from '@/services/unihub-backend/inventory';
 import {
   deleteAcquisition,
   deleteItem,
   listAcquisitions,
+  listItems,
   updateItem,
 } from '@/services/unihub-backend/inventory';
-import { EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
-import type { ColumnDef, FilterableAttribute, FilterOperator } from '@/components/EntityToolbar';
+import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
+import type {
+  ColumnDef,
+  EntityListParams,
+  FilterableAttribute,
+  OffsetPaginatedResponse,
+} from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 const EMPTY = (
@@ -32,7 +43,7 @@ const EMPTY = (
   </Typography.Text>
 );
 
-// A row is either an acquisition (parent) or one of its items (child).
+// A row is either an acquisition (parent) or one of its items (child/flat).
 type CatalogRow =
   | (Acquisition & { rowType: 'acquisition'; children: CatalogRow[] })
   | (Item & { rowType: 'item' });
@@ -41,33 +52,23 @@ function isAcquisition(r: CatalogRow): r is Acquisition & { rowType: 'acquisitio
   return r.rowType === 'acquisition';
 }
 
-// Item-level columns; a filter/sort on any of these flattens the tree.
+// Item-level column keys — an active filter/sort on any of these flattens the
+// Catalog to a server-paginated flat item list (ItemViewSet). Everything else
+// keeps the acquisition tree (AcquisitionViewSet).
 const ITEM_KEYS = new Set([
   'name',
   'spec',
   'size',
-  'weight',
-  'length',
-  'width',
-  'height',
   'quantity',
   'sku_price',
-  'url',
-  'status',
+  'weight_canonical',
+  'length_canonical',
+  'width_canonical',
+  'height_canonical',
 ]);
 
-function measureText(m: Measurement | null | undefined): string | null {
-  return m ? `${m.value} ${m.unit}` : null;
-}
-
-function formatNetCost(net: NetCostEntry[]): string | null {
-  if (!net || net.length === 0) return null;
-  return net.map((n) => `${Number(n.total).toLocaleString()} ${n.currency}`.trim()).join(', ');
-}
-
-function formatDateRelative(val: string | null | undefined) {
-  if (!val) return null;
-  return `${dayjs(val).format('YYYY-MM-DD HH:mm')} (${dayjs(val).fromNow()})`;
+function measureText(m: Measurement | null | undefined): string {
+  return m ? `${m.value} ${m.unit}` : '';
 }
 
 // Drop trailing zeros: "10.0000" → "10", "59.9000" → "59.9".
@@ -77,109 +78,42 @@ function formatDecimal(v: string | number | null | undefined): string {
   return Number.isFinite(n) ? String(n) : String(v);
 }
 
-function skuText(it: Item): string | null {
-  return it.sku_price != null ? `${formatDecimal(it.sku_price)} ${it.sku_price_currency}`.trim() : null;
+function skuText(it: Item): string {
+  return it.sku_price != null ? `${formatDecimal(it.sku_price)} ${it.sku_price_currency}`.trim() : '';
 }
 
-// A single comparable/display value for a row+column (item OR acquisition rows).
-function cellComparable(r: CatalogRow, key: string): number | string | null {
-  if (isAcquisition(r)) {
-    switch (key) {
-      case 'source':
-        return r.source || null;
-      case 'request_time':
-        return r.request_time ? new Date(r.request_time).getTime() : null;
-      case 'obtained_at':
-        return r.obtained_at ? new Date(r.obtained_at).getTime() : null;
-      case 'item_count':
-        return r.item_count;
-      case 'net_cost':
-        return r.net_cost.reduce((s, n) => s + Number(n.total), 0);
-      default:
-        return null;
-    }
-  }
-  switch (key) {
-    case 'name':
-      return r.name || null;
-    case 'spec':
-      return r.spec || null;
-    case 'size':
-      return r.size || null;
-    case 'url':
-      return r.url || null;
-    case 'status':
-      return r.status;
-    case 'quantity':
-      return r.quantity;
-    case 'sku_price':
-      return r.sku_price != null ? Number(r.sku_price) : null;
-    case 'weight':
-      return r.weight ? Number(r.weight.value) : null;
-    case 'length':
-      return r.length ? Number(r.length.value) : null;
-    case 'width':
-      return r.width ? Number(r.width.value) : null;
-    case 'height':
-      return r.height ? Number(r.height.value) : null;
-    case 'source':
-      return r.acquisition?.source || null;
-    case 'obtained_at':
-      return r.acquisition?.obtained_at ? new Date(r.acquisition.obtained_at).getTime() : null;
-    default:
-      return null;
-  }
+function formatNetCost(net: NetCostEntry[] | undefined): string {
+  if (!net || net.length === 0) return '';
+  return net.map((n) => `${Number(n.total).toLocaleString()} ${n.currency}`.trim()).join(', ');
 }
 
-function matchCondition(cmp: number | string | null, op: FilterOperator, val: string): boolean {
-  if (op === 'is_empty') return cmp == null || cmp === '';
-  if (op === 'is_not_empty') return cmp != null && cmp !== '';
-  if (cmp == null) return false;
-  if (typeof cmp === 'number') {
-    const v = Number(val);
-    switch (op) {
-      case 'eq':
-      case 'equals':
-      case 'is':
-        return cmp === v;
-      case 'neq':
-      case 'not_equals':
-      case 'is_not':
-        return cmp !== v;
-      case 'gt':
-      case 'date_after':
-        return cmp > v;
-      case 'gte':
-        return cmp >= v;
-      case 'lt':
-      case 'date_before':
-        return cmp < v;
-      case 'lte':
-        return cmp <= v;
-      default:
-        return true;
-    }
+function formatDateRelative(val: string | null | undefined): string {
+  if (!val) return '';
+  return `${dayjs(val).format('YYYY-MM-DD HH:mm')} (${dayjs(val).fromNow()})`;
+}
+
+// Tree mode hits AcquisitionViewSet, whose fields are un-prefixed — strip the
+// `acquisition__` prefix from the toolbar's filter/sort field names.
+function stripAcqPrefix(field: string): string {
+  return field.replace(/^acquisition__/, '');
+}
+function toTreeParams(p: EntityListParams): EntityListParams {
+  const out: EntityListParams = { ...p };
+  if (p.ordering) {
+    out.ordering = p.ordering
+      .split(',')
+      .map((o) => (o.startsWith('-') ? `-${stripAcqPrefix(o.slice(1))}` : stripAcqPrefix(o)))
+      .join(',');
   }
-  const a = String(cmp).toLowerCase();
-  const b = (val ?? '').toLowerCase();
-  switch (op) {
-    case 'contains':
-      return a.includes(b);
-    case 'not_contains':
-      return !a.includes(b);
-    case 'equals':
-    case 'is':
-      return a === b;
-    case 'not_equals':
-    case 'is_not':
-      return a !== b;
-    case 'starts_with':
-      return a.startsWith(b);
-    case 'ends_with':
-      return a.endsWith(b);
-    default:
-      return true;
+  if (p.filters?.groups) {
+    out.filters = {
+      groups: p.filters.groups.map((g) => ({
+        ...g,
+        conditions: g.conditions.map((c) => ({ ...c, attr: stripAcqPrefix(c.attr) })),
+      })),
+    };
   }
+  return out;
 }
 
 export function CatalogPage() {
@@ -188,48 +122,43 @@ export function CatalogPage() {
   const { formatMessage: t } = useIntl();
   const [deprecateTarget, setDeprecateTarget] = useState<Item | null>(null);
   const [deprecateDate, setDeprecateDate] = useState<dayjs.Dayjs | null>(null);
-  // Default-expanded: track only the acquisition ids the user has collapsed, so
-  // expandedRowKeys is derived synchronously (no post-mount effect → no jitter).
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
   const filterableAttrs = useMemo<FilterableAttribute[]>(
     () => [
-      { key: 'source', label: t({ id: 'pages.inventory.acquisitions.col.source' }), dataType: 'text' },
+      { key: 'acquisition__source', label: t({ id: 'pages.inventory.acquisitions.col.source' }), dataType: 'text' },
       { key: 'name', label: t({ id: 'common.name' }), dataType: 'text' },
       { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text' },
       { key: 'size', label: t({ id: 'pages.inventory.items.col.size' }), dataType: 'text' },
-      { key: 'weight', label: t({ id: 'pages.inventory.items.col.weight' }), dataType: 'number' },
-      { key: 'length', label: t({ id: 'pages.inventory.items.col.length' }), dataType: 'number' },
-      { key: 'width', label: t({ id: 'pages.inventory.items.col.width' }), dataType: 'number' },
-      { key: 'height', label: t({ id: 'pages.inventory.items.col.height' }), dataType: 'number' },
       { key: 'quantity', label: t({ id: 'pages.inventory.items.col.quantity' }), dataType: 'number' },
       { key: 'sku_price', label: t({ id: 'pages.inventory.items.col.skuPrice' }), dataType: 'number' },
-      { key: 'url', label: t({ id: 'pages.inventory.items.col.url' }), dataType: 'text' },
-      { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select' },
-      { key: 'request_time', label: t({ id: 'pages.inventory.acquisitions.col.requestTime' }), dataType: 'date' },
-      { key: 'obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date' },
+      { key: 'weight_canonical', label: t({ id: 'pages.inventory.items.col.weight' }), dataType: 'number' },
+      { key: 'length_canonical', label: t({ id: 'pages.inventory.items.col.length' }), dataType: 'number' },
+      { key: 'width_canonical', label: t({ id: 'pages.inventory.items.col.width' }), dataType: 'number' },
+      { key: 'height_canonical', label: t({ id: 'pages.inventory.items.col.height' }), dataType: 'number' },
+      { key: 'acquisition__request_time', label: t({ id: 'pages.inventory.acquisitions.col.requestTime' }), dataType: 'date' },
+      { key: 'acquisition__obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date' },
     ],
     [t],
   );
 
   const columnDefs = useMemo<ColumnDef[]>(
     () => [
-      { key: 'source', label: t({ id: 'pages.inventory.acquisitions.col.source' }), dataType: 'text', visible: true, order: 0 },
+      { key: 'acquisition__source', label: t({ id: 'pages.inventory.acquisitions.col.source' }), dataType: 'text', visible: true, order: 0 },
       { key: 'name', label: t({ id: 'common.name' }), dataType: 'text', visible: true, order: 1 },
       { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text', visible: true, order: 2 },
       { key: 'size', label: t({ id: 'pages.inventory.items.col.size' }), dataType: 'text', visible: true, order: 3 },
       { key: 'quantity', label: t({ id: 'pages.inventory.items.col.quantity' }), dataType: 'number', visible: true, order: 4 },
       { key: 'sku_price', label: t({ id: 'pages.inventory.items.col.skuPrice' }), dataType: 'number', visible: true, order: 5 },
-      { key: 'weight', label: t({ id: 'pages.inventory.items.col.weight' }), dataType: 'number', visible: true, order: 6 },
-      { key: 'length', label: t({ id: 'pages.inventory.items.col.length' }), dataType: 'number', visible: true, order: 7 },
-      { key: 'width', label: t({ id: 'pages.inventory.items.col.width' }), dataType: 'number', visible: true, order: 8 },
-      { key: 'height', label: t({ id: 'pages.inventory.items.col.height' }), dataType: 'number', visible: true, order: 9 },
-      { key: 'url', label: t({ id: 'pages.inventory.items.col.url' }), dataType: 'text', visible: true, order: 10 },
-      { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select', visible: true, order: 11 },
-      { key: 'net_cost', label: t({ id: 'pages.inventory.acquisitions.col.netCost' }), dataType: 'text', visible: true, order: 12 },
-      { key: 'request_time', label: t({ id: 'pages.inventory.acquisitions.col.requestTime' }), dataType: 'date', visible: true, order: 13 },
-      { key: 'obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date', visible: true, order: 14 },
-      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 15 },
+      { key: 'weight_canonical', label: t({ id: 'pages.inventory.items.col.weight' }), dataType: 'number', visible: true, order: 6 },
+      { key: 'length_canonical', label: t({ id: 'pages.inventory.items.col.length' }), dataType: 'number', visible: true, order: 7 },
+      { key: 'width_canonical', label: t({ id: 'pages.inventory.items.col.width' }), dataType: 'number', visible: true, order: 8 },
+      { key: 'height_canonical', label: t({ id: 'pages.inventory.items.col.height' }), dataType: 'number', visible: true, order: 9 },
+      { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select', visible: true, order: 10 },
+      { key: 'net_cost', label: t({ id: 'pages.inventory.acquisitions.col.netCost' }), dataType: 'text', visible: true, order: 11 },
+      { key: 'acquisition__request_time', label: t({ id: 'pages.inventory.acquisitions.col.requestTime' }), dataType: 'date', visible: true, order: 12 },
+      { key: 'acquisition__obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date', visible: true, order: 13 },
+      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 14 },
     ],
     [t],
   );
@@ -237,64 +166,53 @@ export function CatalogPage() {
   const table = useEntityTable({ key: 'inventory-catalog', filterableAttrs, columnDefs });
   const { filter, sort, cols } = table;
 
-  // Fully client-side: fetch all acquisitions (joined with items on the backend)
-  // ONCE, then filter/sort/flatten locally. Cache indefinitely + keep previous
-  // data so navigating to this page does not refetch → no flash/jitter.
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['inventory', 'catalog', 'all'],
-    queryFn: () => listAcquisitions({ limit: 1000 }),
-    staleTime: Infinity,
-    placeholderData: keepPreviousData,
+  // Flat mode when any active filter/sort targets an item column.
+  const flatMode = useMemo(() => {
+    const fields = [
+      ...sort.activeRules.map((r) => r.field),
+      ...filter.activeGroups.flatMap((g) => g.conditions.map((c) => c.attr)),
+    ];
+    return fields.some((f) => ITEM_KEYS.has(f));
+  }, [sort.activeRules, filter.activeGroups]);
+
+  const treeParams = useMemo(() => toTreeParams(table.queryParams), [table.queryParams]);
+
+  const { data, isLoading, isError } = useQuery<OffsetPaginatedResponse<Acquisition | Item>>({
+    queryKey: ['inventory', 'catalog', flatMode ? 'items' : 'acq', flatMode ? table.queryParams : treeParams],
+    queryFn: () => (flatMode ? listItems(table.queryParams) : listAcquisitions(treeParams)),
   });
-  const acquisitions = useMemo(() => data?.results ?? [], [data]);
+  const total = data?.count;
 
-  // Active filter conditions and sort rules (flattened from the toolbar state).
-  const conditions = useMemo(
-    () => filter.activeGroups.flatMap((g) => g.conditions),
-    [filter.activeGroups],
+  const acquisitions = useMemo(
+    () => (!flatMode ? ((data?.results as Acquisition[] | undefined) ?? []) : []),
+    [data, flatMode],
   );
-  const sortRules = sort.activeRules;
-  const itemModeActive =
-    conditions.some((c) => ITEM_KEYS.has(c.attr)) || sortRules.some((r) => ITEM_KEYS.has(r.field));
-
-  const applyFilter = <T extends CatalogRow>(row: T): boolean =>
-    conditions.every((c) => matchCondition(cellComparable(row, c.attr), c.op, c.val));
-
-  const applySort = <T extends CatalogRow>(list: T[]): T[] => {
-    if (sortRules.length === 0) return list;
-    return [...list].sort((a, b) => {
-      for (const rule of sortRules) {
-        const av = cellComparable(a, rule.field);
-        const bv = cellComparable(b, rule.field);
-        if (av == null && bv == null) continue;
-        if (av == null) return 1;
-        if (bv == null) return -1;
-        if (av < bv) return rule.direction === 'asc' ? -1 : 1;
-        if (av > bv) return rule.direction === 'asc' ? 1 : -1;
-      }
-      return 0;
-    });
-  };
+  const flatItems = useMemo(
+    () => (flatMode ? ((data?.results as Item[] | undefined) ?? []) : []),
+    [data, flatMode],
+  );
 
   const rows = useMemo<CatalogRow[]>(() => {
-    if (itemModeActive) {
-      // Flat, ungrouped item list filtered/sorted by the active column(s).
-      const items: CatalogRow[] = acquisitions.flatMap((a) =>
-        a.items.map((it) => ({ ...it, rowType: 'item' as const })),
-      );
-      return applySort(items.filter(applyFilter));
-    }
-    // Tree: acquisitions (parents) with their items as children.
-    const tree: CatalogRow[] = acquisitions.map((a) => ({
+    if (flatMode) return flatItems.map((it) => ({ ...it, rowType: 'item' as const }));
+    return acquisitions.map((a) => ({
       ...a,
       rowType: 'acquisition' as const,
       children: a.items.map((it) => ({ ...it, rowType: 'item' as const })),
     }));
-    return applySort(tree.filter(applyFilter));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [acquisitions, conditions, sortRules, itemModeActive]);
+  }, [flatMode, flatItems, acquisitions]);
 
-  // Expanded = every acquisition except the ones the user collapsed (synchronous).
+  // Every displayed row (parents AND their item children) — used for width
+  // measurement so item columns (Name/Spec/…) size to their real content.
+  const measuredRows = useMemo<CatalogRow[]>(() => {
+    if (flatMode) return rows;
+    const out: CatalogRow[] = [];
+    for (const a of acquisitions) {
+      out.push({ ...a, rowType: 'acquisition', children: [] });
+      for (const it of a.items) out.push({ ...it, rowType: 'item' });
+    }
+    return out;
+  }, [flatMode, rows, acquisitions]);
+
   const expandedKeys = useMemo(
     () => acquisitions.map((a) => a.id).filter((id) => !collapsedIds.has(id)),
     [acquisitions, collapsedIds],
@@ -324,7 +242,6 @@ export function CatalogPage() {
       message.success(t({ id: 'pages.inventory.acquisitions.deleted' }));
     },
   });
-
   const deleteItemMutation = useMutation({
     mutationFn: (id: string) => deleteItem(id),
     onSuccess: () => {
@@ -332,7 +249,6 @@ export function CatalogPage() {
       message.success(t({ id: 'pages.inventory.items.deleted' }));
     },
   });
-
   const deprecateMutation = useMutation({
     mutationFn: ({ id, ts }: { id: string; ts: string | null }) => updateItem(id, { deprecate_time: ts }),
     onSuccess: () => {
@@ -352,7 +268,6 @@ export function CatalogPage() {
       onOk: () => deleteAcqMutation.mutate(record.id),
     });
   };
-
   const confirmDeleteItem = (item: Item) => {
     Modal.confirm({
       title: t({ id: 'pages.inventory.items.delete.title' }),
@@ -363,48 +278,73 @@ export function CatalogPage() {
       onOk: () => deleteItemMutation.mutate(item.id),
     });
   };
-
   const openDeprecate = (item: Item) => {
     setDeprecateTarget(item);
     setDeprecateDate(dayjs().startOf('day'));
   };
 
-  // Per-column content width: measure the displayed text of every row + header.
+  // Displayed text per column (for canonical dataWidths measurement).
   const displayText = (r: CatalogRow, key: string): string => {
-    const c = cellComparable(r, key);
-    if (key === 'weight' || key === 'length' || key === 'width' || key === 'height') {
-      return !isAcquisition(r) ? (measureText(r[key]) ?? '') : '';
+    if (isAcquisition(r)) {
+      switch (key) {
+        case 'acquisition__source':
+          return r.source || t({ id: 'pages.inventory.acquisitions.new.untitled' });
+        case 'net_cost':
+          return formatNetCost(r.net_cost);
+        case 'acquisition__request_time':
+          return formatDateRelative(r.request_time);
+        case 'acquisition__obtained_at':
+          return formatDateRelative(r.obtained_at);
+        default:
+          return '';
+      }
     }
-    if (key === 'sku_price') return !isAcquisition(r) ? (skuText(r) ?? '') : '';
-    if (key === 'net_cost') return isAcquisition(r) ? (formatNetCost(r.net_cost) ?? '') : '';
-    if (key === 'request_time') return isAcquisition(r) ? (formatDateRelative(r.request_time) ?? '') : '';
-    if (key === 'obtained_at') return isAcquisition(r) ? (formatDateRelative(r.obtained_at) ?? '') : '';
-    if (key === 'status') return !isAcquisition(r) ? t({ id: `pages.inventory.items.status.${r.status}` }) : '';
-    if (c == null) return '';
-    return typeof c === 'number' ? String(c) : c;
+    switch (key) {
+      case 'acquisition__source':
+        return flatMode ? (r.acquisition?.source ?? '') : '';
+      case 'name':
+        return r.name;
+      case 'spec':
+        return r.spec ?? '';
+      case 'size':
+        return r.size ?? '';
+      case 'quantity':
+        return String(r.quantity);
+      case 'sku_price':
+        return skuText(r);
+      case 'weight_canonical':
+        return measureText(r.weight);
+      case 'length_canonical':
+        return measureText(r.length);
+      case 'width_canonical':
+        return measureText(r.width);
+      case 'height_canonical':
+        return measureText(r.height);
+      case 'status':
+        return t({ id: `pages.inventory.items.status.${r.status}` });
+      case 'acquisition__request_time':
+        return flatMode ? formatDateRelative(r.acquisition?.request_time) : '';
+      case 'acquisition__obtained_at':
+        return flatMode ? formatDateRelative(r.acquisition?.obtained_at) : '';
+      default:
+        return '';
+    }
   };
 
-  const contentWidths = useMemo(() => {
-    const widths: Record<string, number> = {};
+  // Canonical dataWidths: per-column max content width across the displayed rows.
+  const dataWidths = useMemo(() => {
+    const w: Record<string, number> = {};
     for (const def of columnDefs) {
       if (def.key === 'actions') continue;
       let max = 0;
-      for (const r of rows) max = Math.max(max, measureTextWidth(displayText(r, def.key)));
-      widths[def.key] = max;
+      for (const r of measuredRows) max = Math.max(max, measureTextWidth(displayText(r, def.key)));
+      w[def.key] = max;
     }
-    // Actions: fit the widest button set — acquisition (Edit + Delete) vs item
-    // (Deprecate/Restore + Delete). Two small buttons + icons + gaps + td padding.
-    const acqActions =
-      measureTextWidth(t({ id: 'common.edit' })) + measureTextWidth(t({ id: 'common.delete' }));
-    const itemActions =
-      Math.max(
-        measureTextWidth(t({ id: 'pages.inventory.items.deprecate' })),
-        measureTextWidth(t({ id: 'pages.inventory.items.restore' })),
-      ) + measureTextWidth(t({ id: 'common.delete' }));
-    widths.actions = Math.max(acqActions, itemActions) + 130;
-    return widths;
+    return w;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, columnDefs, t]);
+  }, [measuredRows, columnDefs, t, flatMode]);
+
+  const actionsColWidth = useActionsColWidth(rows);
 
   const colDefMap = useMemo<Record<string, ProColumns<CatalogRow>>>(
     () => {
@@ -415,13 +355,8 @@ export function CatalogPage() {
             ? cols.lastColumnFixed
             : undefined;
       const w = (key: string, labelId: string, min = 90) =>
-        widthForHeader(t({ id: labelId }), Math.max(min, contentWidths[key] ?? 0));
-      const textCol = (
-        key: string,
-        labelId: string,
-        get: (it: Item) => string | null | undefined,
-        min = 120,
-      ): ProColumns<CatalogRow> => ({
+        widthForHeader(t({ id: labelId }), Math.max(min, dataWidths[key] ?? 0));
+      const itemText = (key: string, labelId: string, get: (it: Item) => string, min = 120): ProColumns<CatalogRow> => ({
         key,
         title: t({ id: labelId }),
         ...w(key, labelId, min),
@@ -429,44 +364,47 @@ export function CatalogPage() {
         ...makeSortProps(key, t({ id: labelId }), sort),
         render: (_, r) => (!isAcquisition(r) ? (get(r) || EMPTY) : EMPTY),
       });
-      const measureCol = (
-        key: 'weight' | 'length' | 'width' | 'height',
-        labelId: string,
-      ): ProColumns<CatalogRow> => ({
-        key,
+      const measureCol = (key: 'weight' | 'length' | 'width' | 'height', canonKey: string, labelId: string): ProColumns<CatalogRow> => ({
+        key: canonKey,
         title: t({ id: labelId }),
-        ...w(key, labelId, 100),
-        fixed: getFixed(key),
-        ...makeSortProps(key, t({ id: labelId }), sort),
-        render: (_, r) => (!isAcquisition(r) ? (measureText(r[key]) ?? EMPTY) : EMPTY),
+        ...w(canonKey, labelId, 100),
+        fixed: getFixed(canonKey),
+        ...makeSortProps(canonKey, t({ id: labelId }), sort),
+        render: (_, r) => (!isAcquisition(r) ? (measureText(r[key]) || EMPTY) : EMPTY),
       });
       return {
-        source: {
-          key: 'source',
+        acquisition__source: {
+          key: 'acquisition__source',
           title: t({ id: 'pages.inventory.acquisitions.col.source' }),
-          ...w('source', 'pages.inventory.acquisitions.col.source', 160),
-          fixed: getFixed('source'),
-          ...makeSortProps('source', t({ id: 'pages.inventory.acquisitions.col.source' }), sort),
+          ...w('acquisition__source', 'pages.inventory.acquisitions.col.source', 160),
+          fixed: getFixed('acquisition__source'),
+          ...makeSortProps('acquisition__source', t({ id: 'pages.inventory.acquisitions.col.source' }), sort),
           render: (_, r) =>
-            isAcquisition(r) ? (r.source || t({ id: 'pages.inventory.acquisitions.new.untitled' })) : EMPTY,
+            isAcquisition(r)
+              ? r.source || t({ id: 'pages.inventory.acquisitions.new.untitled' })
+              : flatMode
+                ? (r.acquisition?.source ?? EMPTY)
+                : EMPTY,
         },
-        name: textCol('name', 'common.name', (it) => it.name, 160),
-        spec: { ...textCol('spec', 'pages.inventory.items.col.spec', (it) => it.spec, 160), ellipsis: true },
-        size: textCol('size', 'pages.inventory.items.col.size', (it) => it.size, 90),
-        url: {
-          key: 'url',
-          title: t({ id: 'pages.inventory.items.col.url' }),
-          ...w('url', 'pages.inventory.items.col.url', 140),
-          fixed: getFixed('url'),
+        name: {
+          key: 'name',
+          title: t({ id: 'common.name' }),
+          ...w('name', 'common.name', 160),
+          fixed: getFixed('name'),
+          ...makeSortProps('name', t({ id: 'common.name' }), sort),
           render: (_, r) =>
-            !isAcquisition(r) && r.url ? (
+            isAcquisition(r) ? (
+              EMPTY
+            ) : r.url ? (
               <a href={r.url} target="_blank" rel="noopener noreferrer">
-                {r.url}
+                {r.name}
               </a>
             ) : (
-              EMPTY
+              r.name
             ),
         },
+        spec: { ...itemText('spec', 'pages.inventory.items.col.spec', (it) => it.spec, 160), ellipsis: true },
+        size: itemText('size', 'pages.inventory.items.col.size', (it) => it.size, 90),
         quantity: {
           key: 'quantity',
           title: t({ id: 'pages.inventory.items.col.quantity' }),
@@ -475,24 +413,16 @@ export function CatalogPage() {
           ...makeSortProps('quantity', t({ id: 'pages.inventory.items.col.quantity' }), sort),
           render: (_, r) => (!isAcquisition(r) ? r.quantity : EMPTY),
         },
-        sku_price: {
-          key: 'sku_price',
-          title: t({ id: 'pages.inventory.items.col.skuPrice' }),
-          ...w('sku_price', 'pages.inventory.items.col.skuPrice', 120),
-          fixed: getFixed('sku_price'),
-          ...makeSortProps('sku_price', t({ id: 'pages.inventory.items.col.skuPrice' }), sort),
-          render: (_, r) => (!isAcquisition(r) ? (skuText(r) ?? EMPTY) : EMPTY),
-        },
-        weight: measureCol('weight', 'pages.inventory.items.col.weight'),
-        length: measureCol('length', 'pages.inventory.items.col.length'),
-        width: measureCol('width', 'pages.inventory.items.col.width'),
-        height: measureCol('height', 'pages.inventory.items.col.height'),
+        sku_price: itemText('sku_price', 'pages.inventory.items.col.skuPrice', (it) => skuText(it), 120),
+        weight_canonical: measureCol('weight', 'weight_canonical', 'pages.inventory.items.col.weight'),
+        length_canonical: measureCol('length', 'length_canonical', 'pages.inventory.items.col.length'),
+        width_canonical: measureCol('width', 'width_canonical', 'pages.inventory.items.col.width'),
+        height_canonical: measureCol('height', 'height_canonical', 'pages.inventory.items.col.height'),
         status: {
           key: 'status',
           title: t({ id: 'pages.inventory.items.col.status' }),
           ...w('status', 'pages.inventory.items.col.status', 110),
           fixed: getFixed('status'),
-          ...makeSortProps('status', t({ id: 'pages.inventory.items.col.status' }), sort),
           render: (_, r) =>
             isAcquisition(r) ? (
               EMPTY
@@ -507,39 +437,44 @@ export function CatalogPage() {
           title: t({ id: 'pages.inventory.acquisitions.col.netCost' }),
           ...w('net_cost', 'pages.inventory.acquisitions.col.netCost', 140),
           fixed: getFixed('net_cost'),
-          ...makeSortProps('net_cost', t({ id: 'pages.inventory.acquisitions.col.netCost' }), sort),
-          render: (_, r) => (isAcquisition(r) ? (formatNetCost(r.net_cost) ?? EMPTY) : EMPTY),
+          render: (_, r) => (isAcquisition(r) ? (formatNetCost(r.net_cost) || EMPTY) : EMPTY),
         },
-        request_time: {
-          key: 'request_time',
+        acquisition__request_time: {
+          key: 'acquisition__request_time',
           title: t({ id: 'pages.inventory.acquisitions.col.requestTime' }),
-          ...w('request_time', 'pages.inventory.acquisitions.col.requestTime', 200),
-          fixed: getFixed('request_time'),
-          ...makeSortProps('request_time', t({ id: 'pages.inventory.acquisitions.col.requestTime' }), sort),
-          render: (_, r) => (isAcquisition(r) ? (formatDateRelative(r.request_time) ?? EMPTY) : EMPTY),
+          ...w('acquisition__request_time', 'pages.inventory.acquisitions.col.requestTime', 200),
+          fixed: getFixed('acquisition__request_time'),
+          ...makeSortProps('acquisition__request_time', t({ id: 'pages.inventory.acquisitions.col.requestTime' }), sort),
+          render: (_, r) =>
+            isAcquisition(r)
+              ? (formatDateRelative(r.request_time) || EMPTY)
+              : flatMode
+                ? (formatDateRelative(r.acquisition?.request_time) || EMPTY)
+                : EMPTY,
         },
-        obtained_at: {
-          key: 'obtained_at',
+        acquisition__obtained_at: {
+          key: 'acquisition__obtained_at',
           title: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }),
-          ...w('obtained_at', 'pages.inventory.acquisitions.col.obtainedAt', 200),
-          fixed: getFixed('obtained_at'),
-          ...makeSortProps('obtained_at', t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), sort),
-          render: (_, r) => (isAcquisition(r) ? (formatDateRelative(r.obtained_at) ?? EMPTY) : EMPTY),
+          ...w('acquisition__obtained_at', 'pages.inventory.acquisitions.col.obtainedAt', 200),
+          fixed: getFixed('acquisition__obtained_at'),
+          ...makeSortProps('acquisition__obtained_at', t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), sort),
+          render: (_, r) =>
+            isAcquisition(r)
+              ? (formatDateRelative(r.obtained_at) || EMPTY)
+              : flatMode
+                ? (formatDateRelative(r.acquisition?.obtained_at) || EMPTY)
+                : EMPTY,
         },
         actions: {
           title: t({ id: 'common.actions' }),
           key: 'actions',
-          width: contentWidths.actions,
+          width: actionsColWidth,
           fixed: getFixed('actions'),
           render: (_, r) => (
             <span data-actions-col>
               {isAcquisition(r) ? (
                 <Space>
-                  <Button
-                    size="small"
-                    icon={<EditOutlined />}
-                    onClick={() => navigate(`/inventory/acquisitions/${r.id}/edit`)}
-                  >
+                  <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/inventory/acquisitions/${r.id}/edit`)}>
                     {t({ id: 'common.edit' })}
                   </Button>
                   <Button size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteAcq(r)}>
@@ -549,11 +484,7 @@ export function CatalogPage() {
               ) : (
                 <Space>
                   {r.deprecate_time ? (
-                    <Button
-                      size="small"
-                      icon={<UndoOutlined />}
-                      onClick={() => deprecateMutation.mutate({ id: r.id, ts: null })}
-                    >
+                    <Button size="small" icon={<UndoOutlined />} onClick={() => deprecateMutation.mutate({ id: r.id, ts: null })}>
                       {t({ id: 'pages.inventory.items.restore' })}
                     </Button>
                   ) : (
@@ -572,11 +503,9 @@ export function CatalogPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, contentWidths, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns, navigate],
+    [t, dataWidths, actionsColWidth, flatMode, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns, navigate],
   );
 
-  // Dedicated caret column (tree mode only) so the disclosure has its own cell
-  // and never changes the width of the data columns when expanded/collapsed.
   const caretColumn = useMemo<ProColumns<CatalogRow>>(
     () => ({
       key: '__caret',
@@ -597,13 +526,13 @@ export function CatalogPage() {
     const visible = cols.visibleColumns
       .map((c) => colDefMap[c.key])
       .filter((c): c is ProColumns<CatalogRow> => Boolean(c));
-    return itemModeActive ? visible : [caretColumn, ...visible];
-  }, [cols.visibleColumns, colDefMap, itemModeActive, caretColumn]);
+    return flatMode ? visible : [caretColumn, ...visible];
+  }, [cols.visibleColumns, colDefMap, flatMode, caretColumn]);
 
   return (
     <>
       <PageTable<CatalogRow>
-        key={`${cols.visibleColumns[0]?.key ?? ''}-${cols.visibleColumns.at(-1)?.key ?? ''}-${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
+        key={`${flatMode}-${cols.visibleColumns[0]?.key ?? ''}-${cols.visibleColumns.at(-1)?.key ?? ''}-${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
         pageTitle={t({ id: 'pages.inventory.catalog.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/inventory/acquisitions/new')}>
@@ -623,13 +552,11 @@ export function CatalogPage() {
         loading={isLoading}
         columnEmptyText={false}
         indentSize={0}
-        expandable={{
-          // The caret lives in its own column; hide AntD's default inline toggle.
-          showExpandColumn: false,
-          expandedRowKeys: itemModeActive ? [] : expandedKeys,
-        }}
+        expandable={{ showExpandColumn: false, expandedRowKeys: flatMode ? [] : expandedKeys }}
         scroll={{ x: computeScrollX(columns) }}
-        pagination={{ pageSize: 50, showSizeChanger: true, pageSizeOptions: [25, 50, 100, 200] }}
+        onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
+        pagination={false}
+        footer={() => <EntityOffsetFooter {...table.paginationProps(total)} />}
       />
 
       <Modal

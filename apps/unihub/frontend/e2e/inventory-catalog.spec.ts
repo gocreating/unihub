@@ -76,10 +76,36 @@ test('caret has its own dedicated column (not merged into a data column)', async
   await expect(caretCell.locator('.anticon-caret-down, .anticon-caret-right')).toHaveCount(1);
 });
 
-test('has no item-count ("Items") column and shows pagination', async ({ page }) => {
+test('no item-count ("Items") column, no URL column, standard footer pagination', async ({ page }) => {
   const headers = await page.locator('.ant-table-thead th').allInnerTexts();
   expect(headers).not.toContain('Items');
-  await expect(page.locator('.ant-pagination')).toBeVisible();
+  expect(headers).not.toContain('URL');
+  // The standard EntityOffsetFooter pagination lives in the table footer.
+  await expect(page.locator('.ant-table-footer .ant-pagination')).toBeVisible();
+  await expect(page.locator('.ant-table-footer .ant-pagination-options')).toBeVisible();
+});
+
+test('item Name cell links to the item URL in a new tab (no URL column)', async ({ page }) => {
+  // Find an item row whose Name is a link (an item that has a url).
+  const link = page.locator('.ant-table-tbody a[target="_blank"]').first();
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute('href', /.+/);
+});
+
+test('Name and Spec columns size to content (canonical dataWidths, incl. item rows)', async ({ page }) => {
+  // The Name header cell width must be at least as wide as the longest item name
+  // rendered beneath it (no fixed-min clipping of item columns).
+  const nameHeader = page.locator('.ant-table-thead th', { hasText: /^Name/ }).first();
+  const headerBox = await nameHeader.boundingBox();
+  const nameCells = page.locator('.ant-table-tbody tr .ant-table-cell:nth-child(3)');
+  const count = await nameCells.count();
+  for (let i = 0; i < Math.min(count, 20); i++) {
+    const cell = nameCells.nth(i);
+    // scrollWidth (content) should not exceed the column width by more than padding.
+    const overflow = await cell.evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(4);
+  }
+  expect(headerBox?.width ?? 0).toBeGreaterThan(80);
 });
 
 test('SKU price drops trailing zeros', async ({ page }) => {

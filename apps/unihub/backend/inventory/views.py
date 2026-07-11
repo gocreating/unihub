@@ -24,29 +24,42 @@ class ItemViewSet(viewsets.ModelViewSet):
     queryset = Item.objects.all()
     serializer_class = ItemSerializer
     filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    # Keys are the real field paths so a single toolbar key works for BOTH filter
+    # and sort (the ordering filter validates the raw field name against
+    # ordering_fields). The Catalog's flat mode sends these paths directly.
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
         "spec": {"lookup": "spec", "type": "text"},
         "size": {"lookup": "size", "type": "text"},
-        "weight": {"lookup": "weight_canonical", "type": "number"},
-        "length": {"lookup": "length_canonical", "type": "number"},
-        "width": {"lookup": "width_canonical", "type": "number"},
-        "height": {"lookup": "height_canonical", "type": "number"},
-        "volume": {"lookup": "volume_canonical", "type": "number"},
-        "sku_price": {"lookup": "sku_price", "type": "number"},
         "color": {"lookup": "color", "type": "text"},
+        "quantity": {"lookup": "quantity", "type": "number"},
+        "sku_price": {"lookup": "sku_price", "type": "number"},
+        "weight_canonical": {"lookup": "weight_canonical", "type": "number"},
+        "length_canonical": {"lookup": "length_canonical", "type": "number"},
+        "width_canonical": {"lookup": "width_canonical", "type": "number"},
+        "height_canonical": {"lookup": "height_canonical", "type": "number"},
+        "volume_canonical": {"lookup": "volume_canonical", "type": "number"},
         "deprecated": {"lookup": "deprecate_time", "type": "date"},
-        "obtained_at": {"lookup": "acquisition__obtained_at", "type": "date"},
+        # Acquisition-derived columns (used in the Catalog's flat mode).
+        "acquisition__source": {"lookup": "acquisition__source", "type": "text"},
+        "acquisition__request_time": {"lookup": "acquisition__request_time", "type": "date"},
+        "acquisition__obtained_at": {"lookup": "acquisition__obtained_at", "type": "date"},
     }
     ordering_fields = [
         "name",
+        "spec",
         "size",
+        "color",
+        "quantity",
+        "sku_price",
         "weight_canonical",
         "length_canonical",
         "width_canonical",
         "height_canonical",
         "volume_canonical",
-        "sku_price",
+        "deprecate_time",
+        "acquisition__source",
+        "acquisition__request_time",
         "acquisition__obtained_at",
     ]
     ordering = ["-acquisition__obtained_at"]

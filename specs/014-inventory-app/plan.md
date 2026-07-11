@@ -215,3 +215,40 @@ No new violations.
 ## Structure Decision (delta)
 
 Frontend-only feature work + one Django management command for the legacy import. Catalog gains a flat/tree mode switch and dynamic widths; the cost panel becomes responsive with an icon reset. Regression e2e specs lock the repeatedly-reported behaviours.
+
+---
+
+# Iteration 7 (catalog fit/stability, cost/modal fixes, CNY) — delta plan
+
+**Date**: 2026-07-11 | Builds on iteration 6 (commit `4ed51c0`). Spec: `### Session 2026-07-11 (catalog fit/stability, cost/modal fixes, CNY, iteration 7)` + FR-003/006/006b/006c/022. **No schema change.** Constitution **v1.16.0**.
+
+## Catalog (`catalog/index.tsx`)
+- **Caret in its own column**: add a dedicated narrow leading column rendering the caret for acquisition rows; hide the default inline tree expand icon (`expandable.expandIcon` → spacer) and drive expansion via controlled `expandedRowKeys` toggled from the custom column.
+- **No flash/jitter**: React Query `staleTime: Infinity` + `placeholderData: keepPreviousData` (data cached across navigations → no refetch-on-mount flash). Derive `expandedRowKeys` synchronously (default = all acquisition ids, memoised) instead of a post-mount `useEffect` (removes the expand jitter). Widths are canvas-measured in a `useMemo` (already synchronous) — no DOM post-render measurement.
+- **Content-fit widths incl. tree expansion**: for the first content column (Source) and the caret column, add the **per-level indentation + caret width** to the measured max; **measure the Actions column** too (was unbounded) from its button labels (Edit/Delete vs Deprecate/Restore/Delete). No clip in expanded or collapsed state.
+- **SKU price trailing zeros dropped** (shared `formatDecimal` — `10.0000→10`, `59.9000→59.9`).
+- **Remove the item-count ("Items") column.**
+- **Restore pagination**: client-side pagination over the single fetched set (`EntityOffsetFooter` + slice by page/pageSize from the toolbar), replacing the row-count footer.
+
+## Acquisition form (`AcquisitionForm.tsx`, `ItemFormModal.tsx`)
+- **Cost `type` shows a localized label**: type editor becomes a searchable/creatable `Select` (`optionLabelProp="label"`, built-in options `{value:key,label:localized}`, an `onSearch`-added transient option for free text) so the field renders the **label** while storing the **key** (built-ins) or verbatim text (custom). A shared `costFactorTypeLabel(key,t)` maps keys→labels everywhere.
+- **Cost-panel grid compliance (Principle VI)**: rework the factor rows to a `Row`/`Col` grid whose fields stretch to fill and together fill the row, stack to one column on narrow content width, number inputs right-aligned (global CSS already right-aligns `InputNumber`).
+- **Item cards**: render available optional attributes as `<Tag>` badges in the card **body** (not a plain text list); sku_price trailing zeros dropped.
+- **ItemFormModal**: reorder fields to **Name, quantity, SKU price, spec, URL, remark, color, size, weight, length, width, height, volume**; ensure the grid + content-width stacking + right-aligned numbers satisfy Principle VI; primary action right / Cancel left (already compliant).
+
+## Legacy importer (`import_legacy_csv.py`)
+- **Currency alias map `RMB → CNY`** (extensible) applied to item + factor currencies. **Delete** the previously-imported 2026 acquisitions, then **re-import** `data/財產們 - 2026.csv` as CNY. Add a `--purge-source` (or documented delete step) so the re-import is idempotent.
+
+## e2e / tests
+- Extend `e2e/inventory-catalog.spec.ts` (caret own column, no item-count column, pagination present, widths fit) and `e2e/inventory-acquisition.spec.ts` (type shows label, item-card badges). Update the Catalog RTL test.
+
+## Constitution re-check (delta)
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| VI. UI/UX (v1.16.0) | ✅ PASS | Cost panel + item modal now follow the form-grid + right-aligned-number rule; modal primary-right/Cancel-left retained. |
+| VII. PageTable | ✅ PASS | Catalog stays a `PageTable`; caret gets its own column; pagination restored. |
+| VIII. i18n | ✅ PASS | Cost-factor type labels localized (both locales); no raw keys shown. |
+| II. Domain Independence | ✅ PASS | Importer maps currency strings (RMB→CNY); no finance FK. |
+
+## Structure Decision (delta)
+Frontend polish + importer currency fix + re-import. No models/migrations. The Catalog's rendering is stabilised (cache + synchronous expand/width) and gains a caret column + pagination; the cost panel and item modal are brought into Principle-VI compliance; the type label is decoupled from its stored key.

@@ -58,8 +58,11 @@ rows (`總支出` totals, empty padding) are skipped.
 
 ## Currency
 
-`Currency.code` is a user-created 3-char string (no seed). `RMB`/`USD`/`TWD`/`JPY`
-must exist in Finance before import (or normalise `RMB→CNY`). **Decision needed** (M8).
+`Currency.code` is a user-created 3-char string (no seed). **Decision (2026-07-11):
+unihub uses `CNY`, not `RMB`** — the importer MUST normalise **`RMB → CNY`** (an
+alias map, extensible) for both item `sku_price_currency` and cost-factor `currency`.
+The previously-imported 2026 acquisitions (imported as `RMB`) MUST be **deleted and
+re-imported** as `CNY`. Other codes (`USD`/`TWD`/`JPY`) pass through unchanged.
 
 ## Dates
 

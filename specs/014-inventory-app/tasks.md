@@ -334,3 +334,46 @@ Completed 2026-07-11 (builds on iteration 5, commit `e979bb3`). Frontend-only fe
 
 ### Not run this session
 - **T029 / T050 (Docker quickstart end-to-end)** — the local Postgres already had all inventory migrations (incl. `0009`/`0010`) applied and the importer ran against it, but the full quickstart UI walkthrough was not executed.
+
+---
+
+# Tasks: Iteration 7 (catalog fit/stability, cost/modal fixes, CNY)
+
+**Input**: plan.md "Iteration 7" delta; spec `### Session 2026-07-11 (catalog fit/stability, cost/modal fixes, CNY, iteration 7)` + FR-003/006/006b/006c/022. Builds on iteration 6 (`4ed51c0`). Frontend fixes + importer currency fix + re-import. **No schema change.**
+
+## Phase 1: US1 — Catalog fit & stability (Priority: P1)
+
+- [ ] T068 [US1] `catalog/index.tsx`: give the expand **caret its own dedicated narrow column** (custom leading column toggling controlled `expandedRowKeys`; hide the default inline tree expand icon); **remove the item-count ("Items") column**
+- [ ] T069 [US1] `catalog/index.tsx`: **eliminate flash/jitter** — React Query `staleTime: Infinity` + `placeholderData: keepPreviousData`; derive `expandedRowKeys` **synchronously** (memoised default = all acquisition ids, no post-mount `useEffect`)
+- [ ] T070 [US1] `catalog/index.tsx`: **content-fit widths that account for tree expansion** — add caret-column + per-level indentation to the first content column's measured width, and **measure the Actions column** from its button labels; verify no clip expanded/collapsed
+- [ ] T071 [US1] `catalog/index.tsx`: **drop SKU price trailing zeros** (shared `formatDecimal`); **restore pagination** (client-side over the fetched set via `EntityOffsetFooter` + page/pageSize slice)
+- [ ] T072 [P] [US1] Update `catalog/CatalogPage.test.tsx` (RTL): assert no "Items"/item-count column, a dedicated caret column, SKU price without trailing zeros, and pagination footer present
+
+## Phase 2: US2 — Cost panel & item modal (Priority: P1)
+
+- [ ] T073 [US2] `AcquisitionForm.tsx`: cost-factor **`type` field shows the localized label** while storing the key (searchable/creatable `Select`, `optionLabelProp="label"`, free-text via `onSearch`); add a shared `costFactorTypeLabel(key, t)` used in the editor and any display
+- [ ] T074 [US2] `AcquisitionForm.tsx`: bring the **Cost panel fields into Principle-VI compliance** — `Row`/`Col` grid, fields stretch to fill + fill the row, stack to one column on narrow content width, number inputs right-aligned
+- [ ] T075 [US2] `AcquisitionForm.tsx`: **item cards render available attributes as `<Tag>` badges** in the card body (only non-empty; sku_price trailing zeros dropped)
+- [ ] T076 [US2] `ItemFormModal.tsx`: **reorder fields** to Name, quantity, SKU price, spec, URL, remark, color, size, weight, length, width, height, volume; ensure grid + content-width stacking + right-aligned numbers (Principle VI); Cancel left / primary right
+- [ ] T077 [P] [US2] i18n check (BOTH locales): cost-factor type labels exist for all built-ins; any new copy added
+
+## Phase 3: Legacy import — CNY
+
+- [ ] T078 `import_legacy_csv.py`: add a currency alias map **`RMB → CNY`** (applied to item `sku_price_currency` + factor `currency`); dry-run shows CNY
+- [ ] T079 Re-import 2026 as CNY: **delete** the previously-imported 2026 acquisitions, then `import_legacy_csv "data/財產們 - 2026.csv" --commit`; verify DB net = 199.9 CNY / 687 TWD / 186.22 USD
+
+## Phase 4: e2e + Polish
+
+- [ ] T080 [P] Extend `e2e/inventory-catalog.spec.ts` (caret own column, no item-count column, pagination present) and `e2e/inventory-acquisition.spec.ts` (type shows label, item-card badges)
+- [ ] T081 Quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test`; backend `uv run ruff check . && uv run pytest`
+- [ ] T082 [P] Mark iteration-7 tasks complete + append Implementation Notes to this file
+
+---
+
+## Dependencies (iteration 7)
+- US1 (T068–T072) and US2 (T073–T077) are independent frontend slices (different files) → parallelizable.
+- Importer (T078) → re-import (T079, needs DB up).
+- e2e/polish (T080–T082) last.
+
+## Implementation Strategy (iteration 7)
+Stabilise + fit the Catalog (US1) and bring the cost panel + item modal into Principle-VI compliance (US2), then fix the importer currency and re-import 2026 as CNY. No schema/migration changes.

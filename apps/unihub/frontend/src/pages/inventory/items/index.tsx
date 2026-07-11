@@ -272,6 +272,7 @@ export function ItemsPage() {
         columns={columns}
         dataSource={items}
         loading={isLoading}
+        columnEmptyText={false}
         scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}

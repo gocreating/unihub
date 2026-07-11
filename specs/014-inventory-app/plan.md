@@ -1,4 +1,4 @@
-# Implementation Plan: Inventory App — Iteration 3 (UI + cost model refinements)
+# Implementation Plan: Inventory App — Iteration 4 (cost factors, merged Catalog, cleanups)
 
 **Branch**: `014-inventory-app` | **Date**: 2026-07-11 | **Spec**: [spec.md](spec.md)
 
@@ -6,36 +6,37 @@
 
 ## Summary
 
-Iteration 2 shipped at commit `2fc0106` (acquisition-first flow, per-field currency, unit normalization). This plan covers **iteration 3** — five clarification batches (2026-07-11) that refine the data model and UI. Net changes:
+Iteration 3 shipped at commit `a7a0ea2`. This plan consolidates the clarifications recorded after it (five clarify sessions) into one iteration-4 delta:
 
-- **Deprecation lifecycle**: rename `Item.archived_at` → **`deprecate_time`**; **remove the stored `status` field** — status is now **derived** (deprecated when `deprecate_time` set, else active). "Archive" action → **"Deprecate"** (confirm dialog collects a timestamp defaulting to today 00:00) + a **"Restore"** action that clears it.
-- **Cost model moves to the order**: **remove `Item.cost`/`cost_currency`**; **Acquisition gains `cost` (+currency), `discount`, `tax_refund`**, derived **`net_cost = cost − discount − tax_refund`**. The per-currency item-cost aggregation is dropped.
-- **Field churn**: rename `Item.price` → **`sku_price`** (+ derived `total_price = sku_price × quantity`); add **`Item.volume`** (mL/L, canonical mL); **remove `Item.model`, `Item.serial_number`**; `quantity` becomes **required, default 1**. **Remove `Acquisition.method`**; add **`Acquisition.request_time`**.
-- **Acquisition UX**: **source auto-complete** over previously-used values; the "Items in this acquisition" section becomes a **card view** (preview filled fields only); **≥1 item required to submit**, create form **pre-inserts one empty item card**; acquisition is **editable on a standalone page**; RWD row layout.
-- **Constitution v1.14.0 compliance**: standalone create/edit pages (acquisition create/edit) **drop the Cancel button** and navigate via **breadcrumb**; modals put **Cancel left-most**, **don't close on outside-click while dirty**, and **stack fields on narrow screens**.
-- **Bug fixes**: non-sortable table columns render **blank headers** (add explicit `title`); standardize on the single **"—"** placeholder; add an **obtained-date column** to the item list; drop the **"Add items via New Acquisition" hint**.
+- **Cost model → cost factors**: replace the scalar `Acquisition.cost`/`cost_currency`/`discount`/`tax_refund` with a **`CostFactor`** child entity `{value (signed), currency, type}` (type ∈ accumulated/shipping/discount/tax_refund/paid_by_other/other — **informational label, does not set the sign**). Derived read-only **`net_cost` grouped by currency**. **≥1 factor**; on create an `accumulated` factor auto-derives its value from Σ item `total_price`, overridable/resettable.
+- **Item field cleanups**: `quantity` becomes an **integer**; **remove `item_type`** (and the consumable/stockable concept). The scenario checklist's **shortfall is removed** (no quantity-based warning; `required_quantity` stays for planning).
+- **Merged "Catalog" page**: combine the Items and Acquisitions lists into **one expandable-tree table** — acquisition parent rows (acquisition columns) expand to item child rows (item columns), columns unioned. Single **"Catalog"** nav entry (Inventory section) + "Scenarios"; legacy `/inventory/items` and `/inventory/acquisitions` list routes **redirect**. **Item rows drop the Edit action** (items edited via the acquisition edit page); item rows keep Deprecate/Restore + Delete; acquisition rows keep Edit + Delete. Adds an **obtained-date column** and a **`deprecate_time` column**; single **"—"** placeholder (`columnEmptyText={false}`).
+- **Acquisition page polish**: section title **"Acquisition"** (not "New Acquisition") on create & edit; edit breadcrumb **Acquisitions / {id} / Edit Acquisition**; `request_time` **defaults to today 00:00**.
+- **Content-width RWD**: acquisition form + item modal fields **stack to one full-width column** based on the **content width** (not just viewport) — via a container-width hook.
+- **Critical bug fix**: editing an item card on the acquisition page **must persist** (FR-021a).
+- **Carries forward**: the already-written `columnEmptyText={false}` placeholder fix (moves into the merged Catalog table).
 
-Approach: one schema migration (`0005`, non-atomic, with data-preserving backfills) + a reseed migration (`0006`), updated serializers/viewsets (incl. a distinct-`source` endpoint), an updated `ItemFormModal`, a reworked Acquisition create page + a new edit page, updated Items/Acquisitions lists, and refreshed i18n and tests.
+Approach: one schema migration (`0007`, non-atomic, data-preserving) creating `CostFactor` (backfilling one `accumulated` factor per acquisition from the dropped scalar cost) + dropping `item_type`/scalar cost fields and making `quantity` integer; a reseed migration (`0008`); updated serializers/viewsets (nested `cost_factors`, per-currency `net_cost`, no `item_type`, no shortfall); a rewritten frontend built around a new **CatalogPage** (expandable tree) replacing the two list pages, a **CostFactors** editor on the acquisition form, an integer quantity + no-type `ItemFormModal`, a container-width RWD hook, and the item-edit-persistence fix. i18n + tests refreshed.
 
 ## Technical Context
 
 **Language/Version**: Python 3.12 (backend), TypeScript 5.7 / React 18.3 (frontend)
 
-**Primary Dependencies**: Django 5 + DRF 3, drf-spectacular, PostgreSQL 16; Ant Design 5 + Pro Components (adds `AutoComplete` for source), TanStack React Query 5, React Router 7, react-intl. Currency pickers continue to read `GET /api/v1/finance/currencies/` (Principle II — no model import).
+**Primary Dependencies**: Django 5 + DRF 3, drf-spectacular, PostgreSQL 16; Ant Design 5 + Pro Components (`ProTable` expandable rows for the tree; `AutoComplete` for source), TanStack React Query 5, React Router 7, react-intl. Currency pickers still read `GET /api/v1/finance/currencies/` (Principle II — no import).
 
-**Storage**: PostgreSQL 16. Item money = `sku_price` (+currency); measurements incl. `volume` store canonical + unit; lifecycle = single `deprecate_time`. Acquisition holds order payment (`cost`+currency, `discount`, `tax_refund`) and `request_time`.
+**Storage**: PostgreSQL 16. New `inventory_costfactor` table (FK → Acquisition, CASCADE). Item drops `item_type`; `quantity` becomes integer. Acquisition drops scalar cost fields.
 
 **Testing**: pytest-django (backend, test-first for changed behavior); Vitest + RTL (frontend)
 
-**Target Platform**: Desktop/tablet browsers, with explicit **responsive (RWD) stacking** now required on the acquisition form and item modal (narrow screens).
+**Target Platform**: Desktop/tablet browsers; **content-width responsive** stacking now mandated (a collapsed-sidebar-narrow content area must stack, so breakpoints are container-based, not raw viewport).
 
-**Project Type**: Web application within the unihub monorepo (in-place refinement of the existing `inventory` app).
+**Project Type**: Web application within the unihub monorepo (in-place refinement of the `inventory` app).
 
-**Performance Goals**: Catalog ≥500 items server-paginated; default sort by indexed `acquisition__obtained_at`. Source auto-complete queries a small distinct set (personal scale).
+**Performance Goals**: Catalog tree server-paginated by acquisition (parents); each acquisition's items load with it (nested). Default sort by indexed `acquisition.obtained_at`.
 
-**Constraints**: Single user; no FX conversion (`discount`/`tax_refund` share the acquisition `cost` currency); unit sets fixed; ≥1 item per acquisition invariant.
+**Constraints**: Single user; no FX (per-currency `net_cost`); ≥1 item and ≥1 cost factor per acquisition; integer quantity.
 
-**Scale/Scope**: ~5 models (schema delta only), 4 frontend pages reworked + 1 new Acquisition edit page.
+**Scale/Scope**: 6 models (adds CostFactor). Frontend: two list pages replaced by one CatalogPage; new CostFactors editor; ItemFormModal + AcquisitionForm reworked.
 
 ## Constitution Check
 
@@ -43,20 +44,20 @@ Approach: one schema migration (`0005`, non-atomic, with data-preserving backfil
 
 | Principle | Status | Notes for this iteration |
 |-----------|--------|--------------------------|
-| I. Entity-Centric (NON-NEGOTIABLE) | ✅ PASS | `0006` reseeds system `AttributeDefinition`s to the new Item/Acquisition field set (add sku_price/volume/deprecate_time; add acquisition cost/discount/tax_refund/request_time; drop cost/model/serial/status/method). |
+| I. Entity-Centric (NON-NEGOTIABLE) | ✅ PASS | `0008` reseeds system `AttributeDefinition`s: Item drops `item_type`; Acquisition drops scalar cost fields; a **CostFactor** content-type is seeded (value/currency/type). |
 | II. Domain Independence | ✅ PASS | Currency still a code string via the finance API — no import/FK. Unchanged. |
-| III. Reference Implementation Alignment | ✅ PASS | Continues Finance/ov-fleet patterns; the source field uses AntD `AutoComplete`. |
-| IV. API Contract-Driven Frontend | ✅ PASS | Schema regenerated; `src/generated/api-types.ts` refreshed; no hand-written types. |
-| V. Quality Loop | ✅ PASS | Changed behavior is test-first; full backend + frontend loops must pass. |
-| VI. UI/UX ov-fleet (**expanded in v1.14.0**) | ✅ PASS (design-critical) | **New rules applied**: Acquisition create/edit are standalone pages → **breadcrumb, no Cancel button**. `ItemFormModal` → **Cancel left-most, no outside-click close while dirty, fields stack on narrow screens**. Also fixes the blank-header bug and the mixed-placeholder inconsistency this principle already forbids. |
-| VII. PageTable (NON-NEGOTIABLE) | ✅ PASS | Items/Acquisitions/Scenarios lists stay on `PageTable`. The acquisition "Items" section is a **card view** (a form sub-section, not a data grid) — not subject to the table rule. |
-| VIII. i18n (NON-NEGOTIABLE) | ✅ PASS | New/renamed keys (sku_price, volume, deprecate/restore, request_time, cost/discount/tax_refund/net_cost, card view, autocomplete) in BOTH locales; removed keys pruned from both. |
-| IX. Base Currency Net Worth | ➖ N/A | Inventory does no FX valuation; acquisition cost is a single-currency amount. |
+| III. Reference Alignment | ✅ PASS | Continues Finance/ov-fleet patterns; the merged tree uses `ProTable` expandable rows (still `PageTable`). |
+| IV. API Contract-Driven Frontend | ✅ PASS | Schema regenerated; types refreshed; no hand-written types. |
+| V. Quality Loop | ✅ PASS | Changed behavior test-first; full backend + frontend loops. |
+| VI. UI/UX ov-fleet (v1.14.0) | ✅ PASS | Standalone acquisition create/edit keep breadcrumb + no Cancel; modals keep Cancel-left + dirty-guard; **RWD now content-width based**; single "—" placeholder; every column has a header. |
+| VII. PageTable (NON-NEGOTIABLE) | ✅ PASS | The merged Catalog is a **`PageTable`** with `expandable` rows (acquisition parent → item children) — still the mandated table component. The acquisition "items" editor stays a card view within the form. |
+| VIII. i18n (NON-NEGOTIABLE) | ✅ PASS | New/renamed keys (Catalog, cost-factor types, net_cost, no type/shortfall) in BOTH locales; removed keys pruned. |
+| IX. Base Currency Net Worth | ➖ N/A | No FX; `net_cost` grouped by currency. |
 | X / XI. Charts | ➖ N/A | No charts. |
-| XII. Entity Toolbar & Sort | ✅ PASS | List sort/filter/columns unchanged in mechanism; filterable/ordering fields updated (drop cost/model/serial; add sku_price/volume). Every column now carries an explicit `title` (bug fix). |
-| Dev Constraint: Delete confirmation | ✅ PASS | Deprecate (with timestamp) and acquisition delete keep `Modal.confirm`/dialog with `okType:'danger'`. |
+| XII. Entity Toolbar & Sort | ✅ PASS | Catalog filter/sort/columns via the toolbar; item_type/shortfall filters removed; acquisition + item columns unioned with explicit titles. |
+| Dev Constraint: Delete confirmation | ✅ PASS | Acquisition delete (cascade) and item deprecate/delete keep `Modal.confirm`/dialog with `okType:'danger'`. |
 
-**Result**: All gates pass. Principle VI (v1.14.0) is the design-critical one and is directly satisfied by the page/modal button rules. Complexity Tracking empty.
+**Result**: All gates pass. The merged tree remains on `PageTable` (VII) and RWD/placeholder rules satisfy VI. Complexity Tracking empty.
 
 ## Project Structure
 
@@ -64,47 +65,50 @@ Approach: one schema migration (`0005`, non-atomic, with data-preserving backfil
 
 ```text
 specs/014-inventory-app/
-├── plan.md              # This file (iteration 3)
-├── research.md          # Refreshed decisions (R1–R9)
-├── data-model.md        # Refreshed entity definitions
+├── plan.md              # This file (iteration 4)
+├── research.md          # Refreshed decisions (R1–R8)
+├── data-model.md        # Refreshed entities (+ CostFactor)
 ├── quickstart.md        # Refreshed walkthrough
-├── contracts/inventory-api.md   # Refreshed REST contract (+ source autocomplete)
+├── contracts/inventory-api.md   # Refreshed REST contract (cost factors, net_cost)
 └── tasks.md             # Regenerated by /speckit-tasks
 ```
 
-### Source Code (delta from commit 2fc0106)
+### Source Code (delta from commit a7a0ea2)
 
 ```text
 apps/unihub/backend/inventory/
-├── models.py            # Item: price→sku_price, +volume_*, archived_at→deprecate_time, −status,−model,−serial,
-│                        #        −cost,−cost_currency, quantity NOT NULL default 1
-│                        # Acquisition: −method, +request_time, +cost,+cost_currency,+discount,+tax_refund
-├── migrations/0005_iter3_fields.py     # renames + adds + removes + backfills (non-atomic; quantity null→1;
-│                        #                acquisition.cost ← sum(item.cost) before dropping item.cost)
-├── migrations/0006_reseed_system_attrs.py
-├── serializers.py       # Item: sku_price, volume {value,unit}, derived total_price + status; drop cost/model/serial
-│                        # Acquisition: request_time, cost/discount/tax_refund + derived net_cost; nested items ≥1;
-│                        #              drop method + total_item_cost
-├── views.py             # Item filter/order fields updated; Acquisition drop method; NEW distinct-source action
+├── models.py            # Item: −item_type, quantity → IntegerField; Acquisition: −cost/−cost_currency/
+│                        #   −discount/−tax_refund; NEW CostFactor(value signed, currency, type, FK→Acquisition CASCADE)
+├── migrations/0007_cost_factors.py   # non-atomic: create CostFactor; backfill one 'accumulated' factor per
+│                        #   acquisition from old cost/discount/tax_refund; drop item_type + scalar cost; quantity → int
+├── migrations/0008_reseed_system_attrs.py
+├── serializers.py       # Item: drop item_type; quantity int; total_price/status derived (unchanged)
+│                        # Acquisition: nested cost_factors (≥1, ≥1 'accumulated' default); net_cost grouped by currency
+│                        # NEW CostFactorSerializer
+├── services.py          # checklist: REMOVE shortfall; keep progress + constraint violations
+├── views.py             # Item filter/order: drop item_type; Acquisition: cost-factor nested writes; sources unchanged
 └── ...
-apps/unihub/backend/tests/   # update test_inventory_* (deprecate/restore, cost-on-acquisition, volume, ≥1-item, sources)
+apps/unihub/backend/tests/   # update test_inventory_* (cost factors/net_cost, no item_type, integer quantity, no shortfall,
+                             #   item-edit persistence via acquisition PATCH); drop consumable-shortfall test
 
 apps/unihub/frontend/src/
-├── pages/inventory/items/ItemFormModal.tsx  # +volume, sku_price rename, −model/serial, −status select,
-│                        #  quantity required/default 1, currency-disable, RWD stack, Cancel left-most, dirty-guard
-├── pages/inventory/items/index.tsx          # blank-header fix, obtained_at column, −model/serial cols,
-│                        #  Deprecate(+timestamp)/Restore actions, derived status tag, single "—", remove hint
-├── pages/inventory/acquisitions/new.tsx     # card view + default item card + ≥1 required; source AutoComplete;
-│                        #  +request_time/cost/discount/tax_refund; no method; no Cancel (breadcrumb); RWD row
-├── pages/inventory/acquisitions/edit.tsx    # NEW standalone edit page (same form, prefilled)
-├── pages/inventory/acquisitions/index.tsx   # blank-header fix; drop method col; show net_cost; edit → standalone page
-├── services/unihub-backend/inventory.ts     # types + endpoints for the new shape (+ listSources)
-├── generated/api-types.ts                   # regenerated
-├── App.tsx                                   # register /inventory/acquisitions/:id/edit
-└── locales/{en-US,zh-TW}/pages.ts           # add/rename/prune keys in both
+├── pages/inventory/catalog/index.tsx   # NEW merged Catalog: PageTable expandable tree (acquisition parents → item children);
+│                        #   union columns; item rows: Deprecate/Restore/Delete (no Edit); acquisition rows: Edit/Delete;
+│                        #   New Acquisition action; obtained + deprecate_time columns; columnEmptyText={false}
+├── pages/inventory/acquisitions/AcquisitionForm.tsx   # +CostFactors editor (list of {value,currency,type}, accumulated
+│                        #   auto-derive/override/reset, live per-currency net_cost); title "Acquisition"; edit breadcrumb
+│                        #   3 crumbs; request_time default today 00:00; FIX item-card edit persistence; content-width RWD
+├── pages/inventory/items/ItemFormModal.tsx   # remove item_type select; quantity integer; content-width RWD
+├── hooks/useContainerWidth.ts   # NEW — container-width breakpoint for RWD stacking
+├── services/unihub-backend/inventory.ts   # types: Item (no item_type, integer quantity), Acquisition (cost_factors,
+│                        #   net_cost per currency; no scalar cost), CostFactor; drop shortfall
+├── App.tsx              # route /inventory/catalog; redirect /inventory/items & /inventory/acquisitions → catalog
+├── components/AppShell/AppShell.tsx   # nav: Inventory → Catalog + Scenarios (drop Items/Acquisitions entries)
+├── generated/api-types.ts             # regenerated
+└── locales/{en-US,zh-TW}/{menu,pages}.ts   # Catalog + cost-factor keys; prune item_type/shortfall/method-era keys
 ```
 
-**Structure Decision**: In-place refinement of the existing `inventory` app. One structural addition: a standalone **Acquisition edit page** (mirroring the create page). The "Items in this acquisition" UI shifts from a list to a **card view** within the acquisition form.
+**Structure Decision**: In-place refinement. The two list pages (`items/index.tsx`, `acquisitions/index.tsx`) are replaced by one **`catalog/index.tsx`** (expandable tree); a **CostFactors** editor is added to the acquisition form; a **`useContainerWidth`** hook backs content-width RWD. Backend adds one child entity (`CostFactor`).
 
 ## Complexity Tracking
 

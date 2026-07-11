@@ -1,16 +1,16 @@
 ---
-description: "Task list for Inventory App — Iteration 3 (2026-07-11)"
+description: "Task list for Inventory App — Iteration 4 (2026-07-11)"
 ---
 
-# Tasks: Inventory App — Iteration 3 (UI + cost model refinements)
+# Tasks: Inventory App — Iteration 4 (cost factors, merged Catalog, cleanups)
 
 **Input**: Design documents from `/specs/014-inventory-app/`
 
 **Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/inventory-api.md](contracts/inventory-api.md)
 
-**Baseline**: Iterations 1–2 shipped at commit `2fc0106` (all tests passing/live on Postgres). This iteration is a **delta**; tasks modify existing files unless marked "NEW". Backend behavior changes are **test-first** (Principle V). Constitution is **v1.14.0** (new page/modal button rules).
+**Baseline**: Iteration 3 shipped at commit `a7a0ea2`. This iteration is a **delta**; tasks modify existing files unless marked "NEW". Backend behavior changes are **test-first** (Principle V). Constitution is **v1.14.0**.
 
-**Organization**: Grouped by the affected user stories. US2 (acquisition form: cost, cards, edit) and US1 (item fields + list) are co-critical P1.
+**Organization**: Grouped by the affected user stories. US2 (acquisition: cost factors, page polish, item-edit fix) and US1 (item cleanups + merged Catalog) are co-critical P1.
 
 ## Format: `[ID] [P?] [Story?] Description`
 
@@ -21,8 +21,7 @@ description: "Task list for Inventory App — Iteration 3 (2026-07-11)"
 
 ## Phase 1: Setup
 
-- [x] T001 [P] Add volume units to `apps/unihub/backend/inventory/units.py`: `VOLUME_UNITS = {"mL": 1, "L": 1000}` (canonical mL) + `volume_to_canonical` / `volume_from_canonical` helpers
-- [x] T002 [P] Add volume conversion tests (L↔mL round-trip, unknown unit) to `apps/unihub/backend/tests/test_inventory_units.py`
+- [ ] T001 [P] Create the container-width RWD hook `apps/unihub/frontend/src/hooks/useContainerWidth.ts` (ResizeObserver → `{ width, isNarrow }`) so form layouts stack on a narrow **content area**, not just a narrow viewport
 
 ---
 
@@ -30,74 +29,74 @@ description: "Task list for Inventory App — Iteration 3 (2026-07-11)"
 
 **⚠️ CRITICAL**: reshapes the DB; blocks every story below.
 
-- [x] T003 Update `apps/unihub/backend/inventory/models.py` (per data-model.md): **Item** — rename `price`→`sku_price`, `price_currency`→`sku_price_currency`, `archived_at`→`deprecate_time`; add `volume_canonical`/`volume_unit`; make `quantity` `null=False, default=1`; remove `status`, `model`, `serial_number`, `cost`, `cost_currency`. **Acquisition** — remove `method`; add `request_time`, `cost`, `cost_currency`, `discount`, `tax_refund`.
-- [x] T004 Generate the base migration then hand-edit → `apps/unihub/backend/inventory/migrations/0005_iter3_fields.py` (mark `atomic = False`). Operation order: RenameFields (price/price_currency/archived_at) → AddFields (volume, acquisition cost/discount/tax_refund/request_time) → **RunPython backfill** (set `quantity=1` where null; set each `Acquisition.cost = Σ item.cost` and `cost_currency` = first non-blank item `cost_currency`, **before** item.cost is dropped) → AlterField `quantity` NOT NULL → RemoveFields (item cost/cost_currency/status/model/serial_number; acquisition method)
-- [x] T005 Add `apps/unihub/backend/inventory/migrations/0006_reseed_system_attrs.py` refreshing `is_system` AttributeDefinitions (Item: +sku_price/sku_price_currency/volume/volume_unit/deprecate_time, −cost/cost_currency/status/model/serial_number; Acquisition: +request_time/cost/cost_currency/discount/tax_refund, −method), reversible
-- [x] T006 Run `uv run python manage.py migrate` on the local stack; confirm `0005`/`0006` apply cleanly on a **fresh DB** AND on the iteration-2 DB (exercise the `item.cost → acquisition.cost` backfill and `quantity` null→1)
+- [ ] T002 Update `apps/unihub/backend/inventory/models.py` (per data-model.md): **NEW `CostFactor`** model (`value` signed Decimal, `currency`, `type` single_select {accumulated,shipping,discount,tax_refund,paid_by_other,other} default accumulated, FK→Acquisition CASCADE related_name `cost_factors`); **Acquisition** remove `cost`/`cost_currency`/`discount`/`tax_refund`; **Item** remove `item_type`, change `quantity` to `IntegerField(default=1)`
+- [ ] T003 Hand-write migration `apps/unihub/backend/inventory/migrations/0007_cost_factors.py` (`atomic = False`): create CostFactor → RunPython backfill (per acquisition: `accumulated` factor = old `cost`/`cost_currency`; add `discount` factor `−discount` and `tax_refund` factor `−tax_refund` when non-zero; if no cost, `accumulated`=0; round `Item.quantity` to int) **before** dropping the scalar cost columns → RemoveField(item_type, acquisition cost/cost_currency/discount/tax_refund) → AlterField `Item.quantity` → IntegerField
+- [ ] T004 Add `apps/unihub/backend/inventory/migrations/0008_reseed_system_attrs.py`: drop Item `item_type`, Acquisition cost/cost_currency/discount/tax_refund system attrs; seed a **CostFactor** content-type's system attrs (value, currency, type); reversible
+- [ ] T005 Run `uv run python manage.py migrate`; confirm `0007`/`0008` apply cleanly on a **fresh DB** AND the iteration-3 DB (exercise the `cost → accumulated/discount/tax_refund factors` backfill and `quantity → int`)
 
 **Checkpoint**: schema on the new shape; stories can proceed.
 
 ---
 
-## Phase 3: User Story 2 - Acquisition form: cost, cards, edit (Priority: P1) 🎯
+## Phase 3: User Story 2 - Cost factors + acquisition polish + item-edit fix (Priority: P1) 🎯
 
-**Goal**: Acquisition holds the order payment (cost/discount/tax_refund → net_cost) and request_time; items show as an editable **card view** (≥1 required, default card on create); source is auto-complete; acquisition is editable on a standalone page. No method. Constitution v1.14.0 page rules.
+**Goal**: Acquisition payment is 1..N cost factors (signed value, currency, type) → per-currency net_cost; `accumulated` auto-derives/overrides/resets; page title "Acquisition"; 3-crumb edit breadcrumb; request_time defaults today 00:00; **editing an item card persists** (fixed).
 
-**Independent Test**: Create an acquisition (cost 3300 / discount 100 → net_cost 3200) with a default card + one added card; confirm ≥1-item enforced, source auto-completes, no Cancel button; then edit it on its standalone page and change the discount.
+**Independent Test**: Create an acquisition with an accumulated factor + a −100 USD discount + a 30 EUR shipping → net_cost shows USD & EUR lines; edit an item card value and confirm it survives on the card and after reload.
 
 ### Tests for User Story 2 (write/adjust first) ⚠️
 
-- [x] T007 [P] [US2] Update `apps/unihub/backend/tests/test_inventory_acquisitions.py`: `test_acquisition_cost_discount_tax_refund_net_cost`, `test_acquisition_requires_at_least_one_item`, `test_acquisition_no_method_field`, `test_acquisition_request_time_persisted`, `test_sources_endpoint_returns_distinct_used_sources`, `test_sources_endpoint_filters_by_q`
+- [ ] T006 [P] [US2] Update `apps/unihub/backend/tests/test_inventory_acquisitions.py`: `test_acquisition_cost_factors_net_cost_per_currency`, `test_acquisition_requires_at_least_one_cost_factor`, `test_cost_factor_value_carries_sign`, `test_accumulated_defaults_to_item_total_sum`, `test_acquisition_requires_at_least_one_item` (kept); `test_item_edit_via_acquisition_patch_persists`
 
 ### Implementation for User Story 2
 
-- [x] T008 [US2] Rework `AcquisitionSerializer` in `apps/unihub/backend/inventory/serializers.py`: fields `request_time`, `cost`, `cost_currency`, `discount`, `tax_refund` + derived read-only `net_cost`; nested writable `items` with **≥1 validation** on create; drop `method` and `total_item_cost`
-- [x] T009 [US2] In `apps/unihub/backend/inventory/views.py`+`urls.py`: add `GET /acquisitions/sources/?q=` action returning distinct non-blank sources (capped, `q`-filtered); update `AcquisitionViewSet` filter/ordering (drop `method`; add `request_time`, `cost`)
-- [x] T010 [US2] Run T007 to green (`uv run pytest tests/test_inventory_acquisitions.py`)
-- [x] T011 [US2] Regenerate OpenAPI schema + frontend types into `apps/unihub/frontend/src/generated/api-types.ts`
-- [x] T012 [P] [US2] Update `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`: `Acquisition` types (request_time, cost/cost_currency/discount/tax_refund, derived net_cost; no method/total_item_cost), `updateAcquisition`, and `listSources(q)`
-- [x] T013 [US2] Rework `apps/unihub/frontend/src/pages/inventory/acquisitions/new.tsx`: **card view** for "Items in this acquisition" (preview filled fields only, editable/removable); **pre-insert one empty item card**; **≥1-item submit guard**; `source` via AntD **AutoComplete** (options from `listSources`); add request_time + cost/cost_currency/discount/tax_refund fields with a live **net_cost** preview; remove method; **remove the Cancel button** (breadcrumb only); source/obtained_at row **stacks on narrow screens**
-- [x] T014 [US2] Build the NEW standalone edit page `apps/unihub/frontend/src/pages/inventory/acquisitions/edit.tsx` (same form pre-filled from `getAcquisition`, `PATCH` on save, breadcrumb, no Cancel); register route `/inventory/acquisitions/:id/edit` in `apps/unihub/frontend/src/App.tsx`
-- [x] T015 [US2] Update `apps/unihub/frontend/src/pages/inventory/acquisitions/index.tsx`: **add explicit `title` to every column** (fix blank headers on `item_count`/net_cost), drop the method column, show `net_cost`, and route the Edit action to the standalone edit page
-- [x] T016 [P] [US2] Update `pages.inventory.acquisitions.*` keys in BOTH `en-US` and `zh-TW`: add request_time, cost/discount/tax_refund/net_cost, card-view + source-autocomplete copy; remove method/pending keys
+- [ ] T007 [US2] Add `CostFactorSerializer` and rework `AcquisitionSerializer` in `apps/unihub/backend/inventory/serializers.py`: nested writable `cost_factors` (≥1 on create; PATCH replaces the set, ≥1); derived **`net_cost`** = per-currency sum of factor values; when `cost_factors` omitted on create, auto-add an `accumulated` factor = Σ item `total_price`; drop scalar cost fields
+- [ ] T008 [US2] Update `AcquisitionViewSet` filter/ordering in `apps/unihub/backend/inventory/views.py` (drop `cost` filter; keep source/request_time/obtained_at + `sources` action); run T006 to green
+- [ ] T009 [US2] Regenerate OpenAPI schema + frontend types into `apps/unihub/frontend/src/generated/api-types.ts`
+- [ ] T010 [P] [US2] Update `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`: `Acquisition` types (nested `cost_factors`, `net_cost` per-currency list; no scalar cost), NEW `CostFactor`/`CostFactorWrite`, `CostFactorType`
+- [ ] T011 [US2] Add a **CostFactors editor** to `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionForm.tsx`: a list of `{value, currency, type}` rows (add/remove; type select; currency picker; signed value); the `accumulated` row's value **auto-derives** from Σ item total_price with **override** + **reset-to-derived**; a live **per-currency net_cost** preview; enforce ≥1 factor
+- [ ] T012 [US2] In `AcquisitionForm.tsx`: title the section **"Acquisition"**; default `request_time` to **today 00:00** (like obtained_at); apply the **`useContainerWidth`** hook so acquisition fields + cost-factor rows stack single-column on narrow content; **FIX the item-card edit persistence** (write edited values back to the pending list in create, and to the stored item via `updateItem` in edit; ensure the modal re-inits from the edited card)
+- [ ] T013 [US2] Update `apps/unihub/frontend/src/pages/inventory/acquisitions/edit.tsx`: breadcrumb **Acquisitions / {acquisition.id} / Edit Acquisition** (three crumbs)
+- [ ] T014 [P] [US2] Apply `useContainerWidth` stacking in `apps/unihub/frontend/src/pages/inventory/items/ItemFormModal.tsx` (single-column on narrow) and **remove the `item_type` select**; make `quantity` an integer input (precision 0)
+- [ ] T015 [P] [US2] Update `pages.inventory.acquisitions.*` keys in BOTH locales: cost-factor types (accumulated/shipping/discount/tax_refund/paid_by_other/other), net_cost, "Acquisition" title, reset/override copy; prune scalar cost/discount/tax_refund keys
 
-**Checkpoint**: acquisition payment + card flow + standalone edit work; no method.
+**Checkpoint**: cost factors + per-currency net_cost + acquisition polish + item-edit persistence all work.
 
 ---
 
-## Phase 4: User Story 1 - Item fields, deprecation, list fixes (Priority: P1)
+## Phase 4: User Story 1 - Item cleanups + merged Catalog page (Priority: P1)
 
-**Goal**: Items use sku_price (+derived total_price), volume, required quantity; lifecycle is `deprecate_time` with derived status (Deprecate/Restore); the list fixes blank headers, uses a single "—", adds an obtained-date column, drops model/serial. Constitution v1.14.0 modal rules.
+**Goal**: `quantity` integer; `item_type` gone; checklist shortfall removed. The Items and Acquisitions lists merge into one **expandable-tree "Catalog"** page (acquisition parents → item children); item rows lose Edit.
 
-**Independent Test**: Edit an item (sku_price + currency, volume, quantity) and confirm total_price = sku_price × quantity; Deprecate (timestamp defaults today 00:00) → status "deprecated"; Restore → "active"; confirm every list column has a header and one "—" placeholder.
+**Independent Test**: Open Catalog → acquisitions as parent rows sorted ↓ obtained; expand to item children; item rows show Deprecate/Restore/Delete (no Edit); acquisition rows show Edit/Delete; `/inventory/items` redirects here.
 
 ### Tests for User Story 1 (write/adjust first) ⚠️
 
-- [x] T017 [P] [US1] Update `apps/unihub/backend/tests/test_inventory_items.py`: `test_item_sku_price_and_total_price`, `test_item_quantity_defaults_to_one`, `test_item_volume_roundtrip_units`, `test_deprecate_sets_status_deprecated`, `test_restore_clears_deprecate_time`, `test_status_is_read_only`, `test_item_has_no_model_serial_cost_fields`; update the shared `create_item` helper in `tests/conftest.py` (sku_price, no cost/model/serial)
+- [ ] T016 [P] [US1] Update `apps/unihub/backend/tests/test_inventory_items.py`: `test_item_quantity_is_integer`, `test_item_has_no_item_type_field`; update the shared `create_item` helper in `tests/conftest.py` (integer quantity, no item_type)
+- [ ] T017 [P] [US1] Update `apps/unihub/backend/tests/test_inventory_scenarios.py`: `test_checklist_has_no_shortfall` (line payload omits shortfall); remove the consumable-shortfall test
 
 ### Implementation for User Story 1
 
-- [x] T018 [US1] Update `ItemSerializer` in `apps/unihub/backend/inventory/serializers.py`: `sku_price`/`sku_price_currency`; `volume` as `{value,unit}`; derived read-only `total_price` and `status`; `quantity` default 1; drop `cost`/`cost_currency`/`model`/`serial_number`; `status` is read-only (reject/ignore writes)
-- [x] T019 [US1] Update `ItemViewSet` in `apps/unihub/backend/inventory/views.py`: filter/ordering fields drop `cost`/`model`/`serial_number`/`status`, add `sku_price`/`volume_canonical` and an optional `deprecated` filter over `deprecate_time`; run T017 to green
-- [x] T020 [US1] Regenerate frontend types into `apps/unihub/frontend/src/generated/api-types.ts`
-- [x] T021 [P] [US1] Update `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`: `Item` types (sku_price/sku_price_currency, volume, deprecate_time, derived total_price/status; no cost/model/serial), keep `updateItem`/`deleteItem`
-- [x] T022 [US1] Rework `apps/unihub/frontend/src/pages/inventory/items/ItemFormModal.tsx`: rename price→sku_price; add a **volume** field (value+unit); remove model/serial inputs; **remove the status select** (derived); make `quantity` required + default 1; **disable a currency selector when its amount is 0/empty**; **stack fields on narrow screens**; **Cancel button left-most**; **do not close on outside-click/Esc while dirty**
-- [x] T023 [US1] Update `apps/unihub/frontend/src/pages/inventory/items/index.tsx`: **add explicit `title` to every column** (fix blank headers on spec/weight/length/width/height/volume); add an **obtained-date column**; remove model/serial columns; default column order name, spec, size, weight, length, width, height (+ obtained-date); replace **Archive → Deprecate** (a custom confirm modal with a `deprecate_time` DatePicker defaulting today 00:00) and add a **Restore** action (clears deprecate_time) for deprecated items; render the **derived status** tag; use the single **"—"** placeholder everywhere; **remove the "Add items via New Acquisition" hint**
-- [x] T024 [P] [US1] Update `pages.inventory.items.*` keys in BOTH locales: add sku_price, volume, deprecate/restore, deprecated-status, obtained-date; remove model/serial/price/editable-status/archive keys
-- [x] T025 [P] [US1] Update `apps/unihub/frontend/src/pages/inventory/items/ItemsPage.test.tsx` to the new shape (sku_price, volume, no New/model/serial; deprecate/restore)
+- [ ] T018 [US1] Update `ItemSerializer` in `apps/unihub/backend/inventory/serializers.py` (drop `item_type`; `quantity` integer) and `ItemViewSet` filter/ordering in `views.py` (drop `item_type`); remove the `shortfall` from `apps/unihub/backend/inventory/services.py` `build_checklist` (and the `consumable_shortfall` helper + its serializer use); run T016/T017 to green
+- [ ] T019 [US1] Regenerate frontend types into `apps/unihub/frontend/src/generated/api-types.ts`
+- [ ] T020 [P] [US1] Update `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`: `Item` (no `item_type`, integer `quantity`), `ScenarioItem`/`ChecklistLine` (drop `shortfall`)
+- [ ] T021 [US1] Build the NEW merged Catalog page `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx`: `PageTable` with **expandable rows** (acquisitions as parents via `listAcquisitions` with nested items → item child rows); **union columns** (acquisition: source/obtained/net_cost; item: name/spec/size/weight/length/width/height/status/deprecate_time); parent rows fill acquisition cols, child rows item cols; `columnEmptyText={false}`; default sort acquisitions ↓ obtained; **item rows: Deprecate/Restore + Delete (NO Edit)**; **acquisition rows: Edit (→ /:id/edit) + Delete (cascade confirm)**; page action **New Acquisition**
+- [ ] T022 [US1] Wire routing/nav: in `apps/unihub/frontend/src/App.tsx` add `/inventory/catalog` and **redirect** `/inventory/items` + `/inventory/acquisitions` → it; in `apps/unihub/frontend/src/components/AppShell/AppShell.tsx` replace the Items/Acquisitions nav entries with a single **"Catalog"** entry (keep Scenarios); delete the old `pages/inventory/items/index.tsx` and `pages/inventory/acquisitions/index.tsx` list pages
+- [ ] T023 [P] [US1] Update scenario detail `apps/unihub/frontend/src/pages/inventory/scenarios/detail.tsx`: remove any shortfall display from the checklist lines
+- [ ] T024 [P] [US1] Update locale keys in BOTH `en-US` and `zh-TW`: add `menu.inventory.catalog` + `pages.inventory.catalog.*`; remove `menu.inventory.items`/`menu.inventory.acquisitions` (list entries) and item_type/shortfall keys; keep item column keys reused by the Catalog
 
-**Checkpoint**: item model + list + modal reflect iteration 3; blank-header bug fixed.
+**Checkpoint**: one Catalog page; item_type/shortfall gone; integer quantity.
 
 ---
 
 ## Phase 5: Polish & Cross-Cutting
 
-- [x] T026 Run the backend quality loop from `apps/unihub/backend/`: `uv run ruff format . && uv run ruff check . --fix && uv run pytest` — full suite green
-- [x] T027 Run the frontend quality loop from `apps/unihub/frontend/`: `pnpm lint` (0 warnings) `&& pnpm typecheck` `&& pnpm test`
-- [x] T028 [P] Verify locale parity: every `menu.inventory.*` / `pages.inventory.*` key exists in BOTH locales with removed keys pruned from both (Principle VIII)
-- [x] T029 [P] Constitution v1.14.0 spot-check: acquisition create/edit pages render **no Cancel button** (breadcrumb present); `ItemFormModal` Cancel is left-most and the modal does not close on outside-click while dirty; both stack on narrow widths. Also grep confirms no `finance` model import in `inventory/` (Principle II)
-- [x] T030 Rebuild the Docker stack and run the [quickstart.md](quickstart.md) walkthrough end-to-end on Postgres (acquisition card flow + net_cost, ≥1-item guard, source autocomplete, deprecate/restore, standalone edit, cascade delete), including the `item.cost → acquisition.cost` backfill on the pre-existing DB
-- [x] T031 [P] Mark tasks complete and add an Implementation Notes section (deviations, migration `atomic=False` rationale) to this file
+- [ ] T025 Run the backend quality loop from `apps/unihub/backend/`: `uv run ruff format . && uv run ruff check . --fix && uv run pytest` — full suite green
+- [ ] T026 Run the frontend quality loop from `apps/unihub/frontend/`: `pnpm lint` (0 warnings) `&& pnpm typecheck` `&& pnpm test`; update/replace `ItemsPage.test.tsx` with a `CatalogPage` test (expandable rows; item rows have no Edit)
+- [ ] T027 [P] Verify locale parity (both locales identical key sets; removed keys pruned) and that the merged Catalog + acquisition pages have no blank headers and use the single "—" (Principle VI/VIII)
+- [ ] T028 [P] Constitution v1.14.0 + Principle II spot-check: acquisition pages breadcrumb/no-Cancel; modal Cancel-left/dirty-guard; **content-width stacking works when the sidebar makes the content narrow at a wide window**; grep confirms no `finance` model import in `inventory/`
+- [ ] T029 Rebuild the Docker stack and run [quickstart.md](quickstart.md) end-to-end on Postgres (cost factors + per-currency net_cost, accumulated derive/override/reset, integer quantity, no item_type, merged Catalog expandable tree + redirects, item-edit persistence, deprecate/restore), including the `cost → factors` + `quantity → int` backfill on the pre-existing DB
+- [ ] T030 [P] Mark tasks complete + add an Implementation Notes section (deviations, migration `atomic=False`, backfill order) to this file
 
 ---
 
@@ -105,40 +104,31 @@ description: "Task list for Inventory App — Iteration 3 (2026-07-11)"
 
 ### Phase Dependencies
 
-- **Setup (P1)**: volume helpers — no deps.
-- **Foundational (P2)**: models + migrations — depends on the volume helpers (T001) for the serializer; **blocks all stories**.
-- **US2 (P3)** and **US1 (P4)**: both depend on Foundational. They share the regenerated types (T011/T020) — run US2 backend before US1 frontend, or regenerate once after both serializers land. Independent otherwise; can be staffed in parallel.
+- **Setup (P1)**: RWD hook — no deps (frontend).
+- **Foundational (P2)**: CostFactor model + migrations — **blocks all stories**.
+- **US2 (P3)** and **US1 (P4)**: both depend on Foundational and share the regenerated types (T009/T019) — regenerate once after both serializers land, or run US2 backend before US1 frontend. US1's Catalog page (T021) consumes acquisitions-with-nested-items and net_cost (from US2's serializer), so **T021 depends on T007**.
 - **Polish (P5)**: after both stories.
 
 ### Parallel Opportunities
 
-- T001/T002 (volume helpers + tests) in parallel.
-- After Foundational, US2 (T007–T016) and US1 (T017–T025) can proceed in parallel; `[P]` service/i18n/test tasks touch different files.
-- Locale tasks (T016, T024) and test tasks are parallelizable within a phase.
+- T001 (RWD hook) alongside Foundational.
+- After Foundational, US2 backend (T006–T008) and US1 backend (T016–T018) run in parallel; frontend service/i18n/test `[P]` tasks touch different files.
 
 ---
 
 ## Implementation Strategy
 
 ### Critical path
-1. Setup + Foundational (volume helpers → models → migrations → migrate) — schema lands first, with the data-preserving backfill.
-2. US2 + US1 backend (serializers, sources endpoint, deprecate/restore) → regen types → US2 + US1 frontend (card view, edit page, ItemFormModal, list fixes).
-3. Polish: both quality loops + Docker quickstart.
+1. Setup + Foundational (RWD hook → CostFactor model → migrations → migrate) — schema + backfill land first.
+2. US2 backend (cost-factor serializer, net_cost) → regen types → US2 frontend (CostFactors editor, page polish, **item-edit fix**) + US1 item cleanups.
+3. US1 merged **Catalog** page + routing/nav + shortfall removal.
+4. Polish: both quality loops + Docker quickstart.
 
 ### Notes
-- Backend behavior changes are test-first: adjust the test to the new contract and see it fail before changing code.
-- Migration `0005` MUST be `atomic = False` (Postgres rejects ALTER after a RunPython row backfill in one transaction — learned in iteration 2).
-- The backfill MUST read `item.cost` before the RemoveField drops it, and set `quantity` before the NOT-NULL alter.
+- Backend behavior changes are test-first.
+- Migration `0007` MUST be `atomic = False`; the backfill MUST read the scalar `cost`/`discount`/`tax_refund` and current `quantity` **before** those columns are dropped/altered.
 - Regenerate frontend types after every serializer change (Principle IV).
 - Add/prune i18n keys in both locales in the same commit (Principle VIII).
-- Apply Constitution v1.14.0: standalone pages have no Cancel (breadcrumb); modals keep Cancel left-most, guard outside-click while dirty, and stack on narrow screens.
-
-## Implementation Notes (2026-07-11, iteration 3)
-
-**All 31 tasks complete.** Verified end-to-end on the Postgres Docker stack.
-
-- **Backend**: 248 tests pass (10 unit-conversion incl. volume + rewritten inventory suites), ruff clean. Migrations `0005_iter3_fields` (non-atomic) + `0006_reseed_system_attrs` applied cleanly on a fresh DB **and** on the iteration-2 DB — the `item.cost → acquisition.cost` backfill and `quantity` null→1 worked; renames preserved data.
-- **Frontend**: ESLint 0 warnings, strict typecheck clean, 358 tests pass. New shared `AcquisitionForm` (card view, source `AutoComplete`, payment fields + live net_cost, ≥1-item guard) reused by the create page and a new standalone edit page; `ItemFormModal` gains volume + Cancel-left + dirty-guard + RWD; Items list fixes blank headers, adds an obtained-date column, and has Deprecate(+timestamp)/Restore actions with a single "—" placeholder.
-- **Live smoke**: net_cost 3200 (3300−100−0), no `method`, total_price 4400 (2200×2), volume 1.2 L round-trip, empty-items → 400, distinct source autocomplete, deprecate→deprecated / restore→active.
-- **Deviation**: `AcquisitionForm` edit mode persists existing-item edits/removals immediately via the item endpoints (`updateItem`/`deleteItem`) and appends only *new* cards through `PATCH /acquisitions/` — the backend's acquisition PATCH appends items but does not update/remove existing ones. Create mode submits all cards at once.
-- **Constitution v1.14.0** honored: acquisition create/edit are standalone pages with a breadcrumb and no Cancel button; `ItemFormModal` Cancel is left-most and the modal won't close on outside-click while dirty. **Principle II** re-verified (no `finance` import in `inventory/`).
+- Merged Catalog stays on `PageTable` with `expandable` rows (Principle VII); item rows have **no Edit** (edit via the acquisition page).
+- RWD MUST be **content-width** based (`useContainerWidth`), since AntD `Col` xs/sm follow the viewport.
+- The item-edit-persistence fix (FR-021a) has an explicit acceptance test at both the API (`test_item_edit_via_acquisition_patch_persists`) and UI (quickstart) layers.

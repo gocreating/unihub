@@ -506,33 +506,33 @@ Completed 2026-07-11 (builds on iteration 8, commit `ddb2a82`). **No schema chan
 
 ## Phase 1: Shared infrastructure fixes
 
-- [ ] T098 Rewrite `apps/unihub/frontend/src/hooks/useContainerWidth.ts` around a **callback ref** (observer attaches when the node mounts — fixes lazily-mounted modal content); add `apps/unihub/frontend/src/hooks/useContainerWidth.test.ts` (observer attaches on late mount, isNarrow flips below breakpoint)
-- [ ] T099 [P] Fix the number-input alignment rule in `apps/unihub/frontend/src/index.css` to out-rank AntD cssinjs (`text-align: right !important`, with a comment on why)
-- [ ] T100 [P] Add `defaultSortRules` support to `useEntityTable`/`useEntitySort` (`apps/unihub/frontend/src/components/EntityToolbar/`) — additive, seeds initial sort state
+- [X] T098 Rewrite `apps/unihub/frontend/src/hooks/useContainerWidth.ts` around a **callback ref** (observer attaches when the node mounts — fixes lazily-mounted modal content); add `apps/unihub/frontend/src/hooks/useContainerWidth.test.ts` (observer attaches on late mount, isNarrow flips below breakpoint)
+- [X] T099 [P] Fix the number-input alignment rule in `apps/unihub/frontend/src/index.css` to out-rank AntD cssinjs (`text-align: right !important`, with a comment on why)
+- [X] T100 [P] Add `defaultSortRules` support to `useEntityTable`/`useEntitySort` (`apps/unihub/frontend/src/components/EntityToolbar/`) — additive, seeds initial sort state
 
 ## Phase 2: Backend defaults + tests
 
-- [ ] T101 Set explicit nulls-first defaults in `apps/unihub/backend/inventory/views.py`: `AcquisitionViewSet.ordering = ["-obtained_at__nullsfirst"]`, `ItemViewSet.ordering = ["-acquisition__obtained_at__nullsfirst"]`
-- [ ] T102 [P] Add backend tests (`tests/test_inventory_acquisitions.py` / `test_inventory_items.py`): `?ordering=-obtained_at__nullsfirst` puts null-obtained rows first, `__nullslast` last, and the **default** ordering places null-obtained acquisitions first
+- [X] T101 Set explicit nulls-first defaults in `apps/unihub/backend/inventory/views.py`: `AcquisitionViewSet.ordering = ["-obtained_at__nullsfirst"]`, `ItemViewSet.ordering = ["-acquisition__obtained_at__nullsfirst"]`
+- [X] T102 [P] Add backend tests (`tests/test_inventory_acquisitions.py` / `test_inventory_items.py`): `?ordering=-obtained_at__nullsfirst` puts null-obtained rows first, `__nullslast` last, and the **default** ordering places null-obtained acquisitions first
 
 ## Phase 3: Catalog polish
 
-- [ ] T103 In `catalog/index.tsx`: default column order **net_cost, name, sku_price, acquisition__source, request_time, obtained_at**, rest, actions; **bump the table key to `inventory-catalog-v2`**; seed `defaultSortRules` = obtained desc nulls-first; Requested/Obtained render **date-only** (`YYYY-MM-DD (x ago)`); **align net_cost + sku_price right**; action button label **"New"**
-- [ ] T104 [P] i18n (BOTH locales): `common.new` = "New"/「新增」, `common.add` = "Add"/「新增」, create-submit "Create"/「建立」; wire Catalog action, Items-panel Add, Cost-panel Add, create submit
+- [X] T103 In `catalog/index.tsx`: default column order **net_cost, name, sku_price, acquisition__source, request_time, obtained_at**, rest, actions; **bump the table key to `inventory-catalog-v2`**; seed `defaultSortRules` = obtained desc nulls-first; Requested/Obtained render **date-only** (`YYYY-MM-DD (x ago)`); **align net_cost + sku_price right**; action button label **"New"**
+- [X] T104 [P] i18n (BOTH locales): `common.new` = "New"/「新增」, `common.add` = "Add"/「新增」, create-submit "Create"/「建立」; wire Catalog action, Items-panel Add, Cost-panel Add, create submit
 
 ## Phase 4: Form-constitution fixes
 
-- [ ] T105 `ItemFormModal.tsx`: custom **space-between footer** (Cancel flushed left, Save right); verify grid + stacking now works via the callback-ref hook
-- [ ] T106 [P] Apply compliant **space-between footers** to the catalog **Deprecate** modal and the scenario **Constraint** modal
-- [ ] T107 `AcquisitionForm.tsx` Cost panel: strict grid rows `[24px drag]·[flex 1 type/label]·[flex 2 value+currency]·[flex none action]` for accumulated/manual/Total rows (no fixed 90px/130px)
+- [X] T105 `ItemFormModal.tsx`: custom **space-between footer** (Cancel flushed left, Save right); verify grid + stacking now works via the callback-ref hook
+- [X] T106 [P] Apply compliant **space-between footers** to the catalog **Deprecate** modal and the scenario **Constraint** modal
+- [X] T107 `AcquisitionForm.tsx` Cost panel: strict grid rows `[24px drag]·[flex 1 type/label]·[flex 2 value+currency]·[flex none action]` for accumulated/manual/Total rows (no fixed 90px/130px)
 
 ## Phase 5: Regression tests + polish
 
-- [ ] T108 [P] RTL `ItemFormModal.test.tsx` (new): footer order (Cancel left / Save right, space-between), field order (Name, quantity, SKU price, spec, URL, remark, color, size, …), fields stack under a narrow container (mock ResizeObserver)
-- [ ] T109 [P] RTL `CatalogPage.test.tsx`: default column order headers, right-aligned net_cost/sku_price cells, date-only Requested/Obtained, "New" button
-- [ ] T110 [P] e2e: computed `text-align:right` on `.ant-input-number-input` (cost panel + Add-Item modal); Add-Item modal fields stack at narrow viewport; catalog default order = nulls-first; "New" button label
-- [ ] T111 Quality loops: `pnpm lint && pnpm typecheck && pnpm test`; `uv run ruff check . && uv run pytest`
-- [ ] T112 [P] Mark iteration-10 tasks complete + append Implementation Notes
+- [X] T108 [P] RTL `ItemFormModal.test.tsx` (new): footer order (Cancel left / Save right, space-between), field order (Name, quantity, SKU price, spec, URL, remark, color, size, …), fields stack under a narrow container (mock ResizeObserver)
+- [X] T109 [P] RTL `CatalogPage.test.tsx`: default column order headers, right-aligned net_cost/sku_price cells, date-only Requested/Obtained, "New" button
+- [X] T110 [P] e2e: computed `text-align:right` on `.ant-input-number-input` (cost panel + Add-Item modal); Add-Item modal fields stack at narrow viewport; catalog default order = nulls-first; "New" button label
+- [X] T111 Quality loops: `pnpm lint && pnpm typecheck && pnpm test`; `uv run ruff check . && uv run pytest`
+- [X] T112 [P] Mark iteration-10 tasks complete + append Implementation Notes
 
 ---
 
@@ -541,3 +541,26 @@ Completed 2026-07-11 (builds on iteration 8, commit `ddb2a82`). **No schema chan
 
 ## Implementation Strategy (iteration 10)
 Fix the three root causes in shared infra first (hook callback ref, CSS precedence, footer pattern), then apply catalog defaults + labels, then lock every repeatedly-reported behaviour with backend/RTL/e2e tests.
+
+---
+
+## Implementation Notes (iteration 10)
+
+Completed 2026-07-11 (builds on iteration 9, commit `1be2fd3`). **No schema change.**
+
+### Root causes fixed (shared infra)
+- **`useContainerWidth` → callback ref**: the mount-effect observer never attached inside AntD Modals (children lazy-mount, `ref.current` null at effect time) — modal fields never stacked. Now a `useCallback` ref attaches/detaches the ResizeObserver whenever the node (un)mounts. Unit-tested (`useContainerWidth.test.tsx`: late-mount attach + isNarrow flip).
+- **Number right-align → `!important`**: AntD v5 injects cssinjs styles after `index.css` loads, so the equal-specificity rule lost. `.ant-input-number-input { text-align: right !important; }` with an explanatory comment.
+- **Modal footers → space-between**: AntD's default footer right-aligns the whole group. Custom footers (Cancel flushed left, primary right) on Add-Item, Deprecate, and Constraint modals.
+- **Cost rows → strict grid**: `[24px drag/spacer]·[flex 1 1 0 type/label]·[flex 2 1 0 value+currency]·[flex none action]` for accumulated/manual/Total rows — no more fixed 90px/130px dead space.
+
+### Catalog
+- Default column order **Net cost, Name, SKU price, Source, Requested, Obtained**, rest, Actions; persistence key bumped to **`inventory-catalog-v2`**.
+- Default sort **Obtained desc NULLS FIRST**: backend `ordering = ["-obtained_at__nullsfirst"]` (Acq) / `["-acquisition__obtained_at__nullsfirst"]` (Item) + toolbar seeded via new **`defaultSortRules`** option on `useEntityTable` (threads into `useEntitySort`'s existing initial-rules parameter).
+- Requested/Obtained render **date-only** `YYYY-MM-DD (x ago)`; **Net cost + SKU price `align:'right'`**; page action label **"New"**.
+- Labels: create submit **"Create"**; Items/Cost panel buttons **"Add"** (new `common.new`/`common.add` keys, both locales).
+
+### Regression tests
+- Backend: `test_ordering_nullsfirst_and_nullslast_take_effect`, `test_default_ordering_is_obtained_desc_nulls_first` — **267 pytest**, ruff clean.
+- RTL: `ItemFormModal.test.tsx` (footer space-between order, exact 13-field order, **narrow stacking via mocked ResizeObserver — proves the callback-ref fix**); `CatalogPage.test.tsx` (+2: default column order + "New", right-aligned Net cost/SKU cells, date-only). `useContainerWidth.test.tsx` (2). **Frontend 367 vitest**, lint/typecheck clean, locale parity OK.
+- e2e (20 specs compile): computed `text-align:right` on number inputs (cost panel + modal), modal stacking at 480px, footer Cancel-left/Save-right geometry, catalog nulls-first default + "New" label. Not executed headlessly (needs `pnpm dev` + Docker backend).

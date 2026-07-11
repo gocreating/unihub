@@ -53,9 +53,13 @@ body:has(.ant-drawer-open.ant-drawer-inline) {
  * digits line up for scanning/comparison. Applies to every Ant Design
  * InputNumber app-wide (AntD does not propagate a wrapper `textAlign` to the
  * inner <input>, so this global rule is the reliable enforcement point).
+ *
+ * !important is required: AntD v5 injects its styles at runtime (cssinjs)
+ * AFTER this stylesheet loads, so an equal-specificity rule here loses to
+ * AntD's `text-align: left` regardless of selector order.
  */
 .ant-input-number-input {
-  text-align: right;
+  text-align: right !important;
 }
 
 /* Monetary amount inputs also right-align their plain-text variant. */

@@ -108,6 +108,36 @@ describe('CatalogPage', () => {
     expect(link).toHaveAttribute('target', '_blank');
   });
 
+  it('applies the default column order and a "New" action button', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Shop');
+    // Default order (spec): Net cost, Name, SKU price, Source, Requested, Obtained, …
+    const headers = Array.from(container.querySelectorAll('.ant-table-thead th'))
+      .map((th) => th.textContent?.trim() ?? '')
+      .filter((h) => ['Net Cost', 'Name', 'SKU Price', 'Source', 'Requested', 'Obtained'].includes(h));
+    expect(headers).toEqual(['Net Cost', 'Name', 'SKU Price', 'Source', 'Requested', 'Obtained']);
+    // Page action is "New", not "New Acquisition".
+    expect(screen.getByRole('button', { name: /New/ }).textContent).toBe('New');
+  });
+
+  it('right-aligns Net cost and SKU price cells and shows date-only Requested/Obtained', async () => {
+    renderPage();
+    await screen.findByText('Shop');
+    // Net cost (acquisition row) and SKU price (item row) cells are right-aligned
+    // (AntD applies column align via class or inline style; measure-row cells excluded).
+    const alignedRight = (td: HTMLElement) =>
+      td.className.includes('align-right') || td.style.textAlign === 'right';
+    const cells = screen
+      .getAllByText('10 USD')
+      .map((el) => el.closest('td'))
+      .filter((td): td is HTMLTableCellElement => !!td && !td.closest('.ant-table-measure-row'));
+    expect(cells.length).toBeGreaterThanOrEqual(2); // net_cost + sku_price
+    for (const td of cells) expect(alignedRight(td)).toBe(true);
+    // Obtained renders date-only + relative (no HH:mm).
+    const dateCell = screen.getByText(/2026-07-11 \(/);
+    expect(dateCell.textContent).not.toMatch(/\d{2}:\d{2}/);
+  });
+
   it('has a caret column and the standard EntityOffsetFooter pagination', async () => {
     const { container } = renderPage();
     await screen.findByText('Shop');

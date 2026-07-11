@@ -163,14 +163,19 @@ export function ItemFormModal({
       maskClosable={!dirty}
       keyboard={!dirty}
       width={720}
-      footer={[
-        <Button key="cancel" onClick={onCancel}>
-          {t({ id: 'common.cancel' })}
-        </Button>,
-        <Button key="ok" type="primary" loading={confirmLoading} onClick={() => form.submit()}>
-          {t({ id: 'common.save' })}
-        </Button>,
-      ]}
+      footer={
+        // Constitution Principle VI: Cancel flushed to the LEFT of the footer,
+        // primary on the right (AntD's default footer right-aligns the whole
+        // group, which is non-compliant).
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <Button key="cancel" onClick={onCancel}>
+            {t({ id: 'common.cancel' })}
+          </Button>
+          <Button key="ok" type="primary" loading={confirmLoading} onClick={() => form.submit()}>
+            {t({ id: 'common.save' })}
+          </Button>
+        </div>
+      }
     >
       <div ref={ref}>
         <Form

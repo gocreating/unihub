@@ -13,7 +13,7 @@ import { useEntitySort } from './hooks/useEntitySort';
 import type { UseEntitySortReturn } from './hooks/useEntitySort';
 import { useColumnConfig } from './hooks/useColumnConfig';
 import type { UseColumnConfigReturn } from './hooks/useColumnConfig';
-import type { ColumnDef, EntityListParams, FilterableAttribute } from './types';
+import type { ColumnDef, EntityListParams, FilterableAttribute, SortRule } from './types';
 
 export const ENTITY_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 export type EntityPageSize = (typeof ENTITY_PAGE_SIZE_OPTIONS)[number];
@@ -24,6 +24,8 @@ export interface UseEntityTableOptions {
   filterableAttrs: FilterableAttribute[];
   columnDefs: ColumnDef[];
   defaultPageSize?: EntityPageSize;
+  /** Initial sort rules applied before any user interaction (e.g. a page's default sort). */
+  defaultSortRules?: SortRule[];
 }
 
 export interface EntityPaginationProps {
@@ -55,9 +57,10 @@ export function useEntityTable({
   filterableAttrs: _filterableAttrs,
   columnDefs,
   defaultPageSize = 25,
+  defaultSortRules,
 }: UseEntityTableOptions): UseEntityTableReturn {
   const filter = useEntityFilter(key);
-  const sort = useEntitySort(key);
+  const sort = useEntitySort(key, defaultSortRules);
   const cols = useColumnConfig(columnDefs);
 
   const [limit, setLimit] = useState<number>(defaultPageSize);

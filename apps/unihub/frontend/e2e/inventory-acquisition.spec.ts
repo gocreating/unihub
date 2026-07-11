@@ -94,6 +94,47 @@ test('item cards render available attributes as Tag badges', async ({ page }) =>
   await expect(card.locator('.ant-card-body .ant-tag', { hasText: 'Blue' })).toBeVisible();
 });
 
+test('number inputs are right-aligned (cost panel + Add-Item modal)', async ({ page }) => {
+  await gotoNewAcquisition(page);
+  // Cost panel value input.
+  const costInput = page.locator('.ant-card', { hasText: 'Cost' }).last().locator('.ant-input-number-input').first();
+  await expect(costInput).toBeVisible();
+  expect(await costInput.evaluate((el) => getComputedStyle(el).textAlign)).toBe('right');
+  // Add-Item modal quantity input.
+  await page.getByRole('button', { name: /^Add$/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  const qty = page.locator('.ant-modal .ant-input-number-input').first();
+  expect(await qty.evaluate((el) => getComputedStyle(el).textAlign)).toBe('right');
+});
+
+test('Add-Item modal fields stack at a narrow viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 480, height: 900 });
+  await gotoNewAcquisition(page);
+  await page.getByRole('button', { name: /^Add$/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.waitForTimeout(400);
+  // Narrow modal → the Name field's grid column must be full-width (ant-col-24).
+  const nameCol = page
+    .locator('.ant-modal .ant-form-item', { hasText: 'Name' })
+    .first()
+    .locator('xpath=ancestor::*[contains(@class,"ant-col-")][1]');
+  await expect(nameCol).toHaveClass(/ant-col-24/);
+});
+
+test('Add-Item modal footer: Cancel flushed left, Save right', async ({ page }) => {
+  await gotoNewAcquisition(page);
+  await page.getByRole('button', { name: /^Add$/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  const cancel = page.locator('.ant-modal-footer button', { hasText: 'Cancel' });
+  const save = page.locator('.ant-modal-footer button', { hasText: 'Save' });
+  const cBox = await cancel.boundingBox();
+  const sBox = await save.boundingBox();
+  const modalBox = await page.locator('.ant-modal-content').boundingBox();
+  // Cancel near the left edge; Save near the right edge.
+  expect(cBox!.x - modalBox!.x).toBeLessThan(60);
+  expect(modalBox!.x + modalBox!.width - (sBox!.x + sBox!.width)).toBeLessThan(60);
+});
+
 test('cost-factor rows stack on a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 560, height: 900 });
   await gotoNewAcquisition(page);

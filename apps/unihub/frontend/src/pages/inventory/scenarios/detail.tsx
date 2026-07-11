@@ -365,8 +365,22 @@ export function ScenarioDetailPage() {
           setConstraintModal(false);
           form.resetFields();
         }}
-        onOk={() => form.submit()}
-        confirmLoading={addConstraintMutation.isPending}
+        footer={
+          // Principle VI: Cancel flushed left, primary right.
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Button
+              onClick={() => {
+                setConstraintModal(false);
+                form.resetFields();
+              }}
+            >
+              {t({ id: 'common.cancel' })}
+            </Button>
+            <Button type="primary" loading={addConstraintMutation.isPending} onClick={() => form.submit()}>
+              {t({ id: 'common.save' })}
+            </Button>
+          </div>
+        }
       >
         <Form
           form={form}

@@ -217,6 +217,29 @@ class TestAcquisitions:
         assert fetched["name"] == "New"
         assert fetched["quantity"] == 5
 
+    def test_ordering_nullsfirst_and_nullslast_take_effect(self, auth_client):
+        """Regression: __nullsfirst/__nullslast MUST reorder null obtained_at rows."""
+        _post(auth_client, ACQ, {"source": "HasDate", "obtained_at": "2026-01-01T00:00:00Z",
+                                 "items": [{"name": "A"}]})
+        _post(auth_client, ACQ, {"source": "Pending", "items": [{"name": "B"}]})  # null obtained
+
+        first = auth_client.get(f"{ACQ}?ordering=-obtained_at__nullsfirst").json()["results"]
+        assert [a["source"] for a in first] == ["Pending", "HasDate"]
+
+        last = auth_client.get(f"{ACQ}?ordering=-obtained_at__nullslast").json()["results"]
+        assert [a["source"] for a in last] == ["HasDate", "Pending"]
+
+    def test_default_ordering_is_obtained_desc_nulls_first(self, auth_client):
+        """The Catalog default: obtained desc, NULLS FIRST (pending on top)."""
+        _post(auth_client, ACQ, {"source": "Old", "obtained_at": "2020-01-01T00:00:00Z",
+                                 "items": [{"name": "A"}]})
+        _post(auth_client, ACQ, {"source": "New", "obtained_at": "2026-01-01T00:00:00Z",
+                                 "items": [{"name": "B"}]})
+        _post(auth_client, ACQ, {"source": "Pending", "items": [{"name": "C"}]})
+
+        results = auth_client.get(ACQ).json()["results"]
+        assert [a["source"] for a in results] == ["Pending", "New", "Old"]
+
     def test_sources_endpoint_returns_distinct_used_sources(self, auth_client):
         _post(auth_client, ACQ, {"source": "Amazon", "items": [{"name": "A"}]})
         _post(auth_client, ACQ, {"source": "Amazon", "items": [{"name": "B"}]})

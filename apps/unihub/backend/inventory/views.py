@@ -62,7 +62,7 @@ class ItemViewSet(viewsets.ModelViewSet):
         "acquisition__request_time",
         "acquisition__obtained_at",
     ]
-    ordering = ["-acquisition__obtained_at"]
+    ordering = ["-acquisition__obtained_at__nullsfirst"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "patch", "delete", "head", "options"]
 
@@ -87,7 +87,7 @@ class AcquisitionViewSet(viewsets.ModelViewSet):
         "obtained_at": {"lookup": "obtained_at", "type": "date"},
     }
     ordering_fields = ["source", "request_time", "obtained_at"]
-    ordering = ["-obtained_at"]
+    ordering = ["-obtained_at__nullsfirst"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 

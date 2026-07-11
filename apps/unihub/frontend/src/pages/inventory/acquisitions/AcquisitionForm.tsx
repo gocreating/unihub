@@ -447,7 +447,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
         title={t({ id: 'pages.inventory.acquisitions.items' })}
         extra={
           <Button icon={<PlusOutlined />} onClick={openAddCard}>
-            {t({ id: 'pages.inventory.acquisitions.new.addItem' })}
+            {t({ id: 'common.add' })}
           </Button>
         }
         style={{ marginBottom: 16 }}
@@ -488,7 +488,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
         title={t({ id: 'pages.inventory.acquisitions.cost' })}
         extra={
           <Button icon={<PlusOutlined />} onClick={addFactor}>
-            {t({ id: 'pages.inventory.acquisitions.costFactors.add' })}
+            {t({ id: 'common.add' })}
           </Button>
         }
         style={{ marginBottom: 16 }}
@@ -497,13 +497,13 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
           {accumulatedRows.map((f) => (
             <Row gutter={[8, 8]} key={f.key} align="middle" wrap={isNarrow}>
               {!isNarrow && <Col flex="24px" />}
-              <Col flex={isNarrow ? '100%' : '130px'}>
+              <Col flex={isNarrow ? '100%' : '1 1 0'}>
                 <Typography.Text>
                   {t({ id: 'pages.inventory.acquisitions.costFactors.accumulatedLabel' })}
                 </Typography.Text>
               </Col>
-              <Col flex={isNarrow ? '100%' : 'auto'}>{valueCurrency(f, true)}</Col>
-              <Col flex={isNarrow ? '100%' : '90px'}>
+              <Col flex={isNarrow ? '100%' : '2 1 0'}>{valueCurrency(f, true)}</Col>
+              <Col flex="none">
                 <Button
                   size="small"
                   icon={<ReloadOutlined />}
@@ -532,7 +532,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
                       />
                     </Col>
                     <Col flex={isNarrow ? '100%' : '2 1 0'}>{valueCurrency(f, false)}</Col>
-                    <Col flex={isNarrow ? '100%' : '90px'}>
+                    <Col flex="none">
                       <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeFactor(f.key)} />
                     </Col>
                   </SortableFactorRow>
@@ -544,10 +544,10 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
           <Divider style={{ margin: '8px 0' }} />
           <Row gutter={8} align="top" wrap={false}>
             <Col flex="24px" />
-            <Col flex="130px">
+            <Col flex="1 1 0">
               <Typography.Text strong>{t({ id: 'pages.inventory.acquisitions.total' })}</Typography.Text>
             </Col>
-            <Col flex="auto">
+            <Col flex="2 1 0">
               {totals.length === 0 ? (
                 <Typography.Text>—</Typography.Text>
               ) : (
@@ -560,7 +560,6 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
                 </Space>
               )}
             </Col>
-            <Col flex="90px" />
           </Row>
         </Space>
       </Card>

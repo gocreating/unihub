@@ -87,9 +87,10 @@ function formatNetCost(net: NetCostEntry[] | undefined): string {
   return net.map((n) => `${Number(n.total).toLocaleString()} ${n.currency}`.trim()).join(', ');
 }
 
-function formatDateRelative(val: string | null | undefined): string {
+// Requested/Obtained render date-only (spec override of the datetime format).
+function formatDateShort(val: string | null | undefined): string {
   if (!val) return '';
-  return `${dayjs(val).format('YYYY-MM-DD HH:mm')} (${dayjs(val).fromNow()})`;
+  return `${dayjs(val).format('YYYY-MM-DD')} (${dayjs(val).fromNow()})`;
 }
 
 // Tree mode hits AcquisitionViewSet, whose fields are un-prefixed — strip the
@@ -144,26 +145,34 @@ export function CatalogPage() {
 
   const columnDefs = useMemo<ColumnDef[]>(
     () => [
-      { key: 'acquisition__source', label: t({ id: 'pages.inventory.acquisitions.col.source' }), dataType: 'text', visible: true, order: 0 },
+      // Default order (spec): Net cost, Name, SKU price, Source, Requested, Obtained, rest, Actions.
+      { key: 'net_cost', label: t({ id: 'pages.inventory.acquisitions.col.netCost' }), dataType: 'text', visible: true, order: 0 },
       { key: 'name', label: t({ id: 'common.name' }), dataType: 'text', visible: true, order: 1 },
-      { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text', visible: true, order: 2 },
-      { key: 'size', label: t({ id: 'pages.inventory.items.col.size' }), dataType: 'text', visible: true, order: 3 },
-      { key: 'quantity', label: t({ id: 'pages.inventory.items.col.quantity' }), dataType: 'number', visible: true, order: 4 },
-      { key: 'sku_price', label: t({ id: 'pages.inventory.items.col.skuPrice' }), dataType: 'number', visible: true, order: 5 },
-      { key: 'weight_canonical', label: t({ id: 'pages.inventory.items.col.weight' }), dataType: 'number', visible: true, order: 6 },
-      { key: 'length_canonical', label: t({ id: 'pages.inventory.items.col.length' }), dataType: 'number', visible: true, order: 7 },
-      { key: 'width_canonical', label: t({ id: 'pages.inventory.items.col.width' }), dataType: 'number', visible: true, order: 8 },
-      { key: 'height_canonical', label: t({ id: 'pages.inventory.items.col.height' }), dataType: 'number', visible: true, order: 9 },
-      { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select', visible: true, order: 10 },
-      { key: 'net_cost', label: t({ id: 'pages.inventory.acquisitions.col.netCost' }), dataType: 'text', visible: true, order: 11 },
-      { key: 'acquisition__request_time', label: t({ id: 'pages.inventory.acquisitions.col.requestTime' }), dataType: 'date', visible: true, order: 12 },
-      { key: 'acquisition__obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date', visible: true, order: 13 },
+      { key: 'sku_price', label: t({ id: 'pages.inventory.items.col.skuPrice' }), dataType: 'number', visible: true, order: 2 },
+      { key: 'acquisition__source', label: t({ id: 'pages.inventory.acquisitions.col.source' }), dataType: 'text', visible: true, order: 3 },
+      { key: 'acquisition__request_time', label: t({ id: 'pages.inventory.acquisitions.col.requestTime' }), dataType: 'date', visible: true, order: 4 },
+      { key: 'acquisition__obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date', visible: true, order: 5 },
+      { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text', visible: true, order: 6 },
+      { key: 'size', label: t({ id: 'pages.inventory.items.col.size' }), dataType: 'text', visible: true, order: 7 },
+      { key: 'quantity', label: t({ id: 'pages.inventory.items.col.quantity' }), dataType: 'number', visible: true, order: 8 },
+      { key: 'weight_canonical', label: t({ id: 'pages.inventory.items.col.weight' }), dataType: 'number', visible: true, order: 9 },
+      { key: 'length_canonical', label: t({ id: 'pages.inventory.items.col.length' }), dataType: 'number', visible: true, order: 10 },
+      { key: 'width_canonical', label: t({ id: 'pages.inventory.items.col.width' }), dataType: 'number', visible: true, order: 11 },
+      { key: 'height_canonical', label: t({ id: 'pages.inventory.items.col.height' }), dataType: 'number', visible: true, order: 12 },
+      { key: 'status', label: t({ id: 'pages.inventory.items.col.status' }), dataType: 'single_select', visible: true, order: 13 },
       { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 14 },
     ],
     [t],
   );
 
-  const table = useEntityTable({ key: 'inventory-catalog', filterableAttrs, columnDefs });
+  const table = useEntityTable({
+    // v2: column defaults changed (net cost first) — bump so saved state doesn't shadow them.
+    key: 'inventory-catalog-v2',
+    filterableAttrs,
+    columnDefs,
+    // Default sort (spec): Obtained descending, NULLS FIRST (pending on top).
+    defaultSortRules: [{ field: 'acquisition__obtained_at', direction: 'desc', nulls: 'first' }],
+  });
   const { filter, sort, cols } = table;
 
   // Flat mode when any active filter/sort targets an item column.
@@ -292,9 +301,9 @@ export function CatalogPage() {
         case 'net_cost':
           return formatNetCost(r.net_cost);
         case 'acquisition__request_time':
-          return formatDateRelative(r.request_time);
+          return formatDateShort(r.request_time);
         case 'acquisition__obtained_at':
-          return formatDateRelative(r.obtained_at);
+          return formatDateShort(r.obtained_at);
         default:
           return '';
       }
@@ -323,9 +332,9 @@ export function CatalogPage() {
       case 'status':
         return t({ id: `pages.inventory.items.status.${r.status}` });
       case 'acquisition__request_time':
-        return flatMode ? formatDateRelative(r.acquisition?.request_time) : '';
+        return flatMode ? formatDateShort(r.acquisition?.request_time) : '';
       case 'acquisition__obtained_at':
-        return flatMode ? formatDateRelative(r.acquisition?.obtained_at) : '';
+        return flatMode ? formatDateShort(r.acquisition?.obtained_at) : '';
       default:
         return '';
     }
@@ -413,7 +422,7 @@ export function CatalogPage() {
           ...makeSortProps('quantity', t({ id: 'pages.inventory.items.col.quantity' }), sort),
           render: (_, r) => (!isAcquisition(r) ? r.quantity : EMPTY),
         },
-        sku_price: itemText('sku_price', 'pages.inventory.items.col.skuPrice', (it) => skuText(it), 120),
+        sku_price: { ...itemText('sku_price', 'pages.inventory.items.col.skuPrice', (it) => skuText(it), 120), align: 'right' },
         weight_canonical: measureCol('weight', 'weight_canonical', 'pages.inventory.items.col.weight'),
         length_canonical: measureCol('length', 'length_canonical', 'pages.inventory.items.col.length'),
         width_canonical: measureCol('width', 'width_canonical', 'pages.inventory.items.col.width'),
@@ -434,6 +443,7 @@ export function CatalogPage() {
         },
         net_cost: {
           key: 'net_cost',
+          align: 'right',
           title: t({ id: 'pages.inventory.acquisitions.col.netCost' }),
           ...w('net_cost', 'pages.inventory.acquisitions.col.netCost', 140),
           fixed: getFixed('net_cost'),
@@ -447,9 +457,9 @@ export function CatalogPage() {
           ...makeSortProps('acquisition__request_time', t({ id: 'pages.inventory.acquisitions.col.requestTime' }), sort),
           render: (_, r) =>
             isAcquisition(r)
-              ? (formatDateRelative(r.request_time) || EMPTY)
+              ? (formatDateShort(r.request_time) || EMPTY)
               : flatMode
-                ? (formatDateRelative(r.acquisition?.request_time) || EMPTY)
+                ? (formatDateShort(r.acquisition?.request_time) || EMPTY)
                 : EMPTY,
         },
         acquisition__obtained_at: {
@@ -460,9 +470,9 @@ export function CatalogPage() {
           ...makeSortProps('acquisition__obtained_at', t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), sort),
           render: (_, r) =>
             isAcquisition(r)
-              ? (formatDateRelative(r.obtained_at) || EMPTY)
+              ? (formatDateShort(r.obtained_at) || EMPTY)
               : flatMode
-                ? (formatDateRelative(r.acquisition?.obtained_at) || EMPTY)
+                ? (formatDateShort(r.acquisition?.obtained_at) || EMPTY)
                 : EMPTY,
         },
         actions: {
@@ -536,7 +546,7 @@ export function CatalogPage() {
         pageTitle={t({ id: 'pages.inventory.catalog.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/inventory/acquisitions/new')}>
-            {t({ id: 'pages.inventory.acquisitions.new' })}
+            {t({ id: 'common.new' })}
           </Button>
         }
         headerTitle={
@@ -562,17 +572,26 @@ export function CatalogPage() {
       <Modal
         title={t({ id: 'pages.inventory.items.deprecate.title' })}
         open={!!deprecateTarget}
-        okText={t({ id: 'pages.inventory.items.deprecate' })}
-        okButtonProps={{ danger: true }}
-        cancelText={t({ id: 'common.cancel' })}
-        confirmLoading={deprecateMutation.isPending}
         onCancel={() => setDeprecateTarget(null)}
-        onOk={() =>
-          deprecateTarget &&
-          deprecateMutation.mutate({
-            id: deprecateTarget.id,
-            ts: (deprecateDate ?? dayjs().startOf('day')).toISOString(),
-          })
+        footer={
+          // Principle VI: Cancel flushed left, primary right.
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Button onClick={() => setDeprecateTarget(null)}>{t({ id: 'common.cancel' })}</Button>
+            <Button
+              type="primary"
+              danger
+              loading={deprecateMutation.isPending}
+              onClick={() =>
+                deprecateTarget &&
+                deprecateMutation.mutate({
+                  id: deprecateTarget.id,
+                  ts: (deprecateDate ?? dayjs().startOf('day')).toISOString(),
+                })
+              }
+            >
+              {t({ id: 'pages.inventory.items.deprecate' })}
+            </Button>
+          </div>
         }
       >
         <p>{t({ id: 'pages.inventory.items.deprecate.confirm' })}</p>

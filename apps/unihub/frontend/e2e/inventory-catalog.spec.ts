@@ -108,6 +108,21 @@ test('Name and Spec columns size to content (canonical dataWidths, incl. item ro
   expect(headerBox?.width ?? 0).toBeGreaterThan(80);
 });
 
+test('default sort is Obtained desc NULLS FIRST and the action button says "New"', async ({ page }) => {
+  // Page action label is "New" (not "New Acquisition").
+  const action = page.getByRole('button', { name: /^New$/ });
+  await expect(action).toBeVisible();
+  // Default order: any pending acquisition (empty Obtained cell "—") sorts before dated ones.
+  const obtainedCells = await page
+    .locator('.ant-table-tbody tr.ant-table-row-level-0 td:nth-last-child(2)')
+    .allInnerTexts();
+  const firstDatedIdx = obtainedCells.findIndex((c) => /\d{4}-\d{2}-\d{2}/.test(c));
+  const lastPendingIdx = obtainedCells.map((c) => c.trim() === '—').lastIndexOf(true);
+  if (lastPendingIdx !== -1 && firstDatedIdx !== -1) {
+    expect(lastPendingIdx).toBeLessThan(firstDatedIdx);
+  }
+});
+
 test('SKU price drops trailing zeros', async ({ page }) => {
   // No rendered SKU cell should show a trailing-zero decimal like "10.0000".
   const cells = await page.locator('.ant-table-tbody td').allInnerTexts();

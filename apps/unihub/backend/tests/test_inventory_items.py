@@ -16,14 +16,22 @@ def _patch(client, item_id, body):
 @pytest.mark.django_db
 class TestItems:
     def test_item_sku_price_and_total_price(self, auth_client):
-        item = create_item(auth_client, name="P", sku_price="10", quantity="3")
+        item = create_item(auth_client, name="P", sku_price="10", quantity=3)
         fetched = auth_client.get(f"{ITEMS}{item['id']}/").json()
         assert fetched["sku_price"] == "10.0000"
         assert fetched["total_price"] == "30.0000"  # 10 × 3
 
+    def test_item_quantity_is_integer(self, auth_client):
+        item = create_item(auth_client, name="Q7", quantity=7)
+        assert auth_client.get(f"{ITEMS}{item['id']}/").json()["quantity"] == 7
+
     def test_item_quantity_defaults_to_one(self, auth_client):
         item = create_item(auth_client, name="Q")  # no quantity given
-        assert auth_client.get(f"{ITEMS}{item['id']}/").json()["quantity"] == "1.0000"
+        assert auth_client.get(f"{ITEMS}{item['id']}/").json()["quantity"] == 1
+
+    def test_item_has_no_item_type(self, auth_client):
+        item = create_item(auth_client, name="NT")
+        assert "item_type" not in item
 
     def test_item_volume_roundtrip_units(self, auth_client):
         item = create_item(auth_client, name="V", volume={"value": "1.2", "unit": "L"})
@@ -88,7 +96,7 @@ class TestItems:
     def test_create_item_missing_name_returns_400(self, auth_client):
         resp = auth_client.post(
             "/api/v1/inventory/acquisitions/",
-            json.dumps({"source": "x", "items": [{"item_type": "stockable"}]}),
+            json.dumps({"source": "x", "items": [{"quantity": 1}]}),
             content_type="application/json",
         )
         assert resp.status_code == 400

@@ -7,6 +7,7 @@ export default {
   'menu.inventory': '物品庫存',
   'menu.inventory.items': '物品',
   'menu.inventory.acquisitions': '取得紀錄',
+  'menu.inventory.catalog': '物品清單',
   'menu.inventory.scenarios': '情境',
   'menu.language': '語言學習',
   'menu.people': '人際關係',

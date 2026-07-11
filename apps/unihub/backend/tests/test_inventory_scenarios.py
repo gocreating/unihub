@@ -9,8 +9,8 @@ from tests.conftest import create_item
 SCEN = "/api/v1/inventory/scenarios/"
 
 
-def _item(client, name="Tent", item_type="stockable", quantity=None):
-    fields = {"name": name, "item_type": item_type}
+def _item(client, name="Tent", quantity=None):
+    fields = {"name": name}
     if quantity is not None:
         fields["quantity"] = quantity
     return create_item(client, **fields)
@@ -64,12 +64,12 @@ class TestScenarios:
         )
         assert auth_client.get(f"{SCEN}{s['id']}/checklist/").json()["progress"]["complete"] is True
 
-    def test_checklist_reports_consumable_shortfall(self, auth_client):
+    def test_checklist_line_has_no_shortfall(self, auth_client):
         s = _scenario(auth_client)
-        i = _item(auth_client, name="Batteries", item_type="consumable", quantity="1")
+        i = _item(auth_client, name="Batteries", quantity=1)
         _add_item(auth_client, s["id"], i["id"], required_quantity="3")
         checklist = auth_client.get(f"{SCEN}{s['id']}/checklist/").json()
-        assert checklist["lines"][0]["shortfall"] == "2.0000"
+        assert "shortfall" not in checklist["lines"][0]
 
     def test_empty_scenario_checklist_returns_empty(self, auth_client):
         s = _scenario(auth_client)

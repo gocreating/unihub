@@ -55,8 +55,7 @@ export function AppShell({ children }: AppShellProps) {
         name: t({ id: 'menu.inventory' }),
         icon: <InboxOutlined />,
         routes: [
-          { path: '/inventory/items', name: t({ id: 'menu.inventory.items' }) },
-          { path: '/inventory/acquisitions', name: t({ id: 'menu.inventory.acquisitions' }) },
+          { path: '/inventory/catalog', name: t({ id: 'menu.inventory.catalog' }) },
           { path: '/inventory/scenarios', name: t({ id: 'menu.inventory.scenarios' }) },
         ],
       },

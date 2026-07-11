@@ -24,7 +24,7 @@ def create_item(client, **fields) -> dict:
     """
     import json
 
-    payload = {"name": "Item", "item_type": "stockable"}
+    payload = {"name": "Item"}
     payload.update(fields)
     resp = client.post(
         ACQ,

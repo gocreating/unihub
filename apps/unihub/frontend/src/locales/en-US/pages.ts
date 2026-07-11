@@ -461,6 +461,28 @@ export default {
   'pages.inventory.acquisitions.col.taxRefund': 'Tax Refund',
   'pages.inventory.acquisitions.col.netCost': 'Net Cost',
   'pages.inventory.acquisitions.new.untitled': '(unnamed item)',
+  'pages.inventory.acquisitions.form.title': 'Acquisition',
+  'pages.inventory.acquisitions.form.editCrumb': 'Edit Acquisition',
+  // Cost factors
+  'pages.inventory.acquisitions.costFactors': 'Cost Factors',
+  'pages.inventory.acquisitions.costFactors.add': 'Add Factor',
+  'pages.inventory.acquisitions.costFactors.reset': 'Reset accumulated',
+  'pages.inventory.acquisitions.costFactors.value': 'Value',
+  'pages.inventory.acquisitions.costFactors.currency': 'Currency',
+  'pages.inventory.acquisitions.costFactors.factorType': 'Type',
+  'pages.inventory.acquisitions.costFactors.needOne': 'Add at least one cost factor',
+  'pages.inventory.costFactors.type.accumulated': 'Accumulated',
+  'pages.inventory.costFactors.type.shipping': 'Shipping',
+  'pages.inventory.costFactors.type.discount': 'Discount',
+  'pages.inventory.costFactors.type.tax_refund': 'Tax refund',
+  'pages.inventory.costFactors.type.paid_by_other': 'Paid by other',
+  'pages.inventory.costFactors.type.other': 'Other',
+
+  // Inventory > Catalog (merged items + acquisitions)
+  'pages.inventory.catalog.title': 'Catalog',
+  'pages.inventory.catalog.loadError': 'Failed to load catalog',
+  'pages.inventory.catalog.col.nameSource': 'Name / Source',
+  'pages.inventory.catalog.acquisitionRow': 'Acquisition',
 
   // Inventory > Scenarios
   'pages.inventory.scenarios.title': 'Scenarios',

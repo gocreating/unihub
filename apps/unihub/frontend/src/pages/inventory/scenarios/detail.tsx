@@ -280,20 +280,7 @@ export function ScenarioDetailPage() {
                       }
                     />
                   }
-                  title={
-                    <Space>
-                      <span>{line.item.name}</span>
-                      <Tag>{t({ id: `pages.inventory.items.type.${line.item.item_type}` })}</Tag>
-                      {line.shortfall && (
-                        <Tag color="red">
-                          {t(
-                            { id: 'pages.inventory.scenarios.detail.shortfall' },
-                            { amount: line.shortfall },
-                          )}
-                        </Tag>
-                      )}
-                    </Space>
-                  }
+                  title={<span>{line.item.name}</span>}
                   description={
                     <Space size="small">
                       <span>

@@ -10,7 +10,7 @@ export function AcquisitionNewPage() {
       <Breadcrumb
         style={{ marginBottom: 16 }}
         items={[
-          { title: <Link to="/inventory/acquisitions">{t({ id: 'menu.inventory.acquisitions' })}</Link> },
+          { title: <Link to="/inventory/catalog">{t({ id: 'menu.inventory.acquisitions' })}</Link> },
           { title: t({ id: 'pages.inventory.acquisitions.new' }) },
         ]}
       />

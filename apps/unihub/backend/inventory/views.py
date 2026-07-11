@@ -26,7 +26,6 @@ class ItemViewSet(viewsets.ModelViewSet):
     filter_backends = [EntityFilterBackend, NullsOrderingFilter]
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
-        "item_type": {"lookup": "item_type", "type": "single_select"},
         "spec": {"lookup": "spec", "type": "text"},
         "size": {"lookup": "size", "type": "text"},
         "weight": {"lookup": "weight_canonical", "type": "number"},
@@ -41,7 +40,6 @@ class ItemViewSet(viewsets.ModelViewSet):
     }
     ordering_fields = [
         "name",
-        "item_type",
         "size",
         "weight_canonical",
         "length_canonical",
@@ -74,9 +72,8 @@ class AcquisitionViewSet(viewsets.ModelViewSet):
         "source": {"lookup": "source", "type": "text"},
         "request_time": {"lookup": "request_time", "type": "date"},
         "obtained_at": {"lookup": "obtained_at", "type": "date"},
-        "cost": {"lookup": "cost", "type": "number"},
     }
-    ordering_fields = ["source", "request_time", "obtained_at", "cost"]
+    ordering_fields = ["source", "request_time", "obtained_at"]
     ordering = ["-obtained_at"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]

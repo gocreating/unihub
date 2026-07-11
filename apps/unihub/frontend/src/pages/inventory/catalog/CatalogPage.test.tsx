@@ -4,19 +4,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
 import enUS from '@/locales/en-US';
-import { ItemsPage } from './index';
+import { CatalogPage } from './index';
 import * as inventoryService from '@/services/unihub-backend/inventory';
-import * as financeService from '@/services/unihub-backend/finance';
 
 vi.mock('@/services/unihub-backend/inventory');
-vi.mock('@/services/unihub-backend/finance');
 
 const ITEM = {
   id: 'itm-1',
   name: 'Backpack',
-  item_type: 'stockable' as const,
-  quantity: '1',
-  spec: '',
+  quantity: 1,
+  spec: 'roomy',
   remark: '',
   size: '',
   length: null,
@@ -36,7 +33,19 @@ const ITEM = {
   updated_at: '2026-07-11T00:00:00Z',
 };
 
-const EMPTY_PAGE = { count: 0, next: null, previous: null, results: [] };
+const ACQ = {
+  id: 'acq-1',
+  source: 'Shop',
+  request_time: null,
+  obtained_at: '2026-07-11T00:00:00Z',
+  remark: '',
+  cost_factors: [{ id: 'cf-1', value: '10', currency: 'USD', type: 'accumulated' as const }],
+  net_cost: [{ currency: 'USD', total: '10.0000' }],
+  items: [ITEM],
+  item_count: 1,
+  created_at: '2026-07-11T00:00:00Z',
+  updated_at: '2026-07-11T00:00:00Z',
+};
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -44,31 +53,29 @@ function renderPage() {
     <QueryClientProvider client={qc}>
       <IntlProvider locale="en-US" messages={enUS}>
         <MemoryRouter>
-          <ItemsPage />
+          <CatalogPage />
         </MemoryRouter>
       </IntlProvider>
     </QueryClientProvider>,
   );
 }
 
-describe('ItemsPage', () => {
+describe('CatalogPage', () => {
   beforeEach(() => {
-    vi.mocked(inventoryService.listItems).mockResolvedValue({
+    vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 1,
       next: null,
       previous: null,
-      results: [ITEM],
+      results: [ACQ],
     });
-    vi.mocked(financeService.listCurrencies).mockResolvedValue(EMPTY_PAGE as never);
   });
 
-  it('renders items with measurement value+unit and a Deprecate action', async () => {
+  it('renders acquisition parent rows with net cost per currency', async () => {
     renderPage();
-    await screen.findByText('Backpack');
-    expect(screen.getByText('0.5 kg')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
-    // active item offers Deprecate (not Restore); no standalone New Item button
-    expect(screen.getByText('Deprecate')).toBeInTheDocument();
-    expect(screen.queryByText('New Item')).not.toBeInTheDocument();
+    await screen.findByText('Shop');
+    // Net cost shows the per-currency total.
+    expect(screen.getByText('10 USD')).toBeInTheDocument();
+    // The acquisition row is tagged as such.
+    expect(screen.getByText('Acquisition')).toBeInTheDocument();
   });
 });

@@ -6,7 +6,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from inventory import units
-from inventory.models import Acquisition, Constraint, Item, Scenario, ScenarioItem
+from inventory.models import Acquisition, Constraint, CostFactor, Item, Scenario, ScenarioItem
 
 # measure name → (canonical field, unit field, to_canonical, from_canonical, unit table)
 _MEASURES = {
@@ -68,7 +68,6 @@ class ItemSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
-            "item_type",
             "quantity",
             "spec",
             "remark",
@@ -152,8 +151,16 @@ class ItemSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class CostFactorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CostFactor
+        fields = ["id", "value", "currency", "type"]
+        read_only_fields = ["id"]
+
+
 class AcquisitionSerializer(serializers.ModelSerializer):
     items = ItemSerializer(many=True, required=False)
+    cost_factors = CostFactorSerializer(many=True, required=False)
     item_count = serializers.SerializerMethodField()
     net_cost = serializers.SerializerMethodField()
 
@@ -165,10 +172,7 @@ class AcquisitionSerializer(serializers.ModelSerializer):
             "request_time",
             "obtained_at",
             "remark",
-            "cost",
-            "cost_currency",
-            "discount",
-            "tax_refund",
+            "cost_factors",
             "net_cost",
             "items",
             "item_count",
@@ -180,37 +184,76 @@ class AcquisitionSerializer(serializers.ModelSerializer):
     def get_item_count(self, obj: Acquisition) -> int:
         return obj.items.count()
 
-    def get_net_cost(self, obj: Acquisition) -> str | None:
-        """net_cost = cost - discount - tax_refund (None when no cost recorded)."""
-        if obj.cost is None:
-            return None
-        net = obj.cost - (obj.discount or Decimal("0")) - (obj.tax_refund or Decimal("0"))
-        return str(net.quantize(Decimal("0.0001")))
+    def get_net_cost(self, obj: Acquisition) -> list[dict]:
+        """net_cost = per-currency sum of cost-factor values (value carries its sign)."""
+        totals: dict[str, Decimal] = {}
+        for factor in obj.cost_factors.all():
+            key = factor.currency or ""
+            totals[key] = totals.get(key, Decimal("0")) + factor.value
+        return [
+            {"currency": cur, "total": str(total.quantize(Decimal("0.0001")))}
+            for cur, total in sorted(totals.items())
+        ]
+
+    @staticmethod
+    def _accumulated_default(items_data: list[dict]) -> tuple[Decimal, str]:
+        """Derive the accumulated factor value (Σ item total_price) and its currency."""
+        total = Decimal("0")
+        currency = ""
+        for item in items_data:
+            sku_price = item.get("sku_price")
+            if sku_price is not None:
+                total += sku_price * item.get("quantity", 1)
+                currency = currency or item.get("sku_price_currency", "")
+        return total, currency
 
     def validate(self, attrs: dict) -> dict:
-        # On create, at least one item is required.
-        if self.instance is None and not attrs.get("items"):
-            raise serializers.ValidationError({"items": "An acquisition needs at least 1 item."})
+        if self.instance is None:
+            if not attrs.get("items"):
+                raise serializers.ValidationError(
+                    {"items": "An acquisition needs at least 1 item."}
+                )
+            # cost_factors may be omitted on create → an accumulated factor is auto-added.
+        else:
+            if "cost_factors" in attrs and not attrs["cost_factors"]:
+                raise serializers.ValidationError(
+                    {"cost_factors": "An acquisition needs at least 1 cost factor."}
+                )
         return attrs
 
     @transaction.atomic
     def create(self, validated_data: dict) -> Acquisition:
         items_data = validated_data.pop("items", [])
+        factors_data = validated_data.pop("cost_factors", None)
         acquisition = Acquisition.objects.create(**validated_data)
         for item_data in items_data:
             Item.objects.create(acquisition=acquisition, **item_data)
+        if factors_data:
+            for factor in factors_data:
+                CostFactor.objects.create(acquisition=acquisition, **factor)
+        else:
+            value, currency = self._accumulated_default(items_data)
+            CostFactor.objects.create(
+                acquisition=acquisition, value=value, currency=currency, type="accumulated"
+            )
         return acquisition
 
+    @transaction.atomic
     def update(self, instance: Acquisition, validated_data: dict) -> Acquisition:
         items_data = validated_data.pop("items", None)
+        factors_data = validated_data.pop("cost_factors", None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        # New item rows (no id) are appended; editing/removing existing items
-        # is done through the item endpoints (PATCH/DELETE /items/{id}/).
+        # New item rows (no id) are appended; existing items edited/removed via item endpoints.
         if items_data:
             for item_data in items_data:
                 Item.objects.create(acquisition=instance, **item_data)
+        # cost_factors, when provided, replace the whole set (must remain >= 1).
+        if factors_data is not None:
+            instance.cost_factors.all().delete()
+            for factor in factors_data:
+                CostFactor.objects.create(acquisition=instance, **factor)
         return instance
 
 
@@ -261,7 +304,6 @@ class ScenarioItemSerializer(serializers.ModelSerializer):
     )
     item = ItemSerializer(read_only=True)
     container = serializers.SerializerMethodField()
-    shortfall = serializers.SerializerMethodField()
 
     class Meta:
         model = ScenarioItem
@@ -274,7 +316,6 @@ class ScenarioItemSerializer(serializers.ModelSerializer):
             "required_quantity",
             "prepared",
             "notes",
-            "shortfall",
             "created_at",
         ]
         read_only_fields = ["id", "created_at"]
@@ -283,12 +324,6 @@ class ScenarioItemSerializer(serializers.ModelSerializer):
         if obj.container_id is None:
             return None
         return {"id": obj.container_id, "item_name": obj.container.item.name}
-
-    def get_shortfall(self, obj: ScenarioItem) -> str | None:
-        from inventory.services import consumable_shortfall
-
-        shortfall = consumable_shortfall(obj)
-        return str(shortfall) if shortfall and shortfall > 0 else None
 
 
 class ConstraintSerializer(serializers.ModelSerializer):

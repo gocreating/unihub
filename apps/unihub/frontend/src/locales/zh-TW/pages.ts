@@ -461,6 +461,28 @@ export default {
   'pages.inventory.acquisitions.col.taxRefund': '退稅',
   'pages.inventory.acquisitions.col.netCost': '淨額',
   'pages.inventory.acquisitions.new.untitled': '（未命名物品）',
+  'pages.inventory.acquisitions.form.title': '取得紀錄',
+  'pages.inventory.acquisitions.form.editCrumb': '編輯取得紀錄',
+  // Cost factors
+  'pages.inventory.acquisitions.costFactors': '費用項目',
+  'pages.inventory.acquisitions.costFactors.add': '新增費用項目',
+  'pages.inventory.acquisitions.costFactors.reset': '重設累計金額',
+  'pages.inventory.acquisitions.costFactors.value': '金額',
+  'pages.inventory.acquisitions.costFactors.currency': '幣別',
+  'pages.inventory.acquisitions.costFactors.factorType': '類型',
+  'pages.inventory.acquisitions.costFactors.needOne': '請至少新增一項費用項目',
+  'pages.inventory.costFactors.type.accumulated': '累計金額',
+  'pages.inventory.costFactors.type.shipping': '運費',
+  'pages.inventory.costFactors.type.discount': '折扣',
+  'pages.inventory.costFactors.type.tax_refund': '退稅',
+  'pages.inventory.costFactors.type.paid_by_other': '他人支付',
+  'pages.inventory.costFactors.type.other': '其他',
+
+  // Inventory > Catalog (merged items + acquisitions)
+  'pages.inventory.catalog.title': '物品清單',
+  'pages.inventory.catalog.loadError': '載入清單失敗',
+  'pages.inventory.catalog.col.nameSource': '名稱 / 來源',
+  'pages.inventory.catalog.acquisitionRow': '取得紀錄',
 
   // Inventory > Scenarios
   'pages.inventory.scenarios.title': '情境',

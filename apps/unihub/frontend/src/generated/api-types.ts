@@ -802,15 +802,11 @@ export interface components {
             /** Format: date-time */
             obtained_at?: string | null;
             remark?: string;
-            /** Format: decimal */
-            cost?: string | null;
-            cost_currency?: string;
-            /** Format: decimal */
-            discount?: string | null;
-            /** Format: decimal */
-            tax_refund?: string | null;
-            /** @description net_cost = cost - discount - tax_refund (None when no cost recorded). */
-            readonly net_cost: string | null;
+            cost_factors?: components["schemas"]["CostFactor"][];
+            /** @description net_cost = per-currency sum of cost-factor values (value carries its sign). */
+            readonly net_cost: {
+                [key: string]: unknown;
+            }[];
             items?: components["schemas"]["Item"][];
             readonly item_count: number;
             /** Format: date-time */
@@ -864,6 +860,13 @@ export interface components {
          * @enum {string}
          */
         ConstraintTypeEnum: "mutual_exclusive" | "required" | "weight_limit";
+        CostFactor: {
+            readonly id: string;
+            /** Format: decimal */
+            value: string;
+            currency?: string;
+            type?: components["schemas"]["TypeEnum"];
+        };
         Currency: {
             code: string;
             name: string;
@@ -892,9 +895,7 @@ export interface components {
         Item: {
             readonly id: string;
             name: string;
-            item_type?: components["schemas"]["ItemTypeEnum"];
-            /** Format: decimal */
-            quantity?: string;
+            quantity?: number;
             spec?: string;
             remark?: string;
             size?: string;
@@ -913,12 +914,6 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
-        /**
-         * @description * `stockable` - Stockable
-         *     * `consumable` - Consumable
-         * @enum {string}
-         */
-        ItemTypeEnum: "stockable" | "consumable";
         PaginatedAccountList: {
             /** @example 123 */
             count: number;
@@ -1046,15 +1041,11 @@ export interface components {
             /** Format: date-time */
             obtained_at?: string | null;
             remark?: string;
-            /** Format: decimal */
-            cost?: string | null;
-            cost_currency?: string;
-            /** Format: decimal */
-            discount?: string | null;
-            /** Format: decimal */
-            tax_refund?: string | null;
-            /** @description net_cost = cost - discount - tax_refund (None when no cost recorded). */
-            readonly net_cost?: string | null;
+            cost_factors?: components["schemas"]["CostFactor"][];
+            /** @description net_cost = per-currency sum of cost-factor values (value carries its sign). */
+            readonly net_cost?: {
+                [key: string]: unknown;
+            }[];
             items?: components["schemas"]["Item"][];
             readonly item_count?: number;
             /** Format: date-time */
@@ -1112,9 +1103,7 @@ export interface components {
         PatchedItem: {
             readonly id?: string;
             name?: string;
-            item_type?: components["schemas"]["ItemTypeEnum"];
-            /** Format: decimal */
-            quantity?: string;
+            quantity?: number;
             spec?: string;
             remark?: string;
             size?: string;
@@ -1158,7 +1147,6 @@ export interface components {
             required_quantity?: string;
             prepared?: boolean;
             notes?: string;
-            readonly shortfall?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
         };
@@ -1187,10 +1175,19 @@ export interface components {
             required_quantity?: string;
             prepared?: boolean;
             notes?: string;
-            readonly shortfall: string | null;
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `accumulated` - Accumulated
+         *     * `shipping` - Shipping
+         *     * `discount` - Discount
+         *     * `tax_refund` - Tax refund
+         *     * `paid_by_other` - Paid by other
+         *     * `other` - Other
+         * @enum {string}
+         */
+        TypeEnum: "accumulated" | "shipping" | "discount" | "tax_refund" | "paid_by_other" | "other";
     };
     responses: never;
     parameters: never;

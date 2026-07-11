@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Button, Col, Form, Input, InputNumber, Modal, Row, Select, Space } from 'antd';
 import { useIntl } from 'react-intl';
-import type { Item, ItemType, ItemWrite, Measurement } from '@/services/unihub-backend/inventory';
+import type { Item, ItemWrite, Measurement } from '@/services/unihub-backend/inventory';
 import { LENGTH_UNITS, VOLUME_UNITS, WEIGHT_UNITS } from '@/services/unihub-backend/inventory';
+import { useContainerWidth } from '@/hooks/useContainerWidth';
 
 interface ItemFormValues {
   name: string;
-  item_type: ItemType;
   quantity: number;
   spec?: string;
   remark?: string;
@@ -54,8 +54,7 @@ function toMeasureValue(m: Measurement | null | undefined): number | null {
 function formValuesToItemWrite(v: ItemFormValues): ItemWrite {
   return {
     name: v.name,
-    item_type: v.item_type,
-    quantity: String(v.quantity ?? 1),
+    quantity: v.quantity ?? 1,
     spec: v.spec ?? '',
     remark: v.remark ?? '',
     size: v.size ?? '',
@@ -83,6 +82,12 @@ export function ItemFormModal({
   const { formatMessage: t } = useIntl();
   const [form] = Form.useForm<ItemFormValues>();
   const [dirty, setDirty] = useState(false);
+  // Stack fields into a single column based on the actual content width (not
+  // the viewport, which AntD Col xs/sm breakpoints follow).
+  const { ref, isNarrow } = useContainerWidth(560);
+  const half = isNarrow ? 24 : 12;
+  const third = isNarrow ? 24 : 8;
+  const quarter = isNarrow ? 24 : 6;
 
   useEffect(() => {
     if (!open) return;
@@ -90,7 +95,6 @@ export function ItemFormModal({
     if (initial) {
       form.setFieldsValue({
         name: initial.name,
-        item_type: initial.item_type,
         quantity: Number(initial.quantity ?? 1),
         spec: initial.spec,
         remark: initial.remark,
@@ -113,7 +117,6 @@ export function ItemFormModal({
     } else {
       form.resetFields();
       form.setFieldsValue({
-        item_type: 'stockable',
         quantity: 1,
         length_unit: 'mm',
         width_unit: 'mm',
@@ -137,7 +140,7 @@ export function ItemFormModal({
     label: string,
     unitOptions: { value: string; label: string }[],
   ) => (
-    <Col xs={24} sm={8}>
+    <Col span={third}>
       <Form.Item label={label}>
         <Space.Compact block>
           <Form.Item name={`${name}_value`} noStyle>
@@ -168,84 +171,76 @@ export function ItemFormModal({
         </Button>,
       ]}
     >
-      <Form
-        form={form}
-        layout="vertical"
-        onValuesChange={() => setDirty(true)}
-        onFinish={(values) => onOk(formValuesToItemWrite(values))}
-      >
-        <Row gutter={12}>
-          <Col xs={24} sm={12}>
-            <Form.Item name="name" label={t({ id: 'common.name' })} rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Form.Item name="item_type" label={t({ id: 'pages.inventory.items.col.type' })} rules={[{ required: true }]}>
-              <Select
-                options={[
-                  { value: 'stockable', label: t({ id: 'pages.inventory.items.type.stockable' }) },
-                  { value: 'consumable', label: t({ id: 'pages.inventory.items.type.consumable' }) },
-                ]}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Form.Item name="quantity" label={t({ id: 'pages.inventory.items.col.quantity' })} rules={[{ required: true }]}>
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-        </Row>
-        <Row gutter={12}>
-          <Col xs={24} sm={12}>
-            <Form.Item name="size" label={t({ id: 'pages.inventory.items.col.size' })}>
-              <Input />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12}>
-            <Form.Item name="color" label={t({ id: 'pages.inventory.items.col.color' })}>
-              <Input />
-            </Form.Item>
-          </Col>
-        </Row>
-        <Form.Item name="spec" label={t({ id: 'pages.inventory.items.col.spec' })}>
-          <Input.TextArea rows={2} />
-        </Form.Item>
-        <Row gutter={12}>
-          {measureField('length', t({ id: 'pages.inventory.items.col.length' }), lengthUnitOptions)}
-          {measureField('width', t({ id: 'pages.inventory.items.col.width' }), lengthUnitOptions)}
-          {measureField('height', t({ id: 'pages.inventory.items.col.height' }), lengthUnitOptions)}
-        </Row>
-        <Row gutter={12}>
-          {measureField('weight', t({ id: 'pages.inventory.items.col.weight' }), weightUnitOptions)}
-          {measureField('volume', t({ id: 'pages.inventory.items.col.volume' }), volumeUnitOptions)}
-          <Col xs={24} sm={8}>
-            <Form.Item label={t({ id: 'pages.inventory.items.col.skuPrice' })}>
-              <Space.Compact block>
-                <Form.Item name="sku_price" noStyle>
-                  <InputNumber min={0} style={{ width: '60%' }} />
-                </Form.Item>
-                <Form.Item name="sku_price_currency" noStyle>
-                  <Select
-                    style={{ width: '40%' }}
-                    showSearch
-                    allowClear
-                    disabled={currencyDisabled}
-                    placeholder={currencyDisabled ? '—' : 'CUR'}
-                    options={currencyOptions}
-                  />
-                </Form.Item>
-              </Space.Compact>
-            </Form.Item>
-          </Col>
-        </Row>
-        <Form.Item name="url" label={t({ id: 'pages.inventory.items.col.url' })}>
-          <Input />
-        </Form.Item>
-        <Form.Item name="remark" label={t({ id: 'pages.inventory.items.col.remark' })}>
-          <Input.TextArea rows={2} />
-        </Form.Item>
-      </Form>
+      <div ref={ref}>
+        <Form
+          form={form}
+          layout="vertical"
+          onValuesChange={() => setDirty(true)}
+          onFinish={(values) => onOk(formValuesToItemWrite(values))}
+        >
+          <Row gutter={12}>
+            <Col span={half}>
+              <Form.Item name="name" label={t({ id: 'common.name' })} rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={quarter}>
+              <Form.Item name="quantity" label={t({ id: 'pages.inventory.items.col.quantity' })} rules={[{ required: true }]}>
+                <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={half}>
+              <Form.Item name="size" label={t({ id: 'pages.inventory.items.col.size' })}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={half}>
+              <Form.Item name="color" label={t({ id: 'pages.inventory.items.col.color' })}>
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="spec" label={t({ id: 'pages.inventory.items.col.spec' })}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Row gutter={12}>
+            {measureField('length', t({ id: 'pages.inventory.items.col.length' }), lengthUnitOptions)}
+            {measureField('width', t({ id: 'pages.inventory.items.col.width' }), lengthUnitOptions)}
+            {measureField('height', t({ id: 'pages.inventory.items.col.height' }), lengthUnitOptions)}
+          </Row>
+          <Row gutter={12}>
+            {measureField('weight', t({ id: 'pages.inventory.items.col.weight' }), weightUnitOptions)}
+            {measureField('volume', t({ id: 'pages.inventory.items.col.volume' }), volumeUnitOptions)}
+            <Col span={third}>
+              <Form.Item label={t({ id: 'pages.inventory.items.col.skuPrice' })}>
+                <Space.Compact block>
+                  <Form.Item name="sku_price" noStyle>
+                    <InputNumber min={0} style={{ width: '60%' }} />
+                  </Form.Item>
+                  <Form.Item name="sku_price_currency" noStyle>
+                    <Select
+                      style={{ width: '40%' }}
+                      showSearch
+                      allowClear
+                      disabled={currencyDisabled}
+                      placeholder={currencyDisabled ? '—' : 'CUR'}
+                      options={currencyOptions}
+                    />
+                  </Form.Item>
+                </Space.Compact>
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="url" label={t({ id: 'pages.inventory.items.col.url' })}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="remark" label={t({ id: 'pages.inventory.items.col.remark' })}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </div>
     </Modal>
   );
 }

@@ -3,9 +3,23 @@ import type { EntityListParams, OffsetPaginatedResponse } from '@/components/Ent
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export type ItemType = 'stockable' | 'consumable';
 export type ItemStatus = 'active' | 'deprecated';
 export type ConstraintType = 'mutual_exclusive' | 'required' | 'weight_limit';
+export type CostFactorType =
+  | 'accumulated'
+  | 'shipping'
+  | 'discount'
+  | 'tax_refund'
+  | 'paid_by_other'
+  | 'other';
+export const COST_FACTOR_TYPES: CostFactorType[] = [
+  'accumulated',
+  'shipping',
+  'discount',
+  'tax_refund',
+  'paid_by_other',
+  'other',
+];
 
 export type LengthUnit = 'mm' | 'cm' | 'm' | 'in';
 export type WeightUnit = 'g' | 'kg' | 'lb';
@@ -28,8 +42,7 @@ export interface AcquisitionSummary {
 export interface Item {
   id: string;
   name: string;
-  item_type: ItemType;
-  quantity: string;
+  quantity: number;
   spec: string;
   remark: string;
   size: string;
@@ -52,8 +65,7 @@ export interface Item {
 
 export interface ItemWrite {
   name: string;
-  item_type?: ItemType;
-  quantity?: string;
+  quantity?: number;
   spec?: string;
   remark?: string;
   size?: string;
@@ -69,17 +81,33 @@ export interface ItemWrite {
   deprecate_time?: string | null;
 }
 
+export interface CostFactor {
+  id: string;
+  value: string; // signed decimal
+  currency: string;
+  type: CostFactorType;
+}
+
+export interface CostFactorWrite {
+  value: string;
+  currency?: string;
+  type?: CostFactorType;
+}
+
+/** Per-currency net cost = sum of cost-factor values (value carries its sign). */
+export interface NetCostEntry {
+  currency: string;
+  total: string;
+}
+
 export interface Acquisition {
   id: string;
   source: string;
   request_time: string | null;
   obtained_at: string | null;
   remark: string;
-  cost: string | null;
-  cost_currency: string;
-  discount: string | null;
-  tax_refund: string | null;
-  net_cost: string | null;
+  cost_factors: CostFactor[];
+  net_cost: NetCostEntry[];
   items: Item[];
   item_count: number;
   created_at: string;
@@ -91,10 +119,7 @@ export interface AcquisitionWrite {
   request_time?: string | null;
   obtained_at?: string | null;
   remark?: string;
-  cost?: string | null;
-  cost_currency?: string;
-  discount?: string | null;
-  tax_refund?: string | null;
+  cost_factors?: CostFactorWrite[];
   items?: ItemWrite[];
 }
 
@@ -122,7 +147,6 @@ export interface ScenarioItem {
   required_quantity: string;
   prepared: boolean;
   notes: string;
-  shortfall: string | null;
   created_at: string;
 }
 
@@ -152,11 +176,10 @@ export interface ConstraintWrite {
 
 export interface ChecklistLine {
   id: string;
-  item: { id: string; name: string; item_type: ItemType };
+  item: { id: string; name: string };
   required_quantity: string;
   prepared: boolean;
   container: ContainerRef | null;
-  shortfall: string | null;
 }
 
 export interface ChecklistViolation {

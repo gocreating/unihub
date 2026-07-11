@@ -7,6 +7,7 @@ export default {
   'menu.inventory': 'Inventory',
   'menu.inventory.items': 'Items',
   'menu.inventory.acquisitions': 'Acquisitions',
+  'menu.inventory.catalog': 'Catalog',
   'menu.inventory.scenarios': 'Scenarios',
   'menu.language': 'Language',
   'menu.people': 'People',

@@ -19,11 +19,6 @@ class Acquisition(models.Model):
     request_time = models.DateTimeField(null=True, blank=True)  # when the order was initiated
     obtained_at = models.DateTimeField(null=True, blank=True)  # when received
     remark = models.TextField(blank=True)
-    # Order payment: net_cost = cost - discount - tax_refund (derived in serializer).
-    cost = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    cost_currency = models.CharField(max_length=3, blank=True)
-    discount = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    tax_refund = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -34,18 +29,40 @@ class Acquisition(models.Model):
         return self.source or "Acquisition"
 
 
-class Item(models.Model):
-    """An individual physical thing the user owns or consumes. May be a container."""
+class CostFactor(models.Model):
+    """A signed line of an acquisition's payment (net_cost = per-currency sum)."""
 
     TYPE_CHOICES = [
-        ("stockable", "Stockable"),
-        ("consumable", "Consumable"),
+        ("accumulated", "Accumulated"),
+        ("shipping", "Shipping"),
+        ("discount", "Discount"),
+        ("tax_refund", "Tax refund"),
+        ("paid_by_other", "Paid by other"),
+        ("other", "Other"),
     ]
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
+    acquisition = models.ForeignKey(
+        Acquisition, on_delete=models.CASCADE, related_name="cost_factors"
+    )
+    value = models.DecimalField(max_digits=20, decimal_places=4)  # signed; negative reduces
+    currency = models.CharField(max_length=3, blank=True)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="accumulated")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.type} {self.value} {self.currency}".strip()
+
+
+class Item(models.Model):
+    """An individual physical thing the user owns or consumes. May be a container."""
+
+    id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     name = models.CharField(max_length=200)
-    item_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="stockable")
-    quantity = models.DecimalField(max_digits=20, decimal_places=4, default=1)
+    quantity = models.IntegerField(default=1)
     spec = models.TextField(blank=True)
     remark = models.TextField(blank=True)
     # Dimensions: canonical value stored in millimetres + the display unit.

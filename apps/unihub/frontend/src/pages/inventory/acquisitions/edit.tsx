@@ -18,8 +18,9 @@ export function AcquisitionEditPage() {
       <Breadcrumb
         style={{ marginBottom: 16 }}
         items={[
-          { title: <Link to="/inventory/acquisitions">{t({ id: 'menu.inventory.acquisitions' })}</Link> },
-          { title: data?.source || t({ id: 'pages.inventory.acquisitions.edit' }) },
+          { title: <Link to="/inventory/catalog">{t({ id: 'menu.inventory.acquisitions' })}</Link> },
+          { title: id },
+          { title: t({ id: 'pages.inventory.acquisitions.form.editCrumb' }) },
         ]}
       />
       {isLoading || !data ? <Spin /> : <AcquisitionForm initial={data} />}

@@ -5,24 +5,6 @@ from decimal import Decimal
 from inventory.models import Scenario, ScenarioItem
 
 
-def consumable_shortfall(line: ScenarioItem) -> Decimal | None:
-    """Return the on-hand shortfall for a consumable line, else None.
-
-    Args:
-        line: The scenario checklist line.
-
-    Returns:
-        A positive ``Decimal`` shortfall when a consumable's required quantity
-        exceeds on-hand quantity, ``Decimal("0")`` when covered, or ``None`` for
-        non-consumable items.
-    """
-    if line.item.item_type != "consumable":
-        return None
-    on_hand = line.item.quantity if line.item.quantity is not None else Decimal("0")
-    shortfall = line.required_quantity - on_hand
-    return shortfall if shortfall > 0 else Decimal("0")
-
-
 def evaluate_constraints(scenario: Scenario) -> list[dict]:
     """Evaluate every constraint on a scenario against its current selection.
 
@@ -97,14 +79,12 @@ def build_checklist(scenario: Scenario) -> dict:
 
     line_payloads = []
     for line in lines:
-        shortfall = consumable_shortfall(line)
         line_payloads.append(
             {
                 "id": line.id,
                 "item": {
                     "id": line.item_id,
                     "name": line.item.name,
-                    "item_type": line.item.item_type,
                 },
                 "required_quantity": str(line.required_quantity),
                 "prepared": line.prepared,
@@ -113,7 +93,6 @@ def build_checklist(scenario: Scenario) -> dict:
                     if line.container_id
                     else None
                 ),
-                "shortfall": str(shortfall) if shortfall and shortfall > 0 else None,
             }
         )
 

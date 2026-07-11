@@ -113,3 +113,54 @@ apps/unihub/frontend/src/
 ## Complexity Tracking
 
 > No Constitution Check violations. Section intentionally empty.
+
+---
+
+# Iteration 5 (catalog & cost UI refinements) — delta plan
+
+**Date**: 2026-07-11 | Builds on iteration 4 (commit `57441be`). Spec clarifications: `### Session 2026-07-11 (catalog & cost UI, iteration 5)`.
+
+## Summary
+
+A UI/behaviour refinement of the cost panel and the Catalog, plus three data-model changes:
+
+1. **CostFactor `type` → free-form string** — drop the DB `choices` constraint; the six built-ins become autocomplete suggestions. `accumulated` is system-reserved. The seeded `type` AttributeDefinition changes from `single_select` → **`text`**.
+2. **CostFactor gains `display_order`** (integer) — user-defined ordering, persisted; accumulated rows pinned to top (not draggable), manual rows drag-reorderable.
+3. **`accumulated` becomes per-currency** — for each distinct item currency, the system derives one `accumulated` factor (`value` = Σ `sku_price × quantity` for that currency). Uniqueness: **at most one `accumulated` per (acquisition, currency)**; not user-creatable; non-removable; overridable/resettable.
+
+UI-only (no schema): Catalog uses an **arrow** expand icon, splits **Source**/**Name** into two columns, sizes the **Actions** column to content, and drops the **"Acquisition" badge**. The acquisition form renames **"Cost Factors" → "Cost"** and moves it **below the Items panel**; net cost moves to a **"Total" footer**; each row is `[drag] · type · value+currency (value right-aligned) · reset|remove`, full-width with vertical gaps when stacked; the **reset** action sits on each accumulated row. `obtained_at` **defaults to today 00:00** on create; the items panel is retitled **"Items"** and each **item card shows all its non-empty attribute values**.
+
+## Technical Context (delta)
+
+- **New frontend dependency**: a sortable-list primitive for drag reordering. **Decision: `@dnd-kit/core` + `@dnd-kit/sortable`** (small, accessible, React-18 friendly) over `react-dnd` (heavier) or ProComponents `DragSortTable` (table-oriented; the cost rows live in a form panel, not a `PageTable`). See research.md.
+- **No new backend deps.** Ordering + free-form type + per-currency accumulated are serializer/model changes.
+- **Migration `0009_costfactor_order_freeform`**: add `display_order` (int, default 0); relax `type` to a plain `CharField` (drop `choices`); backfill `display_order` by current `created_at` order; add a **partial unique constraint** `(acquisition, currency)` where `type='accumulated'`. Reseed the `type` AttributeDefinition as `text`. Data-preserving; `atomic` may stay default (no backfill-then-ALTER hazard, but keep `atomic = False` if the unique-constraint add follows the row backfill on Postgres).
+
+## Phase 0 — research delta (research.md)
+
+- **Per-currency accumulated derivation**: on create with omitted `cost_factors`, group items by `sku_price_currency`; emit one `accumulated` factor per currency = Σ(`sku_price × quantity`). On update, recompute only when the caller resets (client sends the recomputed value); the server enforces the per-currency uniqueness + system-reserved rule.
+- **Free-form type validation**: non-empty string; server rejects a client-created factor with `type='accumulated'` (system-reserved) and rejects a second `accumulated` for an existing currency.
+- **Ordering contract**: the client sends `cost_factors` in display order (or an explicit `display_order` per row); the server persists `display_order` = array index (accumulated rows normalised to the front). `net_cost`/Total remains order-independent.
+- **DnD choice**: `@dnd-kit/sortable` for the manual-factor rows only.
+
+## Phase 1 — design delta
+
+- **data-model.md**: CostFactor gains `display_order`; `type` documented as free-form; accumulated documented as per-currency + unique. (updated in this iteration)
+- **contracts/inventory-api.md**: `POST/PATCH /acquisitions/` accept `cost_factors[].display_order` and free-form `type`; document the accumulated per-currency + uniqueness rules and the 400s (`type='accumulated'` from a client; duplicate accumulated currency). (updated)
+- **Frontend**: `catalog/index.tsx` (arrow icon via `expandable.expandIcon`; split columns; `actions` width via `useActionsColWidth`/content measure; remove badge). `AcquisitionForm.tsx` (Cost panel moved below Items; `SortableContext` for manual rows; `Total` footer; `Space.Compact` value+currency with right-aligned `InputNumber`; `AutoComplete` type field; per-row reset on accumulated; obtained default). `ItemFormModal`/item card (render every filled field).
+
+## Constitution re-check (delta)
+
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| I. Entity-Centric | ✅ PASS | `0009` reseeds the CostFactor `type` AttributeDefinition as `text`; adds `display_order`. |
+| IV. API Contract-Driven | ✅ PASS | Schema regenerated after the serializer change; `display_order`/free-form `type` reflected in generated types. |
+| VI. UI/UX (v1.14.0) | ✅ PASS | Content-width stacking retained (rows full-width, vertical gap when narrow); single "—" placeholder; every Catalog column keeps a header (Source/Name split both titled). |
+| VII. PageTable | ✅ PASS | Catalog stays a `PageTable`; the sortable cost rows live in the acquisition form panel (not a table), so no conflict. |
+| VIII. i18n | ✅ PASS | "Cost"/"Total"/"Items", column titles (Source, Name), and any new copy added to BOTH locales; built-in type suggestions localised, unknown free-text rendered verbatim. |
+
+No new violations. `@dnd-kit` is a UI primitive (no domain coupling; Principle II intact).
+
+## Structure Decision (delta)
+
+In-place refinement of iteration 4. Backend: one migration (`0009`) + serializer changes (per-currency accumulated, free-form type, ordering). Frontend: Catalog column/icon tweaks and an AcquisitionForm cost-panel rebuild with drag-sortable manual rows. Legacy-CSV import is tracked **separately** (see `migration-import.md`), not folded into this iteration.

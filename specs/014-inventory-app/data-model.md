@@ -43,12 +43,13 @@ A signed line of an acquisition's payment.
 | `acquisition` | FK→Acquisition, `CASCADE` | — | yes | related_name `cost_factors` |
 | `value` | DecimalField(20,4) | number | yes | **signed** — negative reduces net cost |
 | `currency` | CharField(3) blank | text | no | code string (finance API) |
-| `type` | CharField(20) | single_select | yes (default `accumulated`) | accumulated \| shipping \| discount \| tax_refund \| paid_by_other \| other — **label only, does not set the sign** |
+| `type` | CharField(20) | **text** *(iter 5: free-form; was single_select)* | yes | **free-form non-empty string**; built-ins accumulated/shipping/discount/tax_refund/paid_by_other/other are suggestions only — **label, does not set the sign**. `accumulated` is **system-reserved** (not client-creatable). |
+| `display_order` | IntegerField(default 0) *(iter 5, new)* | number | no | user-defined ordering; accumulated rows pinned to front |
 | `created_at` | DateTimeField auto_now_add | — | auto | |
 
-**`accumulated` default**: on acquisition create, one factor with `type=accumulated`, `value` = Σ item `total_price`, `currency` = items' common currency. User-overridable/resettable.
+**`accumulated` (iter 5: per-currency, system-managed)**: for **each distinct item currency**, the system derives one factor with `type=accumulated`, `value` = Σ (`sku_price × quantity`) for that currency, `currency` = that currency. **At most one `accumulated` per (acquisition, currency)** (partial unique constraint). Non-removable, not client-creatable; the user may **override** the value or **reset** to the derived sum. All other factors are user-added, removable, and **drag-reorderable**.
 
-**Meta**: `ordering = ["created_at"]`.
+**Meta**: `ordering = ["display_order", "created_at"]`. **Constraint**: `UniqueConstraint(fields=["acquisition", "currency"], condition=Q(type="accumulated"), name="uniq_accumulated_per_currency")`.
 
 ---
 
@@ -104,6 +105,12 @@ Scenario    1 ──< Constraint  *>──< Item      (M2M target set)
   5. Item: alter `quantity` → `IntegerField(default=1)` (after the round backfill).
   - Order: create CostFactor + add int-quantity staging → RunPython → drop scalar cost/item_type → finalize quantity type. `atomic = False` (Postgres backfill-then-ALTER).
 - **`0008_reseed_system_attrs`**: Item drops `item_type`; Acquisition drops cost/cost_currency/discount/tax_refund; seed a **CostFactor** content-type's system attrs (value, currency, type). Reversible.
+- **`0009_costfactor_order_freeform`** *(iteration 5)*:
+  1. `AddField` CostFactor.`display_order` = `IntegerField(default=0)`; **RunPython backfill** `display_order` from current per-acquisition `created_at` order.
+  2. `AlterField` CostFactor.`type` → plain `CharField(max_length=20)` (**drop `choices`**); keep existing values.
+  3. `AddConstraint` `UniqueConstraint(fields=["acquisition","currency"], condition=Q(type="accumulated"), name="uniq_accumulated_per_currency")` — assumes existing data already has ≤1 accumulated per (acquisition,currency); a guarded RunPython may merge duplicates first.
+  4. `AlterModelOptions` ordering → `["display_order","created_at"]`.
+  5. Reseed the CostFactor `type` AttributeDefinition from `single_select` → **`text`** (data migration; keep value/currency). Reversible where practical (`atomic = False` if the constraint add follows the backfill on Postgres).
 
 ## Backend filter/order opt-in (updated)
 

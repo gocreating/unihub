@@ -74,3 +74,30 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 - Consumable **shortfall** in the checklist → **removed** (R4).
 - Separate **Items** and **Acquisitions** list pages → one **Catalog** (R5/R6).
 - Acquisition list nav entry "Inventory" (proposed last session) → **"Catalog"** (R6).
+
+---
+
+## Iteration 5 research (catalog & cost UI)
+
+### R7 — Accumulated cost factor is per-currency
+- **Decision**: derive one `accumulated` factor per distinct item `sku_price_currency` (`value` = Σ `sku_price × quantity` for that currency), unique per `(acquisition, currency)`, system-managed (non-removable, not client-creatable, overridable/resettable).
+- **Rationale**: items in an acquisition can carry different currencies (the legacy data mixes RMB/USD/TWD/JPY); a single accumulated can't represent that, and `net_cost` is already per-currency. Matches the requested "Items … USD / Items … TWD" mockup rows.
+- **Alternatives**: one accumulated total (rejected — can't express multi-currency); accumulated per item (rejected — too granular, not what "Items" subtotal means).
+
+### R8 — `type` becomes free-form text
+- **Decision**: store `type` as a plain string (drop DB `choices`); the six built-ins are autocomplete suggestions; `accumulated` is system-reserved (server rejects client use). Reseed the AttributeDefinition `single_select → text`.
+- **Rationale**: users need labels beyond the fixed set (e.g. "customs", "代買", "coupon"). Sign lives on `value`, so `type` is purely descriptive and safe to open up.
+- **Alternatives**: keep fixed enum (rejected — user asked for free text); separate `type` + `label` fields (rejected — redundant).
+
+### R9 — Persisted factor order + drag reordering
+- **Decision**: add `display_order` (int); persist it; accumulated rows pinned to the front (not draggable); manual rows drag-sortable with **`@dnd-kit/sortable`**.
+- **Rationale**: the mockup shows drag handles; `@dnd-kit` is small, accessible, React-18 friendly, and works on a plain list (the cost rows are a form panel, not a `PageTable`).
+- **Alternatives**: `react-dnd` (heavier), ProComponents `DragSortTable` (table-bound — the rows aren't a table), no-persist creation order (rejected — user wants saved order).
+
+### R10 — Catalog & cost-panel UI
+- Arrow expand icon via `expandable.expandIcon`; split the single Name/Source column into a **Source** column (acquisition rows) and a **Name** column (item rows); size **Actions** to content; drop the "Acquisition" badge.
+- Rename **Cost Factors → Cost**, move the panel **below Items**; net cost → **"Total" footer** (per-currency); each row `[drag] · type(AutoComplete) · value+currency (Space.Compact, value right-aligned) · reset|remove`; full-width rows with vertical gap when stacked (`useContainerWidth`).
+- `obtained_at` defaults to today 00:00 on create; item cards render **every non-empty attribute**.
+
+### Terminology delta
+- "Cost Factors" panel → **"Cost"**; derived total label → **"Total"**; item cards must be **attribute-complete**.

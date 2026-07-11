@@ -55,21 +55,25 @@ Edit item; Deprecate = `{"deprecate_time": "<ts>"}`, Restore = `{"deprecate_time
     {"name": "Lens", "quantity": 1, "sku_price": "1100", "sku_price_currency": "USD"}
   ],
   "cost_factors": [
-    {"type": "accumulated", "value": "5500", "currency": "USD"},
-    {"type": "discount",    "value": "-100", "currency": "USD"},
-    {"type": "shipping",    "value": "30",   "currency": "EUR"}
+    {"type": "discount", "value": "-100", "currency": "USD", "display_order": 0},
+    {"type": "shipping", "value": "30",   "currency": "EUR", "display_order": 1}
   ]
 }
 ```
 - **201** → created `Acquisition` with nested `items`, `cost_factors`, and `net_cost` = `[{"currency":"USD","total":"5400.0000"}, {"currency":"EUR","total":"30.0000"}]`.
 - **400** → validation: item missing `name`, **`items` empty** (≥1), or **`cost_factors` empty** (≥1). Whole request rolls back (transactional). Blank `source` allowed.
-- If `cost_factors` is omitted, the server auto-creates one `accumulated` factor with `value` = Σ item `total_price` (currency = items' common currency).
+
+**Cost-factor rules (iteration 5):**
+- `type` is a **free-form non-empty string** (built-ins accumulated/shipping/discount/tax_refund/paid_by_other/other are UI suggestions only).
+- `display_order` (integer, optional) sets row order; if omitted the server assigns by array index (accumulated rows normalised to the front). Response `cost_factors` are returned in `display_order`.
+- **`accumulated` is system-managed & per-currency**: the server derives one `accumulated` factor per distinct item `sku_price_currency` (`value` = Σ `sku_price × quantity` for that currency). If `cost_factors` is omitted, only these accumulated factors are created. A client MAY send additional non-accumulated factors.
+- **400** if a client-sent factor has `type="accumulated"` (system-reserved), or if it would create a **second `accumulated` for the same currency** (unique per `(acquisition, currency)`).
 
 ### `GET /acquisitions/{id}/`
 - **200** → `Acquisition` incl. `items`, `cost_factors`, `net_cost`. **404**.
 
 ### `PATCH /acquisitions/{id}/`
-- Edit acquisition scalars, append new items, and **replace the cost-factor set** (`cost_factors` given ⇒ the acquisition's factors are set to that list; must remain ≥1). Existing items are edited/removed via item endpoints. Used by the standalone **edit page**.
+- Edit acquisition scalars, append new items, and **replace the cost-factor set** (`cost_factors` given ⇒ the acquisition's factors are set to that list, in the given `display_order`; must remain ≥1; the same accumulated per-currency + system-reserved rules apply). Existing items are edited/removed via item endpoints. Used by the standalone **edit page**.
 - **200**. **400** if it would leave 0 items or 0 cost factors.
 
 ### `DELETE /acquisitions/{id}/` → deletes the acquisition, its items, and its cost factors (**204**).
@@ -87,6 +91,7 @@ Unchanged **except** the checklist response **drops `shortfall`** — each line 
 - `test_acquisition_cost_factors_net_cost_per_currency` (USD 5400 + EUR 30), `test_acquisition_requires_at_least_one_cost_factor`, `test_cost_factor_value_carries_sign` (negative reduces), `test_accumulated_defaults_to_item_total_sum`.
 - `test_item_quantity_is_integer`, `test_item_has_no_item_type_field`.
 - `test_checklist_has_no_shortfall` (line payload omits shortfall).
+- **Iteration 5**: `test_accumulated_one_per_item_currency` (items in USD+TWD → two accumulated factors), `test_client_cannot_create_accumulated_type` (400), `test_duplicate_accumulated_currency_rejected` (400), `test_cost_factor_type_accepts_free_text` (e.g. `"customs"`), `test_cost_factors_preserve_display_order` (round-trip order), `test_reset_accumulated_recomputes_from_items`.
 - `test_acquisition_requires_at_least_one_item` (still enforced).
 - `test_item_edit_via_acquisition_patch_persists` (regression guard for the edit bug at the API layer).
 - Migration exercised by the test DB; quickstart covers the Postgres backfill (`cost → accumulated factor`, quantity → int).

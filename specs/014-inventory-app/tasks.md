@@ -158,3 +158,77 @@ Completed 2026-07-11.
 
 ### Not run this session
 - **T029 (Docker end-to-end on Postgres)** was not executed in this session. The migrations are exercised on a fresh DB by the pytest suite (SQLite), but the `cost → factors` + `quantity → int` backfill against a pre-existing **Postgres** DB should still be verified via `docker compose` + quickstart before release.
+
+---
+
+# Tasks: Iteration 5 (catalog & cost UI refinements)
+
+**Input**: plan.md "Iteration 5" delta, data-model.md (CostFactor `display_order`/free-form `type`/per-currency accumulated), contracts/inventory-api.md (iteration-5 rules), research.md (R7–R10). Builds on iteration 4 (commit `57441be`).
+
+**Scope**: 3 data-model changes (free-form `type`, `display_order`, per-currency `accumulated` + uniqueness) + migration `0009`; a rebuilt **Cost** panel (drag-reorder, Total footer, composed value+currency, per-row reset); Catalog UI (arrow icon, split Source/Name, fit Actions, drop badge); item cards render all filled fields; `obtained_at` defaults today 00:00.
+
+**Tests-first** (project TDD preference): write/adjust backend tests before the serializer/model change.
+
+## Phase 1: Setup (iteration 5)
+
+- [ ] T031 [P] Add drag-and-drop deps in `apps/unihub/frontend/package.json`: `@dnd-kit/core` + `@dnd-kit/sortable` (+`@dnd-kit/utilities`); run `pnpm install`; confirm `pnpm typecheck` still passes
+
+## Phase 2: Foundational (iteration 5) — blocks US2
+
+- [ ] T032 Update `apps/unihub/backend/inventory/models.py`: `CostFactor` — add `display_order = IntegerField(default=0)`; change `type` to a plain `CharField(max_length=20)` (**remove `choices`**); `Meta.ordering = ["display_order", "created_at"]`; add `Meta.constraints = [UniqueConstraint(fields=["acquisition","currency"], condition=Q(type="accumulated"), name="uniq_accumulated_per_currency")]`
+- [ ] T033 Create migration `apps/unihub/backend/inventory/migrations/0009_costfactor_order_freeform.py`: `AddField(display_order)` → RunPython backfill `display_order` from per-acquisition `created_at` order (+ optional guarded merge of any duplicate `(acquisition, currency)` accumulated) → `AlterField(type → CharField no choices)` → `AddConstraint(uniq_accumulated_per_currency)` → `AlterModelOptions(ordering)`; `atomic = False` if the constraint add follows the backfill on Postgres
+- [ ] T034 Add migration `apps/unihub/backend/inventory/migrations/0010_reseed_costfactor_type.py`: reseed the CostFactor `type` system AttributeDefinition from `single_select` → `text` (drop options); reversible
+- [ ] T035 Run `uv run python manage.py makemigrations inventory --check` (expect "No changes detected") and `uv run python manage.py migrate` on a fresh DB; confirm `0009`/`0010` apply cleanly
+
+## Phase 3: US2 — Cost panel & per-currency accumulated (Priority: P1)
+
+**Goal**: cost factors support free-form types, persisted order, and one system-managed accumulated per currency; the acquisition form presents them as the requested **Cost** panel.
+
+**Independent test**: create an acquisition whose items span two currencies → two `accumulated` factors auto-derive; add a free-text-typed factor and a discount, reorder them, save, reload → order + values persist; the panel footer shows per-currency Totals.
+
+- [ ] T036 [P] [US2] Update `apps/unihub/backend/tests/test_inventory_acquisitions.py` (tests-first): `test_accumulated_one_per_item_currency` (items USD+TWD → 2 accumulated), `test_client_cannot_create_accumulated_type` (400), `test_duplicate_accumulated_currency_rejected` (400), `test_cost_factor_type_accepts_free_text` (e.g. `"customs"`), `test_cost_factors_preserve_display_order` (round-trip), `test_reset_accumulated_recomputes_from_items`
+- [ ] T037 [US2] Update `CostFactorSerializer` + `AcquisitionSerializer` in `apps/unihub/backend/inventory/serializers.py`: expose `display_order`; free-form `type` (non-empty); **reject** client `type="accumulated"` and a duplicate accumulated currency (400); on create-with-omitted `cost_factors`, derive **one `accumulated` per distinct item `sku_price_currency`** (`value` = Σ `sku_price × quantity`); persist `display_order` = array index with accumulated normalised to the front; keep `net_cost` per-currency; run T036 to green
+- [ ] T038 [US2] Regenerate OpenAPI schema + frontend types into `apps/unihub/frontend/src/generated/api-types.ts`
+- [ ] T039 [P] [US2] Update `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`: `CostFactor` + `CostFactorWrite` add `display_order`; keep `CostFactorType` as the suggestion union but type the field as `string` (free-form)
+- [ ] T040 [US2] Rebuild the **Cost** panel in `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionForm.tsx`: rename "Cost Factors" → **"Cost"** and move the panel **below the Items panel**; header **Add**; each row `[drag] · type (AutoComplete w/ built-in suggestions) · value+currency composed (`Space.Compact`, `InputNumber` right-aligned) · reset (accumulated) | remove (manual)`; **accumulated rows: one per currency, pinned top, non-removable, per-row reset**; enforce **at most one accumulated per currency** client-side; rows full-width with vertical gap when narrow (`useContainerWidth`); **net cost in a "Total" footer** (per currency)
+- [ ] T041 [US2] Add drag reordering to the Cost panel (`AcquisitionForm.tsx`) using `@dnd-kit/sortable`: only manual (non-accumulated) rows are sortable; on drop, update local order and send `cost_factors` in display order (server persists `display_order`)
+- [ ] T042 [P] [US2] In `AcquisitionForm.tsx`: default `obtained_at` to **today 00:00** on create (like `request_time`); rename the items panel heading to **"Items"**; make each **item card render every non-empty attribute** (quantity, sku_price+currency, size, spec, color, length/width/height, weight, volume, url)
+- [ ] T043 [P] [US2] Update locale keys in BOTH `en-US` and `zh-TW` (`menu.ts`/`pages.ts`): `Cost`, `Total`, `Add`, `reset`, cost-factor built-in type suggestions; rename the items-panel heading key to "Items"
+
+## Phase 4: US1 — Catalog table refinements (Priority: P2)
+
+**Goal**: the merged Catalog reads cleanly — arrow disclosure, separate Source/Name columns, right-sized Actions, no badge.
+
+**Independent test**: open `/inventory/catalog`; parent rows show an arrow toggle and a **Source** value (Name blank); expanding shows item rows with a **Name** value (Source blank); the Actions buttons never clip; no "Acquisition" badge is shown.
+
+- [ ] T044 [US1] In `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx`: use an **arrow expand icon** (`expandable.expandIcon`, ▸/▾); **split the Name/Source column** into a `source` column (acquisition rows) and a `name` column (item rows); **size the Actions column to fit content**; **remove the "Acquisition" badge**
+- [ ] T045 [P] [US1] Update the Catalog columns i18n in BOTH locales (`pages.ts`): add `Source`/`Name` column headers; drop the `catalog.col.nameSource` / `catalog.acquisitionRow` (badge) keys
+- [ ] T046 [P] [US1] Update the Catalog test `apps/unihub/frontend/src/pages/inventory/catalog/CatalogPage.test.tsx`: assert separate Source & Name columns and **no "Acquisition" badge**
+
+## Phase 5: Polish & cross-cutting (iteration 5)
+
+- [ ] T047 Backend quality loop from `apps/unihub/backend/`: `uv run ruff format . && uv run ruff check . --fix && uv run pytest` — full suite green (only inventory files reformatted)
+- [ ] T048 Frontend quality loop from `apps/unihub/frontend/`: `pnpm lint` (0 warnings) `&& pnpm typecheck` `&& pnpm test`
+- [ ] T049 [P] Locale parity check (identical key sets both locales; pruned keys gone) and Principle II grep (no `finance` model import in `inventory/`; `@dnd-kit` is UI-only)
+- [ ] T050 [P] Rebuild Docker + run [quickstart.md](quickstart.md) additions on Postgres: per-currency accumulated (2 currencies → 2 "Items" rows), free-text type, drag-reorder persistence, Total footer, arrow/split-column Catalog, item-card attributes; verify `0009`/`0010` on the pre-existing DB
+- [ ] T051 [P] Mark iteration-5 tasks complete + append Implementation Notes (migration `0009`/`0010`, `@dnd-kit` choice, per-currency accumulated derivation, any deviations) to this file
+
+---
+
+## Dependencies & Execution Order (iteration 5)
+
+- **Setup (T031)** can run alongside Foundational.
+- **Foundational (T032–T035)** blocks US2 (serializer needs the model/migration).
+- **US2 (T036–T043)** is tests-first (T036 → T037); T038 regen after T037; T040/T041 depend on T039 types; T044+ (US1) is UI-only and can run in parallel with US2 frontend once types (T039) land.
+- **US1 (T044–T046)** depends only on the existing Catalog page (no schema); parallelizable with US2 frontend.
+- **Polish (T047–T051)** after both stories.
+
+## Parallel Opportunities (iteration 5)
+
+- T031 (deps) ∥ T032–T034 (backend model/migrations).
+- After T038/T039: T040/T041/T042 (AcquisitionForm) are same-file → sequential; T043 (i18n), T044–T046 (Catalog, different files) run in parallel.
+- T049/T050/T051 are independent `[P]` checks.
+
+## Implementation Strategy (iteration 5)
+
+MVP = **US2** (the cost-model change is the substantive one; blocks correct data). Ship US2, then US1 (pure UI polish). Backend behavior is test-first; regenerate types after the serializer change (Principle IV); update both locales in the same commit (Principle VIII).

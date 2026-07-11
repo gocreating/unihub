@@ -18,6 +18,10 @@ import { BalanceSheetEditPage } from '@/pages/finance/balance-sheets/edit';
 import { BalanceSheetNewPage } from '@/pages/finance/balance-sheets/new';
 import { CurrenciesPage } from '@/pages/finance/currencies/index';
 import { ExchangeRatesPage } from '@/pages/finance/exchange-rates/index';
+import { ItemsPage } from '@/pages/inventory/items/index';
+import { AcquisitionsPage } from '@/pages/inventory/acquisitions/index';
+import { ScenariosPage } from '@/pages/inventory/scenarios/index';
+import { ScenarioDetailPage } from '@/pages/inventory/scenarios/detail';
 import { LanguagePage } from '@/pages/language/LanguagePage';
 import { PeoplePage } from '@/pages/people/PeoplePage';
 import { MusicPage } from '@/pages/music/MusicPage';
@@ -75,6 +79,10 @@ function AppRoutes() {
                 <Route path="/finance/balance-sheets/:id/edit" element={<BalanceSheetEditPage />} />
                 <Route path="/finance/balance-sheets/:id" element={<BalanceSheetDetailPage />} />
                 <Route path="/finance/exchange-rates" element={<ExchangeRatesPage />} />
+                <Route path="/inventory/items" element={<ItemsPage />} />
+                <Route path="/inventory/acquisitions" element={<AcquisitionsPage />} />
+                <Route path="/inventory/scenarios" element={<ScenariosPage />} />
+                <Route path="/inventory/scenarios/:id" element={<ScenarioDetailPage />} />
                 <Route path="/language" element={<LanguagePage />} />
                 <Route path="/people" element={<PeoplePage />} />
                 <Route path="/music" element={<MusicPage />} />

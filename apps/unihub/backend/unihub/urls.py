@@ -20,5 +20,6 @@ urlpatterns = [
     path("api/language/", include("language.urls")),
     path("api/people/", include("people.urls")),
     path("api/music/", include("music.urls")),
+    path("api/v1/inventory/", include("inventory.urls")),
     path("api/v1/system/", include("system.urls")),
 ]

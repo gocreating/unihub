@@ -18,12 +18,13 @@ COPY visiting/ ./visiting/
 COPY language/ ./language/
 COPY people/ ./people/
 COPY music/ ./music/
+COPY inventory/ ./inventory/
 COPY data_io/ ./data_io/
 COPY sync/ ./sync/
 COPY system/ ./system/
 COPY manage.py ./
 
-RUN UV_HTTP_TIMEOUT=120 uv sync --no-dev --no-editable
+RUN UV_HTTP_TIMEOUT=300 uv sync --no-dev --no-editable
 
 # collectstatic does not connect to the DB
 RUN DJANGO_SECRET_KEY=collectstatic uv run python manage.py collectstatic --noinput

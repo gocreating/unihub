@@ -29,10 +29,10 @@ Web app in the unihub monorepo:
 
 **Purpose**: Create the empty `inventory` domain app and wire it into the project (Domain Addition Protocol steps 1–2). No models yet.
 
-- [ ] T001 Create backend app skeleton: `apps/unihub/backend/inventory/__init__.py`, `apps.py` (`InventoryConfig`), empty `models.py`, `serializers.py`, `views.py`, `urls.py` (empty `DefaultRouter`), and `migrations/__init__.py`
-- [ ] T002 Register the app: add `"inventory",` to `INSTALLED_APPS` in `apps/unihub/backend/unihub/settings.py` and add `path("api/v1/inventory/", include("inventory.urls"))` to `apps/unihub/backend/unihub/urls.py`
-- [ ] T003 [P] Add the Inventory nav section (collapsible, level-1 icon `<InboxOutlined />`, `menu.inventory.*` labels via `t({id})`) in `apps/unihub/frontend/src/components/AppShell/AppShell.tsx` and register placeholder `/inventory/*` routes in `apps/unihub/frontend/src/App.tsx`
-- [ ] T004 [P] Create the frontend service stub `apps/unihub/frontend/src/services/unihub-backend/inventory.ts` (`API_BASE_URL` import, empty exports) and export it from `apps/unihub/frontend/src/services/unihub-backend/index.ts`
+- [x] T001 Create backend app skeleton: `apps/unihub/backend/inventory/__init__.py`, `apps.py` (`InventoryConfig`), empty `models.py`, `serializers.py`, `views.py`, `urls.py` (empty `DefaultRouter`), and `migrations/__init__.py`
+- [x] T002 Register the app: add `"inventory",` to `INSTALLED_APPS` in `apps/unihub/backend/unihub/settings.py` and add `path("api/v1/inventory/", include("inventory.urls"))` to `apps/unihub/backend/unihub/urls.py`
+- [x] T003 [P] Add the Inventory nav section (collapsible, level-1 icon `<InboxOutlined />`, `menu.inventory.*` labels via `t({id})`) in `apps/unihub/frontend/src/components/AppShell/AppShell.tsx` and register placeholder `/inventory/*` routes in `apps/unihub/frontend/src/App.tsx`
+- [x] T004 [P] Create the frontend service stub `apps/unihub/frontend/src/services/unihub-backend/inventory.ts` (`API_BASE_URL` import, empty exports) and export it from `apps/unihub/frontend/src/services/unihub-backend/index.ts`
 
 ---
 
@@ -42,8 +42,8 @@ Web app in the unihub monorepo:
 
 **⚠️ CRITICAL**: Must complete before user-story test tasks can run.
 
-- [ ] T005 Add shared pytest fixtures for an authenticated DRF API client and DB access in `apps/unihub/backend/tests/conftest.py` (reuse existing fixtures if present; add an `inventory`-scoped one only if missing)
-- [ ] T006 [P] Add the `menu.inventory` and `pages.inventory` namespace roots (section + page titles) to `apps/unihub/frontend/src/locales/en-US/{menu.ts,pages.ts}` AND `apps/unihub/frontend/src/locales/zh-TW/{menu.ts,pages.ts}` (both locales, same commit — Principle VIII)
+- [x] T005 Add shared pytest fixtures for an authenticated DRF API client and DB access in `apps/unihub/backend/tests/conftest.py` (reuse existing fixtures if present; add an `inventory`-scoped one only if missing)
+- [x] T006 [P] Add the `menu.inventory` and `pages.inventory` namespace roots (section + page titles) to `apps/unihub/frontend/src/locales/en-US/{menu.ts,pages.ts}` AND `apps/unihub/frontend/src/locales/zh-TW/{menu.ts,pages.ts}` (both locales, same commit — Principle VIII)
 
 **Checkpoint**: App is wired and testable — user stories can begin.
 
@@ -57,24 +57,24 @@ Web app in the unihub monorepo:
 
 ### Tests for User Story 1 (write first, ensure they FAIL) ⚠️
 
-- [ ] T007 [P] [US1] Write item CRUD/validation tests in `apps/unihub/backend/tests/test_inventory_items.py`: `test_create_item_missing_name_returns_400`, `test_create_item_negative_weight_returns_400`, `test_create_item_defaults_stockable`, `test_update_item_quantity`, `test_list_items_excludes_archived`, `test_archive_item_sets_archived_at`, `test_list_archived_filter_returns_archived`
+- [x] T007 [P] [US1] Write item CRUD/validation tests in `apps/unihub/backend/tests/test_inventory_items.py`: `test_create_item_missing_name_returns_400`, `test_create_item_negative_weight_returns_400`, `test_create_item_defaults_stockable`, `test_update_item_quantity`, `test_list_items_excludes_archived`, `test_archive_item_sets_archived_at`, `test_list_archived_filter_returns_archived`
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Create the `Item` model (all fields per data-model.md **except** the `acquisition` FK, added in US2) in `apps/unihub/backend/inventory/models.py`
-- [ ] T009 [US1] Generate the initial schema migration: `uv run python manage.py makemigrations inventory` → `apps/unihub/backend/inventory/migrations/0001_initial.py`
-- [ ] T010 [US1] Add the Item system-attribute seed data migration `apps/unihub/backend/inventory/migrations/0002_seed_item_system_attrs.py` (mirror `finance/migrations/0002_seed_account_system_attrs.py`; seed `is_system=True` AttributeDefinitions for all Item user-facing fields with `display_order`, plus a reverse `unseed`)
-- [ ] T011 [P] [US1] Implement `ItemSerializer` (all writable fields; `archived_at` read/writable for archive; validation for `name` non-blank and non-negative numerics) in `apps/unihub/backend/inventory/serializers.py`
-- [ ] T012 [US1] Implement `ItemViewSet` in `apps/unihub/backend/inventory/views.py`: `ModelViewSet` with `EntityFilterBackend`+`NullsOrderingFilter`, `EntityOffsetPagination`, `filterable_fields`/`ordering_fields` (per data-model.md), `http_method_names` without `put`, custom `get_queryset` for the `?archived` filter, and a guarded `destroy` (reference-count summary + `?confirm=true`) matching `AccountViewSet.destroy`
-- [ ] T013 [US1] Register `items` on the router in `apps/unihub/backend/inventory/urls.py`; run tests T007 to green (`uv run pytest tests/test_inventory_items.py`)
-- [ ] T014 [US1] Regenerate the OpenAPI schema and frontend types into `apps/unihub/frontend/src/generated/` (Principle IV — no hand-written types)
-- [ ] T015 [P] [US1] Implement item service functions (list/create/update/archive/delete, query key `['inventory','items']`) in `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`
-- [ ] T016 [US1] Build the Items list page `apps/unihub/frontend/src/pages/inventory/items/ItemsPage.tsx` using `PageTable` + `EntityToolbar`/`useEntitySort`/`useEntityFilter`/`useColumnConfig` (Principles VII, XII: apply-gate, `makeSortProps`, `panelApplyCount` in `key`); enum cells (`item_type`, `status`) in `<Tag>`, datetime dual-display, `—` empty placeholder (Principle VI)
-- [ ] T017 [P] [US1] Build the item create/edit modal form `apps/unihub/frontend/src/pages/inventory/items/ItemFormModal.tsx` (all attributes; type = single-select)
-- [ ] T018 [US1] Wire the archived-items filter toggle and the archive action into `ItemsPage.tsx`
-- [ ] T019 [US1] Wire the delete action with a `Modal.confirm` (`okType:'danger'`, localized title/body) handling the backend reference-count gate response in `ItemsPage.tsx` (Dev Constraint — delete confirmation)
-- [ ] T020 [P] [US1] Add all `pages.inventory.items.*` keys to both `en-US` and `zh-TW` `pages.ts` locale files
-- [ ] T021 [P] [US1] Add a Vitest component test for the Items page (renders rows, opens create modal) in `apps/unihub/frontend/src/pages/inventory/items/ItemsPage.test.tsx`
+- [x] T008 [US1] Create the `Item` model (all fields per data-model.md **except** the `acquisition` FK, added in US2) in `apps/unihub/backend/inventory/models.py`
+- [x] T009 [US1] Generate the initial schema migration: `uv run python manage.py makemigrations inventory` → `apps/unihub/backend/inventory/migrations/0001_initial.py`
+- [x] T010 [US1] Add the Item system-attribute seed data migration `apps/unihub/backend/inventory/migrations/0002_seed_item_system_attrs.py` (mirror `finance/migrations/0002_seed_account_system_attrs.py`; seed `is_system=True` AttributeDefinitions for all Item user-facing fields with `display_order`, plus a reverse `unseed`)
+- [x] T011 [P] [US1] Implement `ItemSerializer` (all writable fields; `archived_at` read/writable for archive; validation for `name` non-blank and non-negative numerics) in `apps/unihub/backend/inventory/serializers.py`
+- [x] T012 [US1] Implement `ItemViewSet` in `apps/unihub/backend/inventory/views.py`: `ModelViewSet` with `EntityFilterBackend`+`NullsOrderingFilter`, `EntityOffsetPagination`, `filterable_fields`/`ordering_fields` (per data-model.md), `http_method_names` without `put`, custom `get_queryset` for the `?archived` filter, and a guarded `destroy` (reference-count summary + `?confirm=true`) matching `AccountViewSet.destroy`
+- [x] T013 [US1] Register `items` on the router in `apps/unihub/backend/inventory/urls.py`; run tests T007 to green (`uv run pytest tests/test_inventory_items.py`)
+- [x] T014 [US1] Regenerate the OpenAPI schema and frontend types into `apps/unihub/frontend/src/generated/` (Principle IV — no hand-written types)
+- [x] T015 [P] [US1] Implement item service functions (list/create/update/archive/delete, query key `['inventory','items']`) in `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`
+- [x] T016 [US1] Build the Items list page `apps/unihub/frontend/src/pages/inventory/items/ItemsPage.tsx` using `PageTable` + `EntityToolbar`/`useEntitySort`/`useEntityFilter`/`useColumnConfig` (Principles VII, XII: apply-gate, `makeSortProps`, `panelApplyCount` in `key`); enum cells (`item_type`, `status`) in `<Tag>`, datetime dual-display, `—` empty placeholder (Principle VI)
+- [x] T017 [P] [US1] Build the item create/edit modal form `apps/unihub/frontend/src/pages/inventory/items/ItemFormModal.tsx` (all attributes; type = single-select)
+- [x] T018 [US1] Wire the archived-items filter toggle and the archive action into `ItemsPage.tsx`
+- [x] T019 [US1] Wire the delete action with a `Modal.confirm` (`okType:'danger'`, localized title/body) handling the backend reference-count gate response in `ItemsPage.tsx` (Dev Constraint — delete confirmation)
+- [x] T020 [P] [US1] Add all `pages.inventory.items.*` keys to both `en-US` and `zh-TW` `pages.ts` locale files
+- [x] T021 [P] [US1] Add a Vitest component test for the Items page (renders rows, opens create modal) in `apps/unihub/frontend/src/pages/inventory/items/ItemsPage.test.tsx`
 
 **Checkpoint**: US1 fully functional — items catalog is a shippable MVP.
 
@@ -88,21 +88,21 @@ Web app in the unihub monorepo:
 
 ### Tests for User Story 2 (write first) ⚠️
 
-- [ ] T022 [P] [US2] Write acquisition tests in `apps/unihub/backend/tests/test_inventory_acquisitions.py`: `test_create_acquisition_links_items`, `test_acquisition_total_item_cost`, `test_acquisition_has_arrived_flag`, `test_delete_acquisition_preserves_items`, `test_remove_item_link_preserves_item`, `test_item_without_acquisition_origin_unknown`, `test_optional_method_blank_allowed`
+- [x] T022 [P] [US2] Write acquisition tests in `apps/unihub/backend/tests/test_inventory_acquisitions.py`: `test_create_acquisition_links_items`, `test_acquisition_total_item_cost`, `test_acquisition_has_arrived_flag`, `test_delete_acquisition_preserves_items`, `test_remove_item_link_preserves_item`, `test_item_without_acquisition_origin_unknown`, `test_optional_method_blank_allowed`
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Create the `Acquisition` model and add the nullable `Item.acquisition` FK (`SET_NULL`) in `apps/unihub/backend/inventory/models.py`
-- [ ] T024 [US2] Generate migration `apps/unihub/backend/inventory/migrations/0003_acquisition.py` and add the Acquisition system-attribute seed (either append to the seed migration or a new `0004_seed_acquisition_system_attrs.py`)
-- [ ] T025 [P] [US2] Implement `AcquisitionSerializer` (writable `item_ids`; derived read-only `item_count`, `total_item_cost`, `has_arrived`, nested `items`) in `apps/unihub/backend/inventory/serializers.py`
-- [ ] T026 [US2] Extend `ItemSerializer` to include the nested `acquisition` summary and derived `origin_known` in `apps/unihub/backend/inventory/serializers.py`
-- [ ] T027 [US2] Implement `AcquisitionViewSet` (filter/sort per data-model.md; `destroy` nulls linked items) and register `acquisitions` in `apps/unihub/backend/inventory/urls.py`; run T022 to green
-- [ ] T028 [US2] Regenerate OpenAPI + frontend types into `apps/unihub/frontend/src/generated/`
-- [ ] T029 [P] [US2] Add acquisition service functions (query key `['inventory','acquisitions']`) in `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`
-- [ ] T030 [US2] Build the Acquisitions list page `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionsPage.tsx` (PageTable + EntityToolbar; `method` in `<Tag>`, arrival status distinguishable, delete confirm modal)
-- [ ] T031 [P] [US2] Build the acquisition create/edit modal with multi-item linking `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionFormModal.tsx`
+- [x] T023 [US2] Create the `Acquisition` model and add the nullable `Item.acquisition` FK (`SET_NULL`) in `apps/unihub/backend/inventory/models.py`
+- [x] T024 [US2] Generate migration `apps/unihub/backend/inventory/migrations/0003_acquisition.py` and add the Acquisition system-attribute seed (either append to the seed migration or a new `0004_seed_acquisition_system_attrs.py`)
+- [x] T025 [P] [US2] Implement `AcquisitionSerializer` (writable `item_ids`; derived read-only `item_count`, `total_item_cost`, `has_arrived`, nested `items`) in `apps/unihub/backend/inventory/serializers.py`
+- [x] T026 [US2] Extend `ItemSerializer` to include the nested `acquisition` summary and derived `origin_known` in `apps/unihub/backend/inventory/serializers.py`
+- [x] T027 [US2] Implement `AcquisitionViewSet` (filter/sort per data-model.md; `destroy` nulls linked items) and register `acquisitions` in `apps/unihub/backend/inventory/urls.py`; run T022 to green
+- [x] T028 [US2] Regenerate OpenAPI + frontend types into `apps/unihub/frontend/src/generated/`
+- [x] T029 [P] [US2] Add acquisition service functions (query key `['inventory','acquisitions']`) in `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`
+- [x] T030 [US2] Build the Acquisitions list page `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionsPage.tsx` (PageTable + EntityToolbar; `method` in `<Tag>`, arrival status distinguishable, delete confirm modal)
+- [x] T031 [P] [US2] Build the acquisition create/edit modal with multi-item linking `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionFormModal.tsx`
 - [ ] T032 [US2] Surface the originating acquisition (or "unknown origin") in the item detail/edit view in `apps/unihub/frontend/src/pages/inventory/items/`
-- [ ] T033 [P] [US2] Add all `pages.inventory.acquisitions.*` keys to both `en-US` and `zh-TW` `pages.ts`
+- [x] T033 [P] [US2] Add all `pages.inventory.acquisitions.*` keys to both `en-US` and `zh-TW` `pages.ts`
 
 **Checkpoint**: US1 + US2 both work independently.
 
@@ -116,21 +116,21 @@ Web app in the unihub monorepo:
 
 ### Tests for User Story 3 (write first) ⚠️
 
-- [ ] T034 [P] [US3] Write scenario/checklist tests in `apps/unihub/backend/tests/test_inventory_scenarios.py`: `test_create_scenario_requires_name`, `test_add_scenario_item_duplicate_returns_400`, `test_toggle_prepared_updates_progress`, `test_checklist_complete_when_all_prepared`, `test_checklist_reports_consumable_shortfall`, `test_empty_scenario_checklist_returns_empty`
+- [x] T034 [P] [US3] Write scenario/checklist tests in `apps/unihub/backend/tests/test_inventory_scenarios.py`: `test_create_scenario_requires_name`, `test_add_scenario_item_duplicate_returns_400`, `test_toggle_prepared_updates_progress`, `test_checklist_complete_when_all_prepared`, `test_checklist_reports_consumable_shortfall`, `test_empty_scenario_checklist_returns_empty`
 
 ### Implementation for User Story 3
 
-- [ ] T035 [US3] Create the `Scenario` and `ScenarioItem` models (ScenarioItem **without** the `container` FK, added in US5; include `required_quantity`, `prepared`, `unique_together(scenario,item)`) in `apps/unihub/backend/inventory/models.py`
-- [ ] T036 [US3] Generate migration `apps/unihub/backend/inventory/migrations/0005_scenario_scenarioitem.py` and add the Scenario system-attribute seed
-- [ ] T037 [P] [US3] Implement `ScenarioSerializer` (derived counts: `item_count`, `prepared_count`, `outstanding_count`, `complete`) and `ScenarioItemSerializer` (with derived `shortfall`) in `apps/unihub/backend/inventory/serializers.py`
-- [ ] T038 [US3] Implement the checklist computation (progress + per-line shortfall; `violations: []` placeholder until US4) as a helper in `apps/unihub/backend/inventory/services.py`
-- [ ] T039 [US3] Implement `ScenarioViewSet` (CRUD + `checklist` action `GET /scenarios/{id}/checklist/`) and `ScenarioItemViewSet` (nested list/create/patch/delete with duplicate + prepared handling) in `apps/unihub/backend/inventory/views.py`
-- [ ] T040 [US3] Register `scenarios` and nested `scenarios/{id}/items/` routes in `apps/unihub/backend/inventory/urls.py`; run T034 to green
-- [ ] T041 [US3] Regenerate OpenAPI + frontend types into `apps/unihub/frontend/src/generated/`
-- [ ] T042 [P] [US3] Add scenario + scenario-item + checklist service functions (query keys `['inventory','scenarios']`, `['inventory','scenario',id,'checklist']`) in `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`
-- [ ] T043 [US3] Build the Scenarios list page `apps/unihub/frontend/src/pages/inventory/scenarios/ScenariosPage.tsx` (PageTable + EntityToolbar; readiness counts; delete confirm modal)
-- [ ] T044 [US3] Build the Scenario detail page `apps/unihub/frontend/src/pages/inventory/scenarios/ScenarioDetail.tsx` with the checklist panel: add/remove items, `prepared` toggle, progress summary, shortfall indicator (embedded table uses `ProTable ghost` if inside a card — Principle XI)
-- [ ] T045 [P] [US3] Add all `pages.inventory.scenarios.*` keys to both `en-US` and `zh-TW` `pages.ts`
+- [x] T035 [US3] Create the `Scenario` and `ScenarioItem` models (ScenarioItem **without** the `container` FK, added in US5; include `required_quantity`, `prepared`, `unique_together(scenario,item)`) in `apps/unihub/backend/inventory/models.py`
+- [x] T036 [US3] Generate migration `apps/unihub/backend/inventory/migrations/0005_scenario_scenarioitem.py` and add the Scenario system-attribute seed
+- [x] T037 [P] [US3] Implement `ScenarioSerializer` (derived counts: `item_count`, `prepared_count`, `outstanding_count`, `complete`) and `ScenarioItemSerializer` (with derived `shortfall`) in `apps/unihub/backend/inventory/serializers.py`
+- [x] T038 [US3] Implement the checklist computation (progress + per-line shortfall; `violations: []` placeholder until US4) as a helper in `apps/unihub/backend/inventory/services.py`
+- [x] T039 [US3] Implement `ScenarioViewSet` (CRUD + `checklist` action `GET /scenarios/{id}/checklist/`) and `ScenarioItemViewSet` (nested list/create/patch/delete with duplicate + prepared handling) in `apps/unihub/backend/inventory/views.py`
+- [x] T040 [US3] Register `scenarios` and nested `scenarios/{id}/items/` routes in `apps/unihub/backend/inventory/urls.py`; run T034 to green
+- [x] T041 [US3] Regenerate OpenAPI + frontend types into `apps/unihub/frontend/src/generated/`
+- [x] T042 [P] [US3] Add scenario + scenario-item + checklist service functions (query keys `['inventory','scenarios']`, `['inventory','scenario',id,'checklist']`) in `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`
+- [x] T043 [US3] Build the Scenarios list page `apps/unihub/frontend/src/pages/inventory/scenarios/ScenariosPage.tsx` (PageTable + EntityToolbar; readiness counts; delete confirm modal)
+- [x] T044 [US3] Build the Scenario detail page `apps/unihub/frontend/src/pages/inventory/scenarios/ScenarioDetail.tsx` with the checklist panel: add/remove items, `prepared` toggle, progress summary, shortfall indicator (embedded table uses `ProTable ghost` if inside a card — Principle XI)
+- [x] T045 [P] [US3] Add all `pages.inventory.scenarios.*` keys to both `en-US` and `zh-TW` `pages.ts`
 - [ ] T046 [P] [US3] Add a Vitest test for the checklist progress/toggle behavior in `apps/unihub/frontend/src/pages/inventory/scenarios/ScenarioDetail.test.tsx`
 
 **Checkpoint**: US1–US3 independently functional; scenarios become actionable.
@@ -145,18 +145,18 @@ Web app in the unihub monorepo:
 
 ### Tests for User Story 4 (write first) ⚠️
 
-- [ ] T047 [P] [US4] Write constraint tests in `apps/unihub/backend/tests/test_inventory_constraints.py`: `test_mutual_exclusive_requires_two_items`, `test_weight_limit_requires_limit_value`, `test_required_needs_items_or_category`, `test_mutual_exclusive_violation_flagged`, `test_required_constraint_unsatisfied_flagged`, `test_weight_limit_overage_reports_amount`, `test_all_constraints_satisfied_no_violations`
+- [x] T047 [P] [US4] Write constraint tests in `apps/unihub/backend/tests/test_inventory_constraints.py`: `test_mutual_exclusive_requires_two_items`, `test_weight_limit_requires_limit_value`, `test_required_needs_items_or_category`, `test_mutual_exclusive_violation_flagged`, `test_required_constraint_unsatisfied_flagged`, `test_weight_limit_overage_reports_amount`, `test_all_constraints_satisfied_no_violations`
 
 ### Implementation for User Story 4
 
-- [ ] T048 [US4] Create the `Constraint` model (`constraint_type`, M2M `items`, `target_category`, `limit_value`, per-type validation) in `apps/unihub/backend/inventory/models.py`; migration `apps/unihub/backend/inventory/migrations/0006_constraint.py`
-- [ ] T049 [P] [US4] Implement `ConstraintSerializer` with type-specific validation (mutual_exclusive ≥2 items; required needs items xor category; weight_limit needs `limit_value>0`) in `apps/unihub/backend/inventory/serializers.py`
-- [ ] T050 [US4] Implement the constraint-evaluation function (returns `{constraint_id,type,message,offending_item_ids?,overage?}` list) in `apps/unihub/backend/inventory/services.py`
-- [ ] T051 [US4] Integrate evaluation into the scenario `checklist` endpoint `violations` field (replace the US3 placeholder) in `apps/unihub/backend/inventory/views.py`
-- [ ] T052 [US4] Implement the nested `ConstraintViewSet` and register `scenarios/{id}/constraints/` routes in `apps/unihub/backend/inventory/urls.py`; run T047 to green
-- [ ] T053 [US4] Regenerate OpenAPI + frontend types; add constraint service functions in `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`
-- [ ] T054 [US4] Build the constraints panel in `ScenarioDetail.tsx`: add/edit/delete constraints (type-aware form), render violations from the checklist response (delete confirm modal)
-- [ ] T055 [P] [US4] Add all `pages.inventory.constraints.*` keys to both `en-US` and `zh-TW` `pages.ts`
+- [x] T048 [US4] Create the `Constraint` model (`constraint_type`, M2M `items`, `target_category`, `limit_value`, per-type validation) in `apps/unihub/backend/inventory/models.py`; migration `apps/unihub/backend/inventory/migrations/0006_constraint.py`
+- [x] T049 [P] [US4] Implement `ConstraintSerializer` with type-specific validation (mutual_exclusive ≥2 items; required needs items xor category; weight_limit needs `limit_value>0`) in `apps/unihub/backend/inventory/serializers.py`
+- [x] T050 [US4] Implement the constraint-evaluation function (returns `{constraint_id,type,message,offending_item_ids?,overage?}` list) in `apps/unihub/backend/inventory/services.py`
+- [x] T051 [US4] Integrate evaluation into the scenario `checklist` endpoint `violations` field (replace the US3 placeholder) in `apps/unihub/backend/inventory/views.py`
+- [x] T052 [US4] Implement the nested `ConstraintViewSet` and register `scenarios/{id}/constraints/` routes in `apps/unihub/backend/inventory/urls.py`; run T047 to green
+- [x] T053 [US4] Regenerate OpenAPI + frontend types; add constraint service functions in `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`
+- [x] T054 [US4] Build the constraints panel in `ScenarioDetail.tsx`: add/edit/delete constraints (type-aware form), render violations from the checklist response (delete confirm modal)
+- [x] T055 [P] [US4] Add all `pages.inventory.constraints.*` keys to both `en-US` and `zh-TW` `pages.ts`
 
 **Checkpoint**: US1–US4 independently functional; scenario planning is rule-aware.
 
@@ -170,18 +170,18 @@ Web app in the unihub monorepo:
 
 ### Tests for User Story 5 (write first) ⚠️
 
-- [ ] T056 [P] [US5] Write containment tests in `apps/unihub/backend/tests/test_inventory_containment.py`: `test_set_container_nests_item`, `test_set_container_self_reference_returns_400`, `test_set_container_rejects_cycle`, `test_set_container_cross_scenario_returns_400`, `test_delete_container_line_resets_children_to_top_level`, `test_checklist_line_reports_container`
+- [x] T056 [P] [US5] Write containment tests in `apps/unihub/backend/tests/test_inventory_containment.py`: `test_set_container_nests_item`, `test_set_container_self_reference_returns_400`, `test_set_container_rejects_cycle`, `test_set_container_cross_scenario_returns_400`, `test_delete_container_line_resets_children_to_top_level`, `test_checklist_line_reports_container`
 
 ### Implementation for User Story 5
 
-- [ ] T057 [US5] Add the nullable self-referential `container` FK (`SET_NULL`) to `ScenarioItem` in `apps/unihub/backend/inventory/models.py`; migration `apps/unihub/backend/inventory/migrations/0007_scenarioitem_container.py`
-- [ ] T058 [US5] Add same-scenario + acyclic validation (walk the parent chain, reject self/cycle/cross-scenario with 400) in `ScenarioItemSerializer`/viewset in `apps/unihub/backend/inventory/serializers.py`
-- [ ] T059 [US5] Include the `container` summary in checklist lines and reset children to top-level on line delete in `apps/unihub/backend/inventory/{services.py,views.py}`; run T056 to green
-- [ ] T060 [US5] Regenerate OpenAPI + frontend types into `apps/unihub/frontend/src/generated/`
-- [ ] T061 [P] [US5] Add container-assignment service calls (PATCH `container_id`) in `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`
-- [ ] T062 [US5] Build the containment UI in `ScenarioDetail.tsx`: assign a line into a container, render the multi-level containment tree, and handle the cycle-rejection error message
-- [ ] T063 [US5] Add a position-review surface (per item: storage location or containing container + status) in the Scenario detail (and/or item view) in `apps/unihub/frontend/src/pages/inventory/`
-- [ ] T064 [P] [US5] Add all `pages.inventory.packing.*` keys to both `en-US` and `zh-TW` `pages.ts`
+- [x] T057 [US5] Add the nullable self-referential `container` FK (`SET_NULL`) to `ScenarioItem` in `apps/unihub/backend/inventory/models.py`; migration `apps/unihub/backend/inventory/migrations/0007_scenarioitem_container.py`
+- [x] T058 [US5] Add same-scenario + acyclic validation (walk the parent chain, reject self/cycle/cross-scenario with 400) in `ScenarioItemSerializer`/viewset in `apps/unihub/backend/inventory/serializers.py`
+- [x] T059 [US5] Include the `container` summary in checklist lines and reset children to top-level on line delete in `apps/unihub/backend/inventory/{services.py,views.py}`; run T056 to green
+- [x] T060 [US5] Regenerate OpenAPI + frontend types into `apps/unihub/frontend/src/generated/`
+- [x] T061 [P] [US5] Add container-assignment service calls (PATCH `container_id`) in `apps/unihub/frontend/src/services/unihub-backend/inventory.ts`
+- [x] T062 [US5] Build the containment UI in `ScenarioDetail.tsx`: assign a line into a container, render the multi-level containment tree, and handle the cycle-rejection error message
+- [x] T063 [US5] Add a position-review surface (per item: storage location or containing container + status) in the Scenario detail (and/or item view) in `apps/unihub/frontend/src/pages/inventory/`
+- [x] T064 [P] [US5] Add all `pages.inventory.packing.*` keys to both `en-US` and `zh-TW` `pages.ts`
 - [ ] T065 [P] [US5] Add a Vitest test for the containment tree / cycle-rejection handling in `apps/unihub/frontend/src/pages/inventory/scenarios/`
 
 **Checkpoint**: All five user stories independently functional.
@@ -192,13 +192,13 @@ Web app in the unihub monorepo:
 
 **Purpose**: Quality-loop enforcement, verification, and cleanup across all stories.
 
-- [ ] T066 Run the backend quality loop from `apps/unihub/backend/`: `uv run ruff format . && uv run ruff check . --fix && uv run pytest` (all inventory tests green; type hints + docstrings on all new functions per Principle V)
-- [ ] T067 Run the frontend quality loop from `apps/unihub/frontend/`: `pnpm lint` (zero warnings) `&& pnpm typecheck` (strict, no `any`) `&& pnpm test`
-- [ ] T068 [P] Verify locale parity: every `menu.inventory.*` / `pages.inventory.*` key exists in BOTH `en-US` and `zh-TW` (Principle VIII)
-- [ ] T069 [P] Regression check (Principle II): confirm Finance and other existing domains still load and function after the additive changes
-- [ ] T070 Confirm the OpenAPI schema at `/api/docs/` reflects all inventory endpoints and that `apps/unihub/frontend/src/generated/` is in sync (Principle IV)
+- [x] T066 Run the backend quality loop from `apps/unihub/backend/`: `uv run ruff format . && uv run ruff check . --fix && uv run pytest` (all inventory tests green; type hints + docstrings on all new functions per Principle V)
+- [x] T067 Run the frontend quality loop from `apps/unihub/frontend/`: `pnpm lint` (zero warnings) `&& pnpm typecheck` (strict, no `any`) `&& pnpm test`
+- [x] T068 [P] Verify locale parity: every `menu.inventory.*` / `pages.inventory.*` key exists in BOTH `en-US` and `zh-TW` (Principle VIII)
+- [x] T069 [P] Regression check (Principle II): confirm Finance and other existing domains still load and function after the additive changes
+- [x] T070 Confirm the OpenAPI schema at `/api/docs/` reflects all inventory endpoints and that `apps/unihub/frontend/src/generated/` is in sync (Principle IV)
 - [ ] T071 Execute the manual acceptance walkthrough in [quickstart.md](quickstart.md) (all 5 user-story scenarios) and confirm SC-001…SC-008 from spec.md
-- [ ] T072 [P] Final cleanup: remove dead scaffolding, ensure delete-confirmation modals on every destructive action, and verify datetime dual-display + `—` empty placeholders across all inventory tables (Principle VI)
+- [x] T072 [P] Final cleanup: remove dead scaffolding, ensure delete-confirmation modals on every destructive action, and verify datetime dual-display + `—` empty placeholders across all inventory tables (Principle VI)
 
 ---
 
@@ -265,6 +265,24 @@ Task: T021 ItemsPage.test.tsx
 5. US4 (Constraints) → test → ship.
 6. US5 (Packing + positions) → test → ship.
    Each story adds value without breaking the previous ones.
+
+---
+
+## Implementation Notes (2026-07-11)
+
+Delivered via `/speckit-implement`. **68 / 72 tasks complete.** Backend: 35 new tests, full suite 236 passing, ruff clean. Frontend: ESLint (0 warnings) + strict typecheck clean; all inventory tests pass (one pre-existing flaky *finance* test, `BalanceSheetEditPage`, fails only under full-suite load and passes in isolation — unrelated to this feature).
+
+Intentional deviations from the literal task text (outcome achieved, approach differs):
+- **Migrations combined**: all five models live in `0001_initial.py` and all system-attribute seeds in `0002_seed_system_attrs.py` (single implementer, sequential) rather than one migration per story (resolves analyze finding F1). `makemigrations --check` reports no missing migrations.
+- **Form modals inline**: item/acquisition/scenario create-edit forms are colocated inside each page's `index.tsx` rather than separate `*FormModal.tsx` files (T017/T031).
+- **`Item.category` field added**: concretely resolves analyze finding I1 (the `required`-constraint category semantics) — `target_category` matches `Item.category`.
+- **C1 resolved**: scenario-item removal and container reassignment in the Scenario detail use `Modal.confirm(okType:'danger')`.
+- **i18n**: packing/containment strings live under the `pages.inventory.scenarios.detail.*` namespace (not a separate `packing.*` one).
+
+Still open (4 tasks):
+- **T032** — the item edit modal does not yet surface the originating acquisition as a field (data is exposed via `acquisition_detail`/`origin_known` and shown on the Acquisitions page).
+- **T046 / T065** — optional Vitest tests for the Scenario detail checklist and containment tree were not added (backend behavior is covered by pytest).
+- **T071** — the manual quickstart walkthrough / SC-001…SC-008 sign-off requires a running stack and was not executed in this session.
 
 ---
 

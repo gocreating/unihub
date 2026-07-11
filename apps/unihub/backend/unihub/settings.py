@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "language",  # language learning domain app
     "people",  # people / relationship network domain app
     "music",  # music collection domain app
+    "inventory",  # inventory domain app
     "sync",  # data sync infrastructure
     "system",  # system info (version endpoint)
 ]

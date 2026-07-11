@@ -1,16 +1,20 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.13.0 → 1.13.1 (patch — added delete confirmation rule to
-  Development Constraints. Codifies existing practice as a non-negotiable
-  invariant: Modal.confirm with okType:'danger' required before all destructive
-  actions. Reflects UI fixes feature (branch 011) completed 2026-06-03.)
-Modified principles: none
-Added sections:
-  - Development Constraints: Delete confirmation rule
+Version change: 1.13.1 → 1.14.0 (minor — Principle VI (UI/UX Reference: ov-fleet)
+  materially expanded with two new non-negotiable UI conventions: (1)
+  standalone-page navigation MUST use a breadcrumb and MUST NOT render a Cancel
+  button; (2) modal forms keep a left-most Cancel button, must not close on
+  outside-click while dirty, and stack fields on narrow screens. Sourced from the
+  inventory feature (branch 014-inventory-app) clarification on 2026-07-11.)
+Modified principles:
+  - VI. UI/UX Reference: ov-fleet — added standalone-page navigation rule and
+    modal form-control rule; rationale extended
+Added sections: none (bullets added within Principle VI)
 Removed sections: none
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ No changes needed
+  - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check is
+    generic and already gates all principles)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
 Follow-up TODOs: None.
@@ -194,6 +198,18 @@ reference implementation to follow.
   default `<Tag>` appearance; the goal is to make relational references
   scannable at a glance. Example: currency columns in the Finance Exchange Rates
   page MUST render `<Tag>{currency}</Tag>` rather than a plain string.
+- **Standalone-page navigation (no Cancel button)**: Full-page create, edit, and
+  detail views (e.g. an entity create/edit page, a record detail page) MUST use a
+  breadcrumb for navigation (parent → current) and MUST NOT render a Cancel button.
+  The user abandons or leaves the page via the breadcrumb (or the browser back
+  affordance), not a page-level Cancel control. A single primary action (e.g.
+  Save / Create) is permitted; a redundant Cancel next to it is a violation.
+- **Modal form controls**: Modal (dialog) forms are the exception — they MUST keep
+  a Cancel button, positioned **left-most** in the modal footer. A modal MUST NOT
+  close on outside/overlay click (or `Esc`) while its form is **dirty** (has unsaved
+  changes); it may close on outside click only when the form is pristine. This
+  prevents accidental loss of in-progress input. On narrow screens, modal form
+  fields MUST stack (single column) rather than overflow horizontally.
 
 **Rationale**: Maintaining a living reference implementation prevents UI drift
 and reduces design decisions to a lookup rather than a debate. ov-fleet is
@@ -203,7 +219,11 @@ Relative timestamps reduce cognitive load — users should never need to calcula
 layout collapse and signal intentional absence of data, reducing confusion when
 users scan sparse tables. Tag-wrapped foreign-key values give users an instant
 visual cue that the field is a reference to another record rather than arbitrary
-text, improving scannability across data-dense tables.
+text, improving scannability across data-dense tables. Removing the Cancel button
+from full-page flows eliminates a redundant, ambiguous control (breadcrumb already
+communicates "where back is"), while the dirty-guard on modals protects
+in-progress work — the two surfaces differ because a modal overlays and can be
+dismissed accidentally, whereas a page cannot.
 
 ### VII. PageTable Layout — NON-NEGOTIABLE
 
@@ -596,4 +616,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.13.1 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-06-03
+**Version**: 1.14.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-11

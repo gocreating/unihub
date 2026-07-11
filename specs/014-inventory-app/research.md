@@ -1,56 +1,68 @@
-# Phase 0 Research: Inventory App (Refinement Iteration)
+# Phase 0 Research: Inventory App — Iteration 3
 
 **Feature**: 014-inventory-app | **Date**: 2026-07-11
 
-This refreshes the Phase 0 decisions for the 2026-07-11 clarification refinements. Original decisions R1–R10 from the first iteration still hold except where superseded below. All items are **Resolved**.
+Refreshes Phase 0 for the five 2026-07-11 clarification batches. Prior decisions still hold except where superseded below. All items **Resolved**.
 
 ---
 
-## R1. Cross-domain currency reference (Principle II)
+## R1. Cost model moves to the Acquisition
 
-- **Decision**: Store currency on Item as a plain **code string** per money field (`price_currency`, `cost_currency`). The frontend populates the currency picker by calling the existing finance endpoint `GET /api/v1/finance/currencies/`. Inventory backend performs **no** import of `finance.models`, adds **no** database foreign key to `finance_currency`, and shares no serializers.
-- **Rationale**: Constitution Principle II forbids a domain importing/depending on another domain's internal code. A loose string code + frontend API read is the compliant way to "let the user pick a finance currency" — the domains stay independently deployable. Mirrors how the currency code already travels as a bare string in the finance `Account`/`Balance` serializers.
-- **Alternatives considered**: (a) DB FK `Item.price_currency → finance.Currency` — rejected: hard cross-domain coupling, violates Principle II, breaks "adding/refactoring a domain requires no change to another". (b) Duplicate a currency table inside inventory — rejected: data duplication and drift. (c) Backend proxy of finance currencies through an inventory endpoint — rejected: unnecessary; the frontend can call finance directly.
+- **Decision**: Remove `Item.cost` and `Item.cost_currency`. The **Acquisition** carries the order payment: `cost` (Decimal) + `cost_currency` (code string), `discount` (Decimal), `tax_refund` (Decimal). Expose a read-only derived **`net_cost = cost − discount − tax_refund`**. Items keep `sku_price` only.
+- **Rationale**: Users pay per order; order-level discounts/refunds are logged once instead of smeared across items. A single acquisition cost currency also removes the awkward per-currency item-cost aggregation.
+- **Alternatives**: Keep per-item cost + acquisition adjustments (rejected — two reconciling cost layers); keep as-is (rejected — doesn't match "pay by order").
+- **Migration**: before dropping `item.cost`, backfill `acquisition.cost = Σ item.cost` and `cost_currency` = the first non-blank item `cost_currency`, so existing data is preserved.
 
-## R2. Units on measurements (enum + normalization)
+## R2. Deprecation lifecycle (single timestamp, derived status)
 
-- **Decision**: Each measurement stores a **canonical base value** plus a **display unit**:
-  - Length fields (`length`, `width`, `height`): canonical in **mm**; unit ∈ {mm, cm, m, in}. Factors → mm: mm 1, cm 10, m 1000, in 25.4.
-  - Weight (`weight`): canonical in **g**; unit ∈ {g, kg, lb}. Factors → g: g 1, kg 1000, lb 453.592.
-  - DB columns per measure: `<m>_canonical` (Decimal, base unit) + `<m>_unit` (CharField enum). The serializer accepts `{value, unit}`, computes canonical on write, and returns both the display `value` (canonical ÷ factor) and `unit` on read.
-- **Rationale**: Sorting/filtering by weight or a dimension must be comparable across items entered in different units (SC-002 intent). Storing a canonical column makes ORM ordering/filtering correct and index-friendly; keeping the unit preserves the user's chosen display.
-- **Alternatives considered**: (a) Store raw value + unit, compare raw — rejected: mixes units, misleading sort. (b) Free-text unit string — rejected: no normalization, no validation. (c) Single global metric/imperial toggle — rejected: too coarse; users mix units per item.
+- **Decision**: Rename `Item.archived_at` → **`deprecate_time`** (DateTimeField, null). **Remove the stored `status` field**; `status` is a **serializer-computed** value (`"deprecated"` if `deprecate_time` is not null else `"active"`). The "Deprecate" action sets `deprecate_time` (confirm dialog defaults it to **today 00:00:00 local**); a "Restore" action clears it.
+- **Rationale**: One source of truth eliminates the observed bug where a deprecated item still displayed "active". Reversible via Restore.
+- **Alternatives**: Keep manual status + timestamp (rejected — the exact desync bug); keep `archived_at` separately (rejected — three lifecycle fields).
+- **Migration**: `RenameField(archived_at → deprecate_time)` preserves data; `RemoveField(status)` (its value was already derivable).
 
-## R3. Per-currency cost aggregation
+## R3. Field churn — sku_price / total_price / volume / quantity; drop model+serial
 
-- **Decision**: With per-field currencies, an Acquisition's aggregated cost is reported **grouped by currency**: `total_item_cost` becomes a list of `{currency, total}` (summing each item's `cost` within its `cost_currency`). No cross-currency summation or FX conversion is performed in Inventory. `Acquisition.cost` (the old optional lump-sum) is **removed**.
-- **Rationale**: Summing amounts in different currencies is meaningless without FX, and Principle IX (base-currency valuation) is finance-only. Grouping by currency is the same transparency approach finance uses for per-currency net worth. Most real acquisitions use one currency, so the list usually has a single entry.
-- **Alternatives considered**: (a) Single scalar total — rejected: wrong across mixed currencies. (b) Convert to a base currency in inventory — rejected: pulls FX/rate logic across the domain boundary (Principle II/IX).
+- **Decision**: Rename `Item.price` → **`sku_price`** and `price_currency` → `sku_price_currency`. Expose read-only **`total_price = sku_price × quantity`**. Add **`volume`** as a normalized measurement (units mL, L; canonical mL) — same pattern as length/weight. Make `quantity` **NOT NULL, default 1**. Remove `Item.model` and `Item.serial_number`.
+- **Rationale**: "sku_price" clarifies it's the per-unit price; total is derived. Volume rounds out physical attributes. model/serial detail moves into `spec` (free-form), reducing column clutter.
+- **Alternatives**: keep price name (rejected — ambiguous vs. total); free-text volume unit (rejected — breaks comparable sort, R-units).
+- **Migration**: `RenameField` for price/price_currency; `AddField` volume_canonical/volume_unit; backfill `quantity` null→1 then alter NOT NULL (non-atomic, before the constraint); `RemoveField` model/serial.
 
-## R4. Acquisition-first composition & lifecycle
+## R4. Acquisition method removed; request_time added
 
-- **Decision**: `Item.acquisition` is a **required** FK with `on_delete=CASCADE`. Items are created **only** through the Acquisition create flow (one request creates the acquisition and its item rows). Deleting an acquisition deletes its items (composition) behind a count-stating confirmation. The standalone item-create endpoint/UI is removed; `Item` remains independently editable and deletable-through-its-acquisition. "Unknown/pre-existing origin" is modeled by an acquisition with blank method/source (not by a null FK).
-- **Rationale**: Directly implements the clarified acquisition-first decision, which supersedes the earlier "linking optional / null acquisition" model. CASCADE enforces the "no item without an acquisition" invariant at the DB level.
-- **Alternatives considered**: (a) Keep nullable FK + optional standalone create — rejected: contradicts the clarification. (b) `PROTECT` on delete — rejected: the spec allows cascade-with-warning; PROTECT would block the common "remove this whole purchase" action.
-- **Note (data migration)**: existing rows created in the first iteration may have `acquisition = NULL`. The `0003` migration backfills a synthetic "unknown origin" acquisition (blank method/source) for any orphan items before making the column non-null.
+- **Decision**: Remove `Acquisition.method`. Add optional **`request_time`** (when the order was initiated, distinct from `obtained_at`). Unknown/pre-existing origin is now simply a **blank source**.
+- **Rationale**: Method carried little value for a personal catalog; blank source already signals unknown origin. request_time supports order-lifecycle tracking (requested → obtained).
+- **Alternatives**: keep method (rejected by clarification).
 
-## R5. Item creation via nested write on Acquisition
+## R5. Source auto-complete
 
-- **Decision**: `POST /acquisitions/` accepts an `items: [ …itemFields ]` array and creates the acquisition and all items atomically. `PATCH /acquisitions/{id}/` supports adding new item rows and editing/removing existing ones. Individual item edits still go through `PATCH /items/{id}/`.
-- **Rationale**: Matches the "add one or more items at once" flow on a single page; a nested writable serializer keeps it one round-trip and transactional.
-- **Alternatives considered**: Separate calls (create acquisition, then create each item) — rejected: non-atomic, worse UX, partial-failure states.
+- **Decision**: `Acquisition.source` is entered via an AntD **`AutoComplete`** whose suggestions come from a new backend endpoint returning **distinct previously-used source values** (optionally filtered by a `q` substring). Free text is still allowed.
+- **Rationale**: Speeds repeat entry (same shops recur) without a rigid vocabulary. A dedicated distinct endpoint avoids shipping all acquisitions to the client.
+- **Alternatives**: client-side dedupe of the acquisitions list (rejected — unbounded payload); a Source entity/table (rejected — over-engineered for a free-text convenience).
+- **Contract**: `GET /api/v1/inventory/acquisitions/sources/?q=<substr>` → `["B&H", "Amazon", …]` (distinct, non-blank, capped, ordered by frequency or alpha).
 
-## R6. Item list default view
+## R6. "Items in this acquisition" — card view + ≥1 item + default card
 
-- **Decision**: `ItemViewSet.ordering = ['-acquisition__obtained_at']` (default). `archived_at` becomes a filterable attribute; there is **no** implicit archived exclusion and **no** dedicated toggle — the default view lists all items and the user filters. Default column order (frontend): name, spec, model, serial, size, weight, length, width, height. `ordering_fields` gains `acquisition__obtained_at` (aliased).
-- **Rationale**: Implements the clarified list defaults. The related-field sort is safe and index-friendly because every item now has an acquisition (no null join).
-- **Alternatives considered**: Keep the toggle / default-exclude archived — rejected by the clarification ("use filter instead").
+- **Decision**: Render the items being added as a **card grid** (one card per item) that **previews only filled fields** (empties omitted); each card is editable (reopens `ItemFormModal` pre-filled) and removable. The form requires **≥1 item** to submit (0 rejected). The **create** form **pre-inserts one empty item card** for immediate entry.
+- **Rationale**: Cards read better than a dense list for ≤10 items and surface the salient fields. The default card removes an empty-state click. The ≥1 invariant matches the acquisition-first composition (an acquisition without items is meaningless).
+- **Alternatives**: keep the list (rejected by clarification); allow 0 items (rejected — orphan acquisition).
+- **Note**: the ≥1 rule is enforced both client-side (submit guard) and server-side (serializer validates `len(items) ≥ 1` on create).
 
-## R7. Constraint `required` becomes item-set-only
+## R7. Acquisition editable on a standalone page
 
-- **Decision**: Remove `Constraint.target_category` and `Item.category`. A `required` constraint validates on its M2M `items` set only (≥1 item required); evaluation flags a violation when none of the set is selected.
-- **Rationale**: `item.category` is removed per the clarification, so category-based matching has no backing field; the explicit item set is the remaining, well-defined semantic.
-- **Alternatives considered**: Retain `category` just for constraints — rejected by the clarification.
+- **Decision**: Add a standalone **edit page** at `/inventory/acquisitions/:id/edit`, reusing the create form pre-filled. `PATCH /acquisitions/{id}/` accepts the full payload incl. `items` (add new cards; edit/remove existing items via their ids or the item endpoints).
+- **Rationale**: Symmetry with create; editing an order's payment/source/items is a common correction.
+- **Alternatives**: modal edit (rejected — inconsistent with the standalone create flow and the new breadcrumb/no-Cancel rule).
+
+## R8. Constitution v1.14.0 UI conventions
+
+- **Decision**: Apply the amended Principle VI: the Acquisition **create and edit pages use a breadcrumb and render no Cancel button** (the current create page's Cancel button is removed). The **`ItemFormModal`** places **Cancel left-most**, does **not close on outside-click/Esc while dirty**, and **stacks its fields (single column) on narrow screens**. The acquisition form's source/obtained_at row also stacks on narrow screens.
+- **Rationale**: Codified project-wide in constitution v1.14.0 (sourced from this feature). Prevents accidental loss of in-progress input on modals; removes the redundant page-level Cancel.
+- **Implementation**: AntD `Modal` with `maskClosable={!isDirty}` and `keyboard={!isDirty}`; footer with Cancel first; `Row`/`Col` responsive `xs/sm` spans; track dirtiness via the form's `onValuesChange`.
+
+## R9. Table bug fixes — headers & placeholders
+
+- **Decision**: Every column MUST set an explicit `title` (localized). Non-sortable columns (`item_count`, `total`/`net_cost`, `spec`, `weight`, `length`, `width`, `height`, `volume`) previously lacked one and rendered blank — fix by adding titles. Standardize all absent-value cells on the single constitution placeholder **`<Typography.Text type="secondary" style={{userSelect:'none'}}>—</Typography.Text>`** (no AntD default "-" leaks; no mixed dash styles). Add an **`acquisition.obtained_at` column** to the item list; remove the "Add items via New Acquisition" hint.
+- **Rationale**: Direct fixes to reported bugs; the placeholder standardization is already mandated by Principle VI.
 
 ---
 
@@ -58,16 +70,19 @@ This refreshes the Phase 0 decisions for the 2026-07-11 clarification refinement
 
 | # | Topic | Decision |
 |---|-------|----------|
-| R1 | Currency | Per-field code string; picker via finance API; no import/FK (Principle II) |
-| R2 | Units | Canonical base value (mm/g) + display unit enum per measure |
-| R3 | Cost totals | Aggregate grouped by currency; drop `Acquisition.cost` |
-| R4 | Composition | `Item.acquisition` required + CASCADE; acquisition-first; blank acq = unknown origin |
-| R5 | Nested create | `POST /acquisitions/` writes acquisition + items atomically |
-| R6 | List defaults | Default sort ↓`acquisition__obtained_at`; archived filterable, no toggle; fixed column order |
-| R7 | Required constraint | Item-set-only; drop `target_category`/`item.category` |
+| R1 | Cost | Move to Acquisition (cost/discount/tax_refund/net_cost); drop item.cost |
+| R2 | Deprecation | `deprecate_time` (rename archived_at); status derived; Deprecate/Restore |
+| R3 | Item fields | price→sku_price (+total_price); +volume; quantity required/1; −model/−serial |
+| R4 | Acquisition | −method; +request_time; blank source = unknown origin |
+| R5 | Source | AutoComplete backed by a distinct-sources endpoint |
+| R6 | Item cards | Card view; ≥1 item; default empty card on create |
+| R7 | Edit | Standalone acquisition edit page |
+| R8 | UI rules | v1.14.0: no Cancel on standalone pages; modal Cancel-left/dirty-guard/RWD |
+| R9 | Bugs | Explicit column titles; single "—" placeholder; obtained_at column |
 
-### Superseded from iteration 1
-- Item↔Acquisition **optional nullable FK** → now **required + CASCADE** (R4 supersedes old R2/R7-archive).
-- `Acquisition.cost` lump-sum and single scalar `total_item_cost` → **per-currency grouping**, lump-sum removed (R3).
-- `item.category` + `required`-by-category → **removed** (R7 supersedes old I1 resolution).
-- Default-exclude-archived + toggle → **archived filterable, no toggle** (R6).
+### Superseded from iteration 2
+- `Item.cost`/`cost_currency` and per-currency `total_item_cost` → **removed**; cost lives on the Acquisition (R1).
+- `Item.status` (stored, editable) + `archived_at` → **`deprecate_time` + derived status** (R2).
+- `Item.price` → **`sku_price`**; `Item.model`/`serial_number` → **removed** (R3).
+- `Acquisition.method` → **removed**; **`request_time`** added (R4).
+- Items list in the acquisition form → **card view**, ≥1 item, default card (R6).

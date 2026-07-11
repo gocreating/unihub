@@ -4,7 +4,7 @@
 
 This guide walks a developer through building and exercising the Inventory domain. It assumes the unihub monorepo is checked out and Docker (or local uv/pnpm) is available.
 
-> **Refinement iteration (2026-07-11)**: The domain shipped at commit `49159dd`; this iteration applies the clarified changes — acquisition-first creation, per-field currency (via finance API), units with normalization, field churn, and list defaults. See [plan.md](plan.md) and [research.md](research.md). The migrations for this iteration are `0003_refine_fields` and `0004_reseed_system_attrs`.
+> **Iteration 3 (2026-07-11)**: On top of iteration 2 (commit `2fc0106`), this round applies: cost→Acquisition (cost/discount/tax_refund/net_cost), deprecate_time + derived status (Deprecate/Restore), sku_price/total_price, +volume, quantity required/1, −method/−model/−serial/−item.cost, source auto-complete, item **card view** + ≥1-item + default card, standalone acquisition edit page, Constitution v1.14.0 page/modal button rules, and the blank-header/placeholder bug fixes. Migrations for this iteration: `0005_iter3_fields` (+backfills) and `0006_reseed_system_attrs`. See [plan.md](plan.md) / [research.md](research.md).
 
 ## 1. Bring up the stack
 
@@ -87,12 +87,13 @@ pnpm test
 
 ## 7. Manual acceptance walkthrough (maps to spec user stories)
 
-1. **Acquire items (US2 — creation entry point)**: Go to *Inventory → Acquisitions → New Acquisition*. Set method `purchase`, source "B&H", obtained date, then add two item rows in the same form ("Camera" cost 2200 USD, weight 0.658 kg; "Lens" cost 1100 USD). Save → both items are created and appear in the catalog, each linked to this acquisition. Create a second acquisition with **blank** method/source and one item → its origin reads "unknown/pre-existing". Confirm there is **no** standalone "New Item" button.
-2. **Items list (US1)**: Go to *Inventory → Items*. Confirm the default sort is descending by acquisition obtained date and the default column order (name, spec, model, serial, size, weight, length, width, height). Edit an item: change weight unit kg→g and confirm sorting stays correct; set `price_currency` from the finance currency picker; set `status` to `deprecated`; archive one and find it via the **archived filter** (no toggle).
+1. **Acquire items (US2 — creation entry point)**: Go to *Inventory → Acquisitions → New Acquisition*. Confirm one **empty item card** is already present and there is **no Cancel button** (breadcrumb at top). Type into **source** and confirm the auto-complete suggests previously-used values. Set obtained date (defaults today 00:00), order `cost` 3300 / `discount` 100 / `tax_refund` 0 → **net_cost** shows 3200. Fill the default card ("Camera", sku_price 2200 USD, weight 0.658 kg, volume 1.2 L) and **Add Item** a second card ("Lens", sku_price 1100 USD). Cards preview only filled fields. Save → both items appear in the catalog. Try saving an acquisition with **zero items** → rejected.
+2. **Items list (US1)**: Go to *Inventory → Items*. Confirm **every column has a header** (no blanks), the single **"—"** placeholder is used, there is an **obtained-date column**, default sort ↓ by it, default column order (name, spec, size, weight, length, width, height), and **no "Add items via New Acquisition" hint**. Edit an item: change weight kg→g (sort stays correct); set `sku_price_currency` from the finance picker (currency disabled when the amount is empty); confirm `total_price = sku_price × quantity`. Click **Deprecate** → confirm the `deprecate_time` (defaults today 00:00) → status column reads **deprecated**; then **Restore** → status returns to **active**.
 3. **Scenario checklist (US3)**: *Inventory → Scenarios*, create "Weekend camping", add items. Toggle `prepared`; watch outstanding fall to 0 → complete. Set a consumable's `required_quantity` above on-hand → shortfall flagged.
 4. **Constraints (US4)**: Add a `mutual_exclusive` over two items → select both → violation; remove one → clears. Add a `required` constraint over an item set (no category field) → omit all → violation. Add a `weight_limit` → exceed it → overage shown.
 5. **Packing & positions (US5)**: Assign the camera line's container to the "Backpack" line; review the containment tree. Try to make Backpack contain itself → rejected. Confirm the Scenario detail page uses a **breadcrumb** (Scenarios → name), not a back button.
-6. **Delete acquisition (composition)**: Delete the first acquisition → a confirm dialog states the item count → confirm → its items are removed from the catalog (no item is left acquisition-less).
+6. **Edit acquisition (standalone)**: From the Acquisitions list, open **Edit** on an acquisition → confirm it opens a **standalone page** (breadcrumb, no Cancel) pre-filled with its source/payment/item cards; change the discount → net_cost updates on save.
+7. **Delete acquisition (composition)**: Delete the first acquisition → a confirm dialog states the item count → confirm → its items are removed from the catalog (no item is left acquisition-less).
 
 ## Reference files
 

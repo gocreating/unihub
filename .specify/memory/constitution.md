@@ -1,23 +1,26 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.13.1 → 1.14.0 (minor — Principle VI (UI/UX Reference: ov-fleet)
-  materially expanded with two new non-negotiable UI conventions: (1)
-  standalone-page navigation MUST use a breadcrumb and MUST NOT render a Cancel
-  button; (2) modal forms keep a left-most Cancel button, must not close on
-  outside-click while dirty, and stack fields on narrow screens. Sourced from the
-  inventory feature (branch 014-inventory-app) clarification on 2026-07-11.)
+Version change: 1.14.0 → 1.15.0 (minor — Principle VI (UI/UX Reference: ov-fleet)
+  materially expanded with a new non-negotiable "Form field layout" convention:
+  forms MUST use a responsive grid where fields stretch to fill and together fill
+  each row; fields MUST stack to a single full-width column on a narrow *content*
+  area (content-width based, not viewport); number inputs MUST right-align their
+  content. Applies immediately to ALL existing forms. Sourced from a UX
+  consistency directive on 2026-07-11.)
 Modified principles:
-  - VI. UI/UX Reference: ov-fleet — added standalone-page navigation rule and
-    modal form-control rule; rationale extended
-Added sections: none (bullets added within Principle VI)
+  - VI. UI/UX Reference: ov-fleet — added the Form field layout (grid, responsive,
+    right-aligned numbers) rule; rationale extended
+Added sections: none (bullet added within Principle VI)
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check is
     generic and already gates all principles)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: None.
+Follow-up TODOs: Retrofit existing forms to the grid/right-aligned-number rule
+  (tracked as feature work, not a constitution change). Audit any `InputNumber`
+  not right-aligned and any fixed-px field widths in finance/inventory forms.
 -->
 
 # UniHub Constitution
@@ -210,6 +213,21 @@ reference implementation to follow.
   changes); it may close on outside click only when the form is pristine. This
   prevents accidental loss of in-progress input. On narrow screens, modal form
   fields MUST stack (single column) rather than overflow horizontally.
+- **Form field layout (grid, responsive, right-aligned numbers)**: Every form —
+  page-level or modal — MUST arrange its fields on a **grid** (Ant Design
+  `Row`/`Col`), never as free-floating or fixed-pixel-width controls. Within a
+  single row, **each field MUST stretch to fill its allotted column** and the
+  fields together MUST fill the full row width (no dead horizontal space, no
+  fixed-`px` field widths that leave gaps or overflow). The grid MUST be
+  **responsive**: on a **narrow area the fields MUST stack to a single full-width
+  column** so nothing overflows its row. Narrowness MUST be judged by the actual
+  **content width** (e.g. a container-width hook / `ResizeObserver`), not the raw
+  viewport, because a collapsed-sidebar-narrow content area must also stack —
+  Ant Design `Col` `xs/sm` breakpoints follow the viewport and are therefore
+  insufficient on their own. **Number inputs MUST right-align their content**
+  (`InputNumber` with right-aligned text), not the default left alignment, so
+  digits line up for scanning and comparison. These rules apply **immediately to
+  all existing forms**, not only new ones, for a consistent experience.
 
 **Rationale**: Maintaining a living reference implementation prevents UI drift
 and reduces design decisions to a lookup rather than a debate. ov-fleet is
@@ -223,7 +241,11 @@ text, improving scannability across data-dense tables. Removing the Cancel butto
 from full-page flows eliminates a redundant, ambiguous control (breadcrumb already
 communicates "where back is"), while the dirty-guard on modals protects
 in-progress work — the two surfaces differ because a modal overlays and can be
-dismissed accidentally, whereas a page cannot.
+dismissed accidentally, whereas a page cannot. A consistent, gap-free responsive
+form grid (with content-width stacking) removes a recurring class of layout bugs —
+half-filled rows, fields that overflow on narrow content areas, and inconsistent
+field widths between forms — and right-aligned number inputs make numeric columns
+readable and comparable at a glance.
 
 ### VII. PageTable Layout — NON-NEGOTIABLE
 
@@ -616,4 +638,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.14.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-11
+**Version**: 1.15.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-11

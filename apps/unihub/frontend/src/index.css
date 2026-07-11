@@ -48,9 +48,18 @@ body:has(.ant-drawer-open.ant-drawer-inline) {
   overflow: hidden !important;
 }
 
-/* Right-align text inside monetary amount input fields */
-.amount-input .ant-input,
-.amount-input .ant-input-number-input {
+/*
+ * Constitution Principle VI: number inputs MUST right-align their content so
+ * digits line up for scanning/comparison. Applies to every Ant Design
+ * InputNumber app-wide (AntD does not propagate a wrapper `textAlign` to the
+ * inner <input>, so this global rule is the reliable enforcement point).
+ */
+.ant-input-number-input {
+  text-align: right;
+}
+
+/* Monetary amount inputs also right-align their plain-text variant. */
+.amount-input .ant-input {
   text-align: right;
 }
 

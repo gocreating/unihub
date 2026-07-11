@@ -75,19 +75,29 @@ def parse_date(cell: str) -> tuple[str | None, str | None, list[str]]:
 
 
 # ── 備註 parsing ─────────────────────────────────────────────────────────
-RE_SIZE = re.compile(r"尺寸[:：]\s*(.+)")
-RE_COLOR = re.compile(r"顏色[:：]\s*(.+)")
+RE_SIZE = re.compile(r"(?:尺寸|[Ss]ize)[:：]\s*(.+)")
+RE_SPEC = re.compile(r"規格[:：]\s*(.+)")
+RE_COLOR = re.compile(r"(?:顏色|款式)[:：]\s*(.+)")
 RE_PRICE = re.compile(r"(?:原價|單價)[:：]\s*([\d.,]+)\s*([A-Za-z]+|元|円|¥|￥)?")
 RE_WEIGHT = re.compile(r"(?:重量|淨重)[:：]\s*([\d.]+)\s*(g|kg|克)?")
 RE_LENGTH = re.compile(r"長度[:：]\s*([\d.]+)\s*(mm|cm|m)?")
+RE_VOLUME = re.compile(r"容量[:：]\s*([\d.]+)\s*(mL|ml|L|毫升|公升)")
+RE_URL_KEY = re.compile(r"官網連結[:：]\s*(\S+)")
 RE_DIMS = re.compile(r"(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)?")
 RE_QTY = re.compile(r"數量[:：]\s*(\d+)")
 RE_QTY_EXPR = re.compile(r"\*\s*(\d+)\s*件")
 RE_VARIANT = re.compile(r"x\s*\d+.*[，,].*x\s*\d+")  # e.g. 深藍x2，灰色x1
+# Simple shipping note (whole line) → a shipping cost factor on the acquisition.
+# Complex combos (運費60-國慶折抵70…) intentionally do NOT match → remark.
+RE_SHIPPING = re.compile(r"^運費[:：]?\s*([¥￥$]?)([\d.,]+)\s*(元|RMB|TWD|USD|NT)?$")
 
 
 def parse_remark(remark: str) -> tuple[dict, list[str]]:
-    """Extract structured item fields; return (fields, flags). Residue → remark."""
+    """Extract structured item fields; return (fields, flags). Residue → remark.
+
+    Acquisition-level extractions use reserved keys the builder lifts out:
+    ``_shipping`` → a shipping cost factor.
+    """
     fields: dict = {}
     flags: list[str] = []
     residue: list[str] = []
@@ -98,11 +108,31 @@ def parse_remark(remark: str) -> tuple[dict, list[str]]:
             continue
         matched = False
 
+        if m := RE_URL_KEY.search(line):
+            fields.setdefault("url", m.group(1).strip())
+            matched = True
+        elif m := RE_SHIPPING.match(line):
+            value = norm_num(m.group(2))
+            if value is not None:
+                sym, suffix = m.group(1), (m.group(3) or "")
+                currency = None
+                if suffix in ("TWD", "NT"):
+                    currency = "TWD"
+                elif suffix in ("USD",):
+                    currency = "USD"
+                elif suffix in ("RMB", "元") or sym in ("¥", "￥"):
+                    currency = "RMB"
+                fields.setdefault("_shipping", []).append({"value": value, "currency": currency})
+                matched = True
+
         if m := RE_SIZE.search(line):
             fields["size"] = m.group(1).strip()
             matched = True
+        if m := RE_SPEC.search(line):
+            fields["spec"] = m.group(1).strip()
+            matched = True
         if m := RE_COLOR.search(line):
-            fields["color"] = m.group(1).strip()
+            fields.setdefault("color", m.group(1).strip())
             matched = True
         if m := RE_PRICE.search(line):
             fields["sku_price"] = norm_num(m.group(1))
@@ -115,6 +145,10 @@ def parse_remark(remark: str) -> tuple[dict, list[str]]:
             matched = True
         if m := RE_LENGTH.search(line):
             fields["length"] = {"value": m.group(1), "unit": m.group(2) or "m"}
+            matched = True
+        if m := RE_VOLUME.search(line):
+            unit = {"ml": "mL", "毫升": "mL", "公升": "L"}.get(m.group(2), m.group(2))
+            fields["volume"] = {"value": m.group(1), "unit": unit}
             matched = True
         if m := RE_DIMS.search(line):
             unit = m.group(4) or "cm"
@@ -171,17 +205,27 @@ def is_summary(row: list[str]) -> bool:
     return name == "" or name == "總支出" or "總支出" in (row[1] if len(row) > 1 else "")
 
 
-def build(csv_path: str) -> list[Acquisition]:
+def _add_item(acq: Acquisition, name: str, remark: str, url: str) -> None:
+    """Parse the 備註 and append an Item; lift acquisition-level extractions."""
+    fields, iflags = parse_remark(remark)
+    if url and "url" not in fields:
+        fields["url"] = url
+    # Simple `運費N` notes belong to the acquisition, not the item.
+    acq_currency = next((cf.currency for cf in acq.cost_factors if cf.currency), None)
+    for shipping in fields.pop("_shipping", []):
+        acq.cost_factors.append(
+            CostFactor("shipping", shipping["value"], shipping["currency"] or acq_currency)
+        )
+    acq.items.append(Item(name=name, fields=fields, flags=iflags))
+
+
+def build_from_rows(rows: list[tuple[str, str, str, str, str, str, str]]) -> list[Acquisition]:
+    """Group (name, price, currency, location, date, remark, url) rows into acquisitions."""
     acquisitions: list[Acquisition] = []
     last_source = ""
 
-    with open(csv_path, encoding="utf-8") as fh:
-        rows = list(csv.reader(fh))
-
-    for row in rows[1:]:  # skip header
-        row = (row + [""] * 6)[:6]
-        name, price, currency, location, date, remark = (c.strip() for c in row)
-        if is_summary(row):
+    for name, price, currency, location, date, remark, url in rows:
+        if is_summary([name, price]):
             continue
 
         has_ctx = bool(location or date)
@@ -199,8 +243,7 @@ def build(csv_path: str) -> list[Acquisition]:
             if pv is not None and currency:
                 acq.cost_factors.append(CostFactor("accumulated", pv, currency))
             # the header row is itself an item
-            fields, iflags = parse_remark(remark)
-            acq.items.append(Item(name=name, fields=fields, flags=iflags))
+            _add_item(acq, name, remark, url)
             continue
 
         # attachment row (no location, no date)
@@ -219,10 +262,154 @@ def build(csv_path: str) -> list[Acquisition]:
                 cur = cur or parse_currency(remark)
             acq.cost_factors.append(CostFactor(ftype, val, cur))
         else:
-            fields, iflags = parse_remark(remark)
-            acq.items.append(Item(name=name, fields=fields, flags=iflags))
+            _add_item(acq, name, remark, url)
 
     return acquisitions
+
+
+def build(csv_path: str) -> list[Acquisition]:
+    """v1: per-year CSV (no URLs)."""
+    with open(csv_path, encoding="utf-8") as fh:
+        raw = list(csv.reader(fh))
+    rows = []
+    for row in raw[1:]:  # skip header
+        row = (row + [""] * 6)[:6]
+        name, price, currency, location, date, remark = (c.strip() for c in row)
+        rows.append((name, price, currency, location, date, remark, ""))
+    return build_from_rows(rows)
+
+
+# ── HTML (Google Sheets export) parsing — Format v2 ──────────────────────
+from html.parser import HTMLParser  # noqa: E402
+
+
+class _SheetHTMLParser(HTMLParser):
+    """Extract the sheet grid: per-cell text (with <br> newlines) + first link.
+
+    Google Sheets merges cells with colspan AND rowspan (vertically-merged
+    price/location/date cells span the followup item rows). Normalise into a
+    stable grid: colspans pad the current row; rowspans occupy their column(s)
+    in the following rows with EMPTY placeholders — deliberately empty, so
+    covered rows read as continuation items of the same acquisition rather
+    than starting a new one.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.rows: list[list[dict]] = []
+        self._row: list[dict] | None = None
+        self._cell: dict | None = None
+        self._colspan = 1
+        self._rowspan = 1
+        # grid column index → rows still occupied by an active rowspan.
+        # Declarations stage in _new_spans and only activate AFTER the
+        # declaring row ends (they cover the FOLLOWING rows, not their own).
+        self._occupied: dict[int, int] = {}
+        self._new_spans: dict[int, int] = {}
+
+    @staticmethod
+    def _empty() -> dict:
+        return {"text": "", "link": ""}
+
+    def _next_free_col(self) -> int:
+        col = len(self._row)
+        while self._occupied.get(col, 0) > 0:
+            self._row.append(self._empty())
+            col = len(self._row)
+        return col
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "tr":
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
+            self._next_free_col()
+            self._cell = {"text": "", "link": ""}
+            self._colspan = max(1, int(a.get("colspan") or 1))
+            self._rowspan = max(1, int(a.get("rowspan") or 1))
+        elif self._cell is not None and tag == "a" and not self._cell["link"]:
+            self._cell["link"] = a.get("href", "")
+        elif self._cell is not None and tag == "br":
+            self._cell["text"] += "\n"
+        elif self._cell is not None and tag == "div" and self._cell["text"]:
+            self._cell["text"] += "\n"
+
+    def handle_endtag(self, tag):
+        if tag in ("td", "th") and self._cell is not None:
+            col = len(self._row)
+            self._row.append(self._cell)
+            for _ in range(self._colspan - 1):
+                self._row.append(self._empty())
+            if self._rowspan > 1:
+                for c in range(col, col + self._colspan):
+                    self._new_spans[c] = self._rowspan - 1
+            self._cell = None
+            self._colspan = 1
+            self._rowspan = 1
+        elif tag == "tr" and self._row is not None:
+            # Fill any trailing rowspan-occupied columns.
+            while any(
+                self._occupied.get(c, 0) > 0 for c in range(len(self._row), max(self._occupied, default=-1) + 1)
+            ):
+                self._row.append(self._empty())
+            self.rows.append(self._row)
+            # Consume one covered row from active spans, then activate the
+            # spans declared in THIS row (they cover the following rows).
+            self._occupied = {c: n - 1 for c, n in self._occupied.items() if n > 1}
+            for c, n in self._new_spans.items():
+                self._occupied[c] = max(self._occupied.get(c, 0), n)
+            self._new_spans = {}
+            self._row = None
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell["text"] += data
+
+
+HEADERS = ["項目", "實際支付價錢", "貨幣", "購買地點", "購買日期", "備註"]
+
+
+def build_html(html_path: str) -> list[Acquisition]:
+    """v2: Google-Sheets HTML export (keeps item URLs from name links)."""
+    parser = _SheetHTMLParser()
+    with open(html_path, encoding="utf-8") as fh:
+        parser.feed(fh.read())
+
+    # Locate the header row and derive each logical column's index from it —
+    # robust to the row-number column and any spacer columns between years.
+    col_idx: dict[str, int] | None = None
+    rows = []
+    for grid_row in parser.rows:
+        texts = [c["text"].strip() for c in grid_row]
+        if col_idx is None:
+            if "項目" in texts:
+                col_idx = {h: texts.index(h) for h in HEADERS if h in texts}
+            continue
+
+        def cell(header: str) -> dict:
+            i = col_idx.get(header)
+            return grid_row[i] if i is not None and i < len(grid_row) else {"text": "", "link": ""}
+
+        name_cell = cell("項目")
+        rows.append(
+            (
+                name_cell["text"].strip(),
+                cell("實際支付價錢")["text"].strip(),
+                cell("貨幣")["text"].strip(),
+                cell("購買地點")["text"].strip(),
+                cell("購買日期")["text"].strip(),
+                cell("備註")["text"].strip(),
+                name_cell["link"].strip(),
+            )
+        )
+    if col_idx is None:
+        raise ValueError(f"No 項目 header row found in {html_path}")
+    return build_from_rows(rows)
+
+
+def build_any(path: str) -> list[Acquisition]:
+    """Dispatch on file extension: .html → v2 sheet export, else v1 CSV."""
+    return build_html(path) if path.lower().endswith((".html", ".htm")) else build(path)
 
 
 def merge_accumulated(acq: Acquisition) -> dict:
@@ -241,7 +428,7 @@ def main() -> None:
         sys.exit(1)
     path = sys.argv[1]
     want_json = "--json" in sys.argv
-    acqs = build(path)
+    acqs = build_any(path)
 
     if want_json:
         print(json.dumps([asdict(a) for a in acqs], ensure_ascii=False, indent=2))

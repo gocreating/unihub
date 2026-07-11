@@ -571,13 +571,32 @@ Completed 2026-07-11 (builds on iteration 9, commit `1be2fd3`). **No schema chan
 
 **Input**: plan.md "Iteration 11"; spec session iteration 11; migration-import.md Format v2. Builds on iteration 10 (`341c11a`). **No schema change.**
 
-- [ ] T113 Extend `specs/014-inventory-app/scripts/preview_legacy_import.py`: `build_html(path)` (stdlib HTMLParser, **colspan expansion**, `<br>`→newlines, name `<a href>`→item url); extend 備註 map (規格→spec, size/Size→size, 款式→color, 容量→volume, 官網連結→url, simple `運費<amount>`→shipping factor); unresolved→remark
-- [ ] T114 Update `apps/unihub/backend/inventory/management/commands/import_legacy_csv.py`: route `.html` files to `build_html`; `_item_payload` passes **spec + url**
-- [ ] T115 [P] Add `apps/unihub/backend/tests/test_import_legacy_html.py`: inline HTML fixture → url from href, 規格→spec, 原價→sku_price, AxBxC→dims, 運費→shipping factor, unresolvable lines→remark, colspan-shifted row parsed correctly
-- [ ] T116 Run for 2026: delete the CSV-imported 2026 acquisitions (keep the pre-existing manual one), `import_legacy_csv "data/財產們/2026.html" --commit`; verify net (199.9 CNY / 687 TWD / 186.22 USD) and that items carry URLs
-- [ ] T117 [US2] `AcquisitionForm.tsx`: item-card **Duplicate** action (CopyOutlined) appending a copy (no id) to the end of the list
-- [ ] T118 [P] e2e `inventory-acquisition.spec.ts`: Duplicate appends a new card with the same name
-- [ ] T119 Quality loops incl. **`pnpm build`** (tsc -b — stricter than typecheck; broke CI in iter 10) + backend ruff/pytest; mark tasks + notes
+- [X] T113 Extend `specs/014-inventory-app/scripts/preview_legacy_import.py`: `build_html(path)` (stdlib HTMLParser, **colspan expansion**, `<br>`→newlines, name `<a href>`→item url); extend 備註 map (規格→spec, size/Size→size, 款式→color, 容量→volume, 官網連結→url, simple `運費<amount>`→shipping factor); unresolved→remark
+- [X] T114 Update `apps/unihub/backend/inventory/management/commands/import_legacy_csv.py`: route `.html` files to `build_html`; `_item_payload` passes **spec + url**
+- [X] T115 [P] Add `apps/unihub/backend/tests/test_import_legacy_html.py`: inline HTML fixture → url from href, 規格→spec, 原價→sku_price, AxBxC→dims, 運費→shipping factor, unresolvable lines→remark, colspan-shifted row parsed correctly
+- [X] T116 Run for 2026: delete the CSV-imported 2026 acquisitions (keep the pre-existing manual one), `import_legacy_csv "data/財產們/2026.html" --commit`; verify net (199.9 CNY / 687 TWD / 186.22 USD) and that items carry URLs
+- [X] T117 [US2] `AcquisitionForm.tsx`: item-card **Duplicate** action (CopyOutlined) appending a copy (no id) to the end of the list
+- [X] T118 [P] e2e `inventory-acquisition.spec.ts`: Duplicate appends a new card with the same name
+- [X] T119 Quality loops incl. **`pnpm build`** (tsc -b — stricter than typecheck; broke CI in iter 10) + backend ruff/pytest; mark tasks + notes
 
 ## Implementation Strategy
 Parser first (single source of truth), command routing, fixture test, then the one-off 2026 re-import; Duplicate button + e2e; loops with pnpm build.
+
+---
+
+## Implementation Notes (iteration 11)
+
+Completed 2026-07-12 (builds on iteration 10, commit `341c11a`). **No schema change.**
+
+### HTML legacy import (Format v2)
+- `preview_legacy_import.py` gains **`build_html`** (stdlib `HTMLParser`) + **`build_any`** dispatch; shared `build_from_rows` grouping. **Grid normalisation handles colspan AND rowspan** — critically, rowspan occupancy activates **after** the declaring row (`_new_spans` staging): a first cut decremented it in the same row, which shifted covered rows (e.g. 退稅 under mont-bell's merged date) and misclassified them as new acquisitions with sources like `-735yen`. Locked by `test_rowspan_covered_row_stays_an_attachment`.
+- 備註 map extended: **規格→spec, size/Size→尺寸→size, 款式→color(fallback), 容量→volume, 官網連結→url**, simple **`運費N`→shipping factor** (currency inherited from the acquisition; complex 運費±折抵 combos → remark). Name `<a href>` → `Item.url`. Unresolved lines → remark (no data loss).
+- Command: routes `.html` via `build_any`; `_item_payload` passes **spec + url**; `_iso` made defensive (pads `2016-1-15`, drops junk dates to None — older sheets contain both).
+- **2026 re-imported from HTML** (deleted the CSV-imported batch, kept the manual acquisition): 67 acquisitions / 89 items; net exact (**199.9 CNY / 687 TWD / 186.22 USD**); factor types accumulated/tax_refund/discount/shipping; **76 items with URL, 51 with spec** (CSV had 0 URLs). 2015–2025 parse cleanly structurally (dates have quirks) — import deferred per scope decision.
+- Fixture tests (`tests/test_import_legacy_html.py`, 7): href→url, 規格→spec, 原價→sku, AxBxC→dims, 運費→shipping, unresolvable→remark, **rowspan** + colspan alignment.
+
+### Items panel
+- **Duplicate** card action (`CopyOutlined`, Edit·Duplicate·Delete) appends a `structuredClone` copy as a new unsaved card; e2e spec added (duplicate appends a same-named card at the end).
+
+### Quality
+- Backend **274 pytest** / ruff clean. Frontend **367 vitest** / lint / typecheck / **`pnpm build`** (now part of the loop after the iter-10 CI break) clean. e2e: 30 specs compile.

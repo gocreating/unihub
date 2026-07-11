@@ -135,6 +135,22 @@ test('Add-Item modal footer: Cancel flushed left, Save right', async ({ page }) 
   expect(modalBox!.x + modalBox!.width - (sBox!.x + sBox!.width)).toBeLessThan(60);
 });
 
+test('item card Duplicate appends a copy to the end of the list', async ({ page }) => {
+  await gotoNewAcquisition(page);
+  // Fill the default card via the edit modal so the copy is recognizable.
+  await page.locator('.ant-card-small .anticon-edit').first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.locator('.ant-modal input[id$="name"]').first().fill('Dup me');
+  await page.locator('.ant-modal button', { hasText: /Save/i }).click();
+  await page.waitForTimeout(300);
+  // Duplicate → two cards with the same name, copy appended at the end.
+  await page.locator('.ant-card-small .anticon-copy').first().click();
+  await page.waitForTimeout(200);
+  const titles = await page.locator('.ant-card-small .ant-card-head').allInnerTexts();
+  expect(titles.filter((t) => t.includes('Dup me'))).toHaveLength(2);
+  expect(titles[titles.length - 1]).toContain('Dup me');
+});
+
 test('cost-factor rows stack on a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 560, height: 900 });
   await gotoNewAcquisition(page);

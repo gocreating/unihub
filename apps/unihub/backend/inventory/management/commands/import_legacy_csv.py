@@ -6,14 +6,15 @@ truth for grouping/classification/備註-parsing) and writes through
 `AcquisitionSerializer` so all validation, per-currency accumulated, and unit
 normalization apply. Currency stays a code string (Principle II — no finance FK).
 
-Usage (from apps/unihub/backend/):
-    uv run python manage.py import_legacy_csv "data/財產們 - 2026.csv"            # dry-run
-    uv run python manage.py import_legacy_csv "data/財產們 - 2026.csv" --commit    # write
+Usage (from apps/unihub/backend/): CSV (v1) or Google-Sheets HTML export (v2):
+    uv run python manage.py import_legacy_csv "data/財產們/2026.html"            # dry-run
+    uv run python manage.py import_legacy_csv "data/財產們/2026.html" --commit    # write
 """
 
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -47,9 +48,22 @@ def _norm_currency(code: str | None) -> str:
     return CURRENCY_ALIASES.get(code, code)
 
 
+_DATE_RE = re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})$")
+
+
 def _iso(date_str: str | None) -> str | None:
-    """The parser yields YYYY-MM-DD; DRF wants a datetime — pin to 00:00 UTC."""
-    return f"{date_str}T00:00:00Z" if date_str else None
+    """Normalise the parser's date to a DRF datetime (00:00 UTC).
+
+    Legacy sheets contain unpadded (2016-1-15) and junk date cells — pad what
+    is recoverable, drop the rest to None rather than failing the whole import.
+    """
+    if not date_str:
+        return None
+    m = _DATE_RE.match(date_str.strip())
+    if not m:
+        return None
+    y, mo, d = m.groups()
+    return f"{y}-{int(mo):02d}-{int(d):02d}T00:00:00Z"
 
 
 def _item_payload(item) -> dict:
@@ -59,6 +73,10 @@ def _item_payload(item) -> dict:
         payload["quantity"] = int(f["quantity"])
     if "size" in f:
         payload["size"] = str(f["size"])[:100]
+    if "spec" in f:
+        payload["spec"] = str(f["spec"])
+    if "url" in f:
+        payload["url"] = str(f["url"])[:500]
     if "color" in f:
         payload["color"] = str(f["color"])[:50]
     if f.get("sku_price") is not None:
@@ -108,7 +126,7 @@ class Command(BaseCommand):
             raise CommandError(f"CSV not found: {csv_path}")
 
         parser = _load_parser()
-        acquisitions = parser.build(str(csv_path))
+        acquisitions = parser.build_any(str(csv_path))
 
         planned = [a for a in acquisitions if a.items]
         skipped = [a for a in acquisitions if not a.items]

@@ -18,6 +18,7 @@ import {
   message,
 } from 'antd';
 import {
+  CopyOutlined,
   DeleteOutlined,
   EditOutlined,
   HolderOutlined,
@@ -350,6 +351,13 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     setEditingIndex(null);
   };
 
+  // Duplicate an item card: append a copy (new, unsaved) to the end of the list.
+  const duplicateCard = (idx: number) => {
+    const card = cards[idx];
+    if (!card) return;
+    setCards((prev) => [...prev, { data: structuredClone(card.data) }]);
+  };
+
   const removeCard = async (idx: number) => {
     const card = cards[idx];
     if (isEdit && card?.id) {
@@ -468,6 +476,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
                 }
                 actions={[
                   <EditOutlined key="edit" onClick={() => openEditCard(idx)} />,
+                  <CopyOutlined key="dup" onClick={() => duplicateCard(idx)} />,
                   <DeleteOutlined key="del" onClick={() => removeCard(idx)} />,
                 ]}
               >

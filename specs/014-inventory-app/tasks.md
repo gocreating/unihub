@@ -497,3 +497,47 @@ Completed 2026-07-11 (builds on iteration 8, commit `ddb2a82`). **No schema chan
 ### Tests
 - Backend: `test_item_filter_by_quantity`, `test_item_order_by_source` (server-side). Catalog RTL (3): no URL column, Name links to url, standard `EntityOffsetFooter`. e2e (10): standard footer pagination, Name link, Name/Spec size-to-content.
 - **frontend 360 vitest / lint / typecheck clean; backend 265 pytest / ruff clean.**
+
+---
+
+# Tasks: Iteration 10 (catalog defaults, nulls sort, form-constitution enforcement)
+
+**Input**: plan.md "Iteration 10"; spec session iteration 10 + FR-003/006c/022/024. Builds on iteration 9 (`1be2fd3`). **No schema change.**
+
+## Phase 1: Shared infrastructure fixes
+
+- [ ] T098 Rewrite `apps/unihub/frontend/src/hooks/useContainerWidth.ts` around a **callback ref** (observer attaches when the node mounts — fixes lazily-mounted modal content); add `apps/unihub/frontend/src/hooks/useContainerWidth.test.ts` (observer attaches on late mount, isNarrow flips below breakpoint)
+- [ ] T099 [P] Fix the number-input alignment rule in `apps/unihub/frontend/src/index.css` to out-rank AntD cssinjs (`text-align: right !important`, with a comment on why)
+- [ ] T100 [P] Add `defaultSortRules` support to `useEntityTable`/`useEntitySort` (`apps/unihub/frontend/src/components/EntityToolbar/`) — additive, seeds initial sort state
+
+## Phase 2: Backend defaults + tests
+
+- [ ] T101 Set explicit nulls-first defaults in `apps/unihub/backend/inventory/views.py`: `AcquisitionViewSet.ordering = ["-obtained_at__nullsfirst"]`, `ItemViewSet.ordering = ["-acquisition__obtained_at__nullsfirst"]`
+- [ ] T102 [P] Add backend tests (`tests/test_inventory_acquisitions.py` / `test_inventory_items.py`): `?ordering=-obtained_at__nullsfirst` puts null-obtained rows first, `__nullslast` last, and the **default** ordering places null-obtained acquisitions first
+
+## Phase 3: Catalog polish
+
+- [ ] T103 In `catalog/index.tsx`: default column order **net_cost, name, sku_price, acquisition__source, request_time, obtained_at**, rest, actions; **bump the table key to `inventory-catalog-v2`**; seed `defaultSortRules` = obtained desc nulls-first; Requested/Obtained render **date-only** (`YYYY-MM-DD (x ago)`); **align net_cost + sku_price right**; action button label **"New"**
+- [ ] T104 [P] i18n (BOTH locales): `common.new` = "New"/「新增」, `common.add` = "Add"/「新增」, create-submit "Create"/「建立」; wire Catalog action, Items-panel Add, Cost-panel Add, create submit
+
+## Phase 4: Form-constitution fixes
+
+- [ ] T105 `ItemFormModal.tsx`: custom **space-between footer** (Cancel flushed left, Save right); verify grid + stacking now works via the callback-ref hook
+- [ ] T106 [P] Apply compliant **space-between footers** to the catalog **Deprecate** modal and the scenario **Constraint** modal
+- [ ] T107 `AcquisitionForm.tsx` Cost panel: strict grid rows `[24px drag]·[flex 1 type/label]·[flex 2 value+currency]·[flex none action]` for accumulated/manual/Total rows (no fixed 90px/130px)
+
+## Phase 5: Regression tests + polish
+
+- [ ] T108 [P] RTL `ItemFormModal.test.tsx` (new): footer order (Cancel left / Save right, space-between), field order (Name, quantity, SKU price, spec, URL, remark, color, size, …), fields stack under a narrow container (mock ResizeObserver)
+- [ ] T109 [P] RTL `CatalogPage.test.tsx`: default column order headers, right-aligned net_cost/sku_price cells, date-only Requested/Obtained, "New" button
+- [ ] T110 [P] e2e: computed `text-align:right` on `.ant-input-number-input` (cost panel + Add-Item modal); Add-Item modal fields stack at narrow viewport; catalog default order = nulls-first; "New" button label
+- [ ] T111 Quality loops: `pnpm lint && pnpm typecheck && pnpm test`; `uv run ruff check . && uv run pytest`
+- [ ] T112 [P] Mark iteration-10 tasks complete + append Implementation Notes
+
+---
+
+## Dependencies (iteration 10)
+- T098 → T105/T108 (modal stacking depends on the hook fix). T100 → T103. T101 → T102. Same-file: T103 before T109; T105/T107 before T110.
+
+## Implementation Strategy (iteration 10)
+Fix the three root causes in shared infra first (hook callback ref, CSS precedence, footer pattern), then apply catalog defaults + labels, then lock every repeatedly-reported behaviour with backend/RTL/e2e tests.

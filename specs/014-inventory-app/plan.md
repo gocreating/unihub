@@ -328,3 +328,31 @@ Pure backend integration: one `ready()` in `inventory/apps.py` registering 5 des
 
 ## Structure Decision (delta)
 Reuse the two existing server-paginated viewsets (Acquisition=tree, Item=flat) behind one Catalog page following the finance pagination/width patterns exactly. No client-side fetch-all, no new endpoint, no schema change.
+
+---
+
+# Iteration 10 (catalog defaults, nulls sort, form-constitution enforcement) — delta plan
+
+**Date**: 2026-07-11 | Builds on iteration 9 (commit `1be2fd3`). Spec: `### Session 2026-07-11 (…iteration 10)` + FR-003/006c/022/024. **No schema change.**
+
+## Root causes → fixes
+1. **Modal fields never stack**: `useContainerWidth` attaches its ResizeObserver in a `[]`-deps mount effect; AntD `Modal` lazy-mounts children, so `ref.current` is null and the observer never attaches. → Rewrite the hook around a **callback ref** (observer attaches/detaches when the node actually (un)mounts). Unit-tested.
+2. **Numbers not right-aligned**: the `index.css` rule loads before AntD's runtime cssinjs → later-injected `text-align:left` wins. → **`!important`** on the app rule (documented enforcement point; cssinjs injection order is not controllable).
+3. **Cancel on the right**: AntD's default modal footer right-aligns the whole group. → **Custom `space-between` footers** (Cancel flushed left, primary right) on the Add-Item, Deprecate, and Constraint modals.
+4. **Cost rows don't fill**: fixed `90px` action + `130px` label columns leave dead space. → Strict grid `[drag 24px]·[type/label flex 1]·[value+currency flex 2]·[action flex none]` for accumulated, manual, and Total rows.
+5. **Nulls sort "no effect"**: no explicit default + untested path. → Backend defaults `-obtained_at__nullsfirst` (Acquisition) / `-acquisition__obtained_at__nullsfirst` (Item); toolbar sort state seeded (new `defaultSortRules` option on `useEntityTable`/`useEntitySort`, additive); API tests for `__nullsfirst`/`__nullslast` incl. defaults.
+
+## Catalog polish
+- Default column order **Net cost, Name, SKU price, Source, Requested, Obtained**, rest, Actions; **bump the persistence key** (`inventory-catalog-v2`) so saved column state doesn't shadow the new defaults.
+- Requested/Obtained render **date-only** `YYYY-MM-DD (x ago)`.
+- **Net cost + SKU price columns `align:'right'`**.
+- Button labels: Catalog **"New"**; create submit **"Create"**; Items panel **"Add"**; Cost panel **"Add"** (new `common.new`/`common.add`-style keys, both locales; modal title keeps "Add Item").
+
+## Tests (regression lock, FR-024)
+- Backend: nulls-first/last ordering via API + default ordering places null `obtained_at` first.
+- Unit: `useContainerWidth` callback-ref (observer attaches on late mount).
+- RTL: ItemFormModal — footer Cancel-left/primary-right (space-between), field order, **stacking under a narrow container** (mocked ResizeObserver now reachable thanks to callback ref); Catalog — default column order, right-aligned numeric cells, date-only format, "New" label.
+- e2e: computed `text-align:right` on number inputs (cost panel + modal); modal fields stack at narrow viewport; catalog default nulls-first; "New" button.
+
+## Structure Decision (delta)
+Frontend-only + two backend default-ordering strings + one additive toolbar-hook option. The container-width hook becomes callback-ref-based (shared infra fix benefiting all future modals).

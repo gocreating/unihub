@@ -600,3 +600,20 @@ Completed 2026-07-12 (builds on iteration 10, commit `341c11a`). **No schema cha
 
 ### Quality
 - Backend **274 pytest** / ruff clean. Frontend **367 vitest** / lint / typecheck / **`pnpm build`** (now part of the loop after the iter-10 CI break) clean. e2e: 30 specs compile.
+
+---
+
+# Tasks: Iteration 12 (catalog width/sort-state + acquisition form polish)
+
+**Input**: plan.md "Iteration 12"; spec session 2026-07-12. Builds on iteration 11 (`1548a25`). **Frontend only.**
+
+- [ ] T120 `catalog/index.tsx`: remove ALL arbitrary width floors from the `w()` helper and per-column `min` args — width = `widthForHeader(title, dataWidths[key])` only
+- [ ] T121 `EntityToolbar.tsx`: Sort button `type` driven by **`sortProps.hook.isActive`** (was `!isDefault`) so a seeded default sort lights it; verify finance pages unaffected (no seeded defaults ⇒ same visual behavior)
+- [ ] T122 [P] Breadcrumbs: `acquisitions/new.tsx` last crumb → `common.new`; `acquisitions/edit.tsx` last crumb → `common.edit`; prune `pages.inventory.acquisitions.form.editCrumb` key (BOTH locales)
+- [ ] T123 [P] `ItemFormModal.tsx`: first-row spans Name 12 / Quantity 4 / SKU Price 8 (narrow stacking unchanged)
+- [ ] T124 [P] `AcquisitionForm.tsx`: card badges `<Tag>` with `maxWidth:'100%'` + ellipsis + `Tooltip` (full text); new factor `type: ''` default (placeholder shows; payload already falls back to `other`)
+- [ ] T125 [P] Tests: RTL — Sort button primary on catalog load (seeded default), ItemFormModal spans 12/4/8, badge Tooltip/ellipsis; e2e — sort button active on load
+- [ ] T126 Quality loops (lint/typecheck/**build**/vitest; backend ruff/pytest untouched but run); mark tasks + notes
+
+## Implementation Strategy
+Two root-cause fixes (width floors, isActive semantics) + four cosmetic corrections, all regression-tested.

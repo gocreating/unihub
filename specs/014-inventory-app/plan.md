@@ -378,3 +378,26 @@ Frontend-only + two backend default-ordering strings + one additive toolbar-hook
 
 ## Structure Decision (delta)
 The parser script stays the single source of truth (CSV v1 + HTML v2 entry points); the command routes by extension. 2015–2025 import deferred until requested.
+
+---
+
+# Iteration 12 (catalog width/sort-state + acquisition form polish) — delta plan
+
+**Date**: 2026-07-12 | Builds on iteration 11 (commit `1548a25`). Spec: `### Session 2026-07-12 (…iteration 12)`. **Frontend only, no schema change.**
+
+## Root causes → fixes
+1. **Net Cost oversized**: the catalog width helper stacked arbitrary per-column min floors (140/200px) on the measurement. → Remove all floors; width = `widthForHeader(title, measuredContent)` (header floor only).
+2. **Sort button inactive on default sort**: `EntityToolbar` lights the Sort button on `!isDefault`, so a seeded default never activates it. → Light on **`isActive`** (any rule applied) — consistent with the Filter button; no behavior change for pages without seeded defaults.
+
+## Polish
+- Breadcrumbs: create **Catalog / New** (`common.new`); edit **Catalog / {id} / Edit** (`common.edit`) — drop the "Acquisition"-suffixed crumb keys.
+- Add-Item modal first row: **Name 12 / Quantity 4 / SKU Price 8** (currency select clipped at 6).
+- Item-card badges: `<Tag>` capped at card width with **ellipsis + Tooltip** (full text).
+- New cost factor: **type starts empty** (placeholder; `other` fallback at submit — already in payload mapping).
+
+## Tests
+- RTL: catalog Net Cost width sanity (no floor: header-sized when content short) — covered via updated column-order test; Sort-button active state (primary class when default sort seeded); ItemFormModal first-row spans 12/4/8; badge ellipsis style present.
+- e2e: sort button visually active on catalog load.
+
+## Structure Decision (delta)
+Small targeted frontend fixes; one shared-toolbar change (`isActive` semantics for the Sort button).

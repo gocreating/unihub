@@ -56,7 +56,7 @@ describe('ItemFormModal (Principle VI)', () => {
     expect(footer).toBe(save.parentElement);
     expect(footer.style.display).toBe('flex');
     expect(footer.style.justifyContent).toBe('space-between');
-    const order = Array.from(footer.querySelectorAll('button'));
+    const order: Element[] = Array.from(footer.querySelectorAll('button'));
     expect(order.indexOf(cancel)).toBeLessThan(order.indexOf(save));
   });
 
@@ -87,7 +87,7 @@ describe('ItemFormModal (Principle VI)', () => {
     // The callback ref observed the modal's content container (lazy-mounted).
     const instance = ResizeObserverMock.instances.find((i) => i.targets.length > 0);
     expect(instance).toBeTruthy();
-    const container = instance!.targets[0];
+    const container = instance!.targets[0]!;
 
     // The grid Col is the ancestor with an explicit span class (ant-col-N);
     // the inner ant-form-item-control is also an .ant-col but span-less.

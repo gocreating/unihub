@@ -1,26 +1,27 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.15.0 → 1.16.0 (minor — Principle VI (UI/UX Reference: ov-fleet)
-  modal-controls rule expanded with an explicit footer action-placement
-  requirement: the primary action MUST sit on the right-hand side of the modal
-  footer and all other actions (Cancel + secondary/tertiary) on the left, with
-  Cancel remaining left-most. Sourced from a UX consistency directive on
-  2026-07-11.)
+Version change: 1.16.0 → 1.17.0 (minor — Principle I (Entity-Centric Domain
+  Architecture) gains a non-negotiable "Data-portability (data_io) consistency"
+  rule: every concrete domain model MUST register a data_io TableDescriptor in its
+  AppConfig.ready(), and every schema change MUST keep the domain consistent with
+  data_io in the same change; registry-unrepresentable relations (e.g. M2M) MUST be
+  explicitly recorded as deferred. Sourced from discovering the inventory app had
+  never been registered with data_io, 2026-07-11.)
 Modified principles:
-  - VI. UI/UX Reference: ov-fleet — modal form-controls rule now specifies footer
-    action placement (primary right; other actions left; Cancel left-most)
-Added sections: none (existing Principle VI bullet expanded)
+  - I. Entity-Centric Domain Architecture — added the data_io registration +
+    schema-consistency rule; rationale extended
+Added sections: none (bullet added within Principle I; Domain Addition Protocol
+  step referencing it)
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check is
     generic and already gates all principles)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: Retrofit existing modals to the primary-right / others-left footer
-  layout. AntD's default footer already renders [Cancel][OK] (primary right), so
-  compliant by default — audit any modal with a custom `footer` array or extra
-  buttons (e.g. dirty-guarded item/constraint modals).
+Follow-up TODOs: Register the inventory tables with data_io (this iteration:
+  acquisition/item/costfactor/scenario/scenarioitem; Constraint deferred — M2M).
+  Audit other domains for any unregistered concrete models.
 -->
 
 # UniHub Constitution
@@ -44,6 +45,16 @@ all domains — current and future.
 - Deleting a user-defined AttributeDefinition that has existing values MUST
   display a confirmation warning showing the count of affected entities; upon
   confirmation, all associated AttributeValues are permanently removed.
+- **Data-portability (`data_io`) consistency**: Every concrete domain model MUST
+  be registered with the shared **`data_io`** import/export registry — a
+  `TableDescriptor` declared in the domain's `AppConfig.ready()` (with
+  `fk_content_type_label` overrides for every foreign key and an `import_order`
+  that writes parents before children) — so all domain data participates in the
+  standard CSV backup / restore / change-preview flow. **Any schema change MUST
+  keep the domain consistent with `data_io` in the same change**: a new model MUST
+  add its `TableDescriptor`; adding, removing, or renaming a field MUST update that
+  descriptor. A relation the registry cannot yet represent (e.g. a many-to-many)
+  MUST be **explicitly recorded as deferred**, never silently omitted.
 
 **Rationale**: The shared entity/attribute infrastructure is the central value
 proposition of UniHub. Bypassing it — even for convenience — fragments the
@@ -613,6 +624,9 @@ steps may be skipped or reordered:
    (Principle VIII).
 6. Add a service file at `apps/unihub/frontend/src/services/<domain>.ts` with
    types generated from the updated OpenAPI schema.
+7. Register every concrete model with the **`data_io`** registry in the domain's
+   `AppConfig.ready()` (Principle I data-portability rule), and keep those
+   `TableDescriptor`s in sync on every subsequent schema change.
 
 Verify the Finance domain remains fully functional after adding any new domain
 (Principle II compliance check).
@@ -641,4 +655,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.16.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-11
+**Version**: 1.17.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-11

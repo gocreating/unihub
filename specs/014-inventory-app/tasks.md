@@ -403,3 +403,32 @@ Completed 2026-07-11 (builds on iteration 6, commit `4ed51c0`). Frontend fixes +
 ### Tests
 - Catalog RTL: caret column, pagination, no "Items" column. e2e (`--list` = 14 specs): caret-own-column, no-item-count, pagination, SKU trailing zeros, type-label, item-card badges. Backend 260 pytest, ruff clean; frontend lint/typecheck clean, 359 vitest; locale parity OK.
 - e2e not executed headlessly (needs `pnpm dev` + Docker backend).
+
+---
+
+# Tasks: Iteration 8 (data_io integration)
+
+**Input**: plan.md "Iteration 8" delta; spec `### Session 2026-07-11 (data_io integration, iteration 8)` + FR-025; constitution v1.17.0 (Principle I data-portability). Builds on iteration 7 (`0a49717`). **Backend only, no schema change.**
+
+## Phase 1: Registration
+
+- [ ] T083 Add `InventoryConfig.ready()` in `apps/unihub/backend/inventory/apps.py` registering `data_io` `TableDescriptor`s for `inventory.acquisition` (order 1), `inventory.item` (order 2, fk `acquisition_id→inventory.acquisition`), `inventory.costfactor` (order 2, fk `acquisition_id→inventory.acquisition`), `inventory.scenario` (order 3), `inventory.scenarioitem` (order 4, fk `scenario_id→inventory.scenario`, `item_id→inventory.item`, `container_id→inventory.scenarioitem`); all `has_user_attributes=False` via `auto_system_fields(Model, fk_overrides=…)`; add a comment documenting **Constraint deferred (M2M unsupported)**
+
+## Phase 2: Tests
+
+- [ ] T084 [P] Add `apps/unihub/backend/tests/test_inventory_io.py`: `test_inventory_tables_registered` — `GET /api/v1/io/tables/` includes the 5 inventory tables with correct `depends_on` (item/costfactor→acquisition; scenarioitem→scenario/item/self); Constraint NOT present
+- [ ] T085 [US-IO] Add `test_inventory_io_export_import_roundtrip` in `tests/test_inventory_io.py`: create an acquisition (+1 item, +1 cost factor), export the inventory tables to CSV, delete the rows, import the CSV, assert the acquisition/item/cost-factor are restored (mirror the finance io round-trip test)
+
+## Phase 3: Verify + Polish
+
+- [ ] T086 Run `uv run python manage.py check` and confirm registration loads (no `already registered` / import errors); confirm `import_legacy_csv` still works (dry-run)
+- [ ] T087 Backend quality loop: `uv run ruff check . && uv run pytest` — full suite green (incl. the new io tests + existing data_io tests)
+- [ ] T088 [P] Mark iteration-8 tasks complete + append Implementation Notes (descriptors, deferred Constraint, round-trip result) to this file
+
+---
+
+## Dependencies (iteration 8)
+- T083 (registration) → T084/T085 (tests) → T086/T087 (verify) → T088 (notes).
+
+## Implementation Strategy (iteration 8)
+Register the 5 inventory descriptors in `apps.py ready()`, prove it via `/io/tables/` + an export→import round-trip test, and keep the legacy importer. Constraint's M2M stays explicitly deferred until the registry supports it.

@@ -252,3 +252,48 @@ Frontend-only feature work + one Django management command for the legacy import
 
 ## Structure Decision (delta)
 Frontend polish + importer currency fix + re-import. No models/migrations. The Catalog's rendering is stabilised (cache + synchronous expand/width) and gains a caret column + pagination; the cost panel and item modal are brought into Principle-VI compliance; the type label is decoupled from its stored key.
+
+---
+
+# Iteration 8 (data_io integration) — delta plan
+
+**Date**: 2026-07-11 | Builds on iteration 7 (commit `0a49717`). Spec: `### Session 2026-07-11 (data_io integration, iteration 8)` + FR-025. Constitution **v1.17.0** (Principle I data-portability rule). **No schema change.**
+
+## Summary
+
+Wire the Inventory domain into the existing **`data_io`** CSV import/export/change-preview registry (the mechanism finance uses) — a gap: `inventory/apps.py` currently registers **zero** tables. Register **five** `TableDescriptor`s; **defer Constraint** (M2M unsupported). Keep the one-off `import_legacy_csv` too.
+
+## Backend (`inventory/apps.py`)
+
+- Add `InventoryConfig.ready()` that calls `data_io.registry.register(TableDescriptor(...))` for:
+  | content_type_label | model | import_order | fk_overrides |
+  |---|---|---|---|
+  | `inventory.acquisition` | Acquisition | 1 | — |
+  | `inventory.item` | Item | 2 | `acquisition_id → inventory.acquisition` |
+  | `inventory.costfactor` | CostFactor | 2 | `acquisition_id → inventory.acquisition` |
+  | `inventory.scenario` | Scenario | 3 | — |
+  | `inventory.scenarioitem` | ScenarioItem | 4 | `scenario_id → inventory.scenario`, `item_id → inventory.item`, `container_id → inventory.scenarioitem` (self) |
+- All use `system_fields = auto_system_fields(Model, fk_overrides=…)`, `has_user_attributes=False`.
+- Currency fields (`sku_price_currency`, cost-factor `currency`) stay plain string columns (Principle II) — **no** FK override.
+- **Constraint deferred**: documented in `apps.py` (a comment) + FR-025; revisit when the registry supports M2M / a join-table export.
+
+## Tests (`tests/` or `data_io/tests/`)
+
+- `test_inventory_io_registration`: `GET /api/v1/io/tables/` includes the 5 inventory tables with the expected `depends_on` (item/costfactor depend on acquisition; scenarioitem on scenario/item/self).
+- `test_inventory_io_roundtrip`: create an acquisition (+item, +cost factor), **export** those tables to CSV, wipe, **import** the CSV back, assert the rows are restored (mirrors finance's io round-trip test).
+
+## Constitution
+
+Amended to **v1.17.0** — Principle I now requires every concrete model to register a `data_io` `TableDescriptor` and keep it in sync on schema changes; Domain Addition Protocol step 7 added. (Committed with this iteration.)
+
+## Constitution re-check (delta)
+
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| I. Entity-Centric + data-portability | ✅ PASS | Inventory now registers its tables with data_io (the new rule). |
+| II. Domain Independence | ✅ PASS | Currency stays a string; no finance FK in descriptors. |
+| V. Quality Loop | ✅ PASS | Registration + round-trip tests added. |
+
+## Structure Decision (delta)
+
+Pure backend integration: one `ready()` in `inventory/apps.py` registering 5 descriptors + tests. No models, migrations, serializers, or frontend changes. Constraint's M2M is explicitly deferred (recorded, not silently omitted).

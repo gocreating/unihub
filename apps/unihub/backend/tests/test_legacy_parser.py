@@ -244,3 +244,78 @@ def test_factor_amounts_with_currency_adornments(parser, tmp_path):
     values = {cf.type: (cf.value, cf.currency) for cf in acq.cost_factors if cf.type != "accumulated"}
     assert values["tax_refund"] == (-1450.0, "JPY")
     assert values["discount"] == (-735.0, "JPY")
+
+
+# Iteration 23 (FR-029e): date-cell no-data-loss + strikethrough skip.
+def test_dayless_date_resolves_to_month_end(parser, tmp_path):
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>Luggage</td><td>1400</td><td>TWD</td><td>ShopL</td>
+<td>2016/02/??</td><td></td></tr>
+</table>
+"""
+    path = tmp_path / "d.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    assert acq.request_time is None
+    assert acq.obtained_at == "2016-02-29"  # leap-aware month end
+
+
+def test_multiline_date_cell_latest_wins_and_text_survives(parser, tmp_path):
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>Sofa</td><td>4930</td><td>TWD</td><td>momo</td>
+<td>2020/05/09<br>~2020/05/10(本體)<br>~2020/05/11(椅套)</td><td></td></tr>
+</table>
+"""
+    path = tmp_path / "m.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    assert acq.request_time == "2020-05-09"
+    assert acq.obtained_at == "2020-05-11"  # the LATEST date
+    # The full original cell text survives (本體/椅套 annotations).
+    assert "本體" in acq.remark and "椅套" in acq.remark
+
+
+def test_missing_dates_default_to_sheet_year_end(parser, tmp_path):
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>Glasses</td><td>13000</td><td>TWD</td><td>ShopG</td>
+<td>-</td><td>賽璐珞材質</td></tr>
+</table>
+"""
+    path = tmp_path / "2015.html"  # sheet year from the FILENAME
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    assert acq.obtained_at == "2015-12-31"
+    assert "defaulted_eoy" in acq.flags
+
+
+def test_struck_item_rows_are_skipped(parser, tmp_path):
+    fixture = f"""
+<html><head><style>
+.x .y .s9 {{ text-decoration: line-through; color: #999; }}
+</style></head><body>
+<table>
+{HEADER}
+<tr><td>1</td><td class="s9">Dead item</td><td>100</td><td>TWD</td><td>ShopD</td>
+<td>2019/01/05</td><td>skip me</td></tr>
+<tr><td>2</td><td>Alive item</td><td>200</td><td>TWD</td><td>ShopA</td>
+<td>2019/01/06</td><td></td></tr>
+</table>
+</body></html>
+"""
+    path = tmp_path / "s.html"
+    path.write_text(fixture, encoding="utf-8")
+    acqs = parser.build_html(str(path))
+    names = [i.name for a in acqs for i in a.items]
+    assert "Dead item" not in names
+    assert "Alive item" in names
+    # A struck HEADER still creates its acquisition so live continuation
+    # items under its rowspans survive (the 2019 H&M case).
+    shop_d = next(a for a in acqs if a.source == "ShopD")
+    assert shop_d.items == []
+    assert shop_d.obtained_at == "2019-01-05"

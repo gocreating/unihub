@@ -86,8 +86,8 @@ def _line_covered(line: str, blob: str, parser) -> bool:
         return True
     # Transformed lines (resolved keys, factor amounts) pass when every
     # meaningful lexical run of the line survives into some payload field.
-    runs = _runs(line)
-    return bool(runs) and all(_run_covered(r, blob, parser) for r in runs)
+    # A line with NO lexical runs ('-', '??' placeholders) has nothing to lose.
+    return all(_run_covered(r, blob, parser) for r in _runs(line))
 
 
 def _sheet_cases():
@@ -101,8 +101,9 @@ def test_no_legacy_content_lost(sheet):
     blob = _sheet_blob(acquisitions)
 
     # Re-walk the raw grid exactly like build_html does.
-    html_parser = parser._SheetHTMLParser()
-    html_parser.feed(sheet.read_text(encoding="utf-8"))
+    html_text = sheet.read_text(encoding="utf-8")
+    html_parser = parser._SheetHTMLParser(parser._struck_classes(html_text))
+    html_parser.feed(html_text)
     col_idx = None
     misses: list[str] = []
     for row_no, grid_row in enumerate(html_parser.rows):
@@ -120,6 +121,9 @@ def test_no_legacy_content_lost(sheet):
         price = cell("實際支付價錢")["text"].strip()
         if parser.is_summary([name, price]):
             continue
+        # Crossed-out rows are intentionally skipped by the parser (FR-029e).
+        if cell("項目").get("struck") and not cell("項目").get("carried"):
+            continue
 
         # 項目: own cells only; cost-factor keyword rows are transformed.
         name_cell = cell("項目")
@@ -131,6 +135,15 @@ def test_no_legacy_content_lost(sheet):
         location = loc_cell["text"].strip()
         if location and not loc_cell.get("carried") and _norm(location) not in blob:
             misses.append(f"row {row_no} 購買地點: {location!r}")
+
+        # 購買日期 cells joined the sweep in iteration 23 (FR-029e c): date
+        # tokens surface as parsed ISO dates; leftovers live in acq.remark.
+        date_cell = cell("購買日期")
+        if not date_cell.get("carried"):
+            for line in date_cell["text"].splitlines():
+                line = line.strip()
+                if line and not _line_covered(line, blob, parser):
+                    misses.append(f"row {row_no} 購買日期 line: {line!r}")
 
         remark_cell = cell("備註")
         if not remark_cell.get("carried"):

@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+from pathlib import Path
 import sys
 from dataclasses import dataclass, field, asdict
 
@@ -62,25 +63,72 @@ def parse_currency(text: str) -> str | None:
     return None
 
 
-def parse_date(cell: str) -> tuple[str | None, str | None, list[str]]:
-    """Return (request_time, obtained_at, flags). Dates normalised to YYYY-MM-DD."""
+RE_DATE_TOKEN = re.compile(r"(\d{4})[/\-.](\d{1,2})(?:[/\-.](\d{1,2}|\?{1,2}))?")
+
+
+def _date_token_iso(m: "re.Match") -> str:
+    """Normalise one date token; a missing/?? day resolves to the month end."""
+    import calendar
+
+    year, month = int(m.group(1)), int(m.group(2))
+    day_raw = m.group(3)
+    if not day_raw or "?" in day_raw:
+        day = calendar.monthrange(year, month)[1]
+    else:
+        day = int(day_raw)
+    return f"{year:04d}-{month:02d}-{day:02d}"
+
+
+def parse_date(cell: str, default_year: int | None = None):
+    """Return (request_time, obtained_at, flags, leftover_text).
+
+    Rules (FR-029e): simple forms — single date → obtained only; ``d~`` →
+    requested only (pending); ``d~d`` → both; garbage-left ``??~d`` →
+    obtained only. A token with a missing/``??`` day resolves to the LAST DAY
+    of its month. A COMPLEX cell (extra text / extra dates, e.g. the MUJI
+    multiline case) uses the LATEST date as obtained (a leading ``date~`` as
+    requested) and returns the FULL cell text as leftover so the caller
+    preserves it in acquisition.remark. No dates at all → obtained defaults
+    to Dec 31 of the sheet year (``defaulted_eoy``).
+    """
     cell = cell.strip()
     flags: list[str] = []
-    if not cell:
-        return None, None, flags
+    tokens = list(RE_DATE_TOKEN.finditer(cell))
+    dates = [_date_token_iso(m) for m in tokens]
 
-    def iso(d: str) -> str | None:
-        d = d.strip().replace("/", "-")
-        # Garbage tokens (e.g. "??") never become dates.
-        return d if d and any(ch.isdigit() for ch in d) else None
+    if not dates:
+        if default_year:
+            flags.append("defaulted_eoy")
+            keep = cell if re.search(r"[\u4e00-\u9fff]{2,}|[A-Za-z]{2,}|\d{2,}", cell) else ""
+            return None, f"{default_year}-12-31", flags, keep
+        return None, None, flags, ""
 
-    if "~" in cell:
-        left, right = (cell.split("~", 1) + [""])[:2]
-        req, obt = iso(left), iso(right)
-        if req and not obt:
-            flags.append("pending(open_range)")
-        return req, obt, flags
-    return None, iso(cell), flags  # single date → obtained_at
+    # Simple form when nothing but the tokens, ``~`` separators, and
+    # placeholder junk (?? / -) remains.
+    stripped = cell
+    for m in tokens:
+        stripped = stripped.replace(m.group(0), "", 1)
+    residue = stripped.replace("~", "").replace("?", "").replace("-", "").strip()
+
+    if residue == "":
+        if "~" in cell:
+            left = cell.split("~", 1)[0]
+            left_has_date = bool(RE_DATE_TOKEN.search(left))
+            if len(dates) >= 2:
+                return dates[0], dates[-1], flags, ""
+            if left_has_date:
+                flags.append("pending(open_range)")
+                return dates[0], None, flags, ""
+            return None, dates[0], flags, ""
+        return None, dates[0], flags, ""
+
+    # Complex cell: latest date wins as obtained; a LEADING ``date~`` is the
+    # requested side; the whole original text is preserved by the caller.
+    first = tokens[0]
+    leads = cell[: first.start()].strip() == "" and "~" in cell[first.end() : first.end() + 3]
+    request = dates[0] if (leads and len(dates) > 1) else None
+    flags.append("complex_date_cell")
+    return request, max(dates), flags, cell
 
 
 # ── 備註 parsing ─────────────────────────────────────────────────────────
@@ -254,10 +302,14 @@ def _add_item(acq: Acquisition, name: str, remark: str, url: str) -> None:
     acq.items.append(Item(name=name, fields=fields, flags=iflags))
 
 
-def build_from_rows(rows: list[tuple[str, str, str, str, str, str, str]]) -> list[Acquisition]:
+def build_from_rows(
+    rows: list[tuple], default_year: int | None = None
+) -> list[Acquisition]:
     """Group (name, price, currency, location, date, remark, url) rows into acquisitions."""
     acquisitions: list[Acquisition] = []
     last_source = ""
+    skipped_struck: list[str] = []
+    global LAST_SKIPPED_STRUCK
 
     for row in rows:
         name, price, currency, location, date, remark, url, *rest = row
@@ -269,6 +321,17 @@ def build_from_rows(rows: list[tuple[str, str, str, str, str, str, str]]) -> lis
         # 購買日期 shared across acquisitions) without splitting groups.
         has_ctx = rest[0] if rest else bool(location or date)
         own_name = rest[1] if len(rest) > 1 else True
+        struck = rest[2] if len(rest) > 2 else False
+
+        # Crossed-out ITEMS are intentionally SKIPPED (FR-029e b) — but a
+        # struck HEADER row still creates its acquisition (source/date/paid),
+        # because live continuation items may follow under its rowspans.
+        skip_item_only = False
+        if struck and own_name:
+            skipped_struck.append(name)
+            if not has_ctx:
+                continue
+            skip_item_only = True
 
         # A rowspan-carried 項目 row is NOT a new item (FR-029d): its own 備註
         # content belongs to the CURRENT item — merged into spec, sheet order.
@@ -285,15 +348,19 @@ def build_from_rows(rows: list[tuple[str, str, str, str, str, str, str]]) -> lis
             flags = [] if location else ["inherited_source"]
             if location:
                 last_source = location
-            req, obt, dflags = parse_date(date)
+            req, obt, dflags, date_leftover = parse_date(date, default_year)
             acq = Acquisition(source=src, request_time=req, obtained_at=obt, flags=flags + dflags)
+            if date_leftover:
+                # No-data-loss (FR-029e): unconsumed date-cell text survives.
+                acq.remark = date_leftover
             acquisitions.append(acq)
             # header row's paid amount → per-currency accumulated (override)
             pv = norm_num(price)
             if pv is not None and currency:
                 acq.cost_factors.append(CostFactor("accumulated", pv, currency))
-            # the header row is itself an item
-            _add_item(acq, name, remark, url)
+            # the header row is itself an item — unless it is crossed out.
+            if not skip_item_only:
+                _add_item(acq, name, remark, url)
             continue
 
         # attachment row (no location, no date)
@@ -331,7 +398,11 @@ def build_from_rows(rows: list[tuple[str, str, str, str, str, str, str]]) -> lis
         else:
             _add_item(acq, name, remark, url)
 
+    LAST_SKIPPED_STRUCK = skipped_struck
     return acquisitions
+
+
+LAST_SKIPPED_STRUCK: list[str] = []
 
 
 def build(csv_path: str) -> list[Acquisition]:
@@ -342,7 +413,7 @@ def build(csv_path: str) -> list[Acquisition]:
     for row in raw[1:]:  # skip header
         row = (row + [""] * 6)[:6]
         name, price, currency, location, date, remark = (c.strip() for c in row)
-        rows.append((name, price, currency, location, date, remark, "", bool(location or date), True))
+        rows.append((name, price, currency, location, date, remark, "", bool(location or date), True, False))
     return build_from_rows(rows)
 
 
@@ -361,8 +432,9 @@ class _SheetHTMLParser(HTMLParser):
     than starting a new one.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, struck_classes: frozenset[str] = frozenset()) -> None:
         super().__init__(convert_charrefs=True)
+        self._struck_classes = struck_classes
         self.rows: list[list[dict]] = []
         self._row: list[dict] | None = None
         self._cell: dict | None = None
@@ -384,7 +456,12 @@ class _SheetHTMLParser(HTMLParser):
 
     @staticmethod
     def _carried(src: dict) -> dict:
-        return {"text": src["text"], "link": src["link"], "carried": True}
+        return {
+            "text": src["text"],
+            "link": src["link"],
+            "carried": True,
+            "struck": src.get("struck", False),
+        }
 
     def _next_free_col(self) -> int:
         col = len(self._row)
@@ -399,7 +476,12 @@ class _SheetHTMLParser(HTMLParser):
             self._row = []
         elif tag in ("td", "th") and self._row is not None:
             self._next_free_col()
-            self._cell = {"text": "", "link": ""}
+            classes = set((a.get("class") or "").split())
+            self._cell = {
+                "text": "",
+                "link": "",
+                "struck": bool(classes & self._struck_classes),
+            }
             self._colspan = max(1, int(a.get("colspan") or 1))
             self._rowspan = max(1, int(a.get("rowspan") or 1))
         elif self._cell is not None and tag == "a" and not self._cell["link"]:
@@ -448,11 +530,21 @@ class _SheetHTMLParser(HTMLParser):
 HEADERS = ["項目", "實際支付價錢", "貨幣", "購買地點", "購買日期", "備註"]
 
 
+def _struck_classes(html_text: str) -> frozenset[str]:
+    """CSS classes carrying text-decoration: line-through (crossed-out rows)."""
+    return frozenset(
+        re.findall(r"\.(s\d+)\s*\{[^}]*line-through[^}]*\}", html_text)
+    )
+
+
 def build_html(html_path: str) -> list[Acquisition]:
     """v2: Google-Sheets HTML export (keeps item URLs from name links)."""
-    parser = _SheetHTMLParser()
     with open(html_path, encoding="utf-8") as fh:
-        parser.feed(fh.read())
+        html_text = fh.read()
+    parser = _SheetHTMLParser(_struck_classes(html_text))
+    parser.feed(html_text)
+    year_match = re.search(r"(20\d{2})", Path(html_path).stem)
+    default_year = int(year_match.group(1)) if year_match else None
 
     # Locate the header row and derive each logical column's index from it —
     # robust to the row-number column and any spacer columns between years.
@@ -486,11 +578,12 @@ def build_html(html_path: str) -> list[Acquisition]:
                 name_cell["link"].strip(),
                 own("購買地點") or own("購買日期"),
                 own("項目"),
+                bool(name_cell.get("struck")) and not name_cell.get("carried", False),
             )
         )
     if col_idx is None:
         raise ValueError(f"No 項目 header row found in {html_path}")
-    return build_from_rows(rows)
+    return build_from_rows(rows, default_year=default_year)
 
 
 def build_any(path: str) -> list[Acquisition]:

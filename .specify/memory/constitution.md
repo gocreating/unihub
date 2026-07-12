@@ -1,23 +1,23 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.20.0 → 1.21.0 (minor — Principle VI gains one NEW UI rule
-  from user feedback, 2026-07-12: "Panel-header actions (responsive kebab)" —
-  a panel's action buttons sit on the RIGHT of the panel header; advanced /
-  destructive actions (e.g. Delete) fold into a kebab (⋯) menu by default;
-  on a narrow area the otherwise-visible buttons fold into the kebab as width
-  demands; the kebab dropdown right-aligns to its trigger and opens leftward.)
+Version change: 1.21.0 → 1.22.0 (minor — Principle VIII gains one NEW mandatory
+  rule from user feedback, 2026-07-12: "Grammatical number (plurals)" — every
+  English message that embeds a count MUST use ICU plural syntax
+  ({n, plural, one {...} other {...}}); "1 records"-style output is a
+  violation. Applies to ALL existing keys immediately (audited in the same
+  change); zh-TW keeps its uninflected forms.)
 Modified principles:
-  - VI. UI/UX Reference: ov-fleet — added "Panel-header actions (responsive
-    kebab)".
+  - VIII. Internationalisation (i18n) — added "Grammatical number (plurals)"
+    mandatory rule.
 Added sections: none
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed (generic gate)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: none — applied to the live panel headers (scenario detail,
-  acquisition edit) in the same iteration (spec FR updates).
+Follow-up TODOs: none — all count-bearing en-US keys audited/converted in the
+  same iteration (EntityOffsetFooter "records" default and any others).
 -->
 
 # UniHub Constitution
@@ -393,6 +393,12 @@ corresponding entry in the other is a violation.
 - When a new component or page is added, ALL its user-facing strings MUST be
   added to both locale files in the same commit. No deferred i18n.
 - `react-intl` is the ONLY permitted i18n library. Do not introduce alternatives.
+- **Grammatical number (plurals)**: every English message embedding a count
+  MUST use ICU plural syntax — `{n, plural, one {# record} other {# records}}`
+  — so singular counts never render a plural noun ("1 records" is a
+  violation). This applies to table footers, cell counts, confirmations, and
+  any other count-bearing string, existing keys included. zh-TW keeps its
+  uninflected forms (Chinese has no plural inflection).
 - Navigation items MUST use `t({ id: 'menu.*' })` in `AppShell.tsx` — never
   hardcode nav labels directly in the route config.
 - The language selector (Principle VI) and its `localStorage` persistence
@@ -707,4 +713,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.21.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-12
+**Version**: 1.22.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-12

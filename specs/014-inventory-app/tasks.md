@@ -1,16 +1,14 @@
 ---
-description: "Task list for Inventory App — Iteration 19 (2026-07-12)"
+description: "Task list for Inventory App — Iteration 20 (2026-07-12)"
 ---
 
-# Tasks: Inventory App — Iteration 19 (Panel-header kebab, catalog actions, organize polish, full legacy import)
+# Tasks: Inventory App — Iteration 20 (Plural audit, no-data-loss hardening, drag polish)
 
-**Input**: [plan.md](plan.md) (iteration 19), [spec.md](spec.md) — FR-003/003b, FR-007, FR-011, FR-029c. Constitution **v1.21.0**.
+**Input**: [plan.md](plan.md) (iteration 20), [spec.md](spec.md) — FR-011 revised, FR-029d new. Constitution **v1.22.0**.
 
-**Tests**: REQUIRED — test-first (component/unit/RTL before implementation; parser fixtures before any importer fix).
+**Tests**: REQUIRED — test-first everywhere (fixtures before parser changes; sweep before re-import; RTL before UI changes).
 
-**Baseline**: Iteration 18 shipped at `caea75e`. Frontend-only code delta + a large data operation; design pre-confirmed (research R19.1–R19.5).
-
-**Organization**: Foundational = the shared PanelHeaderActions + ItemName.truncate + summary-helper extraction (everything else consumes them). US1 = catalog/edit-page actions. US3 = scenario panel + organize + modal. Data phase last (final UI verified live against the full dataset).
+**Baseline**: Iteration 19 shipped at `39ccbf6`. Root causes pre-confirmed (research R20.1–R20.5).
 
 ## Format: `[ID] [P?] [Story?] Description`
 
@@ -22,75 +20,55 @@ description: "Task list for Inventory App — Iteration 19 (2026-07-12)"
 
 ---
 
-## Phase 2: Foundational (shared components + helpers)
+## Phase 2: Plural audit (constitution v1.22.0)
 
-- [X] T001 Write failing RTL specs `apps/unihub/frontend/src/components/PanelHeaderActions/PanelHeaderActions.test.tsx`: wide (`narrow=false`) renders the `visible` actions as buttons plus a kebab holding only `advanced` items; narrow renders ONLY the kebab containing `visible + advanced` (labels preserved); the kebab Dropdown uses `placement="bottomRight"`; clicking a folded action fires its handler — then implement `apps/unihub/frontend/src/components/PanelHeaderActions/index.tsx` (T001 green)
-- [X] T002 Write failing specs in `apps/unihub/frontend/src/components/ItemName/ItemName.test.tsx` for a new **`truncate` mode**: renders ONE ellipsising span; aliased → tooltip always carries the original name; unaliased → tooltip ONLY when actually truncated (scrollWidth > clientWidth), never a nested double tooltip — then implement in `apps/unihub/frontend/src/components/ItemName/index.tsx` (T002 green)
-- [X] T003 Extract `acquisitionSummaryLines` (+ `formatNetCost` if needed) from `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx` into `apps/unihub/frontend/src/pages/inventory/acquisitionSummary.ts` (pure, unit-tested by the existing catalog RTL passing unchanged); re-import in the catalog
-
-**Checkpoint**: v1.21.0 pattern + display helpers available to every surface.
+- [ ] T001 Write failing RTL spec in `apps/unihub/frontend/src/components/EntityToolbar/EntityOffsetFooter.test.tsx`: total 1 renders "1 record", total 2 renders "2 records"; then convert ALL count-bearing en-US keys to ICU plural per R20.5 in `apps/unihub/frontend/src/locales/en-US/pages.ts` (verb agreement where applicable); T001 green; grep-audit confirms no remaining `(s)`/bare-plural count keys
 
 ---
 
-## Phase 3: User Story 1 — Catalog & edit-page actions (P1)
+## Phase 3: Parser hardening (FR-029d)
 
-**Goal**: No Delete on the catalog; Edit is a real hyperlink; the edit page's Acquisition panel holds Delete in a kebab.
-
-**Independent Test**: Catalog acquisition rows show an Edit control that is an `<a href=…/edit>` (middle-click opens a tab) and NO Delete; the acquisition edit page's Acquisition panel header shows a kebab whose Delete confirms with the item count and returns to the Catalog.
-
-- [X] T004 [US1] Write failing RTL specs in `apps/unihub/frontend/src/pages/inventory/catalog/CatalogPage.test.tsx`: acquisition (and merged) rows have NO Delete button; the Edit action is an anchor with `href` `/inventory/acquisitions/<id>/edit`; plain click navigates SPA (navigate called, no reload)
-- [X] T005 [US1] Implement catalog action changes in `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx` (remove delete mutation/confirm if now unused); T004 green
-- [X] T006 [US1] Write failing RTL spec for the edit page (new `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionEdit.test.tsx` or extend an existing spec): the Acquisition panel header renders PanelHeaderActions with a kebab holding Delete → confirm shows the item count → `deleteAcquisition` called → navigate to `/inventory/catalog`; then implement in `edit.tsx`/`AcquisitionForm.tsx`; T006 green
-- [X] T007 [US1] e2e updates `apps/unihub/frontend/e2e/inventory-catalog.spec.ts` + `inventory-acquisition.spec.ts`: catalog rows keep Edit (as link) and no Delete; edit page kebab-Delete flow (create a throwaway acquisition, delete it via the kebab, land on Catalog)
-
-**Checkpoint**: FR-003/003b/FR-007 satisfied.
+- [ ] T002 Write failing fixture tests in `apps/unihub/backend/tests/test_legacy_parser.py`: (a) an item cell with `rowspan` and per-row 備註 cells yields ONE item whose `spec` carries the continuation lines newline-joined in sheet order (LG regression); (b) date rules: single date → obtained only; `d~` → requested only; `d~d` same day → both; `??~d` → obtained only
+- [ ] T003 Implement the continuation fix in `specs/014-inventory-app/scripts/preview_legacy_import.py` (a row with a CARRIED 項目 never creates an item; own 備註 → current item's spec); T002 green; existing parser suite still green (代買→remark unchanged)
+- [ ] T004 Write the **content-coverage sweep** `apps/unihub/backend/tests/test_legacy_coverage.py` (skipif `data/財產們` absent): per sheet, per acquisition group — every 項目 cell, 購買地點 cell, and non-empty 備註 line is findable (whitespace-normalized substring) in the acquisition's joined payload text; date/price/currency cells exempt; failures report sheet+row; fix ANY misses it surfaces (each with its own fixture test) until the sweep passes on all 12 sheets
 
 ---
 
-## Phase 4: User Story 3 — Scenario panel + organize + modal (P2)
+## Phase 4: Organize drag + modal tooltips (FR-011)
 
-**Goal**: Responsive panel actions; gated tooltips; caret toggler back; width-fitting modal rows with single Add + acquisition context.
-
-**Independent Test**: Wide: scenario panel shows Edit + kebab(Delete), dropdown opens leftward; narrow: only the kebab (Edit + Delete inside). Organize rows show tooltips only when text truncates; container rows show carets that collapse/expand subtrees; dropping after a collapsed container lands after its subtree. Modal rows never overflow, every row has one Add button (disabled + "Added" tooltip on members), and each result shows its acquisition source/date line.
-
-- [X] T008 [US3] Write failing unit specs in `apps/unihub/frontend/src/pages/inventory/scenarios/organizeTree.test.ts`: `visibleRows(working, collapsedIds)` hides descendants of collapsed rows (nested collapse too); `gapFromVisible(working, visible, visIndex, after)` maps before/after slots to working gaps — after a collapsed container = after its entire subtree; end-of-list maps to working.length — then implement both helpers in `organizeTree.ts` (T008 green)
-- [X] T009 [US3] Write failing RTL specs in `apps/unihub/frontend/src/pages/inventory/scenarios/ScenarioDetail.test.tsx`: (a) info panel uses PanelHeaderActions (Edit button wide + kebab with Delete; bottomRight); (b) organized container rows render a caret (childless rows a spacer); clicking it hides/reveals the subtree rows; (c) row names render via ItemName truncate mode (aliased row hover → original name tooltip); (d) modal: member rows show a DISABLED Add button (no "Added" tag) whose hover reveals the "Added" tooltip; non-member Add still calls add; (e) modal rows show the acquisition context line (source + date) when the item carries an acquisition
-- [X] T010 [US3] Implement in `apps/unihub/frontend/src/pages/inventory/scenarios/detail.tsx`: PanelHeaderActions on the info panel (narrow from `useContainerWidth`); caret toggler + collapsedIds + visibleRows/gapFromVisible wiring (indicator in visible coordinates); ItemName truncate + OverflowTooltip on spec lines; modal single-Add (disabled + Tooltip), `minWidth:0` width-fitting rows, acquisition context via `acquisitionSummaryLines`; T009 green
-- [X] T011 [P] [US3] Locales both `apps/unihub/frontend/src/locales/{en-US,zh-TW}/pages.ts`: "Added" tooltip key reuse/rename (drop the tag key if unused), any new labels; same commit
-- [X] T012 [US3] e2e `apps/unihub/frontend/e2e/inventory-scenario.spec.ts`: caret collapse/expand round-trip; drop after a collapsed container lands after the subtree (reload-verified); narrow viewport → info panel folds Edit into the kebab; modal rows within modal bounds; disabled Add with tooltip on a member row
-
-**Checkpoint**: FR-011 (iteration 19) satisfied end-to-end.
+- [ ] T005 Write failing RTL specs in `apps/unihub/frontend/src/pages/inventory/scenarios/ScenarioDetail.test.tsx`: during a simulated tree drag the active row REMAINS in the document (dimmed) and its child rows stay rendered; modal result title (unaliased) carries a truncation-gated tooltip (defineProperty overflow → hover shows full name); spec/context lines render through OverflowTooltip
+- [ ] T006 Implement in `apps/unihub/frontend/src/pages/inventory/scenarios/detail.tsx`: render the full row list during tree drags (activeSubtreeIds dimmed at 0.4; flat-pane parity); over-own-subtree → indicator cleared + drop no-op; valid targets map via the subtree-excluded working list; modal title tooltip (gated, highlight preserved, alias tooltip precedence) + OverflowTooltip on description lines; T005 green
+- [ ] T007 e2e `apps/unihub/frontend/e2e/inventory-scenario.spec.ts`: mid-drag assertion — while dragging a container row, its row count does NOT drop (no reflow); drop still works; modal title hover shows a tooltip when truncated (long-name item)
 
 ---
 
-## Phase 5: Data — full legacy import (FR-029c)
+## Phase 5: Data repair (after parser fixes)
 
-- [X] T013 Preview ALL sheets `data/財產們/{2015..2024}.html` with `specs/014-inventory-app/scripts/preview_legacy_import.py`, recording per-sheet acquisition/item counts and flags; then import sheet-by-sheet (oldest first) via `DATABASE_URL=postgresql://unihub:unihub@localhost:5433/unihub uv run python manage.py import_legacy_csv <sheet> --commit` — on ANY failure: minimal fixture regression test in `apps/unihub/backend/tests/test_legacy_parser.py` → fix parser/importer → suite green → re-run the sheet
-- [X] T014 Verify (FR-029c): live totals equal 140 acquisitions / 221 items + Σ sheet previews; `obtained_at__year` distribution spans 2015–2026 consistently with the sheets; sampled per-year spot checks (dates parsed, remarks/parameters populated); record the numbers in the task notes/commit message
+- [ ] T008 Re-preview ALL 12 sheets (record new per-sheet counts — item counts SHRINK where continuation rows existed), then wipe + re-import all sheets oldest-first (`--wipe` on the first, plain `--commit` for the rest); verify: totals equal the new preview sums; the LG item is ONE row with the 4-line spec; 代買 remarks intact; per-year distribution consistent; content sweep green against the live parser output
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [X] T015 Full quality loops: backend `uv run ruff check . && uv run pytest`; frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` — zero warnings
-- [X] T016 Rebuild docker (`build backend frontend && up -d`), run ALL inventory Playwright suites, live-verify + screenshot: catalog Edit link (no Delete), edit-page kebab, scenario panel folding, carets, modal rows, full-history data behind the YTD filter
+- [ ] T009 Full quality loops: backend `uv run ruff check . && uv run pytest`; frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` — zero warnings
+- [ ] T010 Rebuild docker (frontend; backend if importer files ship in the image), run ALL inventory Playwright suites, live-verify + screenshot: "1 record" footer case, stable tree drag, modal tooltip, LG single item
 
 ---
 
 ## Dependencies & Execution Order
 
-- **Phase 2**: T001/T002 [P with each other] → consumed by T005/T006/T010; T003 anytime before T010.
-- **Phase 3**: T004 → T005; T006 after T001; T007 last in phase.
-- **Phase 4**: T008 → T010; T009 → T010 (T011 [P]); T012 after T010.
-- **Phase 5**: T013 → T014 (after Phase 3/4 so live checks see the final UI).
-- **Phase 6**: T015 → T016 last.
+- **Phase 2**: T001 standalone.
+- **Phase 3**: T002 → T003 → T004 (sweep after the known fix so its first run isolates UNKNOWN misses).
+- **Phase 4**: T005 → T006 → T007. Independent of Phase 3.
+- **Phase 5**: T008 strictly after T003+T004.
+- **Phase 6**: T009 → T010 last.
 
 ```text
-T001/T002 [P] ─┬→ T004 → T005 ─┬→ T007 ─┐
-T003 ──────────┤  T006 ────────┘        ├→ T013 → T014 → T015 → T016
-               └→ T008/T009 → T010(+T011) → T012 ─┘
+T001 ─┐
+T002 → T003 → T004 ─┼→ T008 → T009 → T010
+T005 → T006 → T007 ─┘
 ```
 
 ## Implementation Strategy
 
-Shared pieces first (the kebab component IS the constitution rule — build it once, test the fold logic with an explicit prop). The two action-relocation stories are small; organize polish is the bulk of the UI work. The import runs last, sheet-by-sheet with a strict fix-before-import protocol, and the final live verification exercises the complete dataset.
+Parser fixes land under fixtures before the sweep runs (so sweep failures isolate unknown loss cases), and the destructive re-import happens only after the whole parser suite is green. UI work is independent and parallelizable. Final verification exercises the repaired dataset.

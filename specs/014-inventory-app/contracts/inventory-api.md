@@ -112,3 +112,10 @@ Unchanged **except** the checklist response **drops `shortfall`** — each line 
 
 - **List responses** (acquisitions + items): optional **`totals`** object over the FILTERED queryset — acquisitions list `{acquisitions, items}` (count + aggregate item total); items list `{acquisitions, items}` (distinct acquisition count + item count). Served by `EntityOffsetPagination` when the view defines `get_footer_totals`.
 - **`import_legacy_csv`**: new `--wipe` option (delete all acquisitions before import); blank 實際支付價錢 no longer overrides the derived accumulated (FR-029a c).
+
+## Iteration 16 delta (2026-07-12)
+
+- **ScenarioItem** (list/detail/nested): new read field **`organized`** (boolean).
+- **`POST /scenarios/{sid}/items/{id}/move/`**: body gains optional **`organized`** (boolean). `organized=true` (or omitted, legacy behaviour) — set `container_id`/`index` with dense reorder among ORGANIZED siblings; `organized=false` — unorganize: container forced to NULL, `container_id`/`index` ignored, the line's children re-parented to the organized top level. 400 on cycle/self unchanged.
+- **`POST /scenarios/{sid}/items/`** (add membership): created lines default `organized=false`.
+- No other endpoint changes; OpenAPI + `api-types.ts` regenerated.

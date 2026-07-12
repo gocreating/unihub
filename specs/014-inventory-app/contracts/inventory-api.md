@@ -95,3 +95,7 @@ Unchanged **except** the checklist response **drops `shortfall`** — each line 
 - `test_acquisition_requires_at_least_one_item` (still enforced).
 - `test_item_edit_via_acquisition_patch_persists` (regression guard for the edit bug at the API layer).
 - Migration exercised by the test DB; quickstart covers the Postgres backfill (`cost → accumulated factor`, quantity → int).
+
+## Iteration 13 delta (2026-07-12)
+
+- `GET /api/v1/inventory/items/` (+ detail): the nested `acquisition` summary gains read-only **`net_cost: NetCostEntry[]`** — per-currency sum of the acquisition's cost-factor values, identical shape/semantics to the top-level `Acquisition.net_cost`. No other contract change; regenerated `src/generated/api-types.ts` accordingly.

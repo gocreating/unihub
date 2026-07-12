@@ -487,6 +487,10 @@ export default {
   'pages.inventory.catalog.title': 'Catalog',
   'pages.inventory.catalog.loadError': 'Failed to load catalog',
   'pages.inventory.catalog.rowCount': '{count} rows',
+  'pages.inventory.catalog.col.item': 'Item',
+  'pages.inventory.catalog.col.parameters': 'Parameters',
+  'pages.inventory.catalog.col.acquisition': 'Acquisition',
+  'pages.inventory.items.col.deprecateTime': 'Deprecated At',
 
   // Inventory > Scenarios
   'pages.inventory.scenarios.title': 'Scenarios',

@@ -105,9 +105,13 @@ class TestItems:
         """Catalog flat mode filters items server-side by quantity."""
         create_item(auth_client, name="One", quantity=1)
         create_item(auth_client, name="Five", quantity=5)
-        filters = json.dumps({"groups": [{"logic": "and", "conditions": [
-            {"attr": "quantity", "op": "eq", "val": "5"}
-        ]}]})
+        filters = json.dumps(
+            {
+                "groups": [
+                    {"logic": "and", "conditions": [{"attr": "quantity", "op": "eq", "val": "5"}]}
+                ]
+            }
+        )
         results = auth_client.get(f"{ITEMS}?filters={filters}").json()["results"]
         assert [r["name"] for r in results] == ["Five"]
 
@@ -124,3 +128,22 @@ class TestItems:
             for r in auth_client.get(f"{ITEMS}?ordering=acquisition__source").json()["results"]
         ]
         assert names == ["Alpha", "Zeta"]
+
+
+@pytest.mark.django_db
+class TestItemNestedAcquisitionNetCost:
+    """Iteration 13: the nested acquisition summary carries read-only net_cost."""
+
+    def test_item_detail_nested_acquisition_includes_net_cost(self, auth_client):
+        item = create_item(
+            auth_client, name="NC", sku_price="10", sku_price_currency="TWD", quantity=2
+        )
+        fetched = auth_client.get(f"{ITEMS}{item['id']}/").json()
+        # Accumulated factor auto-derives Σ sku_price × quantity per currency.
+        assert fetched["acquisition"]["net_cost"] == [{"currency": "TWD", "total": "20.0000"}]
+
+    def test_item_list_nested_net_cost_matches_top_level_acquisition(self, auth_client):
+        item = create_item(auth_client, name="NCL", sku_price="5.5", sku_price_currency="USD")
+        row = next(r for r in auth_client.get(ITEMS).json()["results"] if r["id"] == item["id"])
+        top = auth_client.get(f"/api/v1/inventory/acquisitions/{row['acquisition']['id']}/").json()
+        assert row["acquisition"]["net_cost"] == top["net_cost"]

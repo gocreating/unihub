@@ -61,7 +61,9 @@ class NullsOrderingFilter(OrderingFilter):
         return base, desc, None
 
     def remove_invalid_fields(self, queryset, fields, view, request):
-        valid_names = {item[0] for item in self.get_valid_fields(queryset, view, {"request": request})}
+        valid_names = {
+            item[0] for item in self.get_valid_fields(queryset, view, {"request": request})
+        }
         return [term for term in fields if self._parse_term(term)[0] in valid_names]
 
     def filter_queryset(self, request, queryset, view):

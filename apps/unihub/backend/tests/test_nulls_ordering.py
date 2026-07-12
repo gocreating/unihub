@@ -16,6 +16,7 @@ def auth_client(db):
 @pytest.fixture
 def accounts_with_close(auth_client):
     """Create accounts: two with close_datetime, one without (NULL)."""
+
     def make(name, close=None):
         data = {
             "name": name,
@@ -52,9 +53,7 @@ class TestNullsOrderingFilter:
 
     # N-02: __nullsfirst suffix puts NULL rows first for ASC ordering
     def test_nullsfirst_asc_puts_null_first(self, auth_client, accounts_with_close):
-        resp = auth_client.get(
-            "/api/v1/finance/accounts/?ordering=close_datetime__nullsfirst"
-        )
+        resp = auth_client.get("/api/v1/finance/accounts/?ordering=close_datetime__nullsfirst")
         assert resp.status_code == 200
         results = resp.json()["results"]
         # First result must have null close_datetime
@@ -62,9 +61,7 @@ class TestNullsOrderingFilter:
 
     # N-03: __nullslast suffix puts NULL rows last for DESC ordering
     def test_nullslast_desc_puts_null_last(self, auth_client, accounts_with_close):
-        resp = auth_client.get(
-            "/api/v1/finance/accounts/?ordering=-close_datetime__nullslast"
-        )
+        resp = auth_client.get("/api/v1/finance/accounts/?ordering=-close_datetime__nullslast")
         assert resp.status_code == 200
         results = resp.json()["results"]
         # Last result must have null close_datetime
@@ -72,16 +69,12 @@ class TestNullsOrderingFilter:
 
     # N-04: Unknown field with suffix is rejected (ordering_fields validation still applies)
     def test_unknown_field_with_suffix_is_ignored(self, auth_client, accounts_with_close):
-        resp = auth_client.get(
-            "/api/v1/finance/accounts/?ordering=nonexistent_field__nullsfirst"
-        )
+        resp = auth_client.get("/api/v1/finance/accounts/?ordering=nonexistent_field__nullsfirst")
         assert resp.status_code == 200  # not an error — just falls back to default order
 
     # N-05: ASC + nullslast → NULLs appear last
     def test_nullslast_asc_puts_null_last(self, auth_client, accounts_with_close):
-        resp = auth_client.get(
-            "/api/v1/finance/accounts/?ordering=close_datetime__nullslast"
-        )
+        resp = auth_client.get("/api/v1/finance/accounts/?ordering=close_datetime__nullslast")
         assert resp.status_code == 200
         results = resp.json()["results"]
         # For ASC NULLS LAST: non-null rows come first, null row at the end
@@ -90,9 +83,7 @@ class TestNullsOrderingFilter:
 
     # N-06: DESC + nullsfirst → NULLs appear first
     def test_nullsfirst_desc_puts_null_first(self, auth_client, accounts_with_close):
-        resp = auth_client.get(
-            "/api/v1/finance/accounts/?ordering=-close_datetime__nullsfirst"
-        )
+        resp = auth_client.get("/api/v1/finance/accounts/?ordering=-close_datetime__nullsfirst")
         assert resp.status_code == 200
         results = resp.json()["results"]
         # For DESC NULLS FIRST: null row comes first

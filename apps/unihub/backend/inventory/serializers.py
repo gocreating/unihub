@@ -50,12 +50,38 @@ _MEASURES = {
 _NON_NEGATIVE = ["quantity", "sku_price"]
 
 
+def _net_cost(acquisition: Acquisition) -> list[dict]:
+    """Per-currency sum of the acquisition's cost-factor values.
+
+    Args:
+        acquisition: The acquisition whose cost factors are aggregated.
+
+    Returns:
+        One ``{"currency", "total"}`` entry per currency, sorted by currency;
+        the factor value carries its own sign (no FX conversion).
+    """
+    totals: dict[str, Decimal] = {}
+    for factor in acquisition.cost_factors.all():
+        key = factor.currency or ""
+        totals[key] = totals.get(key, Decimal("0")) + factor.value
+    return [
+        {"currency": cur, "total": str(total.quantize(Decimal("0.0001")))}
+        for cur, total in sorted(totals.items())
+    ]
+
+
 class AcquisitionSummarySerializer(serializers.ModelSerializer):
     """Compact acquisition representation nested inside an item."""
 
+    net_cost = serializers.SerializerMethodField()
+
     class Meta:
         model = Acquisition
-        fields = ["id", "source", "request_time", "obtained_at"]
+        fields = ["id", "source", "request_time", "obtained_at", "net_cost"]
+
+    def get_net_cost(self, obj: Acquisition) -> list[dict]:
+        """net_cost = per-currency sum of cost-factor values (value carries its sign)."""
+        return _net_cost(obj)
 
 
 class ItemSerializer(serializers.ModelSerializer):
@@ -187,14 +213,7 @@ class AcquisitionSerializer(serializers.ModelSerializer):
 
     def get_net_cost(self, obj: Acquisition) -> list[dict]:
         """net_cost = per-currency sum of cost-factor values (value carries its sign)."""
-        totals: dict[str, Decimal] = {}
-        for factor in obj.cost_factors.all():
-            key = factor.currency or ""
-            totals[key] = totals.get(key, Decimal("0")) + factor.value
-        return [
-            {"currency": cur, "total": str(total.quantize(Decimal("0.0001")))}
-            for cur, total in sorted(totals.items())
-        ]
+        return _net_cost(obj)
 
     @staticmethod
     def _derive_accumulated(items_data: list[dict]) -> list[dict]:

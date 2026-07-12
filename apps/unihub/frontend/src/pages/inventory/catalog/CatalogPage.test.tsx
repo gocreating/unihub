@@ -1,57 +1,82 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
 import enUS from '@/locales/en-US';
 import { CatalogPage } from './index';
 import * as inventoryService from '@/services/unihub-backend/inventory';
 
 vi.mock('@/services/unihub-backend/inventory');
 
+dayjs.extend(relativeTime);
+
+const REQUESTED = '2026-07-10T00:00:00Z';
+const OBTAINED = '2026-07-11T00:00:00Z';
+
+// Item with URL, spec, and all Parameters attributes.
 const ITEM = {
   id: 'itm-1',
   name: 'Backpack',
   quantity: 1,
   spec: 'roomy',
   remark: '',
-  size: '',
+  size: 'M',
   length: null,
   width: null,
   height: null,
-  weight: { value: '0.5', unit: 'kg' },
-  volume: null,
+  weight: { value: '0.5000', unit: 'kg' },
+  volume: { value: '1.2', unit: 'L' },
   sku_price: '10',
   sku_price_currency: 'USD',
   total_price: '10.0000',
-  color: '',
+  color: 'red',
   url: 'https://example.com/backpack',
   status: 'active' as const,
   deprecate_time: null,
   acquisition: {
     id: 'acq-1',
     source: 'Shop',
-    request_time: null,
-    obtained_at: '2026-07-11T00:00:00Z',
+    request_time: REQUESTED,
+    obtained_at: OBTAINED,
+    net_cost: [{ currency: 'USD', total: '10.0000' }],
   },
-  created_at: '2026-07-11T00:00:00Z',
-  updated_at: '2026-07-11T00:00:00Z',
+  created_at: OBTAINED,
+  updated_at: OBTAINED,
+};
+
+// Item with no URL, no spec, and no Parameters attributes.
+const PLAIN_ITEM = {
+  ...ITEM,
+  id: 'itm-2',
+  name: 'Plain',
+  spec: '',
+  size: '',
+  weight: null,
+  volume: null,
+  sku_price: null,
+  sku_price_currency: '',
+  total_price: null,
+  color: '',
+  url: '',
 };
 
 const ACQ = {
   id: 'acq-1',
   source: 'Shop',
-  request_time: null,
-  obtained_at: '2026-07-11T00:00:00Z',
+  request_time: REQUESTED,
+  obtained_at: OBTAINED,
   remark: '',
   cost_factors: [
     { id: 'cf-1', value: '10', currency: 'USD', type: 'accumulated', display_order: 0 },
   ],
   net_cost: [{ currency: 'USD', total: '10.0000' }],
-  items: [ITEM],
-  item_count: 1,
-  created_at: '2026-07-11T00:00:00Z',
-  updated_at: '2026-07-11T00:00:00Z',
+  items: [ITEM, PLAIN_ITEM],
+  item_count: 2,
+  created_at: OBTAINED,
+  updated_at: OBTAINED,
 };
 
 function renderPage() {
@@ -67,7 +92,18 @@ function renderPage() {
   );
 }
 
-describe('CatalogPage', () => {
+const headerTexts = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll('.ant-table-thead th')).map(
+    (th) => th.textContent?.trim() ?? '',
+  );
+
+// The td backing a cell, excluding AntD's hidden measure row.
+const cellOf = (el: HTMLElement) => {
+  const td = el.closest('td');
+  return td && !td.closest('.ant-table-measure-row') ? td : null;
+};
+
+describe('CatalogPage (iteration 13 — derived columns & density)', () => {
   beforeEach(() => {
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 1,
@@ -76,78 +112,141 @@ describe('CatalogPage', () => {
       results: [ACQ],
     });
     vi.mocked(inventoryService.listItems).mockResolvedValue({
-      count: 1,
+      count: 2,
       next: null,
       previous: null,
-      results: [ITEM],
+      results: [ITEM, PLAIN_ITEM],
     });
   });
 
-  it('renders Source/Name + Requested and item columns; tree expanded by default', async () => {
-    renderPage();
-    await screen.findByText('Shop');
-    expect(screen.getAllByText('10 USD').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Source').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Name').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Requested').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Quantity').length).toBeGreaterThan(0);
-    // Tree expanded by default → the child item name is visible without a click.
-    expect(screen.getByText('Backpack')).toBeInTheDocument();
-    expect(screen.queryByText('Acquisition')).not.toBeInTheDocument();
+  // CAT13-01 (a): default visible columns & order.
+  it('shows only Acquisition, Item, Quantity, SKU Price, Parameters, Actions by default', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    const headers = headerTexts(container).filter((h) => h !== '');
+    // Sort carets render inside sortable titles; compare on startsWith-cleaned text.
+    const names = headers.map((h) => h.replace(/\s+$/, ''));
+    expect(names).toContain('Acquisition');
+    expect(names).toContain('Item');
+    expect(names).toContain('Parameters');
+    const order = names.filter((h) =>
+      ['Acquisition', 'Item', 'Quantity', 'SKU Price', 'Parameters', 'Actions'].includes(h),
+    );
+    expect(order).toEqual(['Acquisition', 'Item', 'Quantity', 'SKU Price', 'Parameters', 'Actions']);
+    // Hidden-by-default columns render no headers.
+    for (const hidden of ['Name', 'Spec', 'URL', 'Source', 'Requested', 'Obtained', 'Net Cost', 'Status', 'Color', 'Volume', 'Weight', 'Deprecated At']) {
+      expect(names).not.toContain(hidden);
+    }
   });
 
-  it('has no URL column; the Name cell links to the item URL', async () => {
+  // CAT13-02 (b): derived Item cell — name link primary, spec secondary.
+  it('renders the Item cell as a name link with a spec secondary row', async () => {
     renderPage();
-    await screen.findByText('Shop');
-    // No standalone URL column.
-    const headers = Array.from(document.querySelectorAll('.ant-table-thead th')).map((th) => th.textContent);
-    expect(headers).not.toContain('URL');
-    // The Name cell is an anchor to the item URL, opening a new tab.
-    const link = screen.getByText('Backpack').closest('a');
+    const name = await screen.findByText('Backpack');
+    const link = name.closest('a');
     expect(link).toHaveAttribute('href', 'https://example.com/backpack');
     expect(link).toHaveAttribute('target', '_blank');
+    expect(link!.getAttribute('rel')).toContain('noopener');
+    // Secondary spec row lives in the same cell.
+    expect(within(cellOf(name)!).getByText('roomy')).toBeInTheDocument();
+    // Without a URL the name is plain text; without a spec there is no secondary row.
+    const plain = screen.getByText('Plain');
+    expect(plain.closest('a')).toBeNull();
   });
 
-  it('applies the default column order and a "New" action button', async () => {
+  // CAT13-03 (c): derived Parameters cell — one Tag per non-empty attribute; "—" when none.
+  it('renders Parameters as Tag badges and the placeholder when empty', async () => {
+    renderPage();
+    const name = await screen.findByText('Backpack');
+    const row = name.closest('tr')!;
+    const tags = Array.from(row.querySelectorAll('.ant-tag')).map((t) => t.textContent);
+    expect(tags).toEqual(expect.arrayContaining(['red', '0.5 kg', '1.2 L', 'M']));
+    // The no-parameters item shows the standard placeholder in its Parameters cell.
+    const plainRow = screen.getByText('Plain').closest('tr')!;
+    expect(plainRow.querySelectorAll('.ant-tag').length).toBe(0);
+    expect(within(plainRow).getAllByText('—').length).toBeGreaterThan(0);
+  });
+
+  // CAT13-04 (d): derived Acquisition cell on the tree parent row.
+  it('renders the Acquisition cell as "{source} {net cost}" with a date-range secondary row', async () => {
+    renderPage();
+    const primary = await screen.findByText('Shop 10 USD');
+    const range = `${dayjs(REQUESTED).format('YYYY-MM-DD')} ~ ${dayjs(OBTAINED).format('YYYY-MM-DD')}`;
+    expect(within(cellOf(primary)!).getByText(range)).toBeInTheDocument();
+  });
+
+  // CAT13-05 (d, flat mode): item rows carry their acquisition summary after an item-column sort.
+  it('shows the acquisition summary on item rows in flat mode', async () => {
     const { container } = renderPage();
-    await screen.findByText('Shop');
-    // Default order (spec): Net cost, Name, SKU price, Source, Requested, Obtained, …
-    const headers = Array.from(container.querySelectorAll('.ant-table-thead th'))
-      .map((th) => th.textContent?.trim() ?? '')
-      .filter((h) => ['Net Cost', 'Name', 'SKU Price', 'Source', 'Requested', 'Obtained'].includes(h));
-    expect(headers).toEqual(['Net Cost', 'Name', 'SKU Price', 'Source', 'Requested', 'Obtained']);
-    // Page action is "New", not "New Acquisition".
+    await screen.findByText('Backpack');
+    // Click the Quantity header → item-level sort → flat item list.
+    const qtyHeader = Array.from(container.querySelectorAll('.ant-table-thead th')).find((th) =>
+      th.textContent?.includes('Quantity'),
+    )!;
+    fireEvent.click(qtyHeader);
+    // Every flat item row carries its acquisition's summary.
+    const summaries = await screen.findAllByText('Shop 10 USD');
+    expect(summaries.length).toBeGreaterThanOrEqual(2);
+    expect(vi.mocked(inventoryService.listItems)).toHaveBeenCalled();
+  });
+
+  // CAT13-06 (e): Requested toggled visible renders the two-row datetime.
+  it('renders two-row datetime for Requested when the column is toggled on', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    const panelRow = (await screen.findByText('Requested')).closest('li, .ant-dropdown, div')!;
+    const checkbox = within(panelRow as HTMLElement).getByRole('checkbox');
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
+    const absolute = await screen.findByText(dayjs(REQUESTED).format('YYYY-MM-DD HH:mm'));
+    expect(within(cellOf(absolute)!).getByText(dayjs(REQUESTED).fromNow())).toBeInTheDocument();
+  });
+
+  // CAT13-07 (f): item rows have no Delete; acquisition rows keep Edit + Delete.
+  it('offers only Deprecate/Restore on item rows, Edit/Delete on acquisition rows', async () => {
+    renderPage();
+    const name = await screen.findByText('Backpack');
+    const itemRow = name.closest('tr')!;
+    expect(within(itemRow).getByRole('button', { name: /Deprecate/ })).toBeInTheDocument();
+    expect(within(itemRow).queryByRole('button', { name: /Delete/ })).toBeNull();
+    const acqRow = screen.getByText('Shop 10 USD').closest('tr')!;
+    expect(within(acqRow).getByRole('button', { name: /Edit/ })).toBeInTheDocument();
+    expect(within(acqRow).getByRole('button', { name: /Delete/ })).toBeInTheDocument();
+  });
+
+  // CAT13-08 (g): the column dropdown lists every real column, including URL.
+  it('lists url, color, volume, and deprecate-time columns in the Columns panel', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    for (const label of ['URL', 'Color', 'Volume', 'Deprecated At', 'Name', 'Spec', 'Source', 'Requested', 'Obtained', 'Net Cost', 'Status']) {
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    }
+  });
+
+  // CAT13-09 (h): derived columns are not sortable; real columns are.
+  it('shows no sort carets on derived column headers', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    const headerFor = (label: string) =>
+      Array.from(container.querySelectorAll('.ant-table-thead th')).find((th) =>
+        th.textContent?.includes(label),
+      )!;
+    expect(headerFor('Quantity').querySelector('.anticon-caret-up')).toBeTruthy();
+    for (const derived of ['Acquisition', 'Item', 'Parameters']) {
+      expect(headerFor(derived).querySelector('.anticon-caret-up')).toBeNull();
+    }
+  });
+
+  // Carried forward: caret column, expanded-by-default tree, standard footer, "New" action.
+  it('keeps the caret column, default expansion, footer pagination, and "New" action', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    expect(container.querySelector('.anticon-caret-down, .anticon-caret-right')).toBeTruthy();
+    expect(container.querySelector('.ant-table-footer .ant-pagination')).toBeTruthy();
     expect(screen.getByRole('button', { name: /New/ }).textContent).toBe('New');
-    // The seeded default sort (Obtained desc nulls-first) lights the Sort button.
     const sortBtn = screen.getByRole('button', { name: /Sort/ });
     expect(sortBtn.className).toContain('ant-btn-primary');
-  });
-
-  it('right-aligns Net cost and SKU price cells and shows date-only Requested/Obtained', async () => {
-    renderPage();
-    await screen.findByText('Shop');
-    // Net cost (acquisition row) and SKU price (item row) cells are right-aligned
-    // (AntD applies column align via class or inline style; measure-row cells excluded).
-    const alignedRight = (td: HTMLElement) =>
-      td.className.includes('align-right') || td.style.textAlign === 'right';
-    const cells = screen
-      .getAllByText('10 USD')
-      .map((el) => el.closest('td'))
-      .filter((td): td is HTMLTableCellElement => !!td && !td.closest('.ant-table-measure-row'));
-    expect(cells.length).toBeGreaterThanOrEqual(2); // net_cost + sku_price
-    for (const td of cells) expect(alignedRight(td)).toBe(true);
-    // Obtained renders date-only + relative (no HH:mm).
-    const dateCell = screen.getByText(/2026-07-11 \(/);
-    expect(dateCell.textContent).not.toMatch(/\d{2}:\d{2}/);
-  });
-
-  it('has a caret column and the standard EntityOffsetFooter pagination', async () => {
-    const { container } = renderPage();
-    await screen.findByText('Shop');
-    expect(container.querySelector('.anticon-caret-down, .anticon-caret-right')).toBeTruthy();
-    // Standard footer pagination (Ant Pagination inside the table footer).
-    expect(container.querySelector('.ant-table-footer .ant-pagination')).toBeTruthy();
-    const headers = Array.from(container.querySelectorAll('.ant-table-thead th')).map((th) => th.textContent);
-    expect(headers).not.toContain('Items');
   });
 });

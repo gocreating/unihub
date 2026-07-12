@@ -219,8 +219,11 @@ class TestAcquisitions:
 
     def test_ordering_nullsfirst_and_nullslast_take_effect(self, auth_client):
         """Regression: __nullsfirst/__nullslast MUST reorder null obtained_at rows."""
-        _post(auth_client, ACQ, {"source": "HasDate", "obtained_at": "2026-01-01T00:00:00Z",
-                                 "items": [{"name": "A"}]})
+        _post(
+            auth_client,
+            ACQ,
+            {"source": "HasDate", "obtained_at": "2026-01-01T00:00:00Z", "items": [{"name": "A"}]},
+        )
         _post(auth_client, ACQ, {"source": "Pending", "items": [{"name": "B"}]})  # null obtained
 
         first = auth_client.get(f"{ACQ}?ordering=-obtained_at__nullsfirst").json()["results"]
@@ -231,10 +234,16 @@ class TestAcquisitions:
 
     def test_default_ordering_is_obtained_desc_nulls_first(self, auth_client):
         """The Catalog default: obtained desc, NULLS FIRST (pending on top)."""
-        _post(auth_client, ACQ, {"source": "Old", "obtained_at": "2020-01-01T00:00:00Z",
-                                 "items": [{"name": "A"}]})
-        _post(auth_client, ACQ, {"source": "New", "obtained_at": "2026-01-01T00:00:00Z",
-                                 "items": [{"name": "B"}]})
+        _post(
+            auth_client,
+            ACQ,
+            {"source": "Old", "obtained_at": "2020-01-01T00:00:00Z", "items": [{"name": "A"}]},
+        )
+        _post(
+            auth_client,
+            ACQ,
+            {"source": "New", "obtained_at": "2026-01-01T00:00:00Z", "items": [{"name": "B"}]},
+        )
         _post(auth_client, ACQ, {"source": "Pending", "items": [{"name": "C"}]})
 
         results = auth_client.get(ACQ).json()["results"]

@@ -76,7 +76,12 @@ class TestInventoryDataIoRoundTrip:
                     "source": "IO Shop",
                     "obtained_at": "2026-03-03T00:00:00Z",
                     "items": [
-                        {"name": "Gadget", "quantity": 2, "sku_price": "12", "sku_price_currency": "USD"}
+                        {
+                            "name": "Gadget",
+                            "quantity": 2,
+                            "sku_price": "12",
+                            "sku_price_currency": "USD",
+                        }
                     ],
                 }
             ),

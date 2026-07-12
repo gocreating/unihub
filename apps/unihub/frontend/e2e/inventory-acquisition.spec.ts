@@ -155,8 +155,9 @@ test('cost-factor rows stack on a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 560, height: 900 });
   await gotoNewAcquisition(page);
   // Add a manual factor so there is a multi-field row to inspect.
+  // (The header action is labelled "Add" since iteration 10, FR-006c.)
   const cost = page.locator('.ant-card', { hasText: 'Cost' }).last();
-  await cost.getByRole('button', { name: /Add Factor/i }).click();
+  await cost.locator('button').filter({ hasText: /^Add$/ }).first().click();
   await page.waitForTimeout(300);
   // Narrow: the factor row's fields wrap (each full width) → the row is tall
   // enough to hold stacked controls rather than a single 32px line.

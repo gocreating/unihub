@@ -46,6 +46,7 @@ import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import type { Acquisition, CostFactorWrite, Item, ItemWrite } from '@/services/unihub-backend/inventory';
+import { itemCardBadges } from '../itemBadges';
 import {
   COST_FACTOR_TYPES,
   createAcquisition,
@@ -117,29 +118,6 @@ function deriveAccumulated(cards: Card[]): { currency: string; value: string }[]
   return [...totals.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([currency, value]) => ({ currency, value: String(value) }));
-}
-
-// Drop trailing zeros: "10.0000" → "10", "59.9000" → "59.9".
-function formatDecimal(v: string | number | null | undefined): string {
-  if (v == null || v === '') return '';
-  const n = Number(v);
-  return Number.isFinite(n) ? String(n) : String(v);
-}
-
-// Available (non-empty) item attributes to show as badges on a card body.
-function itemCardBadges(d: ItemWrite): string[] {
-  const b: string[] = [];
-  if (d.quantity != null && d.quantity !== 1) b.push(`× ${d.quantity}`);
-  if (d.sku_price) b.push(`${formatDecimal(d.sku_price)} ${d.sku_price_currency ?? ''}`.trim());
-  if (d.size) b.push(d.size);
-  if (d.color) b.push(d.color);
-  if (d.length) b.push(`L ${d.length.value}${d.length.unit}`);
-  if (d.width) b.push(`W ${d.width.value}${d.width.unit}`);
-  if (d.height) b.push(`H ${d.height.value}${d.height.unit}`);
-  if (d.weight) b.push(`${d.weight.value} ${d.weight.unit}`);
-  if (d.volume) b.push(`${d.volume.value} ${d.volume.unit}`);
-  if (d.spec) b.push(d.spec);
-  return b;
 }
 
 interface AcquisitionFormProps {

@@ -487,6 +487,10 @@ export default {
   'pages.inventory.catalog.title': '物品清單',
   'pages.inventory.catalog.loadError': '載入清單失敗',
   'pages.inventory.catalog.rowCount': '{count} 列',
+  'pages.inventory.catalog.col.item': '物品',
+  'pages.inventory.catalog.col.parameters': '參數',
+  'pages.inventory.catalog.col.acquisition': '取得',
+  'pages.inventory.items.col.deprecateTime': '棄用時間',
 
   // Inventory > Scenarios
   'pages.inventory.scenarios.title': '情境',

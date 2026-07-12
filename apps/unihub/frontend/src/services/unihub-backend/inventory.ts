@@ -38,6 +38,7 @@ export interface AcquisitionSummary {
   source: string;
   request_time: string | null;
   obtained_at: string | null;
+  net_cost: NetCostEntry[];
 }
 
 export interface Item {

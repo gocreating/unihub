@@ -822,6 +822,10 @@ export interface components {
             request_time?: string | null;
             /** Format: date-time */
             obtained_at?: string | null;
+            /** @description net_cost = per-currency sum of cost-factor values (value carries its sign). */
+            readonly net_cost: {
+                [key: string]: unknown;
+            }[];
         };
         AttributeDefinition: {
             readonly id: string;

@@ -39,7 +39,9 @@ class ItemViewSet(viewsets.ModelViewSet):
         "width_canonical": {"lookup": "width_canonical", "type": "number"},
         "height_canonical": {"lookup": "height_canonical", "type": "number"},
         "volume_canonical": {"lookup": "volume_canonical", "type": "number"},
+        "url": {"lookup": "url", "type": "text"},
         "deprecated": {"lookup": "deprecate_time", "type": "date"},
+        "deprecate_time": {"lookup": "deprecate_time", "type": "date"},
         # Acquisition-derived columns (used in the Catalog's flat mode).
         "acquisition__source": {"lookup": "acquisition__source", "type": "text"},
         "acquisition__request_time": {"lookup": "acquisition__request_time", "type": "date"},
@@ -57,6 +59,7 @@ class ItemViewSet(viewsets.ModelViewSet):
         "width_canonical",
         "height_canonical",
         "volume_canonical",
+        "url",
         "deprecate_time",
         "acquisition__source",
         "acquisition__request_time",
@@ -68,7 +71,13 @@ class ItemViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # No implicit exclusion — deprecate_time is a normal filterable attribute.
-        return super().get_queryset().select_related("acquisition")
+        # cost_factors feeds the nested acquisition.net_cost aggregation.
+        return (
+            super()
+            .get_queryset()
+            .select_related("acquisition")
+            .prefetch_related("acquisition__cost_factors")
+        )
 
     def destroy(self, request, *args, **kwargs):
         """Delete a single item from its acquisition."""

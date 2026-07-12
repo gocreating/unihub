@@ -120,3 +120,19 @@ Scenario    1 ──< Constraint  *>──< Item      (M2M target set)
 ## Iteration 13 note (2026-07-12)
 
 No schema change — presentation-only iteration. The single API-contract delta is a **derived, read-only `net_cost`** added to the *nested* acquisition summary on Item reads (`ItemSerializer.acquisition`), computed per-currency from cost factors exactly like the top-level `Acquisition.net_cost`. No migration; `data_io` descriptors unchanged (Principle I no-op).
+
+## Iteration 14 deltas (2026-07-12)
+
+**core.AttributeDefinition**: + `data_type` choice **`dimension`**; + **`unit_family`** (length|weight|volume, blank unless dimension). System defs protected: delete blocked (existing) AND name/data_type/unit_family changes blocked (new guard).
+
+**core.AttributeValue**: + **`value_number`** (Decimal 20,4, null) — canonical numeric (dimension: family base unit mm/g/mL; numeric: the value); + **`value_unit`** (CharField, blank) — entered display unit for dimension values. `value` remains the entered/display text.
+
+**inventory.Item**: DROP color, size, weight_canonical/_unit, length_canonical/_unit, width_canonical/_unit, height_canonical/_unit, volume_canonical/_unit (12 columns) after data-migrating into AttributeValues against 7 seeded system definitions (color: text, size: text, weight: dimension/weight, length/width/height: dimension/length, volume: dimension/volume). Item keeps: name, quantity, spec, remark, url, sku_price(+currency), deprecate_time, acquisition FK.
+
+**inventory.Scenario**: `notes` → **`description`** (rename).
+
+**inventory.ScenarioItem**: DROP `prepared`, `required_quantity`; + **`display_order`** (integer, dense per (scenario, container), backfilled by created_at).
+
+**inventory.Constraint**: DROPPED (model + table + M2M join table). Never data_io-registered.
+
+**data_io**: item descriptor → `has_user_attributes=True` (parameter values ride the item CSV as `[name]:type` columns); scenario/scenarioitem descriptors pick up renamed/added fields via `auto_system_fields`.

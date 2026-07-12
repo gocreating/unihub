@@ -1,86 +1,109 @@
 ---
-description: "Task list for Inventory App — Iteration 13 (2026-07-12)"
+description: "Task list for Inventory App — Iteration 14 (2026-07-12)"
 ---
 
-# Tasks: Inventory App — Iteration 13 (Catalog derived columns & density)
+# Tasks: Inventory App — Iteration 14 (Dynamic item parameters + scenario simplification)
 
-**Input**: [plan.md](plan.md) (iteration 13), [spec.md](spec.md) — Session 2026-07-12 "catalog derived columns & density", FR-003 (revised), FR-003a (new), FR-024 (revised); constitution **v1.18.0** (two-row datetime).
+**Input**: [plan.md](plan.md) (iteration 14), [spec.md](spec.md) — Session 2026-07-12 "dynamic item parameters + scenario simplification"; FR-026–FR-029 (new), FR-010–FR-017 (rewritten), US4 removed. Constitution **v1.19.0**.
 
-**Tests**: REQUIRED — constitution Principle V is test-first (red-green-refactor); frontend tests precede implementation per project TDD practice.
+**Tests**: REQUIRED — test-first (Principle V) on both sides.
 
-**Baseline**: Iteration 12 shipped at commit `102124e`. This iteration is a **delta**; tasks modify existing files unless marked NEW. Earlier iterations' task lists are in git history.
+**Baseline**: Iteration 13 shipped at commit `7986896`. Delta iteration; tasks modify existing files unless marked NEW. Prior task lists live in git history.
 
-**Organization**: This iteration refines **User Story 1 (Catalog and manage items, P1)**; the acquisition-form badge extraction brushes US2's surface but is a shared foundational refactor.
+**Organization**: Foundational core work (attribute infra) blocks everything; US1 (P1) = parameters end-to-end; US3 (P2) = scenario CRUD/list/backlog; US5 (P3) = organize tree/containment. US4 (constraints) is removed as part of the scenario migration tasks.
 
 ## Format: `[ID] [P?] [Story?] Description`
-
-- **[P]**: different files, no dependency on an incomplete task
-- Backend: `apps/unihub/backend/inventory/` & `.../tests/`; Frontend: `apps/unihub/frontend/src/`
 
 ---
 
 ## Phase 1: Setup
 
-*(none — existing app, no migrations, no new dependencies)*
+*(none — existing app, no new dependencies)*
 
 ---
 
-## Phase 2: Foundational (contract change + shared helpers)
+## Phase 2: Foundational (core attribute infrastructure + migrations + contracts)
 
-**Purpose**: The nested `net_cost` contract chain and the shared renderers every catalog task depends on. Contract regen MUST precede frontend consumption (Principle IV).
+**Purpose**: The `dimension` type, canonical numeric storage, attribute-aware filter/sort, and the schema/data migrations everything else consumes. Contract regen precedes frontend work (Principle IV).
 
-- [X] T001 Write failing pytest: item list/detail responses include read-only `acquisition.net_cost` (per-currency aggregation, same shape as top-level `Acquisition.net_cost`; empty list when no factors) in `apps/unihub/backend/tests/test_inventory_items.py`
-- [X] T002 Add `net_cost` `SerializerMethodField` to `AcquisitionSummarySerializer` (reuse/share the `AcquisitionSerializer.get_net_cost` per-currency aggregation; type hints + Google-style docstring) in `apps/unihub/backend/inventory/serializers.py`; T001 green; run `uv run ruff format . && uv run ruff check . --fix && uv run pytest` from `apps/unihub/backend/`
-- [X] T003 Regenerate the OpenAPI schema (contracts regen command → `specs/014-inventory-app/contracts/openapi.yaml`) and the generated frontend types (`openapi-typescript` → `apps/unihub/frontend/src/generated/`); surface `net_cost: NetCostEntry[]` on the nested acquisition type consumed via `apps/unihub/frontend/src/services/unihub-backend/inventory.ts` (no hand-written response types)
-- [X] T004 [P] Write failing Vitest specs for a shared two-row datetime cell — absolute `YYYY-MM-DD HH:mm` primary row, `fromNow()` relative as muted secondary row, null → standard "—" — in `apps/unihub/frontend/src/components/DateTimeCell/DateTimeCell.test.tsx` (NEW)
-- [X] T005 [P] Implement `DateTimeCell` (named export; secondary row `Typography.Text type="secondary"`; constitution v1.18.0) in `apps/unihub/frontend/src/components/DateTimeCell/index.tsx` (NEW); T004 green
-- [X] T006 [P] Write failing Vitest specs for extracted badge helpers: `itemCardBadges` keeps current card behaviour AND `parameterBadges()` returns formatted value+unit strings for exactly the non-empty of color, weight, length, width, height, volume, size (trailing zeros dropped) in `apps/unihub/frontend/src/pages/inventory/itemBadges.test.ts` (NEW)
-- [X] T007 [P] Extract `itemCardBadges` from `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionForm.tsx` into `apps/unihub/frontend/src/pages/inventory/itemBadges.ts` (NEW; named exports `itemCardBadges`, `parameterBadges`; accepts write + read item shapes); update `AcquisitionForm.tsx` to import it; T006 green
-- [X] T008 [P] Add iteration-13 i18n keys to BOTH `apps/unihub/frontend/src/locales/en-US/pages.ts` and `apps/unihub/frontend/src/locales/zh-TW/pages.ts`: derived column labels ("Item", "Parameters", "Acquisition") plus Color, Volume, URL, Deprecate-time column labels (reuse existing keys where present; both locales in the same commit)
+- [ ] T001 Write failing pytest for core attribute extensions in `apps/unihub/backend/tests/test_core_attributes.py` (NEW): (a) creating a `dimension` definition requires a valid `unit_family` (length|weight|volume); (b) upserting a dimension value stores `value` + `value_unit` + canonical `value_number` (e.g. 1.5 kg → 1500 g-canonical) and a numeric value stores `value_number`; (c) invalid unit for the family → 400; (d) PATCH renaming an `is_system` definition (or changing its data_type/unit_family) → 400 (Principle I guard); (e) delete-with-values count-confirm flow still works for user defs and stays blocked for system defs
+- [ ] T002 Move unit conversion tables/helpers from `apps/unihub/backend/inventory/units.py` to `apps/unihub/backend/core/units.py` (NEW), keeping `inventory/units.py` as a re-export shim (existing unit tests must stay green unchanged)
+- [ ] T003 Implement core model/API changes + migration `apps/unihub/backend/core/migrations/`: `AttributeDefinition` +`dimension` choice +`unit_family`; `AttributeValue` +`value_number` (Decimal 20,4, null) +`value_unit`; serializer exposes `unit_family`; `bulk_upsert`/value writes compute `value_number` (dimension via `core.units`, numeric via parse) and validate unit∈family / numeric parse / select options; views guard `is_system` rename/type change; T001 green
+- [ ] T004 Write failing pytest for attribute-aware filtering/ordering (same test file): on `ItemViewSet` (opt-in), `filters` with `attr:<definition_id>` conditions filter text (icontains) and numeric/dimension (gt/lt/eq on canonical `value_number`); `ordering=attr:<id>__nullsfirst/-attr:<id>__nullslast` orders by canonical with rows lacking the key treated as NULLs
+- [ ] T005 Implement `apps/unihub/backend/core/attributes.py` (NEW: `parse_attr_key`, `annotate_attribute(queryset, definition)` scalar-Subquery helper) and extend `EntityFilterBackend` + `NullsOrderingFilter` in `apps/unihub/backend/core/filters.py` to resolve `attr:` keys when the view declares `attribute_content_type`; T004 green
+- [ ] T006 Write failing pytest for item parameters + scenario changes: in `apps/unihub/backend/tests/test_inventory_items.py` — acquisition create with `parameters` on an item (system key weight {value, unit} + inline user-defined numeric key), read back `parameters[]` (definition_id, name, data_type, unit_family, value, unit, value_number), PATCH full-list upsert-replace (omitted key deleted), duplicate-key rejected, invalid select value rejected; in `apps/unihub/backend/tests/test_inventory_scenarios.py` — scenario create/patch with `description`; `ScenarioItem` exposes `display_order` (no `prepared`/`required_quantity`); `POST scenarios/<sid>/items/<pk>/move {container_id, index}` re-parents + rewrites dense sibling order + rejects cycles/self; DELETE re-parents children to top level; constraint & checklist endpoints are GONE (404) — delete `apps/unihub/backend/tests/test_inventory_constraints.py` and prune checklist tests from scenarios/containment test files
+- [ ] T007 Inventory migrations in `apps/unihub/backend/inventory/migrations/`: (1) data migration seeding the 7 system AttributeDefinitions (color/size → text; weight → dimension/weight; length/width/height → dimension/length; volume → dimension/volume; content type inventory.item) and copying each Item's concrete values into AttributeValues (`value` = display via `from_canonical`, `value_unit`, `value_number` = canonical); (2) schema migration dropping the 12 Item columns; (3) scenario migration: rename `Scenario.notes→description`, drop `ScenarioItem.prepared`/`required_quantity`, add `display_order` (backfill by created_at per scenario), delete `Constraint` (+M2M table); update `apps/unihub/backend/inventory/models.py` accordingly
+- [ ] T008 Rework `apps/unihub/backend/inventory/serializers.py` + `views.py` + `urls.py`: `ItemSerializer.parameters` (prefetched read; upsert-replace write incl. nested create-definition passthrough via definition_id only), remove `_MEASURES` measurement fields and color/size from serializers; `ItemViewSet` declares `attribute_content_type="inventory.item"` and prunes concrete param filter/order keys in favour of `attr:` resolution; Scenario serializers/views drop checklist/constraints/counts, gain `description`; `ScenarioItemViewSet` gains the `move` action (dense reorder + cycle check) and `display_order` in the serializer; constraint viewset/serializer/urls deleted; T006 green; backend loop (`ruff` + full `pytest`) green
+- [ ] T009 Update `apps/unihub/backend/inventory/apps.py` data_io descriptors (item → `has_user_attributes=True`, auto fields re-derived post-drop; scenario/scenarioitem refreshed; add an io round-trip assertion for a parameterized item in `apps/unihub/backend/tests/test_inventory_io.py`) and rewire `apps/unihub/backend/inventory/management/commands/import_legacy_csv.py` `_item_payload` to emit `parameters` instead of concrete keys
+- [ ] T010 Regenerate contracts: OpenAPI schema + `apps/unihub/frontend/src/generated/api-types.ts` (`openapi-typescript`); update service types in `apps/unihub/frontend/src/services/unihub-backend/inventory.ts` (Item.parameters, ItemWrite.parameters, Scenario.description, ScenarioItem.display_order, remove Measurement fields/constraint functions, add `moveScenarioItem`) and `core.ts` (unit_family, dimension type, value_number); append the delta to `specs/014-inventory-app/contracts/inventory-api.md`
 
-**Checkpoint**: Backend green, contract types regenerated, shared helpers tested.
-
----
-
-## Phase 3: User Story 1 — Catalog and manage items (P1)
-
-**Goal**: Dense, hierarchy-readable Catalog — three derived presentation columns, hidden-by-default real columns (all toggleable; URL-dropdown bug fixed), two-row datetimes, item rows without Delete.
-
-**Independent Test**: With acquisitions+items seeded, the Catalog defaults to caret | Acquisition | Item | Quantity | SKU price | Parameters | Actions; parent rows read `{source} {net cost}` + date range; item rows show name-link/spec and parameter badges; the column dropdown lists every real column (name, url, spec, source, Requested, Obtained, net cost, status, color, size, weight, length, width, height, volume, deprecate_time) as hidden-but-toggleable; Requested/Obtained when shown render two-row datetime; item rows offer only Deprecate/Restore.
-
-- [X] T009 [US1] Write failing RTL specs in `apps/unihub/frontend/src/pages/inventory/catalog/CatalogPage.test.tsx` covering: (a) default visible order Acquisition, Item, Quantity, SKU price, Parameters, Actions under persistence key `inventory-catalog-v3`; (b) Item cell = name hyperlink (`target="_blank" rel="noopener"` when `url`) primary + ellipsised spec secondary only when non-empty; (c) Parameters cell = one `<Tag>` per non-empty color/weight/length/width/height/volume/size with Tooltip, "—" when none; (d) Acquisition cell = `{source} {net cost}` primary ("Untitled" fallback; multi-currency comma-joined) + `request ~ obtained` date-only secondary ("—" for a missing side; secondary omitted when both absent) on tree parents AND flat-mode item rows; (e) Requested/Obtained toggled visible render two-row datetime; (f) item-row actions = Deprecate/Restore only (no Delete); acquisition rows keep Edit + Delete; (g) column dropdown lists url/color/volume/deprecate_time; (h) derived columns expose no sort controls
-- [X] T010 [US1] Rework the column model in `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx`: `columnDefs` = 3 derived + all real columns with `visible:false` except Acquisition/Item/Quantity/SKU price/Parameters/Actions, order per FR-003; `useEntityTable` key → `inventory-catalog-v3`; extend `ITEM_KEYS` (+`color`, `volume_canonical`) and `filterableAttrs` (+color text, +volume number, +deprecate_time date); derived keys excluded from both
-- [X] T011 [US1] Implement renderers in `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx`: derived Item / Parameters (`parameterBadges`) / Acquisition (incl. flat-mode via `r.acquisition.net_cost`); url column as clickable ellipsised link; color / volume / deprecate_time columns; Requested/Obtained/deprecate_time via `DateTimeCell`; item-row actions drop Delete; extend `displayText()` so `dataWidths` measures derived + two-row cells as max(primary, secondary) per row (no width floors); T009 fully green
-- [X] T012 [US1] Update Playwright e2e `apps/unihub/frontend/e2e/inventory-catalog.spec.ts`: "Requested column present" → "hidden by default + available in the column dropdown (two-row datetime when shown)"; add assertions for the default derived-column set, parameter badges on an item row, and item rows exposing no Delete; adjust selectors relying on removed default columns
-
-**Checkpoint**: Catalog matches FR-003/FR-003a; RTL + e2e green.
+**Checkpoint**: Backend fully green with new schema; types regenerated.
 
 ---
 
-## Phase 4: Polish & Cross-Cutting
+## Phase 3: User Story 1 — Catalog and manage items with dynamic parameters (P1)
 
-- [X] T013 Run the full frontend quality loop from `apps/unihub/frontend/`: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build = `tsc -b`, stricter than typecheck) — zero warnings; fix fallout
-- [X] T014 Verify against the live stack (backend up + `pnpm dev`): default column set, badges, flat-mode Acquisition summary after an item-column sort, two-row datetimes, no item Delete; run the Playwright suite; capture an iteration screenshot
+**Goal**: On-demand parameter rows in the item form; parameters drive the Catalog's Parameters column and appear as dynamic filter/sort/column options.
+
+**Independent Test**: Create an acquisition item adding a seeded weight (kg) and a new user-defined "capacity" numeric parameter; both appear as badges on the item card and in the Catalog Parameters column; the Columns dropdown lists "capacity"; sorting by weight orders cross-unit correctly; the item form shows no fixed color/size/measurement inputs.
+
+- [ ] T011 [P] [US1] Write failing RTL specs in `apps/unihub/frontend/src/components/ParameterRowsEditor/ParameterRowsEditor.test.tsx` (NEW): renders existing rows; key select lists definitions minus keys already used; adding a row with a dimension key shows the family's unit select; "create new parameter" flow collects name + type (string/numeric/select/dimension) + unit family or options and calls the create API; removing a row works; value inputs validate per type
+- [ ] T012 [P] [US1] Implement `apps/unihub/frontend/src/components/ParameterRowsEditor/index.tsx` (NEW; definitions via TanStack Query on `listAttributeDefinitions('inventory.item')`, form-grid + narrow stacking per Principle VI); T011 green
+- [ ] T013 [US1] Rework item form + badges (RTL first in the same files' tests): `apps/unihub/frontend/src/pages/inventory/items/ItemFormModal.tsx` — fixed color/size/weight/length/width/height/volume inputs replaced by `ParameterRowsEditor` (field order Name, quantity, SKU price, spec, URL, remark, Parameters; modal conventions preserved); `apps/unihub/frontend/src/pages/inventory/itemBadges.ts` + `AcquisitionForm.tsx` cards — badges built from `parameters[]` (system keys keep compact formats; user keys `key: value unit`); update `itemBadges.test.ts` + `ItemFormModal.test.tsx` first
+- [ ] T014 [US1] Catalog dynamic parameters (RTL first in `CatalogPage.test.tsx` with mocked definitions): `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx` — fetch Item definitions; build `filterableAttrs` + hidden-by-default `columnDefs` entries per definition (`attr:<id>` keys, dataType mapped); flatten rule treats any `attr:` key as item-level; Parameters derived column + `displayText` render from `item.parameters`; concrete color/size/measurement columns removed; per-definition columns render typed values (dimension `value unit`, right-aligned numerics)
+- [ ] T015 [US1] Update `apps/unihub/frontend/e2e/inventory-catalog.spec.ts` for dynamic parameter columns (dropdown lists a seeded key, e.g. Weight; badges still assert) and locale files `apps/unihub/frontend/src/locales/{en-US,zh-TW}/pages.ts` with parameter-editor strings (both locales, same commit)
+
+**Checkpoint**: Items round-trip parameters end-to-end; catalog filter/sort/columns work per key.
+
+---
+
+## Phase 4: User Story 3 — Scenario assembly (list + Backlog) (P2)
+
+**Goal**: Simplified scenarios: name+description; 3-column list; Backlog panel search-and-add.
+
+**Independent Test**: Create a scenario with name+description; list shows exactly Name/Description/Actions; on detail, backlog search for a known fragment lists matching non-member items; adding one moves it into the Organize tree and out of backlog results.
+
+- [ ] T016 [US3] Rework scenario list (RTL first in `apps/unihub/frontend/src/pages/inventory/scenarios/ScenariosPage.test.tsx`, NEW or updated): `apps/unihub/frontend/src/pages/inventory/scenarios/index.tsx` — columns exactly Name, Description, Actions; create/edit modal fields name + description; progress/complete/item-count columns and all constraint UI removed
+- [ ] T017 [US3] Scenario detail — Backlog panel (RTL first in `apps/unihub/frontend/src/pages/inventory/scenarios/ScenarioDetail.test.tsx`, NEW): `detail.tsx` — two-panel layout (Backlog | Organize, content-width stacking); Backlog: debounced search input → `listItems` with OR-group filters (name/spec icontains), results exclude current members, one-click Add (top-level, end of order); checklist/constraint/progress UI deleted along with their service calls
+
+**Checkpoint**: Scenario CRUD + membership management works without checklist/constraints.
+
+---
+
+## Phase 5: User Story 5 — Organize tree (containment + order) (P3)
+
+**Goal**: Drag-and-drop packing tree persisting container + sibling order.
+
+**Independent Test**: Drag item A onto item B → nested (survives reload); drag among siblings → order survives reload; dragging B into its own descendant is rejected with a message; removing a container re-parents its children to top level.
+
+- [ ] T018 [US5] Organize tree (RTL first in `ScenarioDetail.test.tsx`: tree renders nesting from scenario items' container/display_order; onDrop handler calls `moveScenarioItem` with correct `{container_id, index}` for nest and reorder cases; cycle rejection surfaces `message.error`; node Remove action): implement in `apps/unihub/frontend/src/pages/inventory/scenarios/detail.tsx` with AntD `Tree` `draggable`+`onDrop`
+- [ ] T019 [US5] Add a scenario-detail Playwright spec `apps/unihub/frontend/e2e/inventory-scenario.spec.ts` (NEW): create scenario, backlog add two items, drag one into the other, reload, assert nesting persists; assert list page shows the 3 columns
+
+**Checkpoint**: Full packing-tree flow verified end-to-end.
+
+---
+
+## Phase 6: Polish & Cross-Cutting
+
+- [ ] T020 Full quality loops: backend `uv run ruff format . && uv run ruff check . --fix && uv run pytest` from `apps/unihub/backend/`; frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` from `apps/unihub/frontend/` — zero warnings; fix fallout
+- [ ] T021 Live-stack verification: rebuild docker backend+frontend, apply migrations, verify migrated legacy data (existing items show their parameters as badges; weight sort works cross-unit), run the Playwright suites, capture an iteration screenshot
 
 ---
 
 ## Dependencies & Execution Order
 
-- **Phase 2**: T001 → T002 → T003 (contract chain, sequential); T004→T005, T006→T007, and T008 run in parallel with it.
-- **Phase 3**: T009 (tests first; needs T005/T007/T008 to import helpers/keys) → T010 → T011 (same file, sequential) → T012. T011 additionally needs T003's regenerated types.
-- **Phase 4**: T013 → T014 last.
+- **Phase 2 backbone (sequential)**: T001 → (T002 ∥) → T003 → T004 → T005 → T006 → T007 → T008 → T009 → T010. T002 may run parallel with T001.
+- **Phase 3**: T011→T012 [P] can start once T010 lands types; T013 → T014 → T015 sequential (shared files).
+- **Phase 4**: T016 [P with T013/T014], T017 after T010 (needs move/search types? — search only; move used in Phase 5).
+- **Phase 5**: T018 after T017 (same file), T019 after T018.
+- **Phase 6**: T020 → T021 last.
 
 ```text
-T001 → T002 → T003 ─┐
-T004 → T005 ─────────┼→ T009 → T010 → T011 → T012 → T013 → T014
-T006 → T007 ─────────┤
-T008 ────────────────┘
+T001 ─→ T003 ─→ T004 ─→ T005 ─→ T006 ─→ T007 ─→ T008 ─→ T009 ─→ T010 ─┬→ T011 → T012 → T013 → T014 → T015 ─┐
+T002 ─┘                                                                ├→ T016 ──────────────┐              ├→ T020 → T021
+                                                                       └→ T017 → T018 → T019 ┘──────────────┘
 ```
-
-## Parallel Example
-
-Foundational tracks concurrently: `T001–T003` (backend + contract), `T004–T005` (DateTimeCell), `T006–T007` (badge extraction), `T008` (i18n) — different files, no cross-dependencies.
 
 ## Implementation Strategy
 
-Single-story iteration (US1). MVP = Phases 2+3 (T001–T012); Phase 4 gates the commit. Every code task lands with its tests; both locale files update in the same commit as any new key (Principle VIII).
+MVP = Phases 2+3 (parameters end-to-end — the P1 payoff); Phases 4–5 deliver the scenario redesign; Phase 6 gates the commit. Destructive migrations (column drops, Constraint drop) land only after their data migrations are test-proven; both locale files update with any new key (Principle VIII).

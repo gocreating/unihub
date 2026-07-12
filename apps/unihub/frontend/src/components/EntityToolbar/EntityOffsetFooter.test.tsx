@@ -131,3 +131,21 @@ describe('EntityOffsetFooter', () => {
     expect(screen.getByText('75 / page')).toBeInTheDocument();
   });
 });
+
+// Iteration 15: custom info-side text replaces "{total} records" when provided.
+describe('EntityOffsetFooter totalText slot', () => {
+  it('renders the custom total text instead of the default records line', () => {
+    render(
+      <EntityOffsetFooter
+        total={90}
+        pageSize={25}
+        current={1}
+        onChange={vi.fn()}
+        totalText="68 acquisitions, 90 items"
+      />,
+      { wrapper },
+    );
+    expect(screen.getByText('68 acquisitions, 90 items')).toBeInTheDocument();
+    expect(screen.queryByText('90 records')).toBeNull();
+  });
+});

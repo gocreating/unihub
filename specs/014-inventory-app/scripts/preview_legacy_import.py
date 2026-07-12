@@ -224,11 +224,15 @@ def build_from_rows(rows: list[tuple[str, str, str, str, str, str, str]]) -> lis
     acquisitions: list[Acquisition] = []
     last_source = ""
 
-    for name, price, currency, location, date, remark, url in rows:
+    for row in rows:
+        name, price, currency, location, date, remark, url, *rest = row
         if is_summary([name, price]):
             continue
 
-        has_ctx = bool(location or date)
+        # A row starts a NEW acquisition only on its OWN (non-rowspan-carried)
+        # location/date context; carried cells provide values (e.g. a merged
+        # 購買日期 shared across acquisitions) without splitting groups.
+        has_ctx = rest[0] if rest else bool(location or date)
 
         if has_ctx:
             src = location or last_source
@@ -301,20 +305,28 @@ class _SheetHTMLParser(HTMLParser):
         self._cell: dict | None = None
         self._colspan = 1
         self._rowspan = 1
-        # grid column index → rows still occupied by an active rowspan.
-        # Declarations stage in _new_spans and only activate AFTER the
+        # grid column index → (rows still occupied, source cell) for an active
+        # rowspan. Declarations stage in _new_spans and only activate AFTER the
         # declaring row ends (they cover the FOLLOWING rows, not their own).
-        self._occupied: dict[int, int] = {}
-        self._new_spans: dict[int, int] = {}
+        # Covered positions receive a CARRIED copy of the source cell so a new
+        # acquisition under a merged 購買日期 keeps the date (FR-029a a), while
+        # the grouping logic ignores carried location/date for new-acquisition
+        # detection so continuation rows keep grouping (see build_html).
+        self._occupied: dict[int, tuple[int, dict]] = {}
+        self._new_spans: dict[int, tuple[int, dict]] = {}
 
     @staticmethod
     def _empty() -> dict:
         return {"text": "", "link": ""}
 
+    @staticmethod
+    def _carried(src: dict) -> dict:
+        return {"text": src["text"], "link": src["link"], "carried": True}
+
     def _next_free_col(self) -> int:
         col = len(self._row)
-        while self._occupied.get(col, 0) > 0:
-            self._row.append(self._empty())
+        while col in self._occupied and self._occupied[col][0] > 0:
+            self._row.append(self._carried(self._occupied[col][1]))
             col = len(self._row)
         return col
 
@@ -342,22 +354,26 @@ class _SheetHTMLParser(HTMLParser):
                 self._row.append(self._empty())
             if self._rowspan > 1:
                 for c in range(col, col + self._colspan):
-                    self._new_spans[c] = self._rowspan - 1
+                    self._new_spans[c] = (self._rowspan - 1, self._row[col])
             self._cell = None
             self._colspan = 1
             self._rowspan = 1
         elif tag == "tr" and self._row is not None:
-            # Fill any trailing rowspan-occupied columns.
+            # Fill any trailing rowspan-occupied columns (carried content).
             while any(
-                self._occupied.get(c, 0) > 0 for c in range(len(self._row), max(self._occupied, default=-1) + 1)
+                self._occupied.get(c, (0, None))[0] > 0
+                for c in range(len(self._row), max(self._occupied, default=-1) + 1)
             ):
-                self._row.append(self._empty())
+                col = len(self._row)
+                src = self._occupied.get(col, (0, None))[1]
+                self._row.append(self._carried(src) if src else self._empty())
             self.rows.append(self._row)
             # Consume one covered row from active spans, then activate the
             # spans declared in THIS row (they cover the following rows).
-            self._occupied = {c: n - 1 for c, n in self._occupied.items() if n > 1}
-            for c, n in self._new_spans.items():
-                self._occupied[c] = max(self._occupied.get(c, 0), n)
+            self._occupied = {c: (n - 1, src) for c, (n, src) in self._occupied.items() if n > 1}
+            for c, (n, src) in self._new_spans.items():
+                if n >= self._occupied.get(c, (0, None))[0]:
+                    self._occupied[c] = (n, src)
             self._new_spans = {}
             self._row = None
 
@@ -391,6 +407,11 @@ def build_html(html_path: str) -> list[Acquisition]:
             return grid_row[i] if i is not None and i < len(grid_row) else {"text": "", "link": ""}
 
         name_cell = cell("項目")
+
+        def own(header: str) -> bool:
+            c = cell(header)
+            return bool(c["text"].strip()) and not c.get("carried", False)
+
         rows.append(
             (
                 name_cell["text"].strip(),
@@ -400,6 +421,7 @@ def build_html(html_path: str) -> list[Acquisition]:
                 cell("購買日期")["text"].strip(),
                 cell("備註")["text"].strip(),
                 name_cell["link"].strip(),
+                own("購買地點") or own("購買日期"),
             )
         )
     if col_idx is None:

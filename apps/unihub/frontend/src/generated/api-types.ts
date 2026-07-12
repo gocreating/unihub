@@ -895,6 +895,10 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Account"][];
+            /** @description Footer totals over the filtered queryset (view-defined). */
+            totals?: {
+                [key: string]: number;
+            };
         };
         PaginatedAcquisitionList: {
             /** @example 123 */
@@ -910,6 +914,10 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Acquisition"][];
+            /** @description Footer totals over the filtered queryset (view-defined). */
+            totals?: {
+                [key: string]: number;
+            };
         };
         PaginatedBalanceSheetList: {
             /** @example 123 */
@@ -925,6 +933,10 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["BalanceSheet"][];
+            /** @description Footer totals over the filtered queryset (view-defined). */
+            totals?: {
+                [key: string]: number;
+            };
         };
         PaginatedCurrencyList: {
             /** @example 123 */
@@ -940,6 +952,10 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Currency"][];
+            /** @description Footer totals over the filtered queryset (view-defined). */
+            totals?: {
+                [key: string]: number;
+            };
         };
         PaginatedExchangeRateList: {
             /** @example 123 */
@@ -955,6 +971,10 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["ExchangeRate"][];
+            /** @description Footer totals over the filtered queryset (view-defined). */
+            totals?: {
+                [key: string]: number;
+            };
         };
         PaginatedItemList: {
             /** @example 123 */
@@ -970,6 +990,10 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Item"][];
+            /** @description Footer totals over the filtered queryset (view-defined). */
+            totals?: {
+                [key: string]: number;
+            };
         };
         PaginatedScenarioList: {
             /** @example 123 */
@@ -985,6 +1009,10 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Scenario"][];
+            /** @description Footer totals over the filtered queryset (view-defined). */
+            totals?: {
+                [key: string]: number;
+            };
         };
         PatchedAccount: {
             readonly id?: string;

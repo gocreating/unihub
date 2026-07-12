@@ -1,6 +1,7 @@
 """DRF viewsets for the Inventory domain."""
 
 from django.db import IntegrityError
+from django.db.models import Count
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -31,6 +32,7 @@ class ItemViewSet(viewsets.ModelViewSet):
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
         "spec": {"lookup": "spec", "type": "text"},
+        "remark": {"lookup": "remark", "type": "text"},
         "quantity": {"lookup": "quantity", "type": "number"},
         "sku_price": {"lookup": "sku_price", "type": "number"},
         "url": {"lookup": "url", "type": "text"},
@@ -45,6 +47,7 @@ class ItemViewSet(viewsets.ModelViewSet):
     ordering_fields = [
         "name",
         "spec",
+        "remark",
         "quantity",
         "sku_price",
         "url",
@@ -56,6 +59,13 @@ class ItemViewSet(viewsets.ModelViewSet):
     ordering = ["-acquisition__obtained_at__nullsfirst"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "patch", "delete", "head", "options"]
+
+    def get_footer_totals(self, queryset) -> dict:
+        """Catalog footer: distinct acquisitions + item count over the filtered set."""
+        return {
+            "acquisitions": queryset.aggregate(n=Count("acquisition", distinct=True))["n"] or 0,
+            "items": queryset.count(),
+        }
 
     def get_queryset(self):
         # No implicit exclusion — deprecate_time is a normal filterable attribute.
@@ -93,6 +103,13 @@ class AcquisitionViewSet(viewsets.ModelViewSet):
     ordering = ["-obtained_at__nullsfirst"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_footer_totals(self, queryset) -> dict:
+        """Catalog footer: acquisition count + aggregate item total over the filtered set."""
+        return {
+            "acquisitions": queryset.count(),
+            "items": queryset.aggregate(n=Count("items"))["n"] or 0,
+        }
 
     @action(detail=False, methods=["get"], url_path="sources")
     def sources(self, request):

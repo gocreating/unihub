@@ -48,9 +48,20 @@ test('uses a caret disclosure icon, not plus/minus', async ({ page }) => {
   await expect(page.locator('.ant-table-row-expand-icon-collapsed')).toHaveCount(0);
 });
 
-test('tree is expanded by default (item rows visible without clicking)', async ({ page }) => {
-  // Expanded rows carry the ant-table-row-level-1 class (child/item rows).
+test('multi-item acquisitions expand by default; single-item ones merge (iter 15)', async ({ page }) => {
+  // Raise page size so both shapes are present.
+  await page.locator('.ant-table-footer .ant-select').first().click();
+  await page
+    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+    .getByText(/100/)
+    .first()
+    .click();
+  await page.waitForTimeout(800);
+  // Multi-item acquisitions show child rows without clicking.
   await expect(page.locator('.ant-table-row-level-1').first()).toBeVisible();
+  // Merged single-item rows: a LEVEL-0 row whose Item cell carries an item link.
+  const mergedLinks = page.locator('tr.ant-table-row-level-0 a[target="_blank"]');
+  expect(await mergedLinks.count()).toBeGreaterThan(0);
 });
 
 test('defaults to the derived columns; real columns hidden (iteration 13)', async ({ page }) => {
@@ -59,7 +70,7 @@ test('defaults to the derived columns; real columns hidden (iteration 13)', asyn
   for (const shown of ['Acquisition', 'Item', 'Parameters']) {
     expect(names.some((h) => h.startsWith(shown))).toBe(true);
   }
-  for (const hidden of ['Name', 'Spec', 'URL', 'Source', 'Requested', 'Obtained', 'Net Cost', 'Status', 'Color', 'Volume', 'Weight']) {
+  for (const hidden of ['Quantity', 'Remark', 'Name', 'Spec', 'URL', 'Source', 'Requested', 'Obtained', 'Net Cost', 'Status', 'Color', 'Volume', 'Weight']) {
     expect(names.some((h) => h.startsWith(hidden))).toBe(false);
   }
 });
@@ -112,9 +123,10 @@ test('no item-count ("Items") column and standard footer pagination', async ({ p
   const headers = await page.locator('.ant-table-thead th').allInnerTexts();
   expect(headers).not.toContain('Items');
   // The standard EntityOffsetFooter pagination lives in the table footer,
-  // with its own per-page Select (showSizeChanger is disabled).
+  // with its own per-page Select; the info side reads "{x} acquisitions, {y} items".
   await expect(page.locator('.ant-table-footer .ant-pagination')).toBeVisible();
   await expect(page.locator('.ant-table-footer .ant-select').first()).toBeVisible();
+  await expect(page.locator('.ant-table-footer')).toContainText(/\d+ acquisitions, \d+ items/);
 });
 
 test('item rows show parameter badges; the Item cell links to the URL', async ({ page }) => {
@@ -136,6 +148,15 @@ test('item rows show parameter badges; the Item cell links to the URL', async ({
 });
 
 test('item rows offer Deprecate/Restore but no Delete; acquisition rows keep Delete', async ({ page }) => {
+  // Page 1 is dominated by merged single-item rows — raise the page size so
+  // multi-item acquisitions (with child rows) are present.
+  await page.locator('.ant-table-footer .ant-select').first().click();
+  await page
+    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+    .getByText(/100/)
+    .first()
+    .click();
+  await page.waitForTimeout(800);
   const itemRow = page.locator('tr.ant-table-row-level-1').first();
   await expect(
     itemRow.locator('button', { hasText: /Deprecate|Restore/ }).first(),
@@ -188,11 +209,20 @@ test('SKU price drops trailing zeros', async ({ page }) => {
 });
 
 test('sorting an item column flattens the tree to a flat item list', async ({ page }) => {
+  // Page 1 is dominated by merged single-item rows — raise the page size so
+  // multi-item acquisitions (with child rows) are present.
+  await page.locator('.ant-table-footer .ant-select').first().click();
+  await page
+    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+    .getByText(/100/)
+    .first()
+    .click();
+  await page.waitForTimeout(800);
   // Baseline: tree mode shows parent (level-0) + child (level-1) rows.
   await expect(page.locator('.ant-table-row-level-1').first()).toBeVisible();
 
-  // Sort by an item column (Quantity) via the column header sorter.
-  const qtyTh = page.locator('.ant-table-thead th', { hasText: /^Quantity/ }).first();
+  // Sort by an item column (SKU Price) via the column header sorter.
+  const qtyTh = page.locator('.ant-table-thead th', { hasText: /^SKU Price/ }).first();
   await qtyTh.click();
   await page.waitForTimeout(500);
 

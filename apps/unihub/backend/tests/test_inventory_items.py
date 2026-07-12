@@ -241,3 +241,40 @@ class TestItemParameters:
         fetched = auth_client.get(f"{ITEMS}{item['id']}/").json()
         for gone in ("color", "size", "weight", "length", "width", "height", "volume"):
             assert gone not in fetched
+
+
+@pytest.mark.django_db
+class TestFooterTotals:
+    """Iteration 15: list responses carry footer totals over the filtered set."""
+
+    def _seed(self, auth_client):
+        # One acquisition with 2 items + one with 1 item.
+        resp = auth_client.post(
+            "/api/v1/inventory/acquisitions/",
+            json.dumps({"source": "multi", "items": [{"name": "FT-A"}, {"name": "FT-B"}]}),
+            content_type="application/json",
+        )
+        assert resp.status_code == 201
+        create_item(auth_client, name="FT-C")
+
+    def test_acquisition_list_totals(self, auth_client):
+        self._seed(auth_client)
+        data = auth_client.get("/api/v1/inventory/acquisitions/").json()
+        assert data["totals"] == {"acquisitions": 2, "items": 3}
+
+    def test_item_list_totals(self, auth_client):
+        self._seed(auth_client)
+        data = auth_client.get(ITEMS).json()
+        assert data["totals"] == {"acquisitions": 2, "items": 3}
+
+    def test_totals_respect_filters(self, auth_client):
+        self._seed(auth_client)
+        from urllib.parse import quote
+
+        filters = quote(
+            json.dumps(
+                {"groups": [{"conditions": [{"attr": "name", "op": "contains", "val": "FT-C"}]}]}
+            )
+        )
+        data = auth_client.get(f"{ITEMS}?filters={filters}").json()
+        assert data["totals"] == {"acquisitions": 1, "items": 1}

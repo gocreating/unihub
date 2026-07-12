@@ -21,7 +21,7 @@ import PageTable, {
   widthForHeader,
 } from '@/components/PageTable';
 import { DateTimeCell, dateTimeLines } from '@/components/DateTimeCell';
-import { EMPTY_TEXT, EmptyValue } from '@/components/EmptyValue';
+import { EmptyValue } from '@/components/EmptyValue';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
 import { parameterKeyLabel } from '@/components/ParameterRowsEditor';
 import { listAttributeDefinitions } from '@/services/unihub-backend/core';
@@ -64,7 +64,7 @@ function isAcquisition(r: CatalogRow): r is Acquisition & { rowType: 'acquisitio
 // attr:<definition_id> parameter key) flattens the Catalog to a
 // server-paginated flat item list (ItemViewSet). Everything else keeps the
 // acquisition tree (AcquisitionViewSet).
-const ITEM_KEYS = new Set(['name', 'url', 'spec', 'quantity', 'sku_price', 'deprecate_time']);
+const ITEM_KEYS = new Set(['name', 'url', 'spec', 'remark', 'quantity', 'sku_price', 'deprecate_time']);
 
 const isItemLevelField = (field: string) => ITEM_KEYS.has(field) || field.startsWith('attr:');
 
@@ -73,8 +73,11 @@ function skuText(it: Item): string {
 }
 
 function formatNetCost(net: NetCostEntry[] | undefined): string {
-  if (!net || net.length === 0) return '';
-  return net.map((n) => `${Number(n.total).toLocaleString()} ${n.currency}`.trim()).join(', ');
+  // A zero net cost is hidden entirely (iteration 15): most zeros mean
+  // "not recorded", so neither "0"/"0 CNY" nor a "Free" claim is shown.
+  const entries = (net ?? []).filter((n) => Number(n.total) !== 0);
+  if (entries.length === 0) return '';
+  return entries.map((n) => `${Number(n.total).toLocaleString()} ${n.currency}`.trim()).join(', ');
 }
 
 // The displayed text of one parameter value in its own dynamic column.
@@ -116,9 +119,11 @@ function acquisitionSummaryLines(
   untitled: string,
 ): { primary: string; secondary: string | null } {
   const primary = `${a.source || untitled} ${formatNetCost(a.net_cost)}`.trim();
-  if (!a.request_time && !a.obtained_at) return { primary, secondary: null };
-  const side = (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD') : EMPTY_TEXT);
-  return { primary, secondary: `${side(a.request_time)} ~ ${side(a.obtained_at)}` };
+  const req = a.request_time ? dayjs(a.request_time).format('YYYY-MM-DD') : null;
+  const obt = a.obtained_at ? dayjs(a.obtained_at).format('YYYY-MM-DD') : null;
+  // Four exact cases (iteration 15): both, requested-only, obtained-only, none.
+  const secondary = req && obt ? `${req} ~ ${obt}` : req ? `${req} ~` : obt ? obt : null;
+  return { primary, secondary };
 }
 
 export function CatalogPage() {
@@ -128,7 +133,10 @@ export function CatalogPage() {
   const { formatMessage: t } = intl;
   const [deprecateTarget, setDeprecateTarget] = useState<Item | null>(null);
   const [deprecateDate, setDeprecateDate] = useState<dayjs.Dayjs | null>(null);
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  // Ids whose default expansion state was flipped by the user. Defaults:
+  // multi-item acquisitions expanded; single-item acquisitions collapsed
+  // (rendered as ONE merged row — FR-003b).
+  const [toggledIds, setToggledIds] = useState<Set<string>>(new Set());
 
   // Every Item parameter definition (system + user-defined) contributes a
   // filter/sort option and a hidden-by-default column (FR-028).
@@ -146,6 +154,7 @@ export function CatalogPage() {
       { key: 'name', label: t({ id: 'common.name' }), dataType: 'text' },
       { key: 'url', label: t({ id: 'pages.inventory.items.col.url' }), dataType: 'text' },
       { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text' },
+      { key: 'remark', label: t({ id: 'pages.inventory.items.col.remark' }), dataType: 'text' },
       { key: 'quantity', label: t({ id: 'pages.inventory.items.col.quantity' }), dataType: 'number' },
       { key: 'sku_price', label: t({ id: 'pages.inventory.items.col.skuPrice' }), dataType: 'number' },
       { key: 'deprecate_time', label: t({ id: 'pages.inventory.items.col.deprecateTime' }), dataType: 'date' },
@@ -169,12 +178,13 @@ export function CatalogPage() {
       // definition (FR-028).
       { key: 'acquisition_summary', label: t({ id: 'pages.inventory.catalog.col.acquisition' }), dataType: 'text', visible: true, order: 0 },
       { key: 'item_summary', label: t({ id: 'pages.inventory.catalog.col.item' }), dataType: 'text', visible: true, order: 1 },
-      { key: 'quantity', label: t({ id: 'pages.inventory.items.col.quantity' }), dataType: 'number', visible: true, order: 2 },
       { key: 'sku_price', label: t({ id: 'pages.inventory.items.col.skuPrice' }), dataType: 'number', visible: true, order: 3 },
       { key: 'parameters', label: t({ id: 'pages.inventory.catalog.col.parameters' }), dataType: 'text', visible: true, order: 4 },
+      { key: 'quantity', label: t({ id: 'pages.inventory.items.col.quantity' }), dataType: 'number', visible: false, order: 4.5 },
       { key: 'name', label: t({ id: 'common.name' }), dataType: 'text', visible: false, order: 5 },
       { key: 'url', label: t({ id: 'pages.inventory.items.col.url' }), dataType: 'text', visible: false, order: 6 },
       { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text', visible: false, order: 7 },
+      { key: 'remark', label: t({ id: 'pages.inventory.items.col.remark' }), dataType: 'text', visible: false, order: 7.5 },
       { key: 'acquisition__source', label: t({ id: 'pages.inventory.acquisitions.col.source' }), dataType: 'text', visible: false, order: 8 },
       { key: 'acquisition__request_time', label: t({ id: 'pages.inventory.acquisitions.col.requestTime' }), dataType: 'date', visible: false, order: 9 },
       { key: 'acquisition__obtained_at', label: t({ id: 'pages.inventory.acquisitions.col.obtainedAt' }), dataType: 'date', visible: false, order: 10 },
@@ -195,9 +205,9 @@ export function CatalogPage() {
   );
 
   const table = useEntityTable({
-    // v4: iteration-14 dynamic parameter columns — bump so previously-saved
-    // state doesn't shadow the new defaults.
-    key: 'inventory-catalog-v4',
+    // v5: iteration-15 defaults (quantity hidden, remark added) — bump so
+    // previously-saved state doesn't shadow the new defaults.
+    key: 'inventory-catalog-v5',
     filterableAttrs,
     columnDefs,
     // Default sort (spec): Obtained descending, NULLS FIRST (pending on top).
@@ -252,17 +262,25 @@ export function CatalogPage() {
     return out;
   }, [flatMode, rows, acquisitions]);
 
+  const isExpanded = (a: Acquisition) => (a.items.length > 1) !== toggledIds.has(a.id);
   const expandedKeys = useMemo(
-    () => acquisitions.map((a) => a.id).filter((id) => !collapsedIds.has(id)),
-    [acquisitions, collapsedIds],
+    () => acquisitions.filter((a) => isExpanded(a)).map((a) => a.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [acquisitions, toggledIds],
   );
   const toggleExpand = (id: string) =>
-    setCollapsedIds((prev) => {
+    setToggledIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+
+  // FR-003b: a collapsed single-item acquisition renders as ONE merged row —
+  // its item feeds the item-side columns of the parent row.
+  const mergedItemOf = (r: CatalogRow): Item | null =>
+    isAcquisition(r) && r.items.length === 1 && !isExpanded(r) ? (r.items[0] ?? null) : null;
+  const itemFor = (r: CatalogRow): Item | null => (isAcquisition(r) ? mergedItemOf(r) : r);
 
   useEffect(() => {
     if (isError) message.error(t({ id: 'pages.inventory.catalog.loadError' }));
@@ -333,6 +351,8 @@ export function CatalogPage() {
     }
     if (isAcquisition(r)) {
       switch (key) {
+        case 'item_summary':
+          return t({ id: 'pages.inventory.catalog.itemCount' }, { count: r.items.length }) as string;
         case 'acquisition__source':
           return r.source || untitled;
         case 'net_cost':
@@ -347,9 +367,11 @@ export function CatalogPage() {
     }
     switch (key) {
       case 'item_summary':
-        return widest([r.name, r.spec ?? '']);
+        return widest([r.name, r.spec ?? '', r.quantity > 1 ? `×${r.quantity}` : '']);
       case 'parameters':
         return parameterBadges(r.parameters).join('   ');
+      case 'remark':
+        return r.remark ?? '';
       case 'acquisition__source':
         return flatMode ? (r.acquisition?.source ?? '') : '';
       case 'name':
@@ -414,7 +436,10 @@ export function CatalogPage() {
         ...wId(key, labelId),
         fixed: getFixed(key),
         ...makeSortProps(key, t({ id: labelId }), sort),
-        render: (_, r) => (!isAcquisition(r) ? (get(r) || EMPTY) : EMPTY),
+        render: (_, r) => {
+          const it = itemFor(r);
+          return it ? (get(it) || EMPTY) : EMPTY;
+        },
       });
       // Two-row datetime column (constitution v1.18.0).
       const dateTimeCol = (
@@ -463,21 +488,36 @@ export function CatalogPage() {
             );
           },
         },
-        // Derived "Item" (FR-003a): name-link primary, ellipsised spec secondary.
+        // Derived "Item" (FR-003a): name-link primary, ellipsised spec secondary,
+        // ×N tertiary (quantity > 1). Unmerged parent rows show the item count.
         item_summary: {
           key: 'item_summary',
           title: t({ id: 'pages.inventory.catalog.col.item' }),
           ...wId('item_summary', 'pages.inventory.catalog.col.item'),
           fixed: getFixed('item_summary'),
-          render: (_, r) =>
-            isAcquisition(r) ? (
-              EMPTY
-            ) : (
+          render: (_, r) => {
+            const it = itemFor(r);
+            if (!it) {
+              return isAcquisition(r) ? (
+                <Typography.Text type="secondary">
+                  {t({ id: 'pages.inventory.catalog.itemCount' }, { count: r.items.length })}
+                </Typography.Text>
+              ) : (
+                EMPTY
+              );
+            }
+            return (
               <div>
-                <div>{nameLink(r)}</div>
-                {r.spec ? ellipsisSecondary(r.spec) : null}
+                <div>{nameLink(it)}</div>
+                {it.spec ? ellipsisSecondary(it.spec) : null}
+                {it.quantity > 1 ? (
+                  <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+                    ×{it.quantity}
+                  </Typography.Text>
+                ) : null}
               </div>
-            ),
+            );
+          },
         },
         // Derived "Parameters" (FR-003a): one badge per parameter row.
         parameters: {
@@ -486,8 +526,9 @@ export function CatalogPage() {
           ...wId('parameters', 'pages.inventory.catalog.col.parameters'),
           fixed: getFixed('parameters'),
           render: (_, r) => {
-            if (isAcquisition(r)) return EMPTY;
-            const badges = parameterBadges(r.parameters);
+            const it = itemFor(r);
+            if (!it) return EMPTY;
+            const badges = parameterBadges(it.parameters);
             if (badges.length === 0) return EMPTY;
             return (
               <Space size={[4, 4]} wrap style={{ maxWidth: '100%' }}>
@@ -519,7 +560,10 @@ export function CatalogPage() {
           ...wId('name', 'common.name'),
           fixed: getFixed('name'),
           ...makeSortProps('name', t({ id: 'common.name' }), sort),
-          render: (_, r) => (isAcquisition(r) ? EMPTY : nameLink(r)),
+          render: (_, r) => {
+            const it = itemFor(r);
+            return it ? nameLink(it) : EMPTY;
+          },
         },
         url: {
           key: 'url',
@@ -528,9 +572,9 @@ export function CatalogPage() {
           fixed: getFixed('url'),
           ...makeSortProps('url', t({ id: 'pages.inventory.items.col.url' }), sort),
           render: (_, r) =>
-            !isAcquisition(r) && r.url ? (
+            itemFor(r)?.url ? (
               <a
-                href={r.url}
+                href={itemFor(r)!.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
@@ -542,38 +586,41 @@ export function CatalogPage() {
                   verticalAlign: 'bottom',
                 }}
               >
-                {r.url}
+                {itemFor(r)!.url}
               </a>
             ) : (
               EMPTY
             ),
         },
         spec: { ...itemText('spec', 'pages.inventory.items.col.spec', (it) => it.spec), ellipsis: true },
+        remark: { ...itemText('remark', 'pages.inventory.items.col.remark', (it) => it.remark), ellipsis: true },
         quantity: {
           key: 'quantity',
           title: t({ id: 'pages.inventory.items.col.quantity' }),
           ...wId('quantity', 'pages.inventory.items.col.quantity'),
           fixed: getFixed('quantity'),
           ...makeSortProps('quantity', t({ id: 'pages.inventory.items.col.quantity' }), sort),
-          render: (_, r) => (!isAcquisition(r) ? r.quantity : EMPTY),
+          render: (_, r) => itemFor(r)?.quantity ?? EMPTY,
         },
         sku_price: { ...itemText('sku_price', 'pages.inventory.items.col.skuPrice', (it) => skuText(it)), align: 'right' },
-        deprecate_time: dateTimeCol('deprecate_time', 'pages.inventory.items.col.deprecateTime', (r) =>
-          isAcquisition(r) ? undefined : r.deprecate_time,
-        ),
+        deprecate_time: dateTimeCol('deprecate_time', 'pages.inventory.items.col.deprecateTime', (r) => {
+          const it = itemFor(r);
+          return it ? it.deprecate_time : undefined;
+        }),
         status: {
           key: 'status',
           title: t({ id: 'pages.inventory.items.col.status' }),
           ...wId('status', 'pages.inventory.items.col.status'),
           fixed: getFixed('status'),
-          render: (_, r) =>
-            isAcquisition(r) ? (
-              EMPTY
-            ) : (
-              <Tag color={r.status === 'active' ? 'green' : 'default'}>
-                {t({ id: `pages.inventory.items.status.${r.status}` })}
+          render: (_, r) => {
+            const it = itemFor(r);
+            if (!it) return EMPTY;
+            return (
+              <Tag color={it.status === 'active' ? 'green' : 'default'}>
+                {t({ id: `pages.inventory.items.status.${it.status}` })}
               </Tag>
-            ),
+            );
+          },
         },
         net_cost: {
           key: 'net_cost',
@@ -598,34 +645,42 @@ export function CatalogPage() {
           key: 'actions',
           width: actionsColWidth,
           fixed: getFixed('actions'),
-          render: (_, r) => (
-            <span data-actions-col>
-              {isAcquisition(r) ? (
-                <Space>
-                  <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/inventory/acquisitions/${r.id}/edit`)}>
-                    {t({ id: 'common.edit' })}
-                  </Button>
-                  <Button size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteAcq(r)}>
-                    {t({ id: 'common.delete' })}
-                  </Button>
-                </Space>
+          render: (_, r) => {
+            // Item-side actions: Deprecate/Restore only — no Delete (items are
+            // hard-deleted on the acquisition edit page, FR-003).
+            const itemActions = (it: Item) =>
+              it.deprecate_time ? (
+                <Button size="small" icon={<UndoOutlined />} onClick={() => deprecateMutation.mutate({ id: it.id, ts: null })}>
+                  {t({ id: 'pages.inventory.items.restore' })}
+                </Button>
               ) : (
-                // Item rows: Deprecate/Restore only — no Delete (items are
-                // hard-deleted on the acquisition edit page, FR-003).
-                <Space>
-                  {r.deprecate_time ? (
-                    <Button size="small" icon={<UndoOutlined />} onClick={() => deprecateMutation.mutate({ id: r.id, ts: null })}>
-                      {t({ id: 'pages.inventory.items.restore' })}
+                <Button size="small" icon={<StopOutlined />} onClick={() => openDeprecate(it)}>
+                  {t({ id: 'pages.inventory.items.deprecate' })}
+                </Button>
+              );
+            if (isAcquisition(r)) {
+              const merged = mergedItemOf(r);
+              return (
+                <span data-actions-col>
+                  <Space>
+                    <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/inventory/acquisitions/${r.id}/edit`)}>
+                      {t({ id: 'common.edit' })}
                     </Button>
-                  ) : (
-                    <Button size="small" icon={<StopOutlined />} onClick={() => openDeprecate(r)}>
-                      {t({ id: 'pages.inventory.items.deprecate' })}
+                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteAcq(r)}>
+                      {t({ id: 'common.delete' })}
                     </Button>
-                  )}
-                </Space>
-              )}
-            </span>
-          ),
+                    {/* Merged single-item row (FR-003b): both entities' actions. */}
+                    {merged ? itemActions(merged) : null}
+                  </Space>
+                </span>
+              );
+            }
+            return (
+              <span data-actions-col>
+                <Space>{itemActions(r)}</Space>
+              </span>
+            );
+          },
         },
       };
       // One dynamic column per parameter definition (hidden by default).
@@ -658,11 +713,12 @@ export function CatalogPage() {
       render: (_, r) =>
         isAcquisition(r) && r.children.length > 0 ? (
           <span style={{ cursor: 'pointer' }} onClick={() => toggleExpand(r.id)}>
-            {collapsedIds.has(r.id) ? <CaretRightOutlined /> : <CaretDownOutlined />}
+            {isExpanded(r) ? <CaretDownOutlined /> : <CaretRightOutlined />}
           </span>
         ) : null,
     }),
-    [collapsedIds, cols.firstColumnFixed],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [toggledIds, cols.firstColumnFixed],
   );
 
   const columns = useMemo<ProColumns<CatalogRow>[]>(() => {
@@ -699,7 +755,19 @@ export function CatalogPage() {
         scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
-        footer={() => <EntityOffsetFooter {...table.paginationProps(total)} />}
+        footer={() => (
+          <EntityOffsetFooter
+            {...table.paginationProps(total)}
+            totalText={
+              data?.totals
+                ? t(
+                    { id: 'pages.inventory.catalog.footerTotals' },
+                    { acquisitions: data.totals.acquisitions, items: data.totals.items },
+                  )
+                : undefined
+            }
+          />
+        )}
       />
 
       <Modal

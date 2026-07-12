@@ -107,3 +107,8 @@ Unchanged **except** the checklist response **drops `shortfall`** — each line 
 - **Scenario**: `notes` → **`description`**; progress fields (`prepared_count`, `outstanding_count`, `complete`) removed. `GET /scenarios/{id}/checklist/` REMOVED.
 - **ScenarioItem**: `prepared`/`required_quantity` removed; **`display_order`** added (read-only). New **`POST /scenarios/{sid}/items/{id}/move/`** `{container_id, index}` → re-parents + rewrites dense sibling order (400 on cycle/self).
 - **Constraints**: all `/scenarios/{sid}/constraints/…` endpoints REMOVED.
+
+## Iteration 15 delta (2026-07-12)
+
+- **List responses** (acquisitions + items): optional **`totals`** object over the FILTERED queryset — acquisitions list `{acquisitions, items}` (count + aggregate item total); items list `{acquisitions, items}` (distinct acquisition count + item count). Served by `EntityOffsetPagination` when the view defines `get_footer_totals`.
+- **`import_legacy_csv`**: new `--wipe` option (delete all acquisitions before import); blank 實際支付價錢 no longer overrides the derived accumulated (FR-029a c).

@@ -491,6 +491,8 @@ export default {
   'pages.inventory.catalog.col.parameters': '參數',
   'pages.inventory.catalog.col.acquisition': '取得',
   'pages.inventory.items.col.deprecateTime': '棄用時間',
+  'pages.inventory.catalog.footerTotals': '{acquisitions} 筆取得，{items} 件物品',
+  'pages.inventory.catalog.itemCount': '{count} 件物品',
 
   // Inventory > dynamic item parameters (iteration 14)
   'pages.inventory.params.add': '新增參數',

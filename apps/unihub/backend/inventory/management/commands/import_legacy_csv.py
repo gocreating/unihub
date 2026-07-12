@@ -23,6 +23,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from inventory.models import Acquisition
 from inventory.serializers import AcquisitionSerializer
 
 REPO_ROOT = Path(settings.BASE_DIR).resolve().parents[2]
@@ -123,11 +124,16 @@ def _factor_payloads(acq) -> tuple[list[dict], list[dict]]:
     """
     accumulated, manual = [], []
     for cf in acq.cost_factors:
-        value = Decimal(str(cf.value)) if cf.value is not None else Decimal("0")
-        row = {"type": cf.type, "value": str(value), "currency": _norm_currency(cf.currency)}
+        if cf.value is None:
+            # Blank legacy amount = unrecorded (FR-029a c): keep the derived
+            # item-price accumulated instead of fabricating a 0 override.
+            continue
+        row = {
+            "type": cf.type,
+            "value": str(Decimal(str(cf.value))),
+            "currency": _norm_currency(cf.currency),
+        }
         (accumulated if cf.type == "accumulated" else manual).append(row)
-    if not accumulated:
-        accumulated.append({"type": "accumulated", "value": "0", "currency": ""})
     return accumulated, manual
 
 
@@ -138,6 +144,11 @@ class Command(BaseCommand):
         parser.add_argument("csv_path", help="Path to the CSV (absolute or repo-root-relative).")
         parser.add_argument(
             "--commit", action="store_true", help="Write to the DB (default: dry-run)."
+        )
+        parser.add_argument(
+            "--wipe",
+            action="store_true",
+            help="Delete ALL existing acquisitions (and their items, via cascade) before importing.",
         )
 
     def handle(self, *args, **opts):
@@ -183,6 +194,10 @@ class Command(BaseCommand):
 
         created = 0
         with transaction.atomic():
+            if opts["wipe"]:
+                wiped = Acquisition.objects.count()
+                Acquisition.objects.all().delete()
+                self.stdout.write(self.style.WARNING(f"Wiped {wiped} existing acquisitions."))
             for a in planned:
                 items = [_item_payload(it) for it in a.items]
                 acc, manual = _factor_payloads(a)
@@ -196,12 +211,14 @@ class Command(BaseCommand):
                 )
                 create_ser.is_valid(raise_exception=True)
                 instance = create_ser.save()
-                # Override the derived accumulated with the legacy actual-paid + manual factors.
-                update_ser = AcquisitionSerializer(
-                    instance, data={"cost_factors": acc + manual}, partial=True
-                )
-                update_ser.is_valid(raise_exception=True)
-                update_ser.save()
+                # Override the derived accumulated with the legacy actual-paid +
+                # manual factors — only when the sheet actually recorded amounts.
+                if acc or manual:
+                    update_ser = AcquisitionSerializer(
+                        instance, data={"cost_factors": acc + manual}, partial=True
+                    )
+                    update_ser.is_valid(raise_exception=True)
+                    update_ser.save()
                 created += 1
 
         self.stdout.write(

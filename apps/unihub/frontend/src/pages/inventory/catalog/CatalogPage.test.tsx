@@ -72,12 +72,41 @@ const PLAIN_ITEM = {
   ...ITEM,
   id: 'itm-2',
   name: 'Plain',
+  quantity: 2,
   spec: '',
   sku_price: null,
   sku_price_currency: '',
   total_price: null,
   url: '',
   parameters: [],
+};
+
+// Single-item acquisitions (merged rows, FR-003b).
+const SOLO_ITEM = {
+  ...PLAIN_ITEM,
+  id: 'itm-solo',
+  name: 'Lantern',
+  quantity: 3,
+  acquisition: {
+    id: 'acq-solo',
+    source: 'Solo',
+    request_time: null,
+    obtained_at: OBTAINED,
+    net_cost: [{ currency: 'USD', total: '0.0000' }],
+  },
+};
+const REQ_ITEM = {
+  ...PLAIN_ITEM,
+  id: 'itm-req',
+  name: 'Preorder',
+  quantity: 1,
+  acquisition: {
+    id: 'acq-req',
+    source: 'Waiting',
+    request_time: REQUESTED,
+    obtained_at: null,
+    net_cost: [{ currency: 'USD', total: '5.0000' }],
+  },
 };
 
 const ACQ = {
@@ -94,6 +123,29 @@ const ACQ = {
   item_count: 2,
   created_at: OBTAINED,
   updated_at: OBTAINED,
+};
+
+// Zero net cost + obtained-only date (merged row).
+const ACQ_SOLO = {
+  ...ACQ,
+  id: 'acq-solo',
+  source: 'Solo',
+  request_time: null,
+  obtained_at: OBTAINED,
+  net_cost: [{ currency: 'USD', total: '0.0000' }],
+  items: [SOLO_ITEM],
+  item_count: 1,
+};
+// Requested-only date (merged row).
+const ACQ_REQ = {
+  ...ACQ,
+  id: 'acq-req',
+  source: 'Waiting',
+  request_time: REQUESTED,
+  obtained_at: null,
+  net_cost: [{ currency: 'USD', total: '5.0000' }],
+  items: [REQ_ITEM],
+  item_count: 1,
 };
 
 function renderPage() {
@@ -124,21 +176,23 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
   beforeEach(() => {
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
-      count: 1,
+      count: 3,
       next: null,
       previous: null,
-      results: [ACQ],
+      totals: { acquisitions: 3, items: 4 },
+      results: [ACQ, ACQ_SOLO, ACQ_REQ],
     });
     vi.mocked(inventoryService.listItems).mockResolvedValue({
-      count: 2,
+      count: 4,
       next: null,
       previous: null,
-      results: [ITEM, PLAIN_ITEM],
+      totals: { acquisitions: 3, items: 4 },
+      results: [ITEM, PLAIN_ITEM, SOLO_ITEM, REQ_ITEM],
     });
   });
 
   // CAT13-01 (a): default visible columns & order.
-  it('shows only Acquisition, Item, Quantity, SKU Price, Parameters, Actions by default', async () => {
+  it('shows only Acquisition, Item, SKU Price, Parameters, Actions by default', async () => {
     const { container } = renderPage();
     await screen.findByText('Backpack');
     const headers = headerTexts(container).filter((h) => h !== '');
@@ -148,11 +202,11 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     expect(names).toContain('Item');
     expect(names).toContain('Parameters');
     const order = names.filter((h) =>
-      ['Acquisition', 'Item', 'Quantity', 'SKU Price', 'Parameters', 'Actions'].includes(h),
+      ['Acquisition', 'Item', 'SKU Price', 'Parameters', 'Actions'].includes(h),
     );
-    expect(order).toEqual(['Acquisition', 'Item', 'Quantity', 'SKU Price', 'Parameters', 'Actions']);
-    // Hidden-by-default columns render no headers.
-    for (const hidden of ['Name', 'Spec', 'URL', 'Source', 'Requested', 'Obtained', 'Net Cost', 'Status', 'Color', 'Volume', 'Weight', 'Deprecated At']) {
+    expect(order).toEqual(['Acquisition', 'Item', 'SKU Price', 'Parameters', 'Actions']);
+    // Hidden-by-default columns render no headers (iteration 15: Quantity too).
+    for (const hidden of ['Quantity', 'Remark', 'Name', 'Spec', 'URL', 'Source', 'Requested', 'Obtained', 'Net Cost', 'Status', 'Color', 'Volume', 'Weight', 'Deprecated At']) {
       expect(names).not.toContain(hidden);
     }
   });
@@ -197,11 +251,11 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
   it('shows the acquisition summary on item rows in flat mode', async () => {
     const { container } = renderPage();
     await screen.findByText('Backpack');
-    // Click the Quantity header → item-level sort → flat item list.
-    const qtyHeader = Array.from(container.querySelectorAll('.ant-table-thead th')).find((th) =>
-      th.textContent?.includes('Quantity'),
+    // Click the SKU Price header → item-level sort → flat item list.
+    const skuHeader = Array.from(container.querySelectorAll('.ant-table-thead th')).find((th) =>
+      th.textContent?.includes('SKU Price'),
     )!;
-    fireEvent.click(qtyHeader);
+    fireEvent.click(skuHeader);
     // Every flat item row carries its acquisition's summary.
     const summaries = await screen.findAllByText('Shop 10 USD');
     expect(summaries.length).toBeGreaterThanOrEqual(2);
@@ -217,8 +271,9 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     const checkbox = within(panelRow as HTMLElement).getByRole('checkbox');
     fireEvent.click(checkbox);
     fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
-    const absolute = await screen.findByText(dayjs(REQUESTED).format('YYYY-MM-DD HH:mm'));
-    expect(within(cellOf(absolute)!).getByText(dayjs(REQUESTED).fromNow())).toBeInTheDocument();
+    const absolutes = await screen.findAllByText(dayjs(REQUESTED).format('YYYY-MM-DD HH:mm'));
+    const absolute = absolutes.find((el) => cellOf(el))!;
+    expect(within(cellOf(absolute)!).getAllByText(dayjs(REQUESTED).fromNow()).length).toBeGreaterThan(0);
   });
 
   // CAT13-07 (f): item rows have no Delete; acquisition rows keep Edit + Delete.
@@ -251,7 +306,7 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
       Array.from(container.querySelectorAll('.ant-table-thead th')).find((th) =>
         th.textContent?.includes(label),
       )!;
-    expect(headerFor('Quantity').querySelector('.anticon-caret-up')).toBeTruthy();
+    expect(headerFor('SKU Price').querySelector('.anticon-caret-up')).toBeTruthy();
     for (const derived of ['Acquisition', 'Item', 'Parameters']) {
       expect(headerFor(derived).querySelector('.anticon-caret-up')).toBeNull();
     }
@@ -266,5 +321,98 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     expect(screen.getByRole('button', { name: /New/ }).textContent).toBe('New');
     const sortBtn = screen.getByRole('button', { name: /Sort/ });
     expect(sortBtn.className).toContain('ant-btn-primary');
+  });
+});
+
+describe('CatalogPage (iteration 15 — merged rows, layers, footer)', () => {
+  beforeEach(() => {
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
+      count: 3,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 3, items: 4 },
+      results: [ACQ, ACQ_SOLO, ACQ_REQ],
+    });
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 4,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 3, items: 4 },
+      results: [ITEM, PLAIN_ITEM, SOLO_ITEM, REQ_ITEM],
+    });
+  });
+
+  // CAT15-01 (FR-003b): single-item acquisition = ONE merged collapsed row.
+  it('renders a single-item acquisition as one merged row with both actions', async () => {
+    renderPage();
+    const lantern = await screen.findByText('Lantern');
+    const row = lantern.closest('tr')!;
+    // Same row carries the acquisition summary (zero cost hidden → source only).
+    expect(within(row).getByText('Solo')).toBeInTheDocument();
+    // Both entities' actions side by side.
+    expect(within(row).getByRole('button', { name: /Edit/ })).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: /Delete/ })).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: /Deprecate/ })).toBeInTheDocument();
+    // No separate child row while collapsed.
+    expect(screen.getAllByText('Lantern')).toHaveLength(1);
+  });
+
+  // CAT15-02 (FR-003b): expanding the merged row splits it into two rows.
+  it('splits a merged row into acquisition + item rows on expand', async () => {
+    const { container } = renderPage();
+    const lantern = await screen.findByText('Lantern');
+    const row = lantern.closest('tr')!;
+    const caret = within(row).getByLabelText(/caret-right/i, { selector: 'span[role="img"]' });
+    fireEvent.click(caret.closest('span[style]') ?? caret);
+    // Two rows now: the parent shows the item count, the child shows the item.
+    expect(await screen.findByText('1 items')).toBeInTheDocument();
+    expect(container.querySelectorAll('tr.ant-table-row-level-1').length).toBeGreaterThan(2);
+  });
+
+  // CAT15-03: multi-item parent row shows the item count in the Item cell.
+  it('shows the item count on unmerged acquisition rows', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    expect(screen.getByText('2 items')).toBeInTheDocument();
+  });
+
+  // CAT15-04: ×N tertiary row only when quantity > 1.
+  it('renders the ×quantity tertiary row only for quantity > 1', async () => {
+    renderPage();
+    const plain = await screen.findByText('Plain');
+    expect(within(plain.closest('td')!).getByText('×2')).toBeInTheDocument();
+    const backpack = screen.getByText('Backpack');
+    expect(within(backpack.closest('td')!).queryByText(/^×1$/)).toBeNull();
+  });
+
+  // CAT15-05: four date-range cases.
+  it('renders the four exact date cases', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    const both = `${dayjs(REQUESTED).format('YYYY-MM-DD')} ~ ${dayjs(OBTAINED).format('YYYY-MM-DD')}`;
+    expect(screen.getByText(both)).toBeInTheDocument();
+    // Obtained-only: bare date, no tilde.
+    expect(screen.getByText(dayjs(OBTAINED).format('YYYY-MM-DD'))).toBeInTheDocument();
+    // Requested-only: trailing tilde.
+    expect(screen.getByText(`${dayjs(REQUESTED).format('YYYY-MM-DD')} ~`)).toBeInTheDocument();
+  });
+
+  // CAT15-06: zero net cost hidden from the Acquisition primary.
+  it('hides a zero net cost', async () => {
+    renderPage();
+    await screen.findByText('Lantern');
+    expect(screen.getByText('Solo')).toBeInTheDocument();
+    expect(screen.queryByText('Solo 0 USD')).toBeNull();
+    // Non-zero still shown.
+    expect(screen.getByText('Waiting 5 USD')).toBeInTheDocument();
+  });
+
+  // CAT15-07: footer shows "{x} acquisitions, {y} items".
+  it('renders the footer totals', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    expect(screen.getByText('3 acquisitions, 4 items')).toBeInTheDocument();
+    expect(screen.queryByText(/\d+ records/)).toBeNull();
   });
 });

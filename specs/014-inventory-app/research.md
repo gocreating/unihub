@@ -197,3 +197,7 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 
 ### Terminology delta
 - **Content-coverage sweep** = the FR-029d pytest asserting every legacy text fragment survives into parser payloads; **active subtree** = the dragged tree row plus its descendants, rendered dimmed and excluded from drop targets.
+
+## Iteration 21 research (flat-mode Edit link, 2026-07-12)
+
+- **R21.1 — Root cause (CONFIRMED)**: the Catalog actions cell renders the acquisition Edit hyperlink only inside the `isAcquisition(r)` branch; flat mode (item-level filter/sort) yields exclusively item rows → no Edit anywhere, and since iteration 19 Edit is the sole path to Delete. Fix: the item-row branch adds the parent acquisition's Edit link when `flatMode && r.acquisition` (same href + SPA left-click interception); tree-mode child rows unchanged (parent row already carries it). Locked by RTL (flat rows expose the anchor; tree child rows don't) and the flatten e2e.

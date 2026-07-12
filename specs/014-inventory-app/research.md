@@ -130,3 +130,15 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 
 ### Terminology delta
 - **Parameter** = an Item AttributeValue whose key is an AttributeDefinition (system or user-defined); **unit family** = length|weight|volume; **`attr:<id>`** = toolbar key format for parameter filter/sort/columns.
+
+## Iteration 15 research (single-row merge + import repairs, 2026-07-12)
+
+- **R15.1 — Missing dates root cause (CONFIRMED)**: the Google-Sheets HTML merges the 購買日期 cell VERTICALLY (`rowspan`) when consecutive acquisitions share a date (e.g. "niko and...（武商夢時代）" and "MUJI 無印良品（武商夢時代）" share `2026/04/25`); the parser normalises `colspan` but not `rowspan`, so the second acquisition's date is lost (preview: `[12] MUJI 武商夢時代 req=— obt=—`). Fix: expand rowspan during table normalisation (carry the cell into subsequent rows). Regression-locked by a fixture-driven pytest.
+- **R15.2 — 代買 root cause (CONFIRMED)**: `parse_remark` only resolves `key：value` lines; bare keyless lines (代買) are silently discarded, violating the no-data-loss rule. Fix: append unresolved bare lines to `remark`. Regression-locked.
+- **R15.3 — "0 CNY" root cause (CONFIRMED)**: the sheet EXPLICITLY records `0` in 實際支付價錢 for many rows (real prices under 備註 單價/原價) — not an importer fabrication. Fix scope: never coerce a BLANK paid column to 0 (blank keeps the derived item-price accumulated); an explicit 0 stays 0 and the UI hides zero net cost.
+- **R15.4 — DB state**: 68 acquisitions, all legacy-imported, zero null-dated, no duplicates beyond expected same-source orders; several dates carry the `T16:00:00Z` signature of manual UI edits — the chosen wipe+re-import supersedes them with parsed values.
+- **R15.5 — Footer totals**: implemented as a core hook — `EntityOffsetPagination` includes a `totals` object in the response when the view defines `get_footer_totals(filtered_qs)`; AcquisitionViewSet returns `{acquisitions: count, items: Σ items}`, ItemViewSet `{acquisitions: distinct acquisition count, items: count}`. `EntityOffsetFooter` gains a `totalText` slot; other pages keep "{total} records".
+- **R15.6 — Merged single-item rows**: render-time only. A collapsed single-item acquisition row feeds item-side renderers from `items[0]` and offers both entities' actions; a single `toggledIds` set flips per-row defaults (multi-item = expanded, single-item = collapsed). Sorting/filtering/pagination semantics unchanged (the merged row IS the acquisition row).
+
+### Terminology delta
+- **Merged row** = a collapsed single-item acquisition rendering both entities in one row (FR-003b); **footer totals** = "{x} acquisitions, {y} items".

@@ -136,3 +136,7 @@ No schema change — presentation-only iteration. The single API-contract delta 
 **inventory.Constraint**: DROPPED (model + table + M2M join table). Never data_io-registered.
 
 **data_io**: item descriptor → `has_user_attributes=True` (parameter values ride the item CSV as `[name]:type` columns); scenario/scenarioitem descriptors pick up renamed/added fields via `auto_system_fields`.
+
+## Iteration 15 note (2026-07-12)
+
+No schema change. List responses gain an optional, response-only **`totals`** object (via `EntityOffsetPagination` + per-view `get_footer_totals`): acquisitions list → `{acquisitions, items}`; items list → `{acquisitions, items}`. Legacy 2026 data is wiped and re-imported after the parser fixes (rowspan dates, bare 備註 lines, blank-paid rule).

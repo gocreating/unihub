@@ -23,6 +23,7 @@ import PageTable, {
 import { DateTimeCell, dateTimeLines } from '@/components/DateTimeCell';
 import { EmptyValue } from '@/components/EmptyValue';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
+import { ItemName } from '@/components/ItemName';
 import { parameterKeyLabel } from '@/components/ParameterRowsEditor';
 import { listAttributeDefinitions } from '@/services/unihub-backend/core';
 import type { AttributeDefinition } from '@/services/unihub-backend/core';
@@ -152,6 +153,7 @@ export function CatalogPage() {
     () => [
       { key: 'acquisition__source', label: t({ id: 'pages.inventory.acquisitions.col.source' }), dataType: 'text' },
       { key: 'name', label: t({ id: 'common.name' }), dataType: 'text' },
+      { key: 'alias_name', label: t({ id: 'pages.inventory.items.col.alias' }), dataType: 'text' },
       { key: 'url', label: t({ id: 'pages.inventory.items.col.url' }), dataType: 'text' },
       { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text' },
       { key: 'remark', label: t({ id: 'pages.inventory.items.col.remark' }), dataType: 'text' },
@@ -184,6 +186,7 @@ export function CatalogPage() {
       { key: 'parameters', label: t({ id: 'pages.inventory.catalog.col.parameters' }), dataType: 'text', visible: true, order: 4 },
       { key: 'quantity', label: t({ id: 'pages.inventory.items.col.quantity' }), dataType: 'number', visible: false, order: 4.5 },
       { key: 'name', label: t({ id: 'common.name' }), dataType: 'text', visible: false, order: 5 },
+      { key: 'alias_name', label: t({ id: 'pages.inventory.items.col.alias' }), dataType: 'text', visible: false, order: 5.2 },
       { key: 'url', label: t({ id: 'pages.inventory.items.col.url' }), dataType: 'text', visible: false, order: 6 },
       { key: 'spec', label: t({ id: 'pages.inventory.items.col.spec' }), dataType: 'text', visible: false, order: 7 },
       { key: 'remark', label: t({ id: 'pages.inventory.items.col.remark' }), dataType: 'text', visible: false, order: 7.5 },
@@ -207,9 +210,9 @@ export function CatalogPage() {
   );
 
   const table = useEntityTable({
-    // v5: iteration-15 defaults (quantity hidden, remark added) — bump so
-    // previously-saved state doesn't shadow the new defaults.
-    key: 'inventory-catalog-v5',
+    // v6: iteration-18 defaults (alias column added) — bump so previously-
+    // saved state doesn't shadow the new defaults.
+    key: 'inventory-catalog-v6',
     filterableAttrs,
     columnDefs,
     // Default sort (spec): Obtained descending, NULLS FIRST (pending on top).
@@ -390,7 +393,7 @@ export function CatalogPage() {
     }
     switch (key) {
       case 'item_summary':
-        return widest([r.name, r.spec ?? '', r.quantity > 1 ? `×${r.quantity}` : '']);
+        return widest([r.alias_name || r.name, r.spec ?? '', r.quantity > 1 ? `×${r.quantity}` : '']);
       case 'parameters':
         return parameterBadges(r.parameters).join('   ');
       case 'remark':
@@ -399,6 +402,8 @@ export function CatalogPage() {
         return flatMode ? (r.acquisition?.source ?? '') : '';
       case 'name':
         return r.name;
+      case 'alias_name':
+        return r.alias_name ?? '';
       case 'url':
         return r.url ?? '';
       case 'spec':
@@ -480,14 +485,6 @@ export function CatalogPage() {
           return value === undefined ? EMPTY : <DateTimeCell value={value} />;
         },
       });
-      const nameLink = (r: Item) =>
-        r.url ? (
-          <a href={r.url} target="_blank" rel="noopener noreferrer">
-            {r.name}
-          </a>
-        ) : (
-          r.name
-        );
       const map: Record<string, ProColumns<CatalogRow>> = {
         // Derived "Acquisition" (FR-003a): display-only, no sort props.
         acquisition_summary: {
@@ -531,7 +528,9 @@ export function CatalogPage() {
             }
             return (
               <div>
-                <div>{nameLink(it)}</div>
+                <div>
+                  <ItemName item={it} linkify />
+                </div>
                 {it.spec ? ellipsisSecondary(it.spec) : null}
                 {it.quantity > 1 ? (
                   <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
@@ -585,6 +584,10 @@ export function CatalogPage() {
           fixed: getFixed('name'),
           ...makeSortProps('name', t({ id: 'common.name' }), sort),
           render: (_, r) => itemFor(r)?.name || EMPTY,
+        },
+        alias_name: {
+          ...itemText('alias_name', 'pages.inventory.items.col.alias', (it) => it.alias_name),
+          ellipsis: true,
         },
         url: {
           key: 'url',

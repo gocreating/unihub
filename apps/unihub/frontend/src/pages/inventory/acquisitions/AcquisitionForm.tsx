@@ -60,6 +60,7 @@ import {
 import { listCurrencies } from '@/services/unihub-backend/finance';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { ItemFormModal } from '../items/ItemFormModal';
+import { ItemName } from '@/components/ItemName';
 
 interface AcquisitionFieldValues {
   source?: string;
@@ -86,6 +87,7 @@ interface FactorRow {
 function itemToWrite(item: Item): ItemWrite {
   return {
     name: item.name,
+    alias_name: item.alias_name,
     quantity: item.quantity,
     spec: item.spec,
     remark: item.remark,
@@ -450,13 +452,14 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
               <Card
                 size="small"
                 title={
-                  card.data.url ? (
-                    <a href={card.data.url} target="_blank" rel="noopener noreferrer">
-                      {card.data.name || t({ id: 'pages.inventory.acquisitions.new.untitled' })}
-                    </a>
-                  ) : (
-                    card.data.name || t({ id: 'pages.inventory.acquisitions.new.untitled' })
-                  )
+                  <ItemName
+                    item={{
+                      name: card.data.name || t({ id: 'pages.inventory.acquisitions.new.untitled' }),
+                      alias_name: card.data.alias_name ?? '',
+                      url: card.data.url,
+                    }}
+                    linkify
+                  />
                 }
                 actions={[
                   <EditOutlined key="edit" onClick={() => openEditCard(idx)} />,
@@ -615,6 +618,7 @@ function writeToItemLike(data?: ItemWrite): Item | null {
   return {
     id: '',
     name: data.name,
+    alias_name: data.alias_name ?? '',
     quantity: data.quantity ?? 1,
     spec: data.spec ?? '',
     remark: data.remark ?? '',

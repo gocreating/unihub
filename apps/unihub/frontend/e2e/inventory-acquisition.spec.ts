@@ -218,3 +218,12 @@ test('cost-factor rows stack on a narrow viewport', async ({ page }) => {
   const box = await row.boundingBox();
   expect(box?.height ?? 0).toBeGreaterThan(60);
 });
+
+test('Add-Item modal offers the Alias field (iteration 18, FR-030)', async ({ page }) => {
+  await gotoNewAcquisition(page);
+  await page.locator('.ant-card', { hasText: 'Items' }).first().locator('button').filter({ hasText: /^Add$/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await expect(
+    page.locator('.ant-modal .ant-form-item', { hasText: 'Alias' }).first().locator('input'),
+  ).toBeVisible();
+});

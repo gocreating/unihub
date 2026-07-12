@@ -41,7 +41,7 @@ function renderPage() {
   );
 }
 
-describe('ScenariosPage (iteration 14 — 3 columns)', () => {
+describe('ScenariosPage (iteration 18 — 2 columns, actions in detail)', () => {
   beforeEach(() => {
     vi.mocked(inventoryService.listScenarios).mockResolvedValue({
       count: 2,
@@ -51,18 +51,21 @@ describe('ScenariosPage (iteration 14 — 3 columns)', () => {
     });
   });
 
-  // SP-01: exactly Name, Description, Actions columns (FR-010).
-  it('shows exactly Name, Description, and Actions columns', async () => {
+  // SP-01 (FR-010): exactly Name + Description — the Actions column is gone.
+  it('shows exactly Name and Description columns without row actions', async () => {
     const { container } = renderPage();
     await screen.findByText('Camping');
     const headers = Array.from(container.querySelectorAll('.ant-table-thead th'))
       .map((th) => th.textContent?.trim() ?? '')
       .filter((h) => h !== '');
     const names = headers.map((h) => h.replace(/\s+$/, ''));
-    expect(names.filter((h) => ['Name', 'Description', 'Actions'].some((k) => h.startsWith(k)))).toHaveLength(3);
-    for (const gone of ['Items', 'Progress', 'Status', 'Ready']) {
+    expect(names.filter((h) => ['Name', 'Description'].some((k) => h.startsWith(k)))).toHaveLength(2);
+    for (const gone of ['Actions', 'Items', 'Progress', 'Status', 'Ready']) {
       expect(names.some((h) => h.startsWith(gone))).toBe(false);
     }
+    // No Edit/Delete row buttons — they live on the detail page now.
+    const row = screen.getByText('Camping').closest('tr')!;
+    expect(row.querySelectorAll('button')).toHaveLength(0);
   });
 
   // SP-02: description renders; empty description shows the standard placeholder.

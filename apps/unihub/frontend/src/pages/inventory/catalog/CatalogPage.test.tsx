@@ -41,6 +41,7 @@ const DEFS = ['color', 'size', 'weight', 'length', 'width', 'height', 'volume'].
 const ITEM = {
   id: 'itm-1',
   name: 'Backpack',
+  alias_name: '',
   quantity: 1,
   spec: 'roomy',
   remark: '',
@@ -582,5 +583,71 @@ describe('CatalogPage (iteration 17 — plurals, name link, url width, seeded de
     ).toContain('50');
     const call = vi.mocked(inventoryService.listAcquisitions).mock.calls.at(-1)![0]!;
     expect(call.limit).toBe(50);
+  });
+});
+
+describe('CatalogPage (iteration 18 — alias display)', () => {
+  const ALIASED_ITEM = {
+    ...SOLO_ITEM,
+    id: 'itm-alias',
+    name: 'Seller Product 42',
+    alias_name: 'Torchy',
+    url: 'https://example.com/torch',
+    acquisition: {
+      id: 'acq-alias',
+      source: 'AliasShop',
+      request_time: null,
+      obtained_at: OBTAINED,
+      net_cost: [{ currency: 'USD', total: '3.0000' }],
+    },
+  };
+  const ACQ_ALIAS = {
+    ...ACQ,
+    id: 'acq-alias',
+    source: 'AliasShop',
+    net_cost: [{ currency: 'USD', total: '3.0000' }],
+    items: [ALIASED_ITEM],
+    item_count: 1,
+  };
+
+  beforeEach(() => {
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
+      count: 2,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 2, items: 3 },
+      results: [ACQ, ACQ_ALIAS],
+    });
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 3,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 2, items: 3 },
+      results: [ITEM, PLAIN_ITEM, ALIASED_ITEM],
+    });
+  });
+
+  // CAT18-01 (FR-030): the Item cell prefers the alias, keeps the link, and
+  // reveals the original seller name in a tooltip.
+  it('prefers the alias in the Item cell with a tooltip carrying the original name', async () => {
+    renderPage();
+    const alias = await screen.findByText('Torchy');
+    expect(screen.queryByText('Seller Product 42')).toBeNull();
+    const link = alias.closest('a')!;
+    expect(link).toHaveAttribute('href', 'https://example.com/torch');
+    fireEvent.mouseEnter(alias);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('Seller Product 42');
+  });
+
+  // CAT18-02 (FR-030): a hidden "Alias" column joins the Columns dropdown.
+  it('lists Alias (unchecked) in the Columns dropdown', async () => {
+    renderPage();
+    await screen.findByText('Torchy');
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    const label = await screen.findByText('Alias');
+    const row = label.closest('li, .ant-space, div') as HTMLElement;
+    expect(within(row).getByRole('checkbox')).not.toBeChecked();
   });
 });

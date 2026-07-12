@@ -1,61 +1,228 @@
 import { useMemo, useRef, useState } from 'react';
-import type { DragEvent } from 'react';
+import type { ReactNode } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Breadcrumb,
   Button,
   Card,
+  Dropdown,
   Empty,
   Input,
   List,
   Modal,
+  Space,
   Splitter,
   Tag,
-  Tree,
+  Tooltip,
   Typography,
   message,
 } from 'antd';
-import type { TreeDataNode, TreeProps } from 'antd';
-import { DeleteOutlined, HolderOutlined, PlusOutlined } from '@ant-design/icons';
-import { Link, useParams } from 'react-router-dom';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EllipsisOutlined,
+  HolderOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  pointerWithin,
+  rectIntersection,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import type { CollisionDetection, DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import {
   addScenarioItem,
+  deleteScenario,
   deleteScenarioItem,
   getScenario,
   listItems,
   listScenarioItems,
   moveScenarioItem,
+  updateScenario,
 } from '@/services/unihub-backend/inventory';
-import type { Item } from '@/services/unihub-backend/inventory';
+import type { Item, ScenarioItem } from '@/services/unihub-backend/inventory';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { HighlightText } from '@/components/HighlightText';
-import {
-  childrenOf,
-  computeDropTarget,
-  organizeAtTopLevel,
-  organizeInto,
-  sendBack,
-  unorganizedLines,
-} from './organizeTree';
-import type { MovePayload } from './organizeTree';
+import { ItemName } from '@/components/ItemName';
+import { parameterBadges } from '../itemBadges';
+import { flattenOrganized, projectDrop, sendBack, unorganizedLines, workingRows } from './organizeTree';
+import type { FlatRow, MovePayload } from './organizeTree';
+import { ScenarioFormModal } from './ScenarioFormModal';
 
-/** The line being dragged across panes (native HTML5 DnD bridge, R16.2). */
-interface DragSource {
-  id: string;
+const INDENT = 24;
+
+/** Ongoing drag: which line, and which pane it started from. */
+interface DragState {
+  lineId: string;
   from: 'flat' | 'tree';
+}
+
+const lineIdOf = (dndId: string | number): string =>
+  String(dndId).replace(/^(tree|flat|orgrow)-/, '');
+
+/** Rich shared row content: alias-preferred link, spec, parameter badges. */
+function RowContent({ line }: { line: ScenarioItem }) {
+  const badges = parameterBadges(line.item.parameters);
+  return (
+    <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <ItemName item={line.item} linkify />
+      </div>
+      {line.item.spec ? (
+        <Typography.Text
+          type="secondary"
+          style={{
+            display: 'block',
+            fontSize: 12,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {line.item.spec}
+        </Typography.Text>
+      ) : null}
+      {badges.length > 0 ? (
+        <div style={{ overflow: 'hidden' }}>
+          {badges.map((badge) => (
+            <Tag key={badge} style={{ fontSize: 11, marginTop: 2 }}>
+              {badge}
+            </Tag>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** A flat-pane row: draggable, with a pinned remove action (never overflows). */
+function FlatPaneRow({
+  line,
+  onRemove,
+  removeLabel,
+}: {
+  line: ScenarioItem;
+  onRemove: () => void;
+  removeLabel: string;
+}) {
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
+    id: `flat-${line.id}`,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      data-testid={`flat-row-${line.id}`}
+      {...attributes}
+      {...listeners}
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 8,
+        padding: '6px 4px',
+        borderBottom: '1px solid rgba(5,5,5,0.06)',
+        cursor: 'grab',
+        opacity: isDragging ? 0.4 : 1,
+        touchAction: 'none',
+      }}
+    >
+      <HolderOutlined style={{ marginTop: 4, color: 'rgba(0,0,0,0.45)', flex: 'none' }} />
+      <RowContent line={line} />
+      <Button
+        size="small"
+        type="text"
+        danger
+        aria-label={removeLabel}
+        icon={<DeleteOutlined />}
+        style={{ flex: 'none' }}
+        onClick={onRemove}
+        onPointerDown={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
+/**
+ * A droppable pane body. Must be its own component: useDroppable registers
+ * against the nearest DndContext PROVIDER, so it has to render as a child of
+ * <DndContext> — calling it in the page component (which renders the provider
+ * itself) would silently register nothing.
+ */
+function PaneDroppable({
+  id,
+  testId,
+  style,
+  children,
+}: {
+  id: string;
+  testId: string;
+  style?: React.CSSProperties;
+  children: ReactNode;
+}) {
+  const { setNodeRef } = useDroppable({ id });
+  return (
+    <div ref={setNodeRef} data-testid={testId} style={style}>
+      {children}
+    </div>
+  );
+}
+
+/** An organized (tree) row: draggable + droppable, indented by depth. */
+function OrgRow({ row }: { row: FlatRow }) {
+  const drag = useDraggable({ id: `tree-${row.line.id}` });
+  const drop = useDroppable({ id: `orgrow-${row.line.id}` });
+  return (
+    <div
+      ref={(node) => {
+        drag.setNodeRef(node);
+        drop.setNodeRef(node);
+      }}
+      data-testid={`org-row-${row.line.id}`}
+      {...drag.attributes}
+      {...drag.listeners}
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 8,
+        padding: '6px 4px',
+        paddingLeft: row.depth * INDENT,
+        borderBottom: '1px solid rgba(5,5,5,0.06)',
+        cursor: 'grab',
+        opacity: drag.isDragging ? 0.4 : 1,
+        touchAction: 'none',
+      }}
+    >
+      <HolderOutlined style={{ marginTop: 4, color: 'rgba(0,0,0,0.45)', flex: 'none' }} />
+      <RowContent line={row.line} />
+    </div>
+  );
 }
 
 export function ScenarioDetailPage() {
   const { id = '' } = useParams();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { formatMessage: t } = useIntl();
   // Splitter orientation follows the CONTENT width (Principle VI).
   const { ref, isNarrow } = useContainerWidth(720);
-  const dragRef = useRef<DragSource | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [search, setSearch] = useState('');
+
+  // ── Drag state (one dnd-kit system for all three motions, FR-011) ──
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const [indicator, setIndicator] = useState<{ gapIndex: number; depth: number } | null>(null);
+  const [overFlat, setOverFlat] = useState(false);
+  const projRef = useRef<{ gapIndex: number; dragDepth: number } | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const [scenarioQ, linesQ] = useQueries({
     queries: [
@@ -67,8 +234,16 @@ export function ScenarioDetailPage() {
   const lines = useMemo(() => linesQ.data ?? [], [linesQ.data]);
   const memberItemIds = useMemo(() => new Set(lines.map((l) => l.item.id)), [lines]);
   const flatLines = useMemo(() => unorganizedLines(lines), [lines]);
+  const rows = useMemo(() => flattenOrganized(lines), [lines]);
+  const lineById = useMemo(() => new Map(lines.map((l) => [l.id, l])), [lines]);
 
-  // Add-modal search: server-side case-insensitive substring over name OR spec.
+  // While dragging a tree row, its subtree collapses away (it travels along).
+  const renderRows = useMemo(
+    () => workingRows(rows, drag?.from === 'tree' ? drag.lineId : null),
+    [rows, drag],
+  );
+
+  // Add-modal search: server-side substring over name OR alias OR spec (FR-030).
   const searchQ = useQuery({
     queryKey: ['inventory', 'scenario-search', search],
     queryFn: () =>
@@ -77,6 +252,7 @@ export function ScenarioDetailPage() {
         filters: {
           groups: [
             { logic: 'and', conditions: [{ attr: 'name', op: 'contains', val: search }] },
+            { logic: 'and', conditions: [{ attr: 'alias_name', op: 'contains', val: search }] },
             { logic: 'and', conditions: [{ attr: 'spec', op: 'contains', val: search }] },
           ],
         },
@@ -103,81 +279,152 @@ export function ScenarioDetailPage() {
     onSuccess: invalidate,
     onError: () => message.error(t({ id: 'pages.inventory.scenarios.moveFailed' })),
   });
+  const updateMutation = useMutation({
+    mutationFn: (values: { name: string; description?: string }) => updateScenario(id, values),
+    onSuccess: () => {
+      invalidate();
+      setEditOpen(false);
+      message.success(t({ id: 'pages.inventory.scenarios.saved' }));
+    },
+    onError: () => message.error(t({ id: 'pages.inventory.scenarios.saveError' })),
+  });
 
-  // ── Cross-pane drag handlers (external drags never reach rc-tree) ──
-  const acceptFrom = (from: DragSource['from']) => (e: DragEvent) => {
-    if (dragRef.current?.from === from) e.preventDefault();
-  };
-  const dropOnTreeBackground = (e: DragEvent) => {
-    const source = dragRef.current;
-    if (source?.from !== 'flat') return;
-    e.preventDefault();
-    dragRef.current = null;
-    moveMutation.mutate({ lineId: source.id, ...organizeAtTopLevel(lines, source.id) });
-  };
-  const dropOnTreeNode = (containerId: string) => (e: DragEvent) => {
-    const source = dragRef.current;
-    if (source?.from !== 'flat') return;
-    e.preventDefault();
-    e.stopPropagation();
-    dragRef.current = null;
-    moveMutation.mutate({ lineId: source.id, ...organizeInto(lines, source.id, containerId) });
-  };
-  const dropOnFlatPane = (e: DragEvent) => {
-    const source = dragRef.current;
-    if (source?.from !== 'tree') return;
-    e.preventDefault();
-    dragRef.current = null;
-    moveMutation.mutate({ lineId: source.id, ...sendBack() });
+  const confirmDeleteScenario = () => {
+    Modal.confirm({
+      title: t({ id: 'pages.inventory.scenarios.delete.title' }),
+      content: t({ id: 'pages.inventory.scenarios.delete.confirm' }),
+      okText: t({ id: 'common.delete' }),
+      okType: 'danger',
+      cancelText: t({ id: 'common.cancel' }),
+      onOk: async () => {
+        await deleteScenario(id);
+        message.success(t({ id: 'pages.inventory.scenarios.deleted' }));
+        navigate('/inventory/scenarios');
+      },
+    });
   };
 
-  // Organized tree: nodes keyed by line id, nested by container, saved order.
-  // Node titles double as drop targets for flat→tree nesting; sending a line
-  // back to the flat pane is the ONLY way out of the tree (no remove button).
-  const treeData = useMemo<TreeDataNode[]>(() => {
-    const build = (parentId: string | null): TreeDataNode[] =>
-      childrenOf(lines, parentId).map((line) => ({
-        key: line.id,
-        title: (
-          <span
-            onDragOver={(e) => {
-              if (dragRef.current?.from === 'flat') {
-                e.preventDefault();
-                e.stopPropagation();
-              }
-            }}
-            onDrop={dropOnTreeNode(line.id)}
-          >
-            {line.item.name}
-          </span>
-        ),
-        children: build(line.id),
-      }));
-    return build(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines]);
-
-  // rc-tree-internal drags (rearranging within the tree).
-  const onTreeDrop: TreeProps['onDrop'] = (info) => {
-    const dragId = String(info.dragNode.key);
-    const dropId = String(info.node.key);
-    const dropPos = info.node.pos.split('-');
-    const relPosition = info.dropPosition - Number(dropPos[dropPos.length - 1]);
-    const target = computeDropTarget(lines, dragId, dropId, info.dropToGap, relPosition);
-    dragRef.current = null;
-    moveMutation.mutate({ lineId: dragId, ...target, organized: true });
+  // ── DnD wiring ──
+  // Prefer row droppables over the pane containers when both contain the pointer.
+  const collision: CollisionDetection = (args) => {
+    const within = pointerWithin(args);
+    const hits = within.length > 0 ? within : rectIntersection(args);
+    const rowHits = hits.filter((c) => String(c.id).startsWith('orgrow-'));
+    return rowHits.length > 0 ? rowHits : hits;
   };
 
+  const onDragStart = ({ active }: DragStartEvent) => {
+    const raw = String(active.id);
+    setDrag({ lineId: lineIdOf(raw), from: raw.startsWith('tree-') ? 'tree' : 'flat' });
+    setIndicator(null);
+    setOverFlat(false);
+    projRef.current = null;
+  };
+
+  const onDragMove = (event: DragMoveEvent) => {
+    const { active, over, delta } = event;
+    if (!drag) return;
+    if (!over) {
+      setIndicator(null);
+      setOverFlat(false);
+      projRef.current = null;
+      return;
+    }
+    const overId = String(over.id);
+    if (overId === 'flat-pane') {
+      setIndicator(null);
+      projRef.current = null;
+      setOverFlat(drag.from === 'tree');
+      return;
+    }
+    setOverFlat(false);
+    // Target slot in the WORKING list coordinates (renderRows).
+    let gapIndex: number;
+    if (overId === 'org-end') {
+      gapIndex = renderRows.length;
+    } else if (overId.startsWith('orgrow-')) {
+      const overIdx = renderRows.findIndex((r) => r.line.id === lineIdOf(overId));
+      if (overIdx === -1) return;
+      const translated = active.rect.current.translated;
+      const activeCenter = translated ? translated.top + translated.height / 2 : 0;
+      const overCenter = over.rect.top + over.rect.height / 2;
+      gapIndex = activeCenter > overCenter ? overIdx + 1 : overIdx;
+    } else {
+      return;
+    }
+    const baseDepth =
+      drag.from === 'tree' ? (rows.find((r) => r.line.id === drag.lineId)?.depth ?? 0) : 0;
+    const dragDepth = Math.max(0, baseDepth + Math.round(delta.x / INDENT));
+    const projected = projectDrop(rows, drag.from === 'tree' ? drag.lineId : null, gapIndex, dragDepth);
+    projRef.current = { gapIndex, dragDepth };
+    setIndicator({ gapIndex, depth: projected.depth });
+  };
+
+  const onDragEnd = ({ over }: DragEndEvent) => {
+    const current = drag;
+    const proj = projRef.current;
+    setDrag(null);
+    setIndicator(null);
+    setOverFlat(false);
+    projRef.current = null;
+    if (!current || !over) return;
+    const overId = String(over.id);
+    if (overId === 'flat-pane') {
+      if (current.from === 'tree') {
+        moveMutation.mutate({ lineId: current.lineId, ...sendBack() });
+      }
+      return;
+    }
+    if ((overId === 'org-end' || overId.startsWith('orgrow-')) && proj) {
+      const payload = projectDrop(
+        rows,
+        current.from === 'tree' ? current.lineId : null,
+        proj.gapIndex,
+        proj.dragDepth,
+      );
+      moveMutation.mutate({
+        lineId: current.lineId,
+        container_id: payload.container_id,
+        index: payload.index,
+        organized: true,
+      });
+    }
+  };
+
+  const onDragCancel = () => {
+    setDrag(null);
+    setIndicator(null);
+    setOverFlat(false);
+    projRef.current = null;
+  };
+
+  const dropIndicator = (
+    <div
+      style={{
+        height: 2,
+        background: '#1677ff',
+        marginLeft: (indicator?.depth ?? 0) * INDENT,
+        borderRadius: 1,
+      }}
+    />
+  );
+
+  const draggedLine = drag ? lineById.get(drag.lineId) : null;
+
+  // Modal result title: highlighted alias-preferred name, linked, tooltip original.
   const searchResults = searchQ.data?.results ?? [];
-  const itemTitle = (item: Item) => {
-    const highlighted = <HighlightText text={item.name} query={search} />;
-    return item.url ? (
+  const modalItemTitle = (item: Item): ReactNode => {
+    const display = item.alias_name || item.name;
+    const highlighted = <HighlightText text={display} query={search} />;
+    let node: ReactNode = item.url ? (
       <a href={item.url} target="_blank" rel="noopener noreferrer">
         {highlighted}
       </a>
     ) : (
       <span>{highlighted}</span>
     );
+    if (item.alias_name) node = <Tooltip title={item.name}>{node}</Tooltip>;
+    return node;
   };
 
   return (
@@ -190,8 +437,36 @@ export function ScenarioDetailPage() {
         ]}
       />
 
-      {/* Standalone info panel (FR-011). */}
-      <Card title={scenario?.name} style={{ marginBottom: 16 }}>
+      {/* Standalone info panel with the scenario actions (FR-011, iteration 18). */}
+      <Card
+        title={scenario?.name}
+        style={{ marginBottom: 16 }}
+        extra={
+          <Space>
+            <Button icon={<EditOutlined />} onClick={() => setEditOpen(true)}>
+              {t({ id: 'common.edit' })}
+            </Button>
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'delete',
+                    danger: true,
+                    icon: <DeleteOutlined />,
+                    label: t({ id: 'common.delete' }),
+                  },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'delete') confirmDeleteScenario();
+                },
+              }}
+              trigger={['click']}
+            >
+              <Button aria-label="scenario-actions" icon={<EllipsisOutlined />} />
+            </Dropdown>
+          </Space>
+        }
+      >
         {scenario?.description ? (
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
             {scenario.description}
@@ -212,83 +487,76 @@ export function ScenarioDetailPage() {
         }
         styles={{ body: { padding: 0 } }}
       >
-        <Splitter layout={isNarrow ? 'vertical' : 'horizontal'} style={{ minHeight: 320 }}>
-          <Splitter.Panel defaultSize="40%" min="20%">
-            <div
-              data-testid="unorganized-pane"
-              style={{ padding: 12, height: '100%' }}
-              onDragOver={acceptFrom('tree')}
-              onDrop={dropOnFlatPane}
-            >
-              <Typography.Text strong>
-                {t({ id: 'pages.inventory.scenarios.organize.unorganized' })}
-              </Typography.Text>
-              <List
-                size="small"
-                dataSource={flatLines}
-                locale={{
-                  emptyText: t({ id: 'pages.inventory.scenarios.organize.unorganizedEmpty' }),
+        <DndContext
+          sensors={sensors}
+          collisionDetection={collision}
+          onDragStart={onDragStart}
+          onDragMove={onDragMove}
+          onDragEnd={onDragEnd}
+          onDragCancel={onDragCancel}
+        >
+          <Splitter layout={isNarrow ? 'vertical' : 'horizontal'} style={{ minHeight: 320 }}>
+            <Splitter.Panel defaultSize="40%" min="20%">
+              <PaneDroppable
+                id="flat-pane"
+                testId="unorganized-pane"
+                style={{
+                  padding: 12,
+                  height: '100%',
+                  outline: overFlat ? '2px dashed #1677ff' : undefined,
+                  outlineOffset: -2,
                 }}
-                renderItem={(line) => (
-                  <List.Item
-                    draggable
-                    onDragStart={(e) => {
-                      dragRef.current = { id: line.id, from: 'flat' };
-                      e.dataTransfer?.setData('text/plain', line.id);
-                    }}
-                    onDragEnd={() => {
-                      dragRef.current = null;
-                    }}
-                    style={{ cursor: 'grab' }}
-                    actions={[
-                      <Button
-                        key="remove"
-                        size="small"
-                        type="text"
-                        danger
-                        aria-label={t({ id: 'pages.inventory.scenarios.organize.remove' })}
-                        icon={<DeleteOutlined />}
-                        onClick={() => removeMutation.mutate(line.id)}
-                      />,
-                    ]}
-                  >
-                    <HolderOutlined style={{ marginRight: 8, color: 'rgba(0,0,0,0.45)' }} />
-                    {line.item.name}
-                  </List.Item>
+              >
+                {flatLines.length === 0 ? (
+                  <Typography.Text type="secondary">
+                    {t({ id: 'pages.inventory.scenarios.organize.unorganizedEmpty' })}
+                  </Typography.Text>
+                ) : (
+                  flatLines.map((line) => (
+                    <FlatPaneRow
+                      key={line.id}
+                      line={line}
+                      removeLabel={t({ id: 'pages.inventory.scenarios.organize.remove' })}
+                      onRemove={() => removeMutation.mutate(line.id)}
+                    />
+                  ))
                 )}
-              />
-            </div>
-          </Splitter.Panel>
-          <Splitter.Panel>
-            <div
-              data-testid="organized-pane"
-              style={{ padding: 12, height: '100%' }}
-              onDragOver={acceptFrom('flat')}
-              onDrop={dropOnTreeBackground}
-            >
-              <Typography.Text strong>
-                {t({ id: 'pages.inventory.scenarios.organize.organized' })}
-              </Typography.Text>
-              {treeData.length === 0 ? (
-                <Empty description={t({ id: 'pages.inventory.scenarios.organize.empty' })} />
-              ) : (
-                <Tree
-                  draggable={{ icon: false }}
-                  blockNode
-                  defaultExpandAll
-                  treeData={treeData}
-                  onDragStart={({ node }) => {
-                    dragRef.current = { id: String(node.key), from: 'tree' };
-                  }}
-                  onDragEnd={() => {
-                    dragRef.current = null;
-                  }}
-                  onDrop={onTreeDrop}
-                />
-              )}
-            </div>
-          </Splitter.Panel>
-        </Splitter>
+              </PaneDroppable>
+            </Splitter.Panel>
+            <Splitter.Panel>
+              <PaneDroppable id="org-end" testId="organized-pane" style={{ padding: 12, height: '100%' }}>
+                {renderRows.length === 0 && !indicator ? (
+                  <Empty description={t({ id: 'pages.inventory.scenarios.organize.empty' })} />
+                ) : (
+                  <>
+                    {renderRows.map((row, i) => (
+                      <div key={row.line.id}>
+                        {indicator?.gapIndex === i ? dropIndicator : null}
+                        <OrgRow row={row} />
+                      </div>
+                    ))}
+                    {indicator?.gapIndex === renderRows.length ? dropIndicator : null}
+                  </>
+                )}
+              </PaneDroppable>
+            </Splitter.Panel>
+          </Splitter>
+          <DragOverlay>
+            {draggedLine ? (
+              <div
+                style={{
+                  padding: '6px 8px',
+                  background: '#fff',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  borderRadius: 6,
+                  maxWidth: 320,
+                }}
+              >
+                {draggedLine.item.alias_name || draggedLine.item.name}
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       </Card>
 
       {/* Add-items search modal (FR-011): members stay listed but disabled. */}
@@ -343,12 +611,20 @@ export function ScenarioDetailPage() {
                       ]
                 }
               >
-                <List.Item.Meta title={itemTitle(item)} description={item.spec || undefined} />
+                <List.Item.Meta title={modalItemTitle(item)} description={item.spec || undefined} />
               </List.Item>
             );
           }}
         />
       </Modal>
+
+      <ScenarioFormModal
+        open={editOpen}
+        initial={scenario ?? null}
+        confirmLoading={updateMutation.isPending}
+        onOk={(values) => updateMutation.mutate(values)}
+        onCancel={() => setEditOpen(false)}
+      />
     </div>
   );
 }

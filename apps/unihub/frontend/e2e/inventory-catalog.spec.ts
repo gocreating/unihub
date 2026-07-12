@@ -79,7 +79,7 @@ test('Requested is toggleable from the Columns dropdown and renders two-row date
   await page.getByRole('button', { name: /Columns/ }).click();
   const panel = page.locator('.ant-dropdown').last();
   // The dropdown lists the hidden real columns (URL-column bug fix).
-  for (const label of ['Requested', 'URL', 'Color', 'Volume']) {
+  for (const label of ['Requested', 'URL', 'Color', 'Volume', 'Alias']) {
     await expect(panel.getByText(label, { exact: true })).toBeVisible();
   }
   // Toggle Requested visible and apply.

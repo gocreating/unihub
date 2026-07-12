@@ -147,3 +147,9 @@ class TestItemParameterIoRoundTrip:
         assert restored.value == "1.5"
         assert restored.value_unit == "kg"
         assert float(restored.value_number) == 1500
+
+
+@pytest.mark.django_db
+def test_item_descriptor_carries_alias_name():
+    names = [f.column_name for f in get_table("inventory.item").system_fields]
+    assert "alias_name" in names

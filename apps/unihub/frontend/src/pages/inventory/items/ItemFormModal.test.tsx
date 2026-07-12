@@ -71,7 +71,7 @@ describe('ItemFormModal (Principle VI)', () => {
     expect(order.indexOf(cancel)).toBeLessThan(order.indexOf(save));
   });
 
-  it('orders fields: Name, Quantity, SKU Price, Spec, URL, Remark, Parameters (FR-022)', () => {
+  it('orders fields: Name, Quantity, SKU Price, Alias, Spec, URL, Remark, Parameters (FR-022)', () => {
     renderModal();
     const labels = Array.from(document.querySelectorAll('.ant-form-item-label label')).map(
       (l) => l.textContent,
@@ -80,6 +80,7 @@ describe('ItemFormModal (Principle VI)', () => {
       'Name',
       'Quantity',
       'SKU Price',
+      'Alias',
       'Spec',
       'URL',
       'Remark',

@@ -67,6 +67,7 @@ export interface AcquisitionSummary {
 export interface Item {
   id: string;
   name: string;
+  alias_name: string;
   quantity: number;
   spec: string;
   remark: string;
@@ -84,6 +85,7 @@ export interface Item {
 
 export interface ItemWrite {
   name: string;
+  alias_name?: string;
   quantity?: number;
   spec?: string;
   remark?: string;

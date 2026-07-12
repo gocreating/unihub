@@ -31,6 +31,7 @@ class ItemViewSet(viewsets.ModelViewSet):
     # ordering_fields). The Catalog's flat mode sends these paths directly.
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
+        "alias_name": {"lookup": "alias_name", "type": "text"},
         "spec": {"lookup": "spec", "type": "text"},
         "remark": {"lookup": "remark", "type": "text"},
         "quantity": {"lookup": "quantity", "type": "number"},
@@ -46,6 +47,7 @@ class ItemViewSet(viewsets.ModelViewSet):
     }
     ordering_fields = [
         "name",
+        "alias_name",
         "spec",
         "remark",
         "quantity",

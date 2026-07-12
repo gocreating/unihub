@@ -278,3 +278,38 @@ class TestFooterTotals:
         )
         data = auth_client.get(f"{ITEMS}?filters={filters}").json()
         assert data["totals"] == {"acquisitions": 1, "items": 1}
+
+
+@pytest.mark.django_db
+class TestItemAlias:
+    """Iteration 18 (FR-030): alias_name round-trip, filter, and ordering."""
+
+    def test_alias_round_trips_and_defaults_blank(self, auth_client):
+        item = create_item(auth_client, name="Seller Name", alias_name="My Torch")
+        fetched = auth_client.get(f"{ITEMS}{item['id']}/").json()
+        assert fetched["alias_name"] == "My Torch"
+        plain = create_item(auth_client, name="No Alias")
+        assert auth_client.get(f"{ITEMS}{plain['id']}/").json()["alias_name"] == ""
+
+    def test_alias_patchable(self, auth_client):
+        item = create_item(auth_client, name="X")
+        resp = _patch(auth_client, item["id"], {"alias_name": "Nick"})
+        assert resp.status_code == 200, resp.content
+        assert resp.json()["alias_name"] == "Nick"
+
+    def test_alias_filter_and_order(self, auth_client):
+        create_item(auth_client, name="A-item", alias_name="zulu")
+        create_item(auth_client, name="B-item", alias_name="alpha")
+        import urllib.parse
+
+        filters = urllib.parse.quote(
+            json.dumps(
+                {"groups": [{"logic": "and", "conditions": [{"attr": "alias_name", "op": "contains", "val": "ulu"}]}]}
+            )
+        )
+        resp = auth_client.get(f"{ITEMS}?filters={filters}")
+        assert resp.status_code == 200, resp.content
+        assert [i["name"] for i in resp.json()["results"]] == ["A-item"]
+        ordered = auth_client.get(f"{ITEMS}?ordering=alias_name").json()["results"]
+        aliases = [i["alias_name"] for i in ordered if i["alias_name"]]
+        assert aliases == sorted(aliases)

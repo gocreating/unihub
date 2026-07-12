@@ -7,6 +7,7 @@ import { useContainerWidth } from '@/hooks/useContainerWidth';
 
 interface ItemFormValues {
   name: string;
+  alias_name?: string;
   quantity: number;
   spec?: string;
   remark?: string;
@@ -34,6 +35,7 @@ interface ItemFormModalProps {
 function formValuesToItemWrite(v: ItemFormValues): ItemWrite {
   return {
     name: v.name,
+    alias_name: v.alias_name ?? '',
     quantity: v.quantity ?? 1,
     spec: v.spec ?? '',
     remark: v.remark ?? '',
@@ -71,6 +73,7 @@ export function ItemFormModal({
     if (initial) {
       form.setFieldsValue({
         name: initial.name,
+        alias_name: initial.alias_name,
         quantity: Number(initial.quantity ?? 1),
         spec: initial.spec,
         remark: initial.remark,
@@ -122,8 +125,8 @@ export function ItemFormModal({
           onValuesChange={() => setDirty(true)}
           onFinish={(values) => onOk(formValuesToItemWrite(values))}
         >
-          {/* Order (FR-022): Name, quantity, SKU price, spec, URL, remark,
-              then the on-demand Parameters editor (FR-026). */}
+          {/* Order (FR-022): Name, quantity, SKU price, alias, spec, URL,
+              remark, then the on-demand Parameters editor (FR-026). */}
           <Row gutter={12}>
             <Col span={half}>
               <Form.Item name="name" label={t({ id: 'common.name' })} rules={[{ required: true }]}>
@@ -155,6 +158,9 @@ export function ItemFormModal({
               </Form.Item>
             </Col>
           </Row>
+          <Form.Item name="alias_name" label={t({ id: 'pages.inventory.items.col.alias' })}>
+            <Input />
+          </Form.Item>
           <Form.Item name="spec" label={t({ id: 'pages.inventory.items.col.spec' })}>
             <Input.TextArea rows={2} />
           </Form.Item>

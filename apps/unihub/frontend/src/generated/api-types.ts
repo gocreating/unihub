@@ -864,6 +864,7 @@ export interface components {
         Item: {
             readonly id: string;
             name: string;
+            alias_name?: string;
             quantity?: number;
             spec?: string;
             remark?: string;
@@ -1090,6 +1091,7 @@ export interface components {
         PatchedItem: {
             readonly id?: string;
             name?: string;
+            alias_name?: string;
             quantity?: number;
             spec?: string;
             remark?: string;

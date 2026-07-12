@@ -77,6 +77,8 @@ class Item(models.Model):
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     name = models.CharField(max_length=200)
+    # The user's own familiar name — preferred in displays (FR-030).
+    alias_name = models.CharField(max_length=200, blank=True)
     quantity = models.IntegerField(default=1)
     spec = models.TextField(blank=True)
     remark = models.TextField(blank=True)

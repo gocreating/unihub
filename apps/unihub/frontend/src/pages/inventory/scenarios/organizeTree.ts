@@ -115,3 +115,36 @@ export function projectDrop(
 export function sendBack(): MovePayload {
   return { container_id: null, index: 0, organized: false };
 }
+
+/**
+ * The rows actually RENDERED in the organized pane: rows whose ancestors are
+ * all expanded. `collapsedIds` holds the ids of collapsed container lines
+ * (iteration 19 caret toggler).
+ */
+export function visibleRows(rows: FlatRow[], collapsedIds: Set<string>): FlatRow[] {
+  const hidden = new Set<string>();
+  for (const row of rows) {
+    if (row.parentId && (collapsedIds.has(row.parentId) || hidden.has(row.parentId))) {
+      hidden.add(row.line.id);
+    }
+  }
+  return rows.filter((row) => !hidden.has(row.line.id));
+}
+
+/**
+ * Map a drop slot expressed in VISIBLE coordinates to a WORKING-list gap
+ * index: "before visible[i]" = that row's working index; "after visible[i]" =
+ * the NEXT visible row's working index (i.e. after the entire hidden subtree
+ * of a collapsed container), or the end of the working list.
+ */
+export function gapFromVisible(
+  working: FlatRow[],
+  visible: FlatRow[],
+  visIndex: number,
+  after: boolean,
+): number {
+  const target = after ? visible[visIndex + 1] : visible[visIndex];
+  if (!target) return working.length;
+  const at = working.findIndex((r) => r.line.id === target.line.id);
+  return at === -1 ? working.length : at;
+}

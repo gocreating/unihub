@@ -10,6 +10,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Row,
   Select,
   Space,
@@ -52,6 +53,7 @@ import { listAttributeDefinitions } from '@/services/unihub-backend/core';
 import {
   COST_FACTOR_TYPES,
   createAcquisition,
+  deleteAcquisition,
   deleteItem,
   listSources,
   updateAcquisition,
@@ -60,6 +62,7 @@ import {
 import { listCurrencies } from '@/services/unihub-backend/finance';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { ItemFormModal } from '../items/ItemFormModal';
+import { PanelHeaderActions } from '@/components/PanelHeaderActions';
 import { ItemName } from '@/components/ItemName';
 
 interface AcquisitionFieldValues {
@@ -138,6 +141,24 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
   const { ref, isNarrow } = useContainerWidth(640);
   const half = isNarrow ? 24 : 12;
   const third = isNarrow ? 24 : 8;
+
+  // Panel kebab Delete (v1.21.0, edit mode only): item-count confirm, then
+  // back to the Catalog (FR-007).
+  const confirmDeleteAcquisition = () => {
+    if (!initial) return;
+    Modal.confirm({
+      title: t({ id: 'pages.inventory.acquisitions.delete.title' }),
+      content: t({ id: 'pages.inventory.acquisitions.delete.confirm' }, { count: initial.items.length }),
+      okText: t({ id: 'common.delete' }),
+      okType: 'danger',
+      cancelText: t({ id: 'common.cancel' }),
+      onOk: async () => {
+        await deleteAcquisition(initial.id);
+        message.success(t({ id: 'pages.inventory.acquisitions.deleted' }));
+        navigate('/inventory/catalog');
+      },
+    });
+  };
 
   const [cards, setCards] = useState<Card[]>(() =>
     initial ? initial.items.map((i) => ({ id: i.id, data: itemToWrite(i) })) : [emptyCard()],
@@ -408,7 +429,28 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
 
   return (
     <div ref={ref}>
-      <Card title={t({ id: 'pages.inventory.acquisitions.form.title' })} style={{ marginBottom: 16 }}>
+      <Card
+        title={t({ id: 'pages.inventory.acquisitions.form.title' })}
+        style={{ marginBottom: 16 }}
+        extra={
+          isEdit ? (
+            <PanelHeaderActions
+              narrow={isNarrow}
+              kebabLabel="acquisition-actions"
+              visible={[]}
+              advanced={[
+                {
+                  key: 'delete',
+                  label: t({ id: 'common.delete' }),
+                  icon: <DeleteOutlined />,
+                  danger: true,
+                  onClick: confirmDeleteAcquisition,
+                },
+              ]}
+            />
+          ) : undefined
+        }
+      >
         <Form form={form} layout="vertical">
           <Row gutter={12}>
             <Col span={half}>

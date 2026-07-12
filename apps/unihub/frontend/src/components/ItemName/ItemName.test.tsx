@@ -32,3 +32,32 @@ describe('ItemName (FR-030)', () => {
     expect(screen.getByText('Seller Product Name').closest('a')).toBeNull();
   });
 });
+
+describe('ItemName truncate mode (iteration 19)', () => {
+  it('aliased: single tooltip carries the original name (no nesting)', async () => {
+    render(<ItemName item={{ ...base, alias_name: 'Torchy' }} truncate />);
+    const el = screen.getByText('Torchy');
+    fireEvent.mouseEnter(el);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('Seller Product Name');
+    // Exactly one tooltip layer.
+    expect(document.querySelectorAll('.ant-tooltip').length).toBe(1);
+  });
+
+  it('unaliased and fully visible: no tooltip', async () => {
+    render(<ItemName item={base} truncate />);
+    fireEvent.mouseEnter(screen.getByText('Seller Product Name'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(document.querySelector('.ant-tooltip-open')).toBeNull();
+  });
+
+  it('unaliased and truncated: tooltip gated on actual overflow', async () => {
+    render(<ItemName item={base} truncate />);
+    const span = screen.getByText('Seller Product Name').closest('span')!;
+    Object.defineProperty(span, 'scrollWidth', { value: 300, configurable: true });
+    Object.defineProperty(span, 'clientWidth', { value: 100, configurable: true });
+    fireEvent.mouseEnter(span);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('Seller Product Name');
+  });
+});

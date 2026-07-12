@@ -122,3 +122,52 @@ describe('organizeTree (iteration 18 — flatten + projection)', () => {
     expect(sendBack()).toEqual({ container_id: null, index: 0, organized: false });
   });
 });
+
+// Iteration 19: caret collapse — visible rows + gap mapping.
+import { gapFromVisible, visibleRows } from './organizeTree';
+
+describe('organizeTree (iteration 19 — collapse helpers)', () => {
+  // Deep fixture: bag > cam > lens; tent top-level.
+  const DEEP = [
+    line('l-bag', null, 0, true),
+    line('l-tent', null, 1, true),
+    line('l-cam', 'l-bag', 0, true),
+    line('l-lens', 'l-cam', 0, true),
+  ];
+  const DEEP_ROWS = flattenOrganized(DEEP);
+
+  it('visibleRows hides descendants of collapsed rows (nested included)', () => {
+    expect(visibleRows(DEEP_ROWS, new Set()).map((r) => r.line.id)).toEqual([
+      'l-bag',
+      'l-cam',
+      'l-lens',
+      'l-tent',
+    ]);
+    expect(visibleRows(DEEP_ROWS, new Set(['l-cam'])).map((r) => r.line.id)).toEqual([
+      'l-bag',
+      'l-cam',
+      'l-tent',
+    ]);
+    expect(visibleRows(DEEP_ROWS, new Set(['l-bag'])).map((r) => r.line.id)).toEqual([
+      'l-bag',
+      'l-tent',
+    ]);
+  });
+
+  it('gapFromVisible maps a slot AFTER a collapsed container to after its subtree', () => {
+    const collapsed = new Set(['l-bag']);
+    const visible = visibleRows(DEEP_ROWS, collapsed);
+    // Before bag → working gap 0.
+    expect(gapFromVisible(DEEP_ROWS, visible, 0, false)).toBe(0);
+    // After bag (collapsed) → after its ENTIRE subtree = before tent = 3.
+    expect(gapFromVisible(DEEP_ROWS, visible, 0, true)).toBe(3);
+    // After tent (last visible) → end of the working list.
+    expect(gapFromVisible(DEEP_ROWS, visible, 1, true)).toBe(4);
+  });
+
+  it('gapFromVisible is the identity mapping when nothing is collapsed', () => {
+    const visible = visibleRows(DEEP_ROWS, new Set());
+    expect(gapFromVisible(DEEP_ROWS, visible, 2, false)).toBe(2);
+    expect(gapFromVisible(DEEP_ROWS, visible, 2, true)).toBe(3);
+  });
+});

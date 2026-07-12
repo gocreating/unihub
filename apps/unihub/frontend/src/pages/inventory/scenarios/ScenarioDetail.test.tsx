@@ -13,7 +13,9 @@ vi.mock('@/services/unihub-backend/inventory');
 const item = (
   id: string,
   name: string,
-  extra: Partial<Pick<Item, 'url' | 'alias_name' | 'spec'>> & { parameters?: ItemParameter[] } = {},
+  extra: Partial<Pick<Item, 'url' | 'alias_name' | 'spec' | 'acquisition'>> & {
+    parameters?: ItemParameter[];
+  } = {},
 ): Item =>
   ({
     id,
@@ -29,7 +31,7 @@ const item = (
     status: 'active',
     deprecate_time: null,
     parameters: extra.parameters ?? [],
-    acquisition: null,
+    acquisition: extra.acquisition ?? null,
     created_at: '2026-07-01T00:00:00Z',
     updated_at: '2026-07-01T00:00:00Z',
   }) as Item;
@@ -113,7 +115,16 @@ describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes
       previous: null,
       results: [
         item('item-bag', 'Backpack'),
-        item('i-new', 'Lantern', { url: 'https://example.com/lantern' }),
+        item('i-new', 'Lantern', {
+          url: 'https://example.com/lantern',
+          acquisition: {
+            id: 'acq-l',
+            source: 'LanternShop',
+            request_time: null,
+            obtained_at: '2026-03-05T00:00:00Z',
+            net_cost: [],
+          },
+        }),
       ],
     });
     vi.mocked(inventoryService.addScenarioItem).mockResolvedValue(LINES[2]!);
@@ -214,7 +225,17 @@ describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes
     );
     expect(lantern.querySelector('mark')?.textContent).toBe('an');
     const memberRow = within(modal).getByText('Backpack').closest('.ant-list-item') as HTMLElement;
-    expect(within(memberRow).getByText('Added')).toBeInTheDocument();
+    // Iteration 19: single Add button per row — DISABLED for members, with an
+    // "Added" tooltip instead of a tag.
+    const memberAdd = within(memberRow).getByRole('button', { name: /Add/ });
+    expect(memberAdd).toBeDisabled();
+    expect(within(memberRow).queryByText('Added')).toBeNull();
+    fireEvent.mouseEnter(memberAdd.parentElement!);
+    expect((await screen.findAllByRole('tooltip')).some((el) => el.textContent === 'Added')).toBe(
+      true,
+    );
+    // Acquisition context line on results that carry one (iteration 19).
+    expect(within(modal).getByText(/LanternShop/)).toBeInTheDocument();
     const lanternRow = lantern.closest('.ant-list-item') as HTMLElement;
     fireEvent.click(within(lanternRow).getByRole('button', { name: /Add/ }));
     await waitFor(() =>
@@ -222,5 +243,32 @@ describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes
         item_id: 'i-new',
       }),
     );
+  });
+
+  // SD19-01 (FR-011): container rows show a caret toggler; collapse hides the subtree.
+  it('collapses and expands a container subtree via the caret', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    const bagRow = screen.getByTestId('org-row-l-bag');
+    // Backpack has a child (Camera) → caret present; Camera has none → spacer.
+    const caret = within(bagRow).getByLabelText('toggle-children');
+    expect(screen.getByTestId('org-row-l-cam')).toBeInTheDocument();
+    fireEvent.click(caret);
+    expect(screen.queryByTestId('org-row-l-cam')).toBeNull();
+    fireEvent.click(within(bagRow).getByLabelText('toggle-children'));
+    expect(screen.getByTestId('org-row-l-cam')).toBeInTheDocument();
+    const camRow = screen.getByTestId('org-row-l-cam');
+    expect(within(camRow).queryByLabelText('toggle-children')).toBeNull();
+  });
+
+  // SD19-02 (FR-011): truncation-gated tooltips via ItemName truncate mode —
+  // the aliased row's tooltip reveals the original name.
+  it('shows the original name tooltip on an aliased organized row', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    const cammy = within(screen.getByTestId('org-row-l-cam')).getByText('Cammy');
+    fireEvent.mouseEnter(cammy.closest('span')!);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('Camera');
   });
 });

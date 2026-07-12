@@ -191,7 +191,7 @@ test('item rows show parameter badges; the Item cell links to the URL', async ({
   expect(tagCount).toBeGreaterThan(0);
 });
 
-test('item rows offer Deprecate/Restore but no Delete; acquisition rows keep Delete', async ({ page }) => {
+test('item rows offer Deprecate/Restore; acquisition rows offer an Edit LINK, no Delete (iter 19)', async ({ page }) => {
   // Page 1 is dominated by merged single-item rows — raise the page size so
   // multi-item acquisitions (with child rows) are present.
   await page.locator('.ant-table-footer .ant-select').first().click();
@@ -207,7 +207,11 @@ test('item rows offer Deprecate/Restore but no Delete; acquisition rows keep Del
   ).toBeVisible();
   await expect(itemRow.locator('button', { hasText: 'Delete' })).toHaveCount(0);
   const acqRow = page.locator('tr.ant-table-row-level-0').first();
-  await expect(acqRow.locator('button', { hasText: 'Delete' }).first()).toBeVisible();
+  // Edit is a REAL hyperlink to the edit page (new-tab capable); no Delete.
+  const edit = acqRow.locator('a', { hasText: 'Edit' }).first();
+  await expect(edit).toBeVisible();
+  await expect(edit).toHaveAttribute('href', /\/inventory\/acquisitions\/.+\/edit/);
+  await expect(acqRow.locator('button', { hasText: 'Delete' })).toHaveCount(0);
 });
 
 test('Item column sizes to content (canonical dataWidths, incl. item rows)', async ({ page }) => {

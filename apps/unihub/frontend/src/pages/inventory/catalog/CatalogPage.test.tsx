@@ -278,15 +278,18 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
   });
 
   // CAT13-07 (f): item rows have no Delete; acquisition rows keep Edit + Delete.
-  it('offers only Deprecate/Restore on item rows, Edit/Delete on acquisition rows', async () => {
+  it('offers only Deprecate/Restore on item rows and an Edit LINK on acquisition rows', async () => {
     renderPage();
     const name = await screen.findByText('Backpack');
     const itemRow = name.closest('tr')!;
     expect(within(itemRow).getByRole('button', { name: /Deprecate/ })).toBeInTheDocument();
     expect(within(itemRow).queryByRole('button', { name: /Delete/ })).toBeNull();
     const acqRow = screen.getByText('Shop 10 USD').closest('tr')!;
-    expect(within(acqRow).getByRole('button', { name: /Edit/ })).toBeInTheDocument();
-    expect(within(acqRow).getByRole('button', { name: /Delete/ })).toBeInTheDocument();
+    // Iteration 19: Edit is a real hyperlink (new-tab capable); Delete is
+    // gone from the catalog (it lives on the edit page's panel kebab).
+    const edit = within(acqRow).getByText('Edit').closest('a')!;
+    expect(edit).toHaveAttribute('href', '/inventory/acquisitions/acq-1/edit');
+    expect(within(acqRow).queryByText('Delete')).toBeNull();
   });
 
   // CAT13-08 (g): the column dropdown lists every real column, including URL.
@@ -351,9 +354,13 @@ describe('CatalogPage (iteration 15 — merged rows, layers, footer)', () => {
     const row = lantern.closest('tr')!;
     // Same row carries the acquisition summary (zero cost hidden → source only).
     expect(within(row).getByText('Solo')).toBeInTheDocument();
-    // Both entities' actions side by side.
-    expect(within(row).getByRole('button', { name: /Edit/ })).toBeInTheDocument();
-    expect(within(row).getByRole('button', { name: /Delete/ })).toBeInTheDocument();
+    // Both entities' actions side by side (iteration 19: Edit is a link,
+    // no Delete on the catalog).
+    expect(within(row).getByText('Edit').closest('a')).toHaveAttribute(
+      'href',
+      '/inventory/acquisitions/acq-solo/edit',
+    );
+    expect(within(row).queryByText('Delete')).toBeNull();
     expect(within(row).getByRole('button', { name: /Deprecate/ })).toBeInTheDocument();
     // No separate child row while collapsed.
     expect(screen.getAllByText('Lantern')).toHaveLength(1);

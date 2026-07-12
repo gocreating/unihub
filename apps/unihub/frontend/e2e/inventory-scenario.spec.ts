@@ -98,7 +98,8 @@ test('detail actions, modal-add, unified drag (nested drop, rearrange, send back
   const modal = page.locator('.ant-modal', { hasText: 'Add items' }).first();
   await modal.locator('input').first().fill('a');
   for (let i = 0; i < 2; i++) {
-    const addButtons = modal.locator('.ant-list-item button').filter({ hasText: /Add/ });
+    // Member rows keep a DISABLED Add button (iter 19) — click enabled ones.
+    const addButtons = modal.locator('.ant-list-item button:not([disabled])').filter({ hasText: /Add/ });
     await expect(addButtons.first()).toBeVisible({ timeout: 10_000 });
     await addButtons.first().click();
     await expect(async () => {
@@ -202,4 +203,84 @@ test('narrow pane keeps flat-row actions inside the pane bounds', async ({ page 
   const paneBox = (await pane.boundingBox())!;
   const btnBox = (await rows.first().getByRole('button').boundingBox())!;
   expect(btnBox.x + btnBox.width).toBeLessThanOrEqual(paneBox.x + paneBox.width + 1);
+});
+
+test('iteration 19: caret collapse, modal add-button tooltip, narrow panel fold', async ({
+  page,
+}) => {
+  const name = `E2E Kebab19 ${Date.now()}`;
+  await page.goto('/inventory/scenarios');
+  await page.waitForSelector('.ant-table-thead', { timeout: 10_000 });
+  await page.locator('button').filter({ hasText: /New/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.locator('.ant-modal input[id$="name"]').fill(name);
+  await page.locator('.ant-modal button', { hasText: /Save/ }).click();
+  await page.waitForTimeout(500);
+  await page.locator('.ant-table-tbody a', { hasText: name }).first().click();
+  await page.waitForSelector('.ant-splitter', { timeout: 10_000 });
+
+  // Add two items; the modal rows stay inside the modal bounds and member
+  // rows show a DISABLED Add button whose hover reveals the "Added" tooltip.
+  await page.locator('.ant-card', { hasText: 'Organize' }).first()
+    .locator('button').filter({ hasText: /^Add$/ }).first().click();
+  const modal = page.locator('.ant-modal', { hasText: 'Add items' }).first();
+  await modal.locator('input').first().fill('a');
+  const enabledAdds = modal.locator('.ant-list-item button:not([disabled])').filter({ hasText: /Add/ });
+  await expect(enabledAdds.first()).toBeVisible({ timeout: 10_000 });
+  const modalBox = (await modal.boundingBox())!;
+  const rowBox = (await modal.locator('.ant-list-item').first().boundingBox())!;
+  expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(modalBox.x + modalBox.width + 1);
+  await enabledAdds.first().click();
+  await page.waitForTimeout(600);
+  await enabledAdds.first().click();
+  await page.waitForTimeout(600);
+  // First result is now a member — its Add button is disabled; hover shows "Added".
+  const disabledAdd = modal.locator('.ant-list-item button[disabled]').first();
+  await expect(disabledAdd).toBeVisible();
+  await disabledAdd.locator('xpath=ancestor::span[1]').hover();
+  await expect(page.locator('.ant-tooltip:not(.ant-tooltip-hidden)', { hasText: 'Added' }))
+    .toBeVisible({ timeout: 5_000 });
+  await modal.locator('.ant-modal-close').click();
+  // Wait out the close animation — the modal wrap swallows pointer events
+  // until fully hidden.
+  await expect(modal).toBeHidden();
+  await page.waitForTimeout(300);
+
+  // Organize: item 1 top-level, item 2 nested (as in the iter-18 spec).
+  const flatPane = page.getByTestId('unorganized-pane');
+  const orgPane = page.getByTestId('organized-pane');
+  const orgBox = (await orgPane.boundingBox())!;
+  await mouseDrag(page, flatPane.locator('[data-testid^="flat-row-"]').first(),
+    orgBox.x + orgBox.width / 2, orgBox.y + 40);
+  const firstRow = orgPane.locator('[data-testid^="org-row-"]').first();
+  const rBox = (await firstRow.boundingBox())!;
+  await mouseDrag(page, flatPane.locator('[data-testid^="flat-row-"]').first(),
+    rBox.x + 120, rBox.y + rBox.height * 0.8);
+  await expect(orgPane.locator('[data-testid^="org-row-"]')).toHaveCount(2, { timeout: 10_000 });
+
+  // Caret collapse hides the child; expand brings it back.
+  const caret = orgPane.locator('[aria-label="toggle-children"]').first();
+  await expect(caret).toBeVisible();
+  await caret.click();
+  await expect(orgPane.locator('[data-testid^="org-row-"]')).toHaveCount(1);
+  await orgPane.locator('[aria-label="toggle-children"]').first().click();
+  await expect(orgPane.locator('[data-testid^="org-row-"]')).toHaveCount(2);
+
+  // Narrow viewport: the info panel folds Edit into the kebab (v1.21.0).
+  await page.setViewportSize({ width: 560, height: 900 });
+  await page.waitForTimeout(600);
+  await expect(page.getByRole('button', { name: /Edit/ })).toHaveCount(0);
+  await page.getByLabel('scenario-actions').click();
+  const menu = page.locator('.ant-dropdown-menu');
+  await expect(menu.locator('.ant-dropdown-menu-item', { hasText: 'Edit' })).toBeVisible();
+  await expect(menu.locator('.ant-dropdown-menu-item', { hasText: 'Delete' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Cleanup.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.waitForTimeout(400);
+  await page.getByLabel('scenario-actions').click();
+  await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
+  await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();
+  await page.waitForURL(/\/inventory\/scenarios$/, { timeout: 10_000 });
 });

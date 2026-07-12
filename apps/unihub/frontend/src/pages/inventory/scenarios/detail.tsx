@@ -5,12 +5,10 @@ import {
   Breadcrumb,
   Button,
   Card,
-  Dropdown,
   Empty,
   Input,
   List,
   Modal,
-  Space,
   Splitter,
   Tag,
   Tooltip,
@@ -18,9 +16,10 @@ import {
   message,
 } from 'antd';
 import {
+  CaretDownOutlined,
+  CaretRightOutlined,
   DeleteOutlined,
   EditOutlined,
-  EllipsisOutlined,
   HolderOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
@@ -52,8 +51,19 @@ import type { Item, ScenarioItem } from '@/services/unihub-backend/inventory';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { HighlightText } from '@/components/HighlightText';
 import { ItemName } from '@/components/ItemName';
+import { OverflowTooltip } from '@/components/OverflowTooltip';
+import { PanelHeaderActions } from '@/components/PanelHeaderActions';
+import { acquisitionSummaryLines } from '../acquisitionSummary';
 import { parameterBadges } from '../itemBadges';
-import { flattenOrganized, projectDrop, sendBack, unorganizedLines, workingRows } from './organizeTree';
+import {
+  flattenOrganized,
+  gapFromVisible,
+  projectDrop,
+  sendBack,
+  unorganizedLines,
+  visibleRows,
+  workingRows,
+} from './organizeTree';
 import type { FlatRow, MovePayload } from './organizeTree';
 import { ScenarioFormModal } from './ScenarioFormModal';
 
@@ -73,21 +83,13 @@ function RowContent({ line }: { line: ScenarioItem }) {
   const badges = parameterBadges(line.item.parameters);
   return (
     <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        <ItemName item={line.item} linkify />
-      </div>
+      {/* Truncation-gated tooltips (constitution VI, iteration 19). */}
+      <ItemName item={line.item} linkify truncate />
       {line.item.spec ? (
-        <Typography.Text
-          type="secondary"
-          style={{
-            display: 'block',
-            fontSize: 12,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {line.item.spec}
+        <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+          <OverflowTooltip title={line.item.spec} style={{ maxWidth: '100%' }}>
+            {line.item.spec}
+          </OverflowTooltip>
         </Typography.Text>
       ) : null}
       {badges.length > 0 ? (
@@ -175,7 +177,17 @@ function PaneDroppable({
 }
 
 /** An organized (tree) row: draggable + droppable, indented by depth. */
-function OrgRow({ row }: { row: FlatRow }) {
+function OrgRow({
+  row,
+  hasChildren,
+  collapsed,
+  onToggle,
+}: {
+  row: FlatRow;
+  hasChildren: boolean;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const drag = useDraggable({ id: `tree-${row.line.id}` });
   const drop = useDroppable({ id: `orgrow-${row.line.id}` });
   return (
@@ -199,6 +211,24 @@ function OrgRow({ row }: { row: FlatRow }) {
         touchAction: 'none',
       }}
     >
+      {/* Caret toggler (iteration 19): containers collapse/expand; childless
+          rows keep an aligned spacer. Pointer events stop so a caret click
+          never starts a drag. */}
+      {hasChildren ? (
+        <span
+          aria-label="toggle-children"
+          style={{ marginTop: 4, cursor: 'pointer', flex: 'none' }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+        >
+          {collapsed ? <CaretRightOutlined /> : <CaretDownOutlined />}
+        </span>
+      ) : (
+        <span style={{ width: 14, flex: 'none' }} />
+      )}
       <HolderOutlined style={{ marginTop: 4, color: 'rgba(0,0,0,0.45)', flex: 'none' }} />
       <RowContent line={row.line} />
     </div>
@@ -242,6 +272,20 @@ export function ScenarioDetailPage() {
     () => workingRows(rows, drag?.from === 'tree' ? drag.lineId : null),
     [rows, drag],
   );
+  // Caret collapse state (iteration 19) — rendered rows hide collapsed subtrees.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const shownRows = useMemo(() => visibleRows(renderRows, collapsedIds), [renderRows, collapsedIds]);
+  const containerIds = useMemo(
+    () => new Set(rows.map((r) => r.parentId).filter((v): v is string => v !== null)),
+    [rows],
+  );
+  const toggleCollapsed = (lineId: string) =>
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineId)) next.delete(lineId);
+      else next.add(lineId);
+      return next;
+    });
 
   // Add-modal search: server-side substring over name OR alias OR spec (FR-030).
   const searchQ = useQuery({
@@ -338,26 +382,32 @@ export function ScenarioDetailPage() {
       return;
     }
     setOverFlat(false);
-    // Target slot in the WORKING list coordinates (renderRows).
-    let gapIndex: number;
+    // The pointer targets VISIBLE rows; map the slot back to WORKING
+    // coordinates (a slot after a collapsed container lands after its whole
+    // subtree — iteration 19).
+    let visGap: number;
+    let workingGap: number;
     if (overId === 'org-end') {
-      gapIndex = renderRows.length;
+      visGap = shownRows.length;
+      workingGap = renderRows.length;
     } else if (overId.startsWith('orgrow-')) {
-      const overIdx = renderRows.findIndex((r) => r.line.id === lineIdOf(overId));
-      if (overIdx === -1) return;
+      const visIdx = shownRows.findIndex((r) => r.line.id === lineIdOf(overId));
+      if (visIdx === -1) return;
       const translated = active.rect.current.translated;
       const activeCenter = translated ? translated.top + translated.height / 2 : 0;
       const overCenter = over.rect.top + over.rect.height / 2;
-      gapIndex = activeCenter > overCenter ? overIdx + 1 : overIdx;
+      const after = activeCenter > overCenter;
+      visGap = after ? visIdx + 1 : visIdx;
+      workingGap = gapFromVisible(renderRows, shownRows, visIdx, after);
     } else {
       return;
     }
     const baseDepth =
       drag.from === 'tree' ? (rows.find((r) => r.line.id === drag.lineId)?.depth ?? 0) : 0;
     const dragDepth = Math.max(0, baseDepth + Math.round(delta.x / INDENT));
-    const projected = projectDrop(rows, drag.from === 'tree' ? drag.lineId : null, gapIndex, dragDepth);
-    projRef.current = { gapIndex, dragDepth };
-    setIndicator({ gapIndex, depth: projected.depth });
+    const projected = projectDrop(rows, drag.from === 'tree' ? drag.lineId : null, workingGap, dragDepth);
+    projRef.current = { gapIndex: workingGap, dragDepth };
+    setIndicator({ gapIndex: visGap, depth: projected.depth });
   };
 
   const onDragEnd = ({ over }: DragEndEvent) => {
@@ -413,6 +463,7 @@ export function ScenarioDetailPage() {
 
   // Modal result title: highlighted alias-preferred name, linked, tooltip original.
   const searchResults = searchQ.data?.results ?? [];
+  const untitled = t({ id: 'pages.inventory.acquisitions.new.untitled' });
   const modalItemTitle = (item: Item): ReactNode => {
     const display = item.alias_name || item.name;
     const highlighted = <HighlightText text={display} query={search} />;
@@ -424,7 +475,29 @@ export function ScenarioDetailPage() {
       <span>{highlighted}</span>
     );
     if (item.alias_name) node = <Tooltip title={item.name}>{node}</Tooltip>;
-    return node;
+    return <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node}</div>;
+  };
+  // Acquisition context on results (iteration 19): source + date summary.
+  const modalItemDescription = (item: Item): ReactNode => {
+    const summary = item.acquisition
+      ? acquisitionSummaryLines(item.acquisition, untitled)
+      : null;
+    if (!item.spec && !summary) return undefined;
+    return (
+      <div style={{ overflow: 'hidden' }}>
+        {item.spec ? (
+          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.spec}
+          </div>
+        ) : null}
+        {summary ? (
+          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {summary.primary}
+            {summary.secondary ? ` · ${summary.secondary}` : ''}
+          </div>
+        ) : null}
+      </div>
+    );
   };
 
   return (
@@ -442,29 +515,27 @@ export function ScenarioDetailPage() {
         title={scenario?.name}
         style={{ marginBottom: 16 }}
         extra={
-          <Space>
-            <Button icon={<EditOutlined />} onClick={() => setEditOpen(true)}>
-              {t({ id: 'common.edit' })}
-            </Button>
-            <Dropdown
-              menu={{
-                items: [
-                  {
-                    key: 'delete',
-                    danger: true,
-                    icon: <DeleteOutlined />,
-                    label: t({ id: 'common.delete' }),
-                  },
-                ],
-                onClick: ({ key }) => {
-                  if (key === 'delete') confirmDeleteScenario();
-                },
-              }}
-              trigger={['click']}
-            >
-              <Button aria-label="scenario-actions" icon={<EllipsisOutlined />} />
-            </Dropdown>
-          </Space>
+          <PanelHeaderActions
+            narrow={isNarrow}
+            kebabLabel="scenario-actions"
+            visible={[
+              {
+                key: 'edit',
+                label: t({ id: 'common.edit' }),
+                icon: <EditOutlined />,
+                onClick: () => setEditOpen(true),
+              },
+            ]}
+            advanced={[
+              {
+                key: 'delete',
+                label: t({ id: 'common.delete' }),
+                icon: <DeleteOutlined />,
+                danger: true,
+                onClick: confirmDeleteScenario,
+              },
+            ]}
+          />
         }
       >
         {scenario?.description ? (
@@ -525,17 +596,22 @@ export function ScenarioDetailPage() {
             </Splitter.Panel>
             <Splitter.Panel>
               <PaneDroppable id="org-end" testId="organized-pane" style={{ padding: 12, height: '100%' }}>
-                {renderRows.length === 0 && !indicator ? (
+                {shownRows.length === 0 && !indicator ? (
                   <Empty description={t({ id: 'pages.inventory.scenarios.organize.empty' })} />
                 ) : (
                   <>
-                    {renderRows.map((row, i) => (
+                    {shownRows.map((row, i) => (
                       <div key={row.line.id}>
                         {indicator?.gapIndex === i ? dropIndicator : null}
-                        <OrgRow row={row} />
+                        <OrgRow
+                          row={row}
+                          hasChildren={containerIds.has(row.line.id)}
+                          collapsed={collapsedIds.has(row.line.id)}
+                          onToggle={() => toggleCollapsed(row.line.id)}
+                        />
                       </div>
                     ))}
-                    {indicator?.gapIndex === renderRows.length ? dropIndicator : null}
+                    {indicator?.gapIndex === shownRows.length ? dropIndicator : null}
                   </>
                 )}
               </PaneDroppable>
@@ -588,30 +664,43 @@ export function ScenarioDetailPage() {
           }}
           renderItem={(item) => {
             const isMember = memberItemIds.has(item.id);
+            // ONE Add button per row (iteration 19): disabled with an "Added"
+            // tooltip on member rows. A disabled button swallows hover events,
+            // so the tooltip wraps a span.
+            const addButton = (
+              <Button
+                size="small"
+                icon={<PlusOutlined />}
+                disabled={isMember}
+                loading={addMutation.isPending && addMutation.variables === item.id}
+                onClick={() => addMutation.mutate(item.id)}
+              >
+                {t({ id: 'pages.inventory.scenarios.organize.add' })}
+              </Button>
+            );
             return (
               <List.Item
-                style={isMember ? { opacity: 0.5 } : undefined}
-                actions={
-                  isMember
-                    ? [
-                        <Tag key="added">
-                          {t({ id: 'pages.inventory.scenarios.organize.alreadyAdded' })}
-                        </Tag>,
-                      ]
-                    : [
-                        <Button
-                          key="add"
-                          size="small"
-                          icon={<PlusOutlined />}
-                          loading={addMutation.isPending && addMutation.variables === item.id}
-                          onClick={() => addMutation.mutate(item.id)}
-                        >
-                          {t({ id: 'pages.inventory.scenarios.organize.add' })}
-                        </Button>,
-                      ]
-                }
+                style={{ overflow: 'hidden', ...(isMember ? { opacity: 0.65 } : null) }}
+                actions={[
+                  isMember ? (
+                    <Tooltip
+                      key="add"
+                      title={t({ id: 'pages.inventory.scenarios.organize.alreadyAdded' })}
+                    >
+                      <span style={{ display: 'inline-block', cursor: 'not-allowed' }}>
+                        {addButton}
+                      </span>
+                    </Tooltip>
+                  ) : (
+                    <span key="add">{addButton}</span>
+                  ),
+                ]}
               >
-                <List.Item.Meta title={modalItemTitle(item)} description={item.spec || undefined} />
+                <List.Item.Meta
+                  style={{ minWidth: 0 }}
+                  title={modalItemTitle(item)}
+                  description={modalItemDescription(item)}
+                />
               </List.Item>
             );
           }}

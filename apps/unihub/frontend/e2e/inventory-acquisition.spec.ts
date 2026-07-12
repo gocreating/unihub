@@ -227,3 +227,30 @@ test('Add-Item modal offers the Alias field (iteration 18, FR-030)', async ({ pa
     page.locator('.ant-modal .ant-form-item', { hasText: 'Alias' }).first().locator('input'),
   ).toBeVisible();
 });
+
+test('edit page: Acquisition panel kebab holds Delete and returns to the catalog (iteration 19)', async ({ page }) => {
+  // Create a throwaway acquisition.
+  await gotoNewAcquisition(page);
+  const src = `E2E Kebab ${Date.now()}`;
+  await page.locator('input[id$="source"]').first().fill(src);
+  // Fill the PRE-INSERTED empty item card (FR-006a) via its Edit action.
+  await page.locator('.ant-card-small .anticon-edit').first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.locator('.ant-modal input[id$="name"]').first().fill('Disposable');
+  await page.locator('.ant-modal button', { hasText: /Save/i }).click();
+  await page.waitForTimeout(300);
+  await page.locator('button', { hasText: /^Create$/ }).click();
+  await page.waitForURL(/\/inventory\/catalog/, { timeout: 10_000 });
+
+  // Open its edit page via the row's Edit link.
+  const row = page.locator('tr.ant-table-row-level-0', { hasText: src }).first();
+  await row.locator('a', { hasText: 'Edit' }).click();
+  await page.waitForURL(/\/acquisitions\/.+\/edit/, { timeout: 10_000 });
+
+  // Kebab on the Acquisition panel → Delete → confirm → back on the catalog.
+  await page.getByLabel('acquisition-actions').click();
+  await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
+  await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();
+  await page.waitForURL(/\/inventory\/catalog/, { timeout: 10_000 });
+  await expect(page.locator('tr', { hasText: src })).toHaveCount(0);
+});

@@ -4,7 +4,6 @@ import { Button, DatePicker, Modal, Space, Tag, Typography, message } from 'antd
 import {
   CaretDownOutlined,
   CaretRightOutlined,
-  DeleteOutlined,
   EditOutlined,
   PlusOutlined,
   StopOutlined,
@@ -24,18 +23,16 @@ import { DateTimeCell, dateTimeLines } from '@/components/DateTimeCell';
 import { EmptyValue } from '@/components/EmptyValue';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
 import { ItemName } from '@/components/ItemName';
+import { acquisitionSummaryLines, formatNetCost } from '../acquisitionSummary';
 import { parameterKeyLabel } from '@/components/ParameterRowsEditor';
 import { listAttributeDefinitions } from '@/services/unihub-backend/core';
 import type { AttributeDefinition } from '@/services/unihub-backend/core';
 import type {
   Acquisition,
-  AcquisitionSummary,
   Item,
   ItemParameter,
-  NetCostEntry,
 } from '@/services/unihub-backend/inventory';
 import {
-  deleteAcquisition,
   listAcquisitions,
   listItems,
   updateItem,
@@ -73,14 +70,6 @@ function skuText(it: Item): string {
   return it.sku_price != null ? `${formatDecimal(it.sku_price)} ${it.sku_price_currency}`.trim() : '';
 }
 
-function formatNetCost(net: NetCostEntry[] | undefined): string {
-  // A zero net cost is hidden entirely (iteration 15): most zeros mean
-  // "not recorded", so neither "0"/"0 CNY" nor a "Free" claim is shown.
-  const entries = (net ?? []).filter((n) => Number(n.total) !== 0);
-  if (entries.length === 0) return '';
-  return entries.map((n) => `${Number(n.total).toLocaleString()} ${n.currency}`.trim()).join(', ');
-}
-
 // The displayed text of one parameter value in its own dynamic column.
 function parameterCellText(p: ItemParameter | undefined): string {
   if (!p) return '';
@@ -111,20 +100,6 @@ function toTreeParams(p: EntityListParams): EntityListParams {
     };
   }
   return out;
-}
-
-// Both display lines of the derived "Acquisition" column (FR-003a):
-// primary "{source} {net cost}", secondary "request ~ obtained" (date-only).
-function acquisitionSummaryLines(
-  a: Pick<AcquisitionSummary, 'source' | 'request_time' | 'obtained_at' | 'net_cost'>,
-  untitled: string,
-): { primary: string; secondary: string | null } {
-  const primary = `${a.source || untitled} ${formatNetCost(a.net_cost)}`.trim();
-  const req = a.request_time ? dayjs(a.request_time).format('YYYY-MM-DD') : null;
-  const obt = a.obtained_at ? dayjs(a.obtained_at).format('YYYY-MM-DD') : null;
-  // Four exact cases (iteration 15): both, requested-only, obtained-only, none.
-  const secondary = req && obt ? `${req} ~ ${obt}` : req ? `${req} ~` : obt ? obt : null;
-  return { primary, secondary };
 }
 
 export function CatalogPage() {
@@ -318,13 +293,6 @@ export function CatalogPage() {
     queryClient.invalidateQueries({ queryKey: ['inventory', 'acquisitions'] });
   };
 
-  const deleteAcqMutation = useMutation({
-    mutationFn: deleteAcquisition,
-    onSuccess: () => {
-      invalidate();
-      message.success(t({ id: 'pages.inventory.acquisitions.deleted' }));
-    },
-  });
   const deprecateMutation = useMutation({
     mutationFn: ({ id, ts }: { id: string; ts: string | null }) => updateItem(id, { deprecate_time: ts }),
     onSuccess: () => {
@@ -334,16 +302,6 @@ export function CatalogPage() {
     },
   });
 
-  const confirmDeleteAcq = (record: Acquisition) => {
-    Modal.confirm({
-      title: t({ id: 'pages.inventory.acquisitions.delete.title' }),
-      content: t({ id: 'pages.inventory.acquisitions.delete.confirm' }, { count: record.item_count }),
-      okText: t({ id: 'common.delete' }),
-      okType: 'danger',
-      cancelText: t({ id: 'common.cancel' }),
-      onOk: () => deleteAcqMutation.mutate(record.id),
-    });
-  };
   const openDeprecate = (item: Item) => {
     setDeprecateTarget(item);
     setDeprecateDate(dayjs().startOf('day'));
@@ -692,11 +650,20 @@ export function CatalogPage() {
               return (
                 <span data-actions-col>
                   <Space>
-                    <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/inventory/acquisitions/${r.id}/edit`)}>
+                    {/* A real hyperlink (iteration 19): middle/ctrl-click opens
+                        a tab; plain left click stays SPA. Delete moved to the
+                        edit page's panel kebab (FR-007). */}
+                    <Button
+                      size="small"
+                      icon={<EditOutlined />}
+                      href={`/inventory/acquisitions/${r.id}/edit`}
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey) return;
+                        e.preventDefault();
+                        navigate(`/inventory/acquisitions/${r.id}/edit`);
+                      }}
+                    >
                       {t({ id: 'common.edit' })}
-                    </Button>
-                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteAcq(r)}>
-                      {t({ id: 'common.delete' })}
                     </Button>
                     {/* Merged single-item row (FR-003b): both entities' actions. */}
                     {merged ? itemActions(merged) : null}

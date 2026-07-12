@@ -144,3 +144,7 @@ No schema change. List responses gain an optional, response-only **`totals`** ob
 ## Iteration 16 delta (2026-07-12)
 
 **inventory.ScenarioItem**: + **`organized`** (boolean, default false; migration 0013). False = the line sits in the scenario's unorganized flat pane (container is NULL, display_order unused); true = the line participates in the organized tree (container/display_order meaningful). Unorganizing a container line re-parents its children to the organized top level (container=NULL, organized stays true), mirroring the destroy rule. New memberships (search-modal add) start `organized=false`. data_io: scenarioitem descriptor picks the field up via `auto_system_fields`. No backfill needed — the table is empty post-iteration-15 wipe.
+
+## Iteration 18 delta (2026-07-12)
+
+**inventory.Item**: + **`alias_name`** (CharField ≤200, blank; migration 0014) — the user's own familiar name. Display-only preference (FR-030): UIs render `alias_name || name` with an informational tooltip carrying the original `name` when aliased. Filterable/orderable like `name`. data_io: item descriptor picks the field up via `auto_system_fields`; the legacy importer never writes it.

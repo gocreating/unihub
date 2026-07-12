@@ -119,3 +119,9 @@ Unchanged **except** the checklist response **drops `shortfall`** — each line 
 - **`POST /scenarios/{sid}/items/{id}/move/`**: body gains optional **`organized`** (boolean). `organized=true` (or omitted, legacy behaviour) — set `container_id`/`index` with dense reorder among ORGANIZED siblings; `organized=false` — unorganize: container forced to NULL, `container_id`/`index` ignored, the line's children re-parented to the organized top level. 400 on cycle/self unchanged.
 - **`POST /scenarios/{sid}/items/`** (add membership): created lines default `organized=false`.
 - No other endpoint changes; OpenAPI + `api-types.ts` regenerated.
+
+## Iteration 18 delta (2026-07-12)
+
+- **Item** (list/detail + nested acquisition items, read/write): new optional **`alias_name`** (string, blank default). Accepted on item create (within acquisition) and PATCH; returned everywhere the item serializes.
+- **Item filter/order**: `alias_name` joins `filterable_fields` (text) and `ordering_fields`.
+- No endpoint changes; OpenAPI + `api-types.ts` regenerated.

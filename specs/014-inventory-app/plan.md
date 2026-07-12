@@ -1,31 +1,29 @@
-# Implementation Plan: Inventory App — Iteration 17 (Catalog polish + 2025 import)
+# Implementation Plan: Inventory App — Iteration 18 (Item alias, scenario actions relocation, organize DnD unification + rich rows)
 
 **Branch**: `014-inventory-app` | **Date**: 2026-07-12 | **Spec**: [spec.md](spec.md)
 
-**Input**: spec.md — Session 2026-07-12 iteration 17; FR-003/FR-003a revisions (plurals, Name link removal, URL width cap, default YTD filter, page size 50), FR-029b (2025 append-import). Constitution v1.20.0.
+**Input**: spec.md — Session 2026-07-12 iteration 18; FR-030 (alias) new, FR-001/003/003a/006/010/011 revisions. Constitution v1.20.0.
 
 ## Summary
 
-1. **Plurals** — the Item-cell count and the footer totals switch to ICU plural messages in en-US (`{count, plural, one {# item} other {# items}}`; footer pluralizes both acquisitions and items). zh-TW texts unchanged.
-2. **Name column** — drop the hyperlink; plain text (the derived Item column keeps the sole link).
-3. **URL width (defect)** — measure-what-you-render: the `url` column's measured width is capped to the 320px render cap (`min(dataWidths.url, 320)` fed to `widthForHeader`), and the ellipsised link gains a truncation-gated `OverflowTooltip` with the full URL.
-4. **Default YTD filter** — `useEntityFilter` gains a `defaultGroups` seed (mirroring `useEntitySort`'s `defaultRules`): initial active+pending state = the seed; the Filter button lights via the existing `isActive`. The Catalog seeds two OR-groups on `acquisition__obtained_at`: `gte <Jan 1 of current year>` OR `is_empty` (pending stays visible; acquisition-level field → tree mode preserved). Threaded through `useEntityTable` as `defaultFilterGroups`.
-5. **Page size 50** — `defaultPageSize: 50` on the Catalog's `useEntityTable` (options unchanged).
-6. **2025 import** — run `import_legacy_csv data/財產們/2025.html --commit` WITHOUT `--wipe` from the host (`DATABASE_URL=postgresql://unihub:unihub@localhost:5433/unihub`), then verify totals and spot-checks over the live API.
+1. **Item alias (FR-030)** — backend `Item.alias_name` (CharField, blank; migration 0014), serializer read/write, `alias_name` filterable/orderable on `ItemViewSet`, data_io auto pickup, OpenAPI/types regen. Frontend: a shared **`ItemName`** display component (alias-preferred text; when aliased, an informational Tooltip carries the original `name`; optional `url` link wrapping) used in the catalog Item column, acquisition item cards, scenario pane rows, and Add-modal results; hidden filterable/sortable **Alias** catalog column (column key bump → v6); Add-Item modal field after Name (FR-022 order: Name, quantity, SKU price, **alias**, spec, URL, remark); Add-modal search OR-groups extended to name/alias/spec.
+2. **Scenario actions relocation** — list drops the Actions column (Name + Description; Name links to detail). Detail info-panel header: **Edit** button (opens the name/description modal form, extracted/reused from the list page) + **kebab (⋯) Dropdown holding Delete** (existing confirm; navigate back to the list on success).
+3. **Organize panel polish** — pane titles removed; pane rows + modal results render rich context (ItemName link + tooltip, spec secondary, parameter badges via the existing `itemBadges` helpers); rows never overflow (flex layout, `minWidth: 0`, text ellipsis, action pinned).
+4. **DnD unification (FR-011)** — replace ALL THREE drag mechanisms (AntD-Tree-internal, native HTML5 rows, cross-pane bridge) with **one dnd-kit system** (already a dependency): a single `DndContext` spans both panes; the organized tree renders as a **flattened depth-indented sortable list** (the canonical dnd-kit sortable-tree pattern) and the flat pane as a droppable list of draggables. During drag, a **projection** (over-row + horizontal offset → depth clamped between neighbor bounds) determines container/index/depth and renders live position + indentation feedback; drop calls the existing `move {container_id, index, organized}`. Pane↔pane both directions, in-tree rearrangement, and **left→nested-position in one motion** all share this path. AntD `Tree` usage is removed from the page.
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.7 (backend untouched — no schema/API change; the importer is reused as-is)
+**Language/Version**: TypeScript 5.7, Python 3.12
 
-**Primary Dependencies**: react-intl ICU plural (already available); no new packages.
+**Primary Dependencies**: @dnd-kit/core 6.3.1 + @dnd-kit/sortable 10 (already installed; used by cost-factor rows). No new packages.
 
-**Storage**: No migration. The 2025 import is a data operation only.
+**Storage**: PostgreSQL — migration 0014 (`Item.alias_name`). No ScenarioItem change (`move` API unchanged).
 
-**Testing**: RTL first (plural texts, Name plain text, URL width cap + tooltip, seeded filter state + lit Filter button, page size 50); useEntityFilter hook specs for `defaultGroups` (seeded active/pending, clearable, apply-gate untouched); e2e updates (default-filtered footer, page-size 50, Name column, seeded Filter button lit). Import verified live (counts + spot checks), not unit-tested beyond the existing parser suite.
+**Testing**: pytest (alias round-trip/filter/order, data_io descriptor); RTL + pure-helper unit tests first — the tree flatten/projection logic lands as **pure functions** (`flattenOrganized`, `projectDrop`) with exhaustive unit specs since jsdom cannot simulate dnd-kit pointer gestures; component RTL covers rendering (rows, depths, rich content, kebab actions); **Playwright covers the real drags** — dnd-kit uses PointerEvents, so Playwright's native `mouse.down/move/up` works (unlike HTML5 DnD — no more synthetic DragEvent dispatch for the scenario page).
 
-**Constraints**: The seeded filter value "Jan 1 of current year" is computed at page load (`dayjs().startOf('year').format('YYYY-MM-DD')`); RTL fixes the assertion via the same computation, not a hardcoded year. Existing RTL specs asserting "1 items" and e2e specs assuming 25/page or unfiltered defaults must be updated in the same change.
+**Constraints**: The kebab Delete reuses the existing two-step confirm text; deleting navigates to `/inventory/scenarios`. Alias tooltip is informational (allowed — reveals hidden content). Scenario list keeps PageTable/toolbar; only its columns change.
 
-**Scale/Scope**: Locale edits ×2; catalog page (name/url colDefs, defaultPageSize, defaultFilterGroups seed); `useEntityFilter` + `useEntityTable` seed plumbing; RTL/e2e updates; one host-side import run.
+**Scale/Scope**: Backend small (field + tests + regen). Frontend: shared `ItemName` component; catalog (column defs v6, Item cell); AcquisitionForm card header; scenarios list (columns) + detail rewrite of the organize body (dnd-kit) + info-panel actions; `organizeTree.ts` gains flatten/projection helpers (drops the rc-tree-specific `computeDropTarget`); locales ×2; RTL/pytest/e2e updates.
 
 ## Constitution Check
 
@@ -33,37 +31,54 @@
 
 | Principle | Gate | Status |
 |---|---|---|
-| VI UI rules | URL tooltip becomes truncation-gated (fixing an omission); placeholders unchanged. | PASS |
-| VII PageTable/footer | Footer layout untouched; only the total text pluralizes. | PASS |
-| VIII i18n | Plural forms land in BOTH locales in the same commit (zh-TW re-uses existing strings — no plural inflection). | PASS |
-| XII Toolbar | `defaultGroups` extends the filter hook exactly like `defaultRules` extended sort (apply-gate + isActive semantics unchanged). | PASS |
-| V TDD | Hook + page RTL specs precede implementation; e2e updated with the behavior change. | PASS |
+| I / data_io | `alias_name` is a schema change → item descriptor auto-fields pick it up; io round-trip asserted in the same change. | PASS |
+| IV Contracts | Serializer change → OpenAPI + types regen before frontend consumption. | PASS (task-ordered) |
+| V TDD | Backend tests first; flatten/projection pure-function specs first; RTL before page rework. | PASS |
+| VI UI rules | Alias tooltip reveals hidden content (never repeats visible text — compliant); pane rows adopt no-overflow flex; placeholders unchanged. | PASS |
+| VII PageTable | Scenario list stays on PageTable; catalog column mechanics unchanged (new hidden def + key bump). | PASS |
+| VIII i18n | New keys (alias label, original-name tooltip, kebab/delete) in BOTH locales; dead pane-title keys removed. | PASS |
+| XII Toolbar | Alias column/filter/sort ride the standard mechanics. | PASS |
+
+No violations → Complexity Tracking empty.
 
 ## Project Structure
 
 ```text
+apps/unihub/backend/
+├── inventory/migrations/0014_item_alias_name.py
+├── inventory/models.py / serializers.py / views.py     # alias_name field + filter/order
+└── tests/test_inventory_items.py / test_inventory_io.py # alias round-trip, filter/sort, descriptor
+
 apps/unihub/frontend/src/
-├── components/EntityToolbar/hooks/useEntityFilter.ts   # defaultGroups seed (+ test)
-├── components/EntityToolbar/useEntityTable.ts          # defaultFilterGroups pass-through
-├── pages/inventory/catalog/index.tsx                   # name plain text; url cap+tooltip; seeds (filter, pageSize 50)
-├── locales/{en-US,zh-TW}/pages.ts                      # ICU plural itemCount + footerTotals
-apps/unihub/frontend/e2e/inventory-catalog.spec.ts      # updated defaults
+├── components/ItemName/index.tsx                # alias-preferred name + original tooltip + url link
+├── pages/inventory/catalog/index.tsx            # v6 defs (+Alias hidden), Item cell via ItemName
+├── pages/inventory/acquisitions/AcquisitionForm.tsx  # alias form field + card header via ItemName
+├── pages/inventory/scenarios/index.tsx          # Name+Description columns; form modal extracted
+├── pages/inventory/scenarios/ScenarioFormModal.tsx   # shared create/edit modal (list "New" + detail Edit)
+├── pages/inventory/scenarios/detail.tsx         # info-panel Edit+kebab; dnd-kit organize body
+├── pages/inventory/scenarios/organizeTree.ts    # + flattenOrganized/projectDrop; − computeDropTarget
+├── services/unihub-backend/inventory.ts         # Item.alias_name (+ generated types)
+└── locales/{en-US,zh-TW}/pages.ts
+
+apps/unihub/frontend/e2e/{inventory-scenario,inventory-catalog,inventory-acquisition}.spec.ts
 ```
 
-**Structure Decision**: Existing layout; the filter seed lives in the shared toolbar hooks so other pages can ship default filters later.
+**Structure Decision**: `ItemName` is a shared component (used by three domains' surfaces already); the scenario form modal is extracted so list-create and detail-edit share one implementation.
 
-## Phase 0 — Research (research.md R17.1–R17.3)
+## Phase 0 — Research (research.md R18.1–R18.5)
 
-- **R17.1 URL width root cause (CONFIRMED)**: cell renders `maxWidth: 320` ellipsis; `displayText('url')` returns the raw URL so `measureTextWidth` sizes the column to the full string. Fix at the width source: cap the url entry fed to `widthForHeader`. Tooltip: wrap the link content in `OverflowTooltip` (measures its own span; title only when truncated).
-- **R17.2 Filter seeding**: `useEntityFilter` currently initializes empty. Mirror `useEntitySort`: accept `defaultGroups`, seed active+pending, keep clear/apply semantics (clearing shows everything — no reset-to-seed requirement in spec). `isActive` already lights the button for non-empty active groups.
-- **R17.3 Import scope**: 2025.html exists alongside 2026.html; append-import (no `--wipe`). The default YTD filter means 2025 rows won't show on the default Catalog view — expected and intended (clear/edit the filter to see them). e2e specs that raise the page size to find multi-item acquisitions keep working against the 2026 YTD subset.
+- **R18.1 DnD choice**: dnd-kit sortable-tree pattern over patching the HTML5 bridge — one PointerEvent-based system removes the three-way conflict, gives first-class nested-drop projection with live depth feedback, and makes real-mouse e2e possible. AntD `Tree` is dropped from the page (expand/collapse not currently required — the tree was always fully expanded).
+- **R18.2 Flatten/projection**: `flattenOrganized(lines)` → ordered `[{line, depth, parentId}]` (children under parents, display_order within siblings); `projectDrop(flattened, activeId, overIndex, offsetDepth)` → `{container_id, index, depth}` with depth clamped to [minDepth, maxDepth] derived from the previous/next rows (canonical dnd-kit tree math); cycle prevention = an active row's own subtree is excluded from its drop targets (subtree moves with it).
+- **R18.3 Alias display**: one `ItemName` component (props: item, linkify?) — alias-preferred text, Tooltip(original name) only when aliased, `<a target=_blank>` when linkify && url. Reused across catalog/cards/panes/modal so the rule cannot drift.
+- **R18.4 Scenario form reuse**: the list page's create modal is extracted to `ScenarioFormModal` (name/description, Cancel-left) and mounted from both the list ("New") and the detail ("Edit", pre-filled, PATCH).
+- **R18.5 Overflow fix**: pane rows = `display:flex` with `minWidth:0` content (ellipsised) and a `flex:none` trailing action; verified at a narrow Splitter width in e2e.
 
 ## Phase 1 — Design & Contracts
 
-- **Contracts**: none (no API change).
-- **data-model.md**: none (no schema change).
-- **Agent context**: CLAUDE.md SPECKIT block → iteration 17.
+- **Contracts**: `Item.alias_name` (read/write, blank default) on item + nested acquisition-item payloads; `alias_name` joins Item filter/order fields. Regen OpenAPI + `api-types.ts`; delta appended to contracts/inventory-api.md.
+- **data-model.md**: iteration-18 note (Item.alias_name, migration 0014).
+- **Agent context**: CLAUDE.md SPECKIT block → iteration 18.
 
 ## Complexity Tracking
 
-*(no violations — empty)*
+*(no constitution violations — intentionally empty)*

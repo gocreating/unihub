@@ -1,24 +1,32 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.18.0 → 1.19.0 (minor — Principle VII (PageTable Layout) gains
-  a "Footer layout" rule: non-interactive information (record count) on the
-  LEFT; all interactive controls on the RIGHT, ordered per-page selector then
-  pagination. Bump rationale: new rule added within a principle. Sourced from
-  user mockup feedback, 2026-07-12.)
+Version change: 1.19.0 → 1.20.0 (minor — Principle VI gains/redefines three UI
+  rules from user feedback, 2026-07-12: (1) the empty-content placeholder is
+  REDEFINED from the em-dash "—" to a SHORT dimmed disabled non-selectable "-"
+  via a shared <EmptyValue /> component — the em-dash read like real content;
+  applies also to disabled-control placeholder slots (e.g. currency selector at
+  amount 0/empty) and composed strings (date ranges); (2) NEW "Dropdowns fit
+  the viewport" rule — panels/overlays MUST max-height + scroll internally,
+  never overflow vertically (Catalog Columns panel overflowed after dynamic
+  parameter columns); (3) NEW "Truncation-gated tooltips" rule — same-content
+  tooltips MUST appear only when the text is actually truncated, via the shared
+  <OverflowTooltip> component (unconditional badge tooltips were redundant).)
 Modified principles:
-  - VII. PageTable Layout — added the "Footer layout (information left,
-    controls right)" rule; applies immediately to the shared footers
-    (EntityOffsetFooter / EntityCursorFooter), not per-page code.
+  - VI. UI/UX Reference: ov-fleet — "Empty cell display" redefined (short "-",
+    EmptyValue component); added "Dropdowns fit the viewport"; added
+    "Truncation-gated tooltips".
+  - IX. Base Currency Net Worth Valuation — placeholder markup reference
+    updated to <EmptyValue />.
 Added sections: none
 Removed sections: none
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check is
-    generic and already gates all principles; no footer references)
+  - .specify/templates/plan-template.md ✅ No changes needed (generic gate)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: none — the rule is enforced in the shared footer components,
-  so all table pages inherit it in one change.
+Follow-up TODOs: none — enforced in shared components (EmptyValue,
+  OverflowTooltip, EntityToolbar panels) and swept across all render sites in
+  the same change.
 -->
 
 # UniHub Constitution
@@ -200,16 +208,37 @@ reference implementation to follow.
   genuinely cannot accommodate two rows MAY the relative time move to an Ant
   Design `<Tooltip>` on hover; it MUST NOT be omitted entirely.
 - **Empty cell display**: Every table cell or detail-view field whose value is
-  absent (null, undefined, or empty string) MUST display a visually distinct
-  placeholder rather than leaving the cell blank or rendering raw `null`. The
-  canonical implementation is:
-  `<Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>`.
-  Two requirements are non-negotiable: (1) the placeholder MUST be styled with a
-  muted/disabled color (`type="secondary"`) to distinguish it from real data, and
-  (2) it MUST be non-selectable (`userSelect: 'none'`) so users cannot accidentally
-  copy it and to signal that the absence is intentional, not an error. Rendering
-  nothing, a blank string, or the literal string `"null"` or `"undefined"` is a
-  constitution violation.
+  absent (null, undefined, or empty string) MUST display the standard empty
+  placeholder: a **SHORT dimmed hyphen "-"** — NOT the long em-dash "—", which
+  reads like real content and misleads users. The canonical implementation is
+  the shared **`<EmptyValue />`** component
+  (`apps/unihub/frontend/src/components/EmptyValue/`), which renders
+  `<Typography.Text disabled style={{ userSelect: 'none' }}>-</Typography.Text>`.
+  Non-negotiable: (1) dimmed/disabled color; (2) non-selectable
+  (`userSelect: 'none'`); (3) the SHORT `-` character EVERYWHERE the absence of
+  content is shown — including the placeholder slot of a disabled control
+  (e.g. a currency selector disabled because its amount is 0/empty shows
+  placeholder `-`) and inside composed strings (a date range with a missing
+  side reads `2026-07-10 ~ -`). Ad-hoc placeholder markup, the em-dash, plain
+  selectable placeholder text, rendering nothing, or the literal
+  `"null"`/`"undefined"` are constitution violations.
+- **Dropdowns fit the viewport**: Any dropdown, popup panel, or overlay menu
+  (the toolbar Filter/Sort/Columns panels, select dropdowns, context menus)
+  MUST constrain its height to the visible viewport and scroll internally — it
+  MUST NEVER overflow the viewport vertically. Canonical implementation: a
+  max-height with internal scrolling on the panel's list body (e.g.
+  `maxHeight: '60vh'`, `overflowY: 'auto'`), keeping the panel's action footer
+  visible. Content of unbounded length (e.g. one Columns entry per parameter
+  definition) MUST remain fully reachable by scrolling within the panel.
+- **Truncation-gated tooltips**: A tooltip whose content merely repeats the
+  target's own text MUST appear ONLY when that text is actually truncated
+  (ellipsised/overflowing). Fully visible content MUST NOT carry a
+  same-content tooltip — it is redundant and annoying. Canonical
+  implementation: the shared **`<OverflowTooltip>`** component
+  (`apps/unihub/frontend/src/components/OverflowTooltip/`), which measures
+  overflow (scrollWidth vs clientWidth) and attaches the tooltip conditionally.
+  Tooltips that add information beyond the visible text are exempt.
+  Unconditional same-content tooltips are a constitution violation.
 - **Foreign-key value display**: Any table cell or detail-view field that renders
   a value sourced from a related/foreign record (e.g., a currency code that
   resolves to a Currency entity, a category resolved from a Categories table)
@@ -409,8 +438,7 @@ original amount.
   with `base_currency = account_currency` and `quote_currency = base_currency`
   (or the inverse and divide). Use the latest `date` among matching records.
 - When no `ExchangeRate` record covers a given pair, the net worth valuation cell
-  MUST display the standard empty-cell placeholder
-  (`<Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>`)
+  MUST display the standard empty-cell placeholder (`<EmptyValue />` — Principle VI)
   rather than crashing, hiding the column, or displaying a raw error.
 - In tree-aggregated views, the tree root node MUST display the total net worth as
   the sum of all leaf-level converted amounts. Leaves with missing exchange rates
@@ -674,4 +702,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.19.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-12
+**Version**: 1.20.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-12

@@ -201,3 +201,7 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 ## Iteration 21 research (flat-mode Edit link, 2026-07-12)
 
 - **R21.1 — Root cause (CONFIRMED)**: the Catalog actions cell renders the acquisition Edit hyperlink only inside the `isAcquisition(r)` branch; flat mode (item-level filter/sort) yields exclusively item rows → no Edit anywhere, and since iteration 19 Edit is the sole path to Delete. Fix: the item-row branch adds the parent acquisition's Edit link when `flatMode && r.acquisition` (same href + SPA left-click interception); tree-mode child rows unchanged (parent row already carries it). Locked by RTL (flat rows expose the anchor; tree child rows don't) and the flatten e2e.
+
+## Iteration 22 research (modal row geometry, 2026-07-13)
+
+- **R22.1 — Root cause (MEASURED live)**: modal rows used `List.Item actions`, which renders `ul.ant-list-item-action` (margin-left 48px) with `li { padding: 0 8px 0 0 }` — the trailing edge is styled by the library, not us; the iteration-21 padding zeroing addressed only the List.Item shell. Fix: drop the `actions` slot; each row renders its own flex container (content flex-1 minWidth-0, action flex-none, zero horizontal padding). Regression lock is GEOMETRIC (e2e boundingBox): button.right within 2px of row.right, row.right within 2px of the modal body content edge, asserted for enabled AND disabled-member rows; RTL asserts no `.ant-list-item-action` exists in the modal.

@@ -338,20 +338,87 @@ test('iteration 20: tree drag keeps rows in place (no reflow jitter)', async ({ 
   await page.waitForTimeout(300);
   await expect(orgPane.locator('[data-testid^="org-row-"]')).toHaveCount(2);
 
-  // Modal tooltip on a truncated long-name result.
+  // Modal tooltip on a truncated long-name result. The flush rows (iter 22)
+  // give titles more room, so force truncation deterministically by
+  // narrowing the viewport before hovering.
+  await page.setViewportSize({ width: 420, height: 900 });
+  await page.waitForTimeout(400);
   await page.locator('.ant-card', { hasText: 'Organize' }).first()
     .locator('button').filter({ hasText: /^Add$/ }).first().click();
   await modal.locator('input').first().fill('超轻');
-  const title = modal.locator('.ant-list-item-meta-title span').first();
+  const title = modal.locator('[data-testid="modal-row"] span').first();
   await expect(title).toBeVisible({ timeout: 10_000 });
   await title.hover();
   await page.waitForTimeout(600);
-  // Tooltip appears only when the title actually truncates — with these long
-  // taobao names in a 520px modal it always does.
   await expect(page.locator('.ant-tooltip:not(.ant-tooltip-hidden)')).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.waitForTimeout(300);
 
   // Cleanup.
   await page.keyboard.press('Escape');
+  await page.getByLabel('scenario-actions').click();
+  await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
+  await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();
+  await page.waitForURL(/\/inventory\/scenarios$/, { timeout: 10_000 });
+});
+
+test('iteration 22: modal rows are geometrically flush (pixel lock)', async ({ page }) => {
+  await page.goto('/inventory/scenarios');
+  await page.waitForSelector('.ant-table-tbody', { timeout: 10_000 });
+  const name = `E2E Flush ${Date.now()}`;
+  await page.locator('button').filter({ hasText: /New/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.locator('.ant-modal input[id$="name"]').fill(name);
+  await page.locator('.ant-modal button', { hasText: /Save/ }).click();
+  await page.waitForTimeout(500);
+  await page.locator('.ant-table-tbody a', { hasText: name }).first().click();
+  await page.waitForSelector('.ant-splitter', { timeout: 10_000 });
+
+  await page.locator('.ant-card', { hasText: 'Organize' }).first()
+    .locator('button').filter({ hasText: /^Add$/ }).first().click();
+  const modal = page.locator('.ant-modal', { hasText: 'Add items' }).first();
+  await modal.locator('input').first().fill('a');
+  const enabledAdds = modal.locator('.ant-list-item button:not([disabled])').filter({ hasText: /Add/ });
+  await expect(enabledAdds.first()).toBeVisible({ timeout: 10_000 });
+  // Create a member row so BOTH states are measured.
+  await enabledAdds.first().click();
+  await page.waitForTimeout(800);
+  await expect(modal.locator('.ant-list-item button[disabled]').first()).toBeVisible();
+
+  // No List actions slot — the row owns its layout.
+  await expect(modal.locator('.ant-list-item-action')).toHaveCount(0);
+
+  // Pixel lock: for an enabled row and the disabled member row, the Add
+  // button's right edge sits within 2px of the row's right edge, and the row
+  // within 2px of the modal body's content edge.
+  const geometry = await modal.evaluateHandle(() => null); // anchor for evaluate below
+  void geometry;
+  const rows = modal.locator('.ant-list-item');
+  const rowCount = Math.min(await rows.count(), 6);
+  let enabledChecked = false;
+  let disabledChecked = false;
+  const bodyEdge = await modal.locator('.ant-modal-body').evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return rect.right - parseFloat(cs.paddingRight);
+  });
+  for (let i = 0; i < rowCount; i++) {
+    const row = rows.nth(i);
+    const button = row.locator('button').first();
+    if ((await button.count()) === 0) continue;
+    const rowBox = (await row.boundingBox())!;
+    const btnBox = (await button.boundingBox())!;
+    expect(Math.abs(rowBox.x + rowBox.width - (btnBox.x + btnBox.width))).toBeLessThanOrEqual(2);
+    expect(Math.abs(bodyEdge - (rowBox.x + rowBox.width))).toBeLessThanOrEqual(2);
+    if (await button.isDisabled()) disabledChecked = true;
+    else enabledChecked = true;
+  }
+  expect(enabledChecked).toBe(true);
+  expect(disabledChecked).toBe(true);
+
+  // Cleanup.
+  await modal.locator('.ant-modal-close').click();
+  await expect(modal).toBeHidden();
   await page.getByLabel('scenario-actions').click();
   await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
   await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();

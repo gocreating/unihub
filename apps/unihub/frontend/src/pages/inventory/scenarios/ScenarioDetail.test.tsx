@@ -297,6 +297,27 @@ describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes
     ).toBeTruthy();
   });
 
+  // SD22-01 (FR-011): modal rows OWN their layout — no List actions slot
+  // (its ul/li wrappers carry library margins that broke the right edge).
+  it('renders modal rows with an owned flex layout, not the List actions slot', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    const modal = (await screen.findByText('Add items')).closest('.ant-modal') as HTMLElement;
+    fireEvent.change(within(modal).getByPlaceholderText('Search items…'), {
+      target: { value: 'an' },
+    });
+    await within(modal).findByText(
+      (_, el) => el?.tagName === 'A' && el.textContent === 'Lantern',
+    );
+    expect(modal.querySelector('.ant-list-item-action')).toBeNull();
+    // The Add button is a flex:none sibling inside the row's flex container.
+    const row = within(modal).getByText('Backpack').closest('.ant-list-item') as HTMLElement;
+    const flexWrap = row.querySelector('[data-testid="modal-row"]') as HTMLElement;
+    expect(flexWrap.style.display).toBe('flex');
+    expect(within(flexWrap).getByRole('button', { name: /Add/ })).toBeInTheDocument();
+  });
+
   // SD21-01 (FR-011): modal result rows carry no horizontal indentation.
   it('renders modal result rows without horizontal padding', async () => {
     renderPage();

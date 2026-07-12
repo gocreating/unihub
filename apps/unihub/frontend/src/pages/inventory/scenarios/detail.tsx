@@ -722,36 +722,42 @@ export function ScenarioDetailPage() {
                 {t({ id: 'pages.inventory.scenarios.organize.add' })}
               </Button>
             );
+            // The row OWNS its layout (iteration 22): the List `actions` slot
+            // injects ul/li wrappers with library margins/padding that broke
+            // the right edge — a plain flex row keeps the Add action flush.
             return (
               <List.Item
-                // Entries fill the modal width — no horizontal indentation
-                // (iteration 21).
                 style={{
                   overflow: 'hidden',
                   paddingLeft: 0,
                   paddingRight: 0,
                   ...(isMember ? { opacity: 0.65 } : null),
                 }}
-                actions={[
-                  isMember ? (
-                    <Tooltip
-                      key="add"
-                      title={t({ id: 'pages.inventory.scenarios.organize.alreadyAdded' })}
-                    >
-                      <span style={{ display: 'inline-block', cursor: 'not-allowed' }}>
-                        {addButton}
-                      </span>
-                    </Tooltip>
-                  ) : (
-                    <span key="add">{addButton}</span>
-                  ),
-                ]}
               >
-                <List.Item.Meta
-                  style={{ minWidth: 0 }}
-                  title={modalItemTitle(item)}
-                  description={modalItemDescription(item)}
-                />
+                <div
+                  data-testid="modal-row"
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%' }}
+                >
+                  <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+                    {modalItemTitle(item)}
+                    <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+                      {modalItemDescription(item)}
+                    </Typography.Text>
+                  </div>
+                  <div style={{ flex: 'none' }}>
+                    {isMember ? (
+                      <Tooltip
+                        title={t({ id: 'pages.inventory.scenarios.organize.alreadyAdded' })}
+                      >
+                        <span style={{ display: 'inline-block', cursor: 'not-allowed' }}>
+                          {addButton}
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      addButton
+                    )}
+                  </div>
+                </div>
               </List.Item>
             );
           }}

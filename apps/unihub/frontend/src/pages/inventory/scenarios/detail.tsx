@@ -622,9 +622,9 @@ export function ScenarioDetailPage() {
                 }}
               >
                 {flatLines.length === 0 ? (
-                  <Typography.Text type="secondary">
-                    {t({ id: 'pages.inventory.scenarios.organize.unorganizedEmpty' })}
-                  </Typography.Text>
+                  <Empty
+                    description={t({ id: 'pages.inventory.scenarios.organize.unorganizedEmpty' })}
+                  />
                 ) : (
                   flatLines.map((line) => (
                     <FlatPaneRow
@@ -724,7 +724,14 @@ export function ScenarioDetailPage() {
             );
             return (
               <List.Item
-                style={{ overflow: 'hidden', ...(isMember ? { opacity: 0.65 } : null) }}
+                // Entries fill the modal width — no horizontal indentation
+                // (iteration 21).
+                style={{
+                  overflow: 'hidden',
+                  paddingLeft: 0,
+                  paddingRight: 0,
+                  ...(isMember ? { opacity: 0.65 } : null),
+                }}
                 actions={[
                   isMember ? (
                     <Tooltip

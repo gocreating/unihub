@@ -671,9 +671,27 @@ export function CatalogPage() {
                 </span>
               );
             }
+            // Flat mode has NO acquisition rows — each item row carries its
+            // parent acquisition's Edit hyperlink (iteration 21, FR-003).
             return (
               <span data-actions-col>
-                <Space>{itemActions(r)}</Space>
+                <Space>
+                  {flatMode && r.acquisition ? (
+                    <Button
+                      size="small"
+                      icon={<EditOutlined />}
+                      href={`/inventory/acquisitions/${r.acquisition.id}/edit`}
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey) return;
+                        e.preventDefault();
+                        navigate(`/inventory/acquisitions/${r.acquisition!.id}/edit`);
+                      }}
+                    >
+                      {t({ id: 'common.edit' })}
+                    </Button>
+                  ) : null}
+                  {itemActions(r)}
+                </Space>
               </span>
             );
           },

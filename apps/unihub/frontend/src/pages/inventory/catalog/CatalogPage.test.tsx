@@ -658,3 +658,48 @@ describe('CatalogPage (iteration 18 — alias display)', () => {
     expect(within(row).getByRole('checkbox')).not.toBeChecked();
   });
 });
+
+describe('CatalogPage (iteration 21 — flat-mode acquisition Edit link)', () => {
+  beforeEach(() => {
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
+      count: 3,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 3, items: 4 },
+      results: [ACQ, ACQ_SOLO, ACQ_REQ],
+    });
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 4,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 3, items: 4 },
+      results: [ITEM, PLAIN_ITEM, SOLO_ITEM, REQ_ITEM],
+    });
+  });
+
+  // CAT21-01 (FR-003): flat rows carry their parent acquisition's Edit link.
+  it('exposes the acquisition Edit link on every flat-mode item row', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    // Item-column sort → flat mode.
+    const skuHeader = Array.from(container.querySelectorAll('.ant-table-thead th')).find((th) =>
+      th.textContent?.includes('SKU Price'),
+    )!;
+    fireEvent.click(skuHeader);
+    await screen.findAllByText('Shop 10 USD');
+    const backpackRow = screen.getByText('Backpack').closest('tr')!;
+    const edit = within(backpackRow).getByText('Edit').closest('a')!;
+    expect(edit).toHaveAttribute('href', '/inventory/acquisitions/acq-1/edit');
+    // Item action still present alongside.
+    expect(within(backpackRow).getByRole('button', { name: /Deprecate/ })).toBeInTheDocument();
+  });
+
+  // CAT21-02 (FR-003): tree-mode CHILD rows still carry no Edit (parent has it).
+  it('keeps tree-mode item child rows without an Edit link', async () => {
+    renderPage();
+    const backpack = await screen.findByText('Backpack');
+    const childRow = backpack.closest('tr')!;
+    expect(within(childRow).queryByText('Edit')).toBeNull();
+  });
+});

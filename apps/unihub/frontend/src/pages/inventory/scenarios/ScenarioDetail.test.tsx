@@ -282,6 +282,38 @@ describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes
     expect(tooltips.some((el) => el.textContent === 'Lantern')).toBe(true);
   });
 
+  // SD21-02 (FR-011): both splitter panes use the AntD Empty component.
+  it('renders consistent Empty states in both panes when the scenario is empty', async () => {
+    vi.mocked(inventoryService.listScenarioItems).mockResolvedValue([]);
+    renderPage();
+    await screen.findAllByText('Camping');
+    expect(
+      within(screen.getByTestId('unorganized-pane')).getByText('Nothing left to organize')
+        .closest('.ant-empty'),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId('organized-pane')).getByText('Drag items here to organize them')
+        .closest('.ant-empty'),
+    ).toBeTruthy();
+  });
+
+  // SD21-01 (FR-011): modal result rows carry no horizontal indentation.
+  it('renders modal result rows without horizontal padding', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    const modal = (await screen.findByText('Add items')).closest('.ant-modal') as HTMLElement;
+    fireEvent.change(within(modal).getByPlaceholderText('Search items…'), {
+      target: { value: 'an' },
+    });
+    await within(modal).findByText(
+      (_, el) => el?.tagName === 'A' && el.textContent === 'Lantern',
+    );
+    const row = within(modal).getByText('Backpack').closest('.ant-list-item') as HTMLElement;
+    expect(row.style.paddingLeft).toBe('0px');
+    expect(row.style.paddingRight).toBe('0px');
+  });
+
   // SD19-02 (FR-011): truncation-gated tooltips via ItemName truncate mode —
   // the aliased row's tooltip reveals the original name.
   it('shows the original name tooltip on an aliased organized row', async () => {

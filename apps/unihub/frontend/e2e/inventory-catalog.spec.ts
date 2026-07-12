@@ -281,6 +281,10 @@ test('sorting an item column flattens the tree to a flat item list', async ({ pa
   // gone — no data row leads with a caret cell (header sort carets and any
   // header clones are a different concern).
   await expect(page.locator('.ant-table-row-level-1')).toHaveCount(0);
+  // Iteration 21: flat item rows expose their acquisition's Edit link.
+  await expect(
+    page.locator('.ant-table-tbody tr.ant-table-row').first().locator('a', { hasText: 'Edit' }),
+  ).toBeVisible();
   await expect(
     page.locator(
       '.ant-table-tbody tr.ant-table-row td:first-child .anticon-caret-right, .ant-table-tbody tr.ant-table-row td:first-child .anticon-caret-down',

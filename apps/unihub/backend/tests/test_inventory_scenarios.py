@@ -35,10 +35,12 @@ def _add_item(client, scenario_id, item_id, **extra):
     )
 
 
-def _move(client, scenario_id, line_id, container_id=None, index=0):
+def _move(client, scenario_id, line_id, container_id=None, index=0, **extra):
+    payload = {"container_id": container_id, "index": index}
+    payload.update(extra)
     return client.post(
         f"{SCEN}{scenario_id}/items/{line_id}/move/",
-        json.dumps({"container_id": container_id, "index": index}),
+        json.dumps(payload),
         content_type="application/json",
     )
 
@@ -113,7 +115,9 @@ class TestScenarioItemMove:
 
     def test_move_reorders_siblings_densely(self, auth_client):
         s, (a, b, c) = self._setup(auth_client)
-        # Move C to the front of the top level.
+        # Organize all three at the top level, then move C to the front.
+        for line, idx in ((a["id"], 0), (b["id"], 1), (c["id"], 2)):
+            assert _move(auth_client, s["id"], line, container_id=None, index=idx).status_code == 200
         assert _move(auth_client, s["id"], c["id"], container_id=None, index=0).status_code == 200
         by_name = {
             line["item"]["name"]: line["display_order"]
@@ -134,3 +138,71 @@ class TestScenarioItemMove:
         assert auth_client.delete(f"{SCEN}{s['id']}/items/{a['id']}/").status_code == 204
         lines = self._listed(auth_client, s["id"])
         assert all(line["container"] is None for line in lines)
+
+
+@pytest.mark.django_db
+class TestScenarioItemOrganized:
+    """Iteration 16 — ScenarioItem.organized: flat (unorganized) pane vs tree."""
+
+    def _setup(self, auth_client):
+        s = _scenario(auth_client)
+        lines = [
+            _add_item(auth_client, s["id"], _item(auth_client, n)["id"]).json()
+            for n in ("A", "B", "C")
+        ]
+        return s, lines
+
+    def _listed(self, auth_client, scenario_id):
+        return auth_client.get(f"{SCEN}{scenario_id}/items/").json()
+
+    def test_new_membership_defaults_unorganized(self, auth_client):
+        s = _scenario(auth_client)
+        line = _add_item(auth_client, s["id"], _item(auth_client)["id"]).json()
+        assert line["organized"] is False
+
+    def test_move_orders_among_organized_siblings_only(self, auth_client):
+        s, (a, b, c) = self._setup(auth_client)
+        resp = _move(auth_client, s["id"], a["id"], container_id=None, index=0, organized=True)
+        assert resp.status_code == 200, resp.content
+        assert resp.json()["organized"] is True
+        # C to the organized front; unorganized B must not count as a sibling.
+        _move(auth_client, s["id"], c["id"], container_id=None, index=0, organized=True)
+        by_name = {line["item"]["name"]: line for line in self._listed(auth_client, s["id"])}
+        assert by_name["C"]["display_order"] == 0
+        assert by_name["A"]["display_order"] == 1
+        assert by_name["B"]["organized"] is False
+
+    def test_move_without_flag_organizes(self, auth_client):
+        s, (a, b, c) = self._setup(auth_client)
+        resp = _move(auth_client, s["id"], b["id"], container_id=None, index=0)
+        assert resp.status_code == 200
+        assert resp.json()["organized"] is True
+
+    def test_unorganize_clears_container_and_reparents_children(self, auth_client):
+        s, (a, b, c) = self._setup(auth_client)
+        _move(auth_client, s["id"], a["id"], container_id=None, index=0)
+        _move(auth_client, s["id"], b["id"], container_id=a["id"], index=0)
+        # Send A back; a stale container_id in the body must be ignored.
+        resp = _move(auth_client, s["id"], a["id"], container_id=c["id"], organized=False)
+        assert resp.status_code == 200, resp.content
+        sent_back = resp.json()
+        assert sent_back["organized"] is False
+        assert sent_back["container"] is None
+        # A's child B jumps to the ORGANIZED top level.
+        by_name = {line["item"]["name"]: line for line in self._listed(auth_client, s["id"])}
+        assert by_name["B"]["container"] is None
+        assert by_name["B"]["organized"] is True
+
+    def test_organize_cycle_still_rejected(self, auth_client):
+        s, (a, b, c) = self._setup(auth_client)
+        _move(auth_client, s["id"], b["id"], container_id=a["id"], organized=True)
+        assert (
+            _move(auth_client, s["id"], a["id"], container_id=b["id"], organized=True).status_code
+            == 400
+        )
+
+    def test_data_io_descriptor_carries_organized(self):
+        from data_io.registry import get_table
+
+        names = [f.column_name for f in get_table("inventory.scenarioitem").system_fields]
+        assert "organized" in names

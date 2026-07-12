@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
@@ -414,5 +414,80 @@ describe('CatalogPage (iteration 15 — merged rows, layers, footer)', () => {
     await screen.findByText('Backpack');
     expect(screen.getByText('3 acquisitions, 4 items')).toBeInTheDocument();
     expect(screen.queryByText(/\d+ records/)).toBeNull();
+  });
+});
+
+describe('CatalogPage (iteration 16 — Toggle column)', () => {
+  beforeEach(() => {
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
+      count: 3,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 3, items: 4 },
+      results: [ACQ, ACQ_SOLO, ACQ_REQ],
+    });
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 4,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 3, items: 4 },
+      results: [ITEM, PLAIN_ITEM, SOLO_ITEM, REQ_ITEM],
+    });
+  });
+
+  // CAT16-01 (FR-003): the caret column is pinned sticky-left by default.
+  it('pins the Toggle column sticky-left by default', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    const caret = container.querySelector(
+      '.ant-table-tbody tr.ant-table-row td .anticon-caret-down, .ant-table-tbody tr.ant-table-row td .anticon-caret-right',
+    )!;
+    expect(caret).toBeTruthy();
+    expect(caret.closest('td')!.className).toContain('ant-table-cell-fix-left');
+  });
+
+  // CAT16-02 (FR-003): "Toggle" is listed (checked) in the Columns panel.
+  it('lists Toggle checked in the Columns panel', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    const label = await screen.findByText('Toggle');
+    const row = label.closest('li, .ant-space, div') as HTMLElement;
+    expect(within(row).getByRole('checkbox')).toBeChecked();
+  });
+
+  // CAT16-03 (FR-003): unchecking Toggle hides the caret column.
+  it('hides the caret column when Toggle is unchecked and applied', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    const label = await screen.findByText('Toggle');
+    const row = label.closest('li, .ant-space, div') as HTMLElement;
+    fireEvent.click(within(row).getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
+    await waitFor(() => {
+      expect(
+        container.querySelector(
+          '.ant-table-tbody tr.ant-table-row td .anticon-caret-down, .ant-table-tbody tr.ant-table-row td .anticon-caret-right',
+        ),
+      ).toBeNull();
+    });
+  });
+
+  // CAT16-04 (FR-003): flat mode never renders the Toggle column.
+  it('renders no Toggle column in flat mode', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    const skuHeader = Array.from(container.querySelectorAll('.ant-table-thead th')).find((th) =>
+      th.textContent?.includes('SKU Price'),
+    )!;
+    fireEvent.click(skuHeader);
+    await screen.findAllByText('Shop 10 USD');
+    expect(
+      container.querySelector(
+        '.ant-table-tbody tr.ant-table-row td .anticon-caret-down, .ant-table-tbody tr.ant-table-row td .anticon-caret-right',
+      ),
+    ).toBeNull();
   });
 });

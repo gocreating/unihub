@@ -175,7 +175,9 @@ export function CatalogPage() {
       // Default visible set & order (FR-003): Acquisition, Item, Quantity,
       // SKU price, Parameters, Actions. Every real column stays toggleable
       // from the dropdown (hidden by default), including one per parameter
-      // definition (FR-028).
+      // definition (FR-028). The caret disclosure column is itself a column
+      // ("Toggle"), pinned by default via defaultSticky (iteration 16).
+      { key: '__caret', label: t({ id: 'pages.inventory.catalog.col.toggle' }), dataType: 'text', visible: true, order: -1 },
       { key: 'acquisition_summary', label: t({ id: 'pages.inventory.catalog.col.acquisition' }), dataType: 'text', visible: true, order: 0 },
       { key: 'item_summary', label: t({ id: 'pages.inventory.catalog.col.item' }), dataType: 'text', visible: true, order: 1 },
       { key: 'sku_price', label: t({ id: 'pages.inventory.items.col.skuPrice' }), dataType: 'number', visible: true, order: 3 },
@@ -212,6 +214,8 @@ export function CatalogPage() {
     columnDefs,
     // Default sort (spec): Obtained descending, NULLS FIRST (pending on top).
     defaultSortRules: [{ field: 'acquisition__obtained_at', direction: 'desc', nulls: 'first' }],
+    // The Toggle (caret) column is pinned by default (FR-003, iteration 16).
+    defaultSticky: { left: true },
   });
   const { filter, sort, cols } = table;
 
@@ -709,7 +713,7 @@ export function CatalogPage() {
       key: '__caret',
       title: '',
       width: 44,
-      fixed: cols.firstColumnFixed ? 'left' : undefined,
+      fixed: cols.visibleColumns[0]?.key === '__caret' ? cols.firstColumnFixed : undefined,
       render: (_, r) =>
         isAcquisition(r) && r.children.length > 0 ? (
           <span style={{ cursor: 'pointer' }} onClick={() => toggleExpand(r.id)}>
@@ -718,14 +722,16 @@ export function CatalogPage() {
         ) : null,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [toggledIds, cols.firstColumnFixed],
+    [toggledIds, cols.firstColumnFixed, cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<CatalogRow>[]>(() => {
-    const visible = cols.visibleColumns
-      .map((c) => colDefMap[c.key])
+    // The Toggle column participates in column config like any other def but
+    // renders only in tree mode (flat item lists have nothing to expand).
+    return cols.visibleColumns
+      .filter((c) => !(flatMode && c.key === '__caret'))
+      .map((c) => (c.key === '__caret' ? caretColumn : colDefMap[c.key]))
       .filter((c): c is ProColumns<CatalogRow> => Boolean(c));
-    return flatMode ? visible : [caretColumn, ...visible];
   }, [cols.visibleColumns, colDefMap, flatMode, caretColumn]);
 
   return (

@@ -132,3 +132,80 @@ describe('ParameterRowsEditor', () => {
     );
   });
 });
+
+describe('ParameterRowsEditor (iteration 16 — form grid + definition delete)', () => {
+  beforeEach(() => {
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+  });
+
+  // PRE16-01 (FR-026): rows sit on the form grid, not a fixed 40%/52% compact split.
+  it('lays parameter rows on the form grid without fixed percentage panes', async () => {
+    const { container } = renderEditor([{ definition_id: 'd-color', value: 'red' }]);
+    await screen.findByDisplayValue('red');
+    // Key select lives inside a grid Col.
+    expect(container.querySelector('.ant-row .ant-col .ant-select')).toBeTruthy();
+    // No fixed percentage widths on the row panes (the old Space.Compact split).
+    expect(container.querySelector('[style*="width: 40%"]')).toBeNull();
+    expect(container.querySelector('[style*="width: 52%"]')).toBeNull();
+  });
+
+  // PRE16-02 (FR-026): delete affordance only on user-defined keys.
+  it('shows a delete affordance only on user-defined keys', async () => {
+    renderEditor([]);
+    fireEvent.click(await screen.findByRole('button', { name: /Add parameter/ }));
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[0]!);
+    const listbox = lastDropdown();
+    const capacity = within(listbox).getByText('capacity').closest('.ant-select-item') as HTMLElement;
+    expect(within(capacity).getByLabelText('delete-definition')).toBeInTheDocument();
+    const color = within(listbox).getByText('Color').closest('.ant-select-item') as HTMLElement;
+    expect(within(color).queryByLabelText('delete-definition')).toBeNull();
+  });
+
+  // PRE16-03 (FR-026): two-step count-confirm delete, row cleanup, list refetch.
+  it('deletes a user definition with count-confirm and clears rows using it', async () => {
+    vi.mocked(coreService.deleteAttributeDefinition)
+      .mockRejectedValueOnce(
+        Object.assign(new Error('confirm required'), {
+          status: 400,
+          body: { affected_entity_count: 3 },
+        }),
+      )
+      .mockResolvedValueOnce(undefined);
+    const onChange = vi.fn();
+    renderEditor(
+      [
+        { definition_id: 'd-capacity', value: '42' },
+        { definition_id: 'd-color', value: 'red' },
+      ],
+      onChange,
+    );
+    // Wait for definitions to resolve (the key label renders) before opening.
+    await screen.findByText('capacity');
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[0]!);
+    const listbox = lastDropdown();
+    const capacity = within(listbox).getByText('capacity').closest('.ant-select-item') as HTMLElement;
+    fireEvent.click(within(capacity).getByLabelText('delete-definition'));
+    // Probe without confirm → 400 carries the affected count.
+    await waitFor(() =>
+      expect(vi.mocked(coreService.deleteAttributeDefinition)).toHaveBeenCalledWith('d-capacity'),
+    );
+    // Count-confirm modal (danger) shows the affected count.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/3/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: /Delete/ }));
+    await waitFor(() =>
+      expect(vi.mocked(coreService.deleteAttributeDefinition)).toHaveBeenLastCalledWith(
+        'd-capacity',
+        true,
+      ),
+    );
+    // Rows keyed to the deleted definition are dropped; others untouched.
+    await waitFor(() =>
+      expect(onChange).toHaveBeenLastCalledWith([{ definition_id: 'd-color', value: 'red' }]),
+    );
+    // Definition queries invalidated (list refetched).
+    await waitFor(() =>
+      expect(vi.mocked(coreService.listAttributeDefinitions).mock.calls.length).toBeGreaterThan(1),
+    );
+  });
+});

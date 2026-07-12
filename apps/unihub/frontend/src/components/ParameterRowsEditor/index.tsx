@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Input, InputNumber, Select, Space, message } from 'antd';
+import { Button, Card, Col, Input, InputNumber, Modal, Row, Select, Space, message } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useIntl } from 'react-intl';
 import type { IntlShape } from 'react-intl';
 import {
   createAttributeDefinition,
+  deleteAttributeDefinition,
   listAttributeDefinitions,
 } from '@/services/unihub-backend/core';
 import type { AttributeDefinition } from '@/services/unihub-backend/core';
 import type { ItemParameterWrite, UnitFamily } from '@/services/unihub-backend/inventory';
 import { UNIT_FAMILY_OPTIONS } from '@/services/unihub-backend/inventory';
+import { useContainerWidth } from '@/hooks/useContainerWidth';
 
 const NEW_KEY = '__new__';
 
@@ -67,6 +69,8 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
   const queryClient = useQueryClient();
   const rows = useMemo(() => value ?? [], [value]);
   const [draft, setDraft] = useState<NewDefinitionDraft | null>(null);
+  // Form-grid stacking on narrow content width (constitution VI).
+  const { ref, isNarrow } = useContainerWidth(640);
 
   const { data: definitions = [] } = useQuery({
     queryKey: ['core', 'attribute-definitions', 'inventory.item'],
@@ -103,12 +107,75 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
 
   const usedIds = new Set(rows.map((r) => r.definition_id).filter(Boolean));
 
-  const keyOptions = (current: string) => [
+  type KeyOption = { value: string; label: string; definition?: AttributeDefinition };
+  const keyOptions = (current: string): KeyOption[] => [
     ...definitions
       .filter((d) => d.id === current || !usedIds.has(d.id))
-      .map((d) => ({ value: d.id, label: parameterKeyLabel(intl, d.name) })),
+      .map((d) => ({ value: d.id, label: parameterKeyLabel(intl, d.name), definition: d })),
     { value: NEW_KEY, label: t({ id: 'pages.inventory.params.new' }) },
   ];
+
+  // Two-step definition delete (FR-026): probe (400 + affected count) →
+  // danger confirm → delete with confirm=true → refetch defs, drop its rows.
+  const afterDefinitionDeleted = (definitionId: string) => {
+    queryClient.invalidateQueries({ queryKey: ['core', 'attribute-definitions'] });
+    emit(rows.filter((r) => r.definition_id !== definitionId));
+  };
+
+  const onDeleteDefinition = async (definition: AttributeDefinition) => {
+    let count = 0;
+    try {
+      await deleteAttributeDefinition(definition.id);
+      afterDefinitionDeleted(definition.id);
+      return;
+    } catch (err) {
+      const e = err as Error & { status?: number; body?: { affected_entity_count?: number } };
+      if (e.status !== 400 || e.body?.affected_entity_count === undefined) {
+        message.error(e.message);
+        return;
+      }
+      count = e.body.affected_entity_count;
+    }
+    Modal.confirm({
+      title: t(
+        { id: 'pages.inventory.params.deleteTitle' },
+        { name: parameterKeyLabel(intl, definition.name) },
+      ),
+      content: t({ id: 'pages.inventory.params.deleteBody' }, { count }),
+      okText: t({ id: 'common.delete' }),
+      okButtonProps: { danger: true },
+      cancelText: t({ id: 'common.cancel' }),
+      onOk: async () => {
+        await deleteAttributeDefinition(definition.id, true);
+        afterDefinitionDeleted(definition.id);
+      },
+    });
+  };
+
+  const renderKeyOption = (option: {
+    label?: React.ReactNode;
+    data: { definition?: AttributeDefinition };
+  }) => {
+    const definition = option.data.definition;
+    return (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>{option.label}</span>
+        {definition && !definition.is_system && (
+          <DeleteOutlined
+            aria-label="delete-definition"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              void onDeleteDefinition(definition);
+            }}
+          />
+        )}
+      </div>
+    );
+  };
 
   const onKeyChange = (index: number, definitionId: string) => {
     if (definitionId === NEW_KEY) {
@@ -173,23 +240,28 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
   const contentTypeId = definitions[0]?.content_type;
 
   return (
-    <div>
+    <div ref={ref}>
       {rows.map((row, index) => (
-        <Space.Compact block key={index} style={{ marginBottom: 8 }}>
-          <Select
-            style={{ width: '40%' }}
-            value={row.definition_id || undefined}
-            placeholder={t({ id: 'pages.inventory.params.key' })}
-            options={keyOptions(row.definition_id)}
-            onChange={(id) => onKeyChange(index, id)}
-          />
-          <div style={{ width: '52%' }}>{valueInput(index, row)}</div>
-          <Button
-            aria-label="remove-parameter"
-            icon={<DeleteOutlined />}
-            onClick={() => removeRow(index)}
-          />
-        </Space.Compact>
+        <Row gutter={[8, 8]} key={index} align="middle" wrap={isNarrow} style={{ marginBottom: 8 }}>
+          <Col flex={isNarrow ? '100%' : '1 1 0'}>
+            <Select
+              style={{ width: '100%' }}
+              value={row.definition_id || undefined}
+              placeholder={t({ id: 'pages.inventory.params.key' })}
+              options={keyOptions(row.definition_id)}
+              optionRender={renderKeyOption}
+              onChange={(id) => onKeyChange(index, id)}
+            />
+          </Col>
+          <Col flex={isNarrow ? '100%' : '2 1 0'}>{valueInput(index, row)}</Col>
+          <Col flex="none">
+            <Button
+              aria-label="remove-parameter"
+              icon={<DeleteOutlined />}
+              onClick={() => removeRow(index)}
+            />
+          </Col>
+        </Row>
       ))}
 
       {draft && (

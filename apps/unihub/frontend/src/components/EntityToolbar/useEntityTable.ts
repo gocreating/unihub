@@ -26,6 +26,8 @@ export interface UseEntityTableOptions {
   defaultPageSize?: EntityPageSize;
   /** Initial sort rules applied before any user interaction (e.g. a page's default sort). */
   defaultSortRules?: SortRule[];
+  /** Seed the default column pin flags (e.g. a pinned-by-default Toggle column). */
+  defaultSticky?: { left?: boolean; right?: boolean };
 }
 
 export interface EntityPaginationProps {
@@ -58,10 +60,11 @@ export function useEntityTable({
   columnDefs,
   defaultPageSize = 25,
   defaultSortRules,
+  defaultSticky,
 }: UseEntityTableOptions): UseEntityTableReturn {
   const filter = useEntityFilter(key);
   const sort = useEntitySort(key, defaultSortRules);
-  const cols = useColumnConfig(columnDefs);
+  const cols = useColumnConfig(columnDefs, defaultSticky);
 
   const [limit, setLimit] = useState<number>(defaultPageSize);
   const [offset, setOffset] = useState(0);

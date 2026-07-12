@@ -119,6 +119,16 @@ test('caret has its own dedicated column (not merged into a data column)', async
   await expect(caretCell.locator('.anticon-caret-down, .anticon-caret-right')).toHaveCount(1);
 });
 
+test('Toggle column is listed in the Columns dropdown and pinned by default (iter 16)', async ({ page }) => {
+  // Pinned by default: the leading caret cell carries the fixed-left class.
+  const firstBodyRow = page.locator('.ant-table-tbody tr.ant-table-row').first();
+  await expect(firstBodyRow.locator('td').first()).toHaveClass(/ant-table-cell-fix-left/);
+  // And the column is a real, user-visible entry in the Columns panel.
+  await page.getByRole('button', { name: /Columns/ }).click();
+  const panel = page.locator('.ant-dropdown').last();
+  await expect(panel.getByText('Toggle', { exact: true })).toBeVisible();
+});
+
 test('no item-count ("Items") column and standard footer pagination', async ({ page }) => {
   const headers = await page.locator('.ant-table-thead th').allInnerTexts();
   expect(headers).not.toContain('Items');

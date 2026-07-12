@@ -136,6 +136,8 @@ class ScenarioItem(models.Model):
         related_name="contained_items",
     )
     display_order = models.IntegerField(default=0)  # sibling order within a container
+    # False = unorganized flat pane (container unused); True = in the packing tree.
+    organized = models.BooleanField(default=False)
     notes = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -156,6 +156,7 @@ export interface ScenarioItem {
   item: Item;
   container: ContainerRef | null;
   display_order: number;
+  organized: boolean;
   notes: string;
   created_at: string;
 }
@@ -319,11 +320,15 @@ export function deleteScenarioItem(scenarioId: string, lineId: string): Promise<
   return fetchJson<void>(`${BASE}/scenarios/${scenarioId}/items/${lineId}/`, { method: 'DELETE' });
 }
 
-/** Drag-drop move: set a line's container and sibling position (dense order). */
+/**
+ * Drag-drop move: set a line's container and sibling position (dense order).
+ * `organized: false` sends the line back to the unorganized pane (container/
+ * index ignored; its children re-parent to the organized top level).
+ */
 export function moveScenarioItem(
   scenarioId: string,
   lineId: string,
-  data: { container_id: string | null; index: number },
+  data: { container_id: string | null; index: number; organized?: boolean },
 ): Promise<ScenarioItem> {
   return fetchJson<ScenarioItem>(`${BASE}/scenarios/${scenarioId}/items/${lineId}/move/`, {
     method: 'POST',

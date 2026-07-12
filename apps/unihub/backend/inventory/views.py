@@ -221,11 +221,22 @@ class ScenarioItemViewSet(viewsets.ModelViewSet):
     def move(self, request, *args, **kwargs):
         """Drag-drop endpoint: set the line's container and sibling position.
 
-        Body: ``{"container_id": <line id or null>, "index": <int>}``. Sibling
-        display_order values are rewritten densely so order survives reloads.
+        Body: ``{"container_id": <line id or null>, "index": <int>,
+        "organized": <bool>}``. ``organized`` defaults to true (any move into
+        the tree organizes the line); ``organized: false`` sends the line back
+        to the unorganized pane — container/index are ignored and its children
+        re-parent to the organized top level. Sibling display_order values are
+        rewritten densely so order survives reloads.
         """
         line = self.get_object()
         scenario = line.scenario
+
+        if request.data.get("organized", True) is False:
+            line.contained_items.update(container=None)
+            line.container = None
+            line.organized = False
+            line.save(update_fields=["container", "organized"])
+            return Response(self.get_serializer(line).data)
 
         container, error = self._resolve_container(
             scenario, request.data.get("container_id"), line=line
@@ -239,16 +250,17 @@ class ScenarioItemViewSet(viewsets.ModelViewSet):
             return Response({"detail": "index must be an integer."}, status=400)
 
         siblings = list(
-            ScenarioItem.objects.filter(scenario=scenario, container=container)
+            ScenarioItem.objects.filter(scenario=scenario, container=container, organized=True)
             .exclude(pk=line.pk)
             .order_by("display_order", "created_at")
         )
         index = max(0, min(index, len(siblings)))
         siblings.insert(index, line)
         line.container = container
+        line.organized = True
         for order, sibling in enumerate(siblings):
             sibling.display_order = order
-        line.save(update_fields=["container"])
+        line.save(update_fields=["container", "organized"])
         ScenarioItem.objects.bulk_update(siblings, ["display_order"])
         line.refresh_from_db()
         return Response(self.get_serializer(line).data)

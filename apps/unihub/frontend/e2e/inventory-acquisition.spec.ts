@@ -113,11 +113,38 @@ test('item cards render parameter rows as Tag badges (iteration 14)', async ({ p
     .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
     .getByText('Color', { exact: true })
     .click();
-  await page.locator('.ant-modal .ant-space-compact input.ant-input').last().fill('Blue');
+  // The value input shares the grid row with the key select showing "Color".
+  await page
+    .locator('.ant-modal .ant-row', { hasText: 'Color' })
+    .last()
+    .locator('input.ant-input')
+    .first()
+    .fill('Blue');
   await page.locator('.ant-modal button', { hasText: /Save/i }).click();
   await page.waitForTimeout(400);
   const card = page.locator('.ant-card-small', { hasText: 'Badged item' }).first();
   await expect(card.locator('.ant-card-body .ant-tag', { hasText: 'Blue' })).toBeVisible();
+});
+
+test('parameter rows follow the form grid; system keys offer no delete icon (iteration 16)', async ({ page }) => {
+  await gotoNewAcquisition(page);
+  await page.locator('.ant-card', { hasText: 'Items' }).first().locator('button').filter({ hasText: /^Add$/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.locator('.ant-modal').getByRole('button', { name: /Add parameter/ }).click();
+  // The parameter row spans the modal form width (grid, not a fixed 40% pane).
+  const paramRow = page
+    .locator('.ant-modal .ant-row')
+    .filter({ has: page.getByRole('button', { name: 'remove-parameter' }) })
+    .last();
+  const rowBox = await paramRow.boundingBox();
+  const bodyBox = await page.locator('.ant-modal .ant-modal-body').boundingBox();
+  expect(rowBox!.width).toBeGreaterThan(bodyBox!.width * 0.8);
+  // System definitions (e.g. Color) carry no delete icon in the key dropdown.
+  await paramRow.locator('.ant-select-selector').first().click();
+  const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').last();
+  const colorOption = dropdown.locator('.ant-select-item-option', { hasText: 'Color' }).first();
+  await expect(colorOption).toBeVisible();
+  await expect(colorOption.locator('[aria-label="delete-definition"]')).toHaveCount(0);
 });
 
 test('number inputs are right-aligned (cost panel + Add-Item modal)', async ({ page }) => {

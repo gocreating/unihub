@@ -472,8 +472,12 @@ export interface paths {
         /**
          * @description Drag-drop endpoint: set the line's container and sibling position.
          *
-         *     Body: ``{"container_id": <line id or null>, "index": <int>}``. Sibling
-         *     display_order values are rewritten densely so order survives reloads.
+         *     Body: ``{"container_id": <line id or null>, "index": <int>,
+         *     "organized": <bool>}``. ``organized`` defaults to true (any move into
+         *     the tree organizes the line); ``organized: false`` sends the line back
+         *     to the unorganized pane — container/index are ignored and its children
+         *     re-parent to the organized top level. Sibling display_order values are
+         *     rewritten densely so order survives reloads.
          */
         post: operations["v1_inventory_scenarios_items_move_create"];
         delete?: never;
@@ -1126,6 +1130,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             readonly display_order?: number;
+            readonly organized?: boolean;
             notes?: string;
             /** Format: date-time */
             readonly created_at?: string;
@@ -1149,6 +1154,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             readonly display_order: number;
+            readonly organized: boolean;
             notes?: string;
             /** Format: date-time */
             readonly created_at: string;

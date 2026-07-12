@@ -41,9 +41,23 @@ function statesEqual(a: ColumnState, b: ColumnState): boolean {
   });
 }
 
-/** Manage column visibility, display order, and sticky-pinning state. */
-export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigReturn {
-  const initial: ColumnState = { columns: initialColumns, stickyLeft: false, stickyRight: false };
+/**
+ * Manage column visibility, display order, and sticky-pinning state.
+ * `defaultSticky` seeds the pin flags of the initial/default state (a page can
+ * ship pinned-by-default columns); user changes still win and Reset restores
+ * the seeded default.
+ */
+export function useColumnConfig(
+  initialColumns: ColumnDef[],
+  defaultSticky?: { left?: boolean; right?: boolean },
+): UseColumnConfigReturn {
+  const seedLeft = !!defaultSticky?.left;
+  const seedRight = !!defaultSticky?.right;
+  const initial: ColumnState = {
+    columns: initialColumns,
+    stickyLeft: seedLeft,
+    stickyRight: seedRight,
+  };
 
   const [activeState, setActiveState] = useState<ColumnState>(initial);
   const [pendingState, setPendingState] = useState<ColumnState>(initial);
@@ -83,10 +97,14 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
   }, [activeState]);
 
   const reset = useCallback(() => {
-    const defaultState: ColumnState = { columns: initialColumns, stickyLeft: false, stickyRight: false };
+    const defaultState: ColumnState = {
+      columns: initialColumns,
+      stickyLeft: seedLeft,
+      stickyRight: seedRight,
+    };
     setActiveState(defaultState);
     setPendingState(defaultState);
-  }, [initialColumns]);
+  }, [initialColumns, seedLeft, seedRight]);
 
   const visible = sortedVisible(activeState);
 

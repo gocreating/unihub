@@ -1,18 +1,54 @@
 import type { ScenarioItem } from '@/services/unihub-backend/inventory';
 
-/** Children of a container line (null = top level), in persisted order. */
+/**
+ * Children of a container line (null = top level), in persisted order.
+ * Only ORGANIZED lines participate in the tree (iteration 16) — unorganized
+ * memberships live in the flat pane regardless of their container column.
+ */
 export function childrenOf(lines: ScenarioItem[], parentId: string | null): ScenarioItem[] {
   return lines
-    .filter((line) => (line.container?.id ?? null) === parentId)
+    .filter((line) => line.organized && (line.container?.id ?? null) === parentId)
     .sort(
       (a, b) =>
         a.display_order - b.display_order || a.created_at.localeCompare(b.created_at),
     );
 }
 
+/** Unorganized memberships (the flat pane), oldest first. */
+export function unorganizedLines(lines: ScenarioItem[]): ScenarioItem[] {
+  return lines
+    .filter((line) => !line.organized)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+}
+
 export interface DropTarget {
   container_id: string | null;
   index: number;
+}
+
+export interface MovePayload extends DropTarget {
+  organized: boolean;
+}
+
+/** Left→right background drop: append at the end of the organized top level. */
+export function organizeAtTopLevel(lines: ScenarioItem[], dragId: string): MovePayload {
+  const index = childrenOf(lines, null).filter((l) => l.id !== dragId).length;
+  return { container_id: null, index, organized: true };
+}
+
+/** Left→right node drop: nest at the end of the node's organized children. */
+export function organizeInto(
+  lines: ScenarioItem[],
+  dragId: string,
+  containerId: string,
+): MovePayload {
+  const index = childrenOf(lines, containerId).filter((l) => l.id !== dragId).length;
+  return { container_id: containerId, index, organized: true };
+}
+
+/** Right→left drop: send the line back (server ignores container/index). */
+export function sendBack(): MovePayload {
+  return { container_id: null, index: 0, organized: false };
 }
 
 /**

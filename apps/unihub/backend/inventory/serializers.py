@@ -375,10 +375,11 @@ class ScenarioItemSerializer(serializers.ModelSerializer):
             "item",
             "container",
             "display_order",
+            "organized",
             "notes",
             "created_at",
         ]
-        read_only_fields = ["id", "display_order", "created_at"]
+        read_only_fields = ["id", "display_order", "organized", "created_at"]
 
     def get_container(self, obj: ScenarioItem) -> dict | None:
         if obj.container_id is None:

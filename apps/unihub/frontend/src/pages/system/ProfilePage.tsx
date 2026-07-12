@@ -1,13 +1,10 @@
-import { Card, Descriptions, Typography } from 'antd';
+import { Card, Descriptions } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { useIntl } from 'react-intl';
 import { getSystemVersion } from '@/services/unihub-backend/system';
+import { EmptyValue } from '@/components/EmptyValue';
 
-const EMPTY = (
-  <Typography.Text type="secondary" style={{ userSelect: 'none' }}>
-    —
-  </Typography.Text>
-);
+const EMPTY = <EmptyValue />;
 
 export function ProfilePage() {
   const { formatMessage: t } = useIntl();

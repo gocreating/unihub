@@ -147,7 +147,7 @@ export function ItemFormModal({
                       showSearch
                       allowClear
                       disabled={currencyDisabled}
-                      placeholder={currencyDisabled ? '—' : 'CUR'}
+                      placeholder={currencyDisabled ? '-' : 'CUR'}
                       options={currencyOptions}
                     />
                   </Form.Item>

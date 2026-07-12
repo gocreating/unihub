@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, ColorPicker, DatePicker, Form, Input, Modal, Select, Space, Tag, Typography, message } from 'antd';
+import { Button, ColorPicker, DatePicker, Form, Input, Modal, Select, Space, Tag, message } from 'antd';
+import { EmptyValue } from '@/components/EmptyValue';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -243,7 +244,7 @@ export function AccountsPage() {
               }}
             />
           ) : (
-            <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>
+            <EmptyValue />
           ),
         ...makeSortProps('color', t({ id: 'pages.finance.accounts.col.color' }), sort),
       },
@@ -254,7 +255,7 @@ export function AccountsPage() {
         ...makeSortProps('open_datetime', t({ id: 'pages.finance.accounts.col.openDatetime' }), sort),
         render: (_, record) => {
           const formatted = formatDateRelative(record.open_datetime);
-          return formatted ?? <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
+          return formatted ?? <EmptyValue />;
         },
       },
       close_datetime: {
@@ -264,7 +265,7 @@ export function AccountsPage() {
         ...makeSortProps('close_datetime', t({ id: 'pages.finance.accounts.col.closeDatetime' }), sort),
         render: (_, record) => {
           const formatted = formatDateRelative(record.close_datetime);
-          return formatted ?? <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
+          return formatted ?? <EmptyValue />;
         },
       },
       actions: {

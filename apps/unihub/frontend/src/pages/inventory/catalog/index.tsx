@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, DatePicker, Modal, Space, Tag, Tooltip, Typography, message } from 'antd';
+import { Button, DatePicker, Modal, Space, Tag, Typography, message } from 'antd';
 import {
   CaretDownOutlined,
   CaretRightOutlined,
@@ -21,6 +21,8 @@ import PageTable, {
   widthForHeader,
 } from '@/components/PageTable';
 import { DateTimeCell, dateTimeLines } from '@/components/DateTimeCell';
+import { EMPTY_TEXT, EmptyValue } from '@/components/EmptyValue';
+import { OverflowTooltip } from '@/components/OverflowTooltip';
 import { parameterKeyLabel } from '@/components/ParameterRowsEditor';
 import { listAttributeDefinitions } from '@/services/unihub-backend/core';
 import type { AttributeDefinition } from '@/services/unihub-backend/core';
@@ -47,11 +49,7 @@ import type {
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 import { formatDecimal, parameterBadges } from '../itemBadges';
 
-const EMPTY = (
-  <Typography.Text type="secondary" style={{ userSelect: 'none' }}>
-    —
-  </Typography.Text>
-);
+const EMPTY = <EmptyValue />;
 
 // A row is either an acquisition (parent) or one of its items (child/flat).
 type CatalogRow =
@@ -119,7 +117,7 @@ function acquisitionSummaryLines(
 ): { primary: string; secondary: string | null } {
   const primary = `${a.source || untitled} ${formatNetCost(a.net_cost)}`.trim();
   if (!a.request_time && !a.obtained_at) return { primary, secondary: null };
-  const side = (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD') : '—');
+  const side = (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD') : EMPTY_TEXT);
   return { primary, secondary: `${side(a.request_time)} ~ ${side(a.obtained_at)}` };
 }
 
@@ -392,22 +390,11 @@ export function CatalogPage() {
 
   const actionsColWidth = useActionsColWidth(rows);
 
+  // Truncation-gated tooltip (constitution v1.20.0): only when ellipsised.
   const ellipsisSecondary = (text: string) => (
-    <Tooltip title={text}>
-      <Typography.Text
-        type="secondary"
-        style={{
-          display: 'block',
-          fontSize: 12,
-          maxWidth: 420,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {text}
-      </Typography.Text>
-    </Tooltip>
+    <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12, maxWidth: 420 }}>
+      <OverflowTooltip title={text}>{text}</OverflowTooltip>
+    </Typography.Text>
   );
 
   const colDefMap = useMemo<Record<string, ProColumns<CatalogRow>>>(
@@ -505,19 +492,9 @@ export function CatalogPage() {
             return (
               <Space size={[4, 4]} wrap style={{ maxWidth: '100%' }}>
                 {badges.map((badge, i) => (
-                  <Tooltip key={i} title={badge}>
-                    <Tag
-                      style={{
-                        marginInlineEnd: 0,
-                        maxWidth: '100%',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {badge}
-                    </Tag>
-                  </Tooltip>
+                  <Tag key={i} style={{ marginInlineEnd: 0, maxWidth: '100%' }}>
+                    <OverflowTooltip title={badge}>{badge}</OverflowTooltip>
+                  </Tag>
                 ))}
               </Space>
             );

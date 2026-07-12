@@ -70,6 +70,6 @@ describe('ScenariosPage (iteration 14 — 3 columns)', () => {
     renderPage();
     expect(await screen.findByText('Weekend trip')).toBeInTheDocument();
     const row = screen.getByText('Studio shoot').closest('tr')!;
-    expect(row.textContent).toContain('—');
+    expect(row.textContent).toContain('-');
   });
 });

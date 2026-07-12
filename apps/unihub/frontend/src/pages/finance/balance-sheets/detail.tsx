@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { EmptyValue } from '@/components/EmptyValue';
 import { useQuery } from '@tanstack/react-query';
 import {
   Breadcrumb, Button, Card, Checkbox, Dropdown,
@@ -284,7 +285,7 @@ export function BalanceSheetDetailPage() {
         // Root node and multi-currency aggregates (e.g. "Asset" spanning TWD+USD):
         // summing different currencies is meaningless, show placeholder.
         if (record.key === 'root' || (!record.currency && !record.isLeaf)) {
-          return <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
+          return <EmptyValue />;
         }
         return record.currency
           ? `${getCurrencySymbol(record.currency)} ${formatAmount(record.amount.toString())}`
@@ -301,7 +302,7 @@ export function BalanceSheetDetailPage() {
           render: (_dom: unknown, record: AggTreeNode) =>
             record.netWorthInBase != null
               ? `${getCurrencySymbol(baseCurrency)} ${formatAmount(record.netWorthInBase.toString())}`
-              : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
+              : <EmptyValue />,
         } satisfies ProColumns<AggTreeNode>]
       : []),
   ], [t, baseCurrency, aggDataWidths]);
@@ -344,7 +345,7 @@ export function BalanceSheetDetailPage() {
           align: 'right' as const,
           render: (_dom: unknown, record: Balance) => {
             const nwv = computeNw?.(record.amount, record.currency) ?? null;
-            if (nwv == null) return <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
+            if (nwv == null) return <EmptyValue />;
             return `${getCurrencySymbol(baseCurrency)} ${formatAmount(nwv.toString())}`;
           },
         }]

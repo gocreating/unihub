@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { Typography } from 'antd';
+import { EmptyValue } from '@/components/EmptyValue';
 
 dayjs.extend(relativeTime);
 
@@ -24,15 +25,11 @@ export interface DateTimeCellProps {
 }
 
 // Constitution v1.18.0: absolute datetime as the primary row, relative time as
-// a muted secondary row; absent values keep the standard "—" placeholder.
+// a muted secondary row; absent values render the standard <EmptyValue />.
 export function DateTimeCell({ value, format = DEFAULT_FORMAT }: DateTimeCellProps) {
   const lines = dateTimeLines(value, format);
   if (lines.length === 0) {
-    return (
-      <Typography.Text type="secondary" style={{ userSelect: 'none' }}>
-        —
-      </Typography.Text>
-    );
+    return <EmptyValue />;
   }
   return (
     <div>

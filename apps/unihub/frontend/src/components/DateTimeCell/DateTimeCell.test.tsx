@@ -30,12 +30,13 @@ describe('DateTimeCell (constitution v1.18.0 two-row datetime)', () => {
     expect(screen.getByText(dayjs(VALUE).fromNow())).toBeInTheDocument();
   });
 
-  // DTC-04: absent value → the standard non-selectable "—" placeholder
+  // DTC-04: absent value → the standard short dimmed non-selectable "-" (v1.20.0)
   it('renders the standard placeholder for null', () => {
     render(<DateTimeCell value={null} />);
-    const empty = screen.getByText('—');
+    const empty = screen.getByText('-');
     expect(empty).toBeInTheDocument();
     expect(empty).toHaveStyle({ userSelect: 'none' });
+    expect(empty.className).toContain('ant-typography-disabled');
   });
 
   // DTC-05: measurement helper exposes both lines for width computation

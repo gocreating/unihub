@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { EmptyValue } from '@/components/EmptyValue';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, Modal, Select, Space, Spin, Typography, message } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, MinusOutlined, PlusOutlined } from '@ant-design/icons';
@@ -455,7 +456,7 @@ export function BalanceSheetsPage() {
           render: (_dom: unknown, record: BalanceSheet) => {
             if (allBalancesLoading) return <Spin size="small" />;
             const nwv = sheetNetWorths[record.id];
-            if (!nwv) return <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
+            if (!nwv) return <EmptyValue />;
             return `${getCurrencySymbol(baseCurrency)} ${formatAmount(nwv.toString())}`;
           },
         } : undefined,

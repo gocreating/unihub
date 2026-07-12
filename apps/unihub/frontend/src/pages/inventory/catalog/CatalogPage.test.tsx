@@ -182,7 +182,7 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     // The no-parameters item shows the standard placeholder in its Parameters cell.
     const plainRow = screen.getByText('Plain').closest('tr')!;
     expect(plainRow.querySelectorAll('.ant-tag').length).toBe(0);
-    expect(within(plainRow).getAllByText('—').length).toBeGreaterThan(0);
+    expect(within(plainRow).getAllByText('-').length).toBeGreaterThan(0);
   });
 
   // CAT13-04 (d): derived Acquisition cell on the tree parent row.

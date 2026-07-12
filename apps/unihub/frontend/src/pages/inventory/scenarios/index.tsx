@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Modal, Space, Typography, message } from 'antd';
+import { Button, Form, Input, Modal, Space, message } from 'antd';
+import { EmptyValue } from '@/components/EmptyValue';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
@@ -157,12 +158,7 @@ export function ScenariosPage() {
           ...widthForHeader(t({ id: 'pages.inventory.scenarios.col.description' }), 260),
           fixed: getFixed('description'),
           ellipsis: true,
-          render: (_, r) =>
-            r.description || (
-              <Typography.Text type="secondary" style={{ userSelect: 'none' }}>
-                —
-              </Typography.Text>
-            ),
+          render: (_, r) => r.description || <EmptyValue />,
         },
         actions: {
           title: t({ id: 'common.actions' }),

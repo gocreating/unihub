@@ -14,7 +14,6 @@ import {
   Select,
   Space,
   Tag,
-  Tooltip,
   Typography,
   message,
 } from 'antd';
@@ -47,6 +46,8 @@ import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import type { Acquisition, CostFactorWrite, Item, ItemWrite } from '@/services/unihub-backend/inventory';
 import { draftParameters, itemCardBadges } from '../itemBadges';
+import { EmptyValue } from '@/components/EmptyValue';
+import { OverflowTooltip } from '@/components/OverflowTooltip';
 import { listAttributeDefinitions } from '@/services/unihub-backend/core';
 import {
   COST_FACTOR_TYPES,
@@ -465,19 +466,9 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
               >
                 <Space size={[4, 4]} wrap style={{ maxWidth: '100%' }}>
                   {itemCardBadges(card.data, draftParameters(card.data.parameters, parameterDefs)).map((badge, i) => (
-                    <Tooltip key={i} title={badge}>
-                      <Tag
-                        style={{
-                          marginInlineEnd: 0,
-                          maxWidth: '100%',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {badge}
-                      </Tag>
-                    </Tooltip>
+                    <Tag key={i} style={{ marginInlineEnd: 0, maxWidth: '100%' }}>
+                      <OverflowTooltip title={badge}>{badge}</OverflowTooltip>
+                    </Tag>
                   ))}
                 </Space>
               </Card>
@@ -551,7 +542,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
             </Col>
             <Col flex="2 1 0">
               {totals.length === 0 ? (
-                <Typography.Text>—</Typography.Text>
+                <EmptyValue />
               ) : (
                 <Space direction="vertical" size={0}>
                   {totals.map(([cur, total]) => (

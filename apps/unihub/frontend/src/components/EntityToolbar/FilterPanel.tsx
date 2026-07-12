@@ -384,13 +384,16 @@ export function FilterPanel({ attrs, hook, onApply, onClose, focusCancelOn }: Fi
         padding: 12,
       }}
     >
-      <GroupCard
-        group={root}
-        attrs={attrs}
-        depth={0}
-        onUpdate={setPendingRoot}
-        onRemove={null}
-      />
+      {/* Constitution v1.20.0: panels never overflow the viewport. */}
+      <div data-panel-scroll style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+        <GroupCard
+          group={root}
+          attrs={attrs}
+          depth={0}
+          onUpdate={setPendingRoot}
+          onRemove={null}
+        />
+      </div>
 
       <Divider style={{ margin: '10px 0 8px' }} />
 

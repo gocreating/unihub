@@ -46,7 +46,8 @@ import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import type { Acquisition, CostFactorWrite, Item, ItemWrite } from '@/services/unihub-backend/inventory';
-import { itemCardBadges } from '../itemBadges';
+import { draftParameters, itemCardBadges } from '../itemBadges';
+import { listAttributeDefinitions } from '@/services/unihub-backend/core';
 import {
   COST_FACTOR_TYPES,
   createAcquisition,
@@ -87,16 +88,14 @@ function itemToWrite(item: Item): ItemWrite {
     quantity: item.quantity,
     spec: item.spec,
     remark: item.remark,
-    size: item.size,
-    color: item.color,
     url: item.url,
     sku_price: item.sku_price,
     sku_price_currency: item.sku_price_currency,
-    length: item.length,
-    width: item.width,
-    height: item.height,
-    weight: item.weight,
-    volume: item.volume,
+    parameters: (item.parameters ?? []).map((p) => ({
+      definition_id: p.definition_id,
+      value: p.value,
+      unit: p.unit || undefined,
+    })),
   };
 }
 
@@ -205,6 +204,11 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
   const { data: currenciesData } = useQuery({
     queryKey: ['finance', 'currencies'],
     queryFn: () => listCurrencies(),
+  });
+  // Parameter definitions resolve pending-card parameter rows into badges.
+  const { data: parameterDefs = [] } = useQuery({
+    queryKey: ['core', 'attribute-definitions', 'inventory.item'],
+    queryFn: () => listAttributeDefinitions('inventory.item'),
   });
   const currencyOptions = useMemo(
     () => (currenciesData?.results ?? []).map((c) => ({ value: c.code, label: c.code })),
@@ -460,7 +464,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
                 ]}
               >
                 <Space size={[4, 4]} wrap style={{ maxWidth: '100%' }}>
-                  {itemCardBadges(card.data).map((badge, i) => (
+                  {itemCardBadges(card.data, draftParameters(card.data.parameters, parameterDefs)).map((badge, i) => (
                     <Tooltip key={i} title={badge}>
                       <Tag
                         style={{
@@ -623,19 +627,21 @@ function writeToItemLike(data?: ItemWrite): Item | null {
     quantity: data.quantity ?? 1,
     spec: data.spec ?? '',
     remark: data.remark ?? '',
-    size: data.size ?? '',
-    length: data.length ?? null,
-    width: data.width ?? null,
-    height: data.height ?? null,
-    weight: data.weight ?? null,
-    volume: data.volume ?? null,
     sku_price: data.sku_price ?? null,
     sku_price_currency: data.sku_price_currency ?? '',
     total_price: null,
-    color: data.color ?? '',
     url: data.url ?? '',
     status: 'active',
     deprecate_time: null,
+    parameters: (data.parameters ?? []).map((p) => ({
+      definition_id: p.definition_id,
+      name: '',
+      data_type: '',
+      unit_family: '' as const,
+      value: p.value,
+      unit: p.unit ?? '',
+      value_number: null,
+    })),
     acquisition: null,
     created_at: '',
     updated_at: '',

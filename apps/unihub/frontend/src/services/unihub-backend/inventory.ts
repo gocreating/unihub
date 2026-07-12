@@ -4,7 +4,6 @@ import type { EntityListParams, OffsetPaginatedResponse } from '@/components/Ent
 // ── Types ────────────────────────────────────────────────────────────
 
 export type ItemStatus = 'active' | 'deprecated';
-export type ConstraintType = 'mutual_exclusive' | 'required' | 'weight_limit';
 export type CostFactorType =
   | 'accumulated'
   | 'shipping'
@@ -28,9 +27,33 @@ export const LENGTH_UNITS: LengthUnit[] = ['mm', 'cm', 'm', 'in'];
 export const WEIGHT_UNITS: WeightUnit[] = ['g', 'kg', 'lb'];
 export const VOLUME_UNITS: VolumeUnit[] = ['mL', 'L'];
 
+export type UnitFamily = 'length' | 'weight' | 'volume';
+export const UNIT_FAMILY_OPTIONS: Record<UnitFamily, readonly string[]> = {
+  length: LENGTH_UNITS,
+  weight: WEIGHT_UNITS,
+  volume: VOLUME_UNITS,
+};
+
 export interface Measurement {
   value: string;
   unit: string;
+}
+
+/** One parameter row on an item (shared AttributeDefinition/AttributeValue). */
+export interface ItemParameter {
+  definition_id: string;
+  name: string;
+  data_type: string; // text | long_text | number | single_select | dimension | …
+  unit_family: UnitFamily | '';
+  value: string;
+  unit: string;
+  value_number: string | null;
+}
+
+export interface ItemParameterWrite {
+  definition_id: string;
+  value: string;
+  unit?: string;
 }
 
 export interface AcquisitionSummary {
@@ -47,19 +70,13 @@ export interface Item {
   quantity: number;
   spec: string;
   remark: string;
-  size: string;
-  length: Measurement | null;
-  width: Measurement | null;
-  height: Measurement | null;
-  weight: Measurement | null;
-  volume: Measurement | null;
   sku_price: string | null;
   sku_price_currency: string;
   total_price: string | null;
-  color: string;
   url: string;
   status: ItemStatus;
   deprecate_time: string | null;
+  parameters: ItemParameter[];
   acquisition: AcquisitionSummary | null;
   created_at: string;
   updated_at: string;
@@ -70,17 +87,11 @@ export interface ItemWrite {
   quantity?: number;
   spec?: string;
   remark?: string;
-  size?: string;
-  length?: Measurement | null;
-  width?: Measurement | null;
-  height?: Measurement | null;
-  weight?: Measurement | null;
-  volume?: Measurement | null;
   sku_price?: string | null;
   sku_price_currency?: string;
-  color?: string;
   url?: string;
   deprecate_time?: string | null;
+  parameters?: ItemParameterWrite[];
 }
 
 export interface CostFactor {
@@ -129,11 +140,8 @@ export interface AcquisitionWrite {
 export interface Scenario {
   id: string;
   name: string;
-  notes: string;
+  description: string;
   item_count: number;
-  prepared_count: number;
-  outstanding_count: number;
-  complete: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -147,8 +155,7 @@ export interface ScenarioItem {
   id: string;
   item: Item;
   container: ContainerRef | null;
-  required_quantity: string;
-  prepared: boolean;
+  display_order: number;
   notes: string;
   created_at: string;
 }
@@ -156,48 +163,7 @@ export interface ScenarioItem {
 export interface ScenarioItemWrite {
   item_id?: string;
   container_id?: string | null;
-  required_quantity?: string;
-  prepared?: boolean;
   notes?: string;
-}
-
-export interface Constraint {
-  id: string;
-  name: string;
-  constraint_type: ConstraintType;
-  items: { id: string; name: string }[];
-  limit_value: string | null;
-  created_at: string;
-}
-
-export interface ConstraintWrite {
-  name?: string;
-  constraint_type: ConstraintType;
-  item_ids?: string[];
-  limit_value?: string | null;
-}
-
-export interface ChecklistLine {
-  id: string;
-  item: { id: string; name: string };
-  required_quantity: string;
-  prepared: boolean;
-  container: ContainerRef | null;
-}
-
-export interface ChecklistViolation {
-  constraint_id: string;
-  type: ConstraintType;
-  message: string;
-  offending_item_ids?: string[];
-  overage?: string;
-}
-
-export interface Checklist {
-  scenario_id: string;
-  progress: { prepared_count: number; outstanding_count: number; total: number; complete: boolean };
-  lines: ChecklistLine[];
-  violations: ChecklistViolation[];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -305,13 +271,15 @@ export function getScenario(id: string): Promise<Scenario> {
   return fetchJson<Scenario>(`${BASE}/scenarios/${id}/`);
 }
 
-export function createScenario(data: Pick<Scenario, 'name'> & { notes?: string }): Promise<Scenario> {
+export function createScenario(
+  data: Pick<Scenario, 'name'> & { description?: string },
+): Promise<Scenario> {
   return fetchJson<Scenario>(`${BASE}/scenarios/`, { method: 'POST', body: JSON.stringify(data) });
 }
 
 export function updateScenario(
   id: string,
-  data: Partial<Pick<Scenario, 'name' | 'notes'>>,
+  data: Partial<Pick<Scenario, 'name' | 'description'>>,
 ): Promise<Scenario> {
   return fetchJson<Scenario>(`${BASE}/scenarios/${id}/`, {
     method: 'PATCH',
@@ -323,11 +291,7 @@ export function deleteScenario(id: string): Promise<void> {
   return fetchJson<void>(`${BASE}/scenarios/${id}/`, { method: 'DELETE' });
 }
 
-export function getChecklist(scenarioId: string): Promise<Checklist> {
-  return fetchJson<Checklist>(`${BASE}/scenarios/${scenarioId}/checklist/`);
-}
-
-// ── Scenario items (checklist lines / containment) ────────────────────
+// ── Scenario items (packing tree / containment) ───────────────────────
 
 export function listScenarioItems(scenarioId: string): Promise<ScenarioItem[]> {
   return fetchJson<ScenarioItem[]>(`${BASE}/scenarios/${scenarioId}/items/`);
@@ -355,21 +319,14 @@ export function deleteScenarioItem(scenarioId: string, lineId: string): Promise<
   return fetchJson<void>(`${BASE}/scenarios/${scenarioId}/items/${lineId}/`, { method: 'DELETE' });
 }
 
-// ── Constraints ──────────────────────────────────────────────────────
-
-export function listConstraints(scenarioId: string): Promise<Constraint[]> {
-  return fetchJson<Constraint[]>(`${BASE}/scenarios/${scenarioId}/constraints/`);
-}
-
-export function createConstraint(scenarioId: string, data: ConstraintWrite): Promise<Constraint> {
-  return fetchJson<Constraint>(`${BASE}/scenarios/${scenarioId}/constraints/`, {
+/** Drag-drop move: set a line's container and sibling position (dense order). */
+export function moveScenarioItem(
+  scenarioId: string,
+  lineId: string,
+  data: { container_id: string | null; index: number },
+): Promise<ScenarioItem> {
+  return fetchJson<ScenarioItem>(`${BASE}/scenarios/${scenarioId}/items/${lineId}/move/`, {
     method: 'POST',
     body: JSON.stringify(data),
-  });
-}
-
-export function deleteConstraint(scenarioId: string, constraintId: string): Promise<void> {
-  return fetchJson<void>(`${BASE}/scenarios/${scenarioId}/constraints/${constraintId}/`, {
-    method: 'DELETE',
   });
 }

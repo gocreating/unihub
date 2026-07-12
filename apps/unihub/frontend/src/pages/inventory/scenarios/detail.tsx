@@ -1,421 +1,213 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
+import type { CSSProperties } from 'react';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert,
   Breadcrumb,
   Button,
   Card,
-  Checkbox,
-  Form,
-  InputNumber,
+  Empty,
+  Input,
   List,
-  Modal,
-  Progress,
-  Select,
-  Space,
-  Tag,
+  Tree,
   Typography,
   message,
 } from 'antd';
+import type { TreeDataNode, TreeProps } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Link, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import type { ConstraintType } from '@/services/unihub-backend/inventory';
 import {
   addScenarioItem,
-  createConstraint,
-  deleteConstraint,
   deleteScenarioItem,
-  getChecklist,
   getScenario,
-  listConstraints,
   listItems,
   listScenarioItems,
-  updateScenarioItem,
+  moveScenarioItem,
 } from '@/services/unihub-backend/inventory';
-
-const CONSTRAINT_TYPES: ConstraintType[] = ['mutual_exclusive', 'required', 'weight_limit'];
-
-interface ConstraintFormValues {
-  constraint_type: ConstraintType;
-  name?: string;
-  item_ids?: string[];
-  limit_value?: number | null;
-}
+import { useContainerWidth } from '@/hooks/useContainerWidth';
+import { childrenOf, computeDropTarget } from './organizeTree';
 
 export function ScenarioDetailPage() {
   const { id = '' } = useParams();
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
-  const [addItemId, setAddItemId] = useState<string | undefined>();
-  const [addQty, setAddQty] = useState<number>(1);
-  const [constraintModal, setConstraintModal] = useState(false);
-  const [form] = Form.useForm<ConstraintFormValues>();
+  const [search, setSearch] = useState('');
+  // Two panels side by side; stack on a narrow content area (Principle VI).
+  const { ref, isNarrow } = useContainerWidth(720);
 
-  const [scenarioQ, checklistQ, linesQ, constraintsQ, itemsQ] = useQueries({
+  const [scenarioQ, linesQ] = useQueries({
     queries: [
       { queryKey: ['inventory', 'scenario', id], queryFn: () => getScenario(id) },
-      { queryKey: ['inventory', 'scenario', id, 'checklist'], queryFn: () => getChecklist(id) },
       { queryKey: ['inventory', 'scenario', id, 'lines'], queryFn: () => listScenarioItems(id) },
-      { queryKey: ['inventory', 'scenario', id, 'constraints'], queryFn: () => listConstraints(id) },
-      { queryKey: ['inventory', 'items', 'all-for-select'], queryFn: () => listItems({ limit: 500 }) },
     ],
   });
-
   const scenario = scenarioQ.data;
-  const checklist = checklistQ.data;
   const lines = useMemo(() => linesQ.data ?? [], [linesQ.data]);
-  const constraints = constraintsQ.data ?? [];
-  const allItems = itemsQ.data?.results ?? [];
+  const memberItemIds = useMemo(() => new Set(lines.map((l) => l.item.id)), [lines]);
 
-  const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['inventory', 'scenario', id] });
-    queryClient.invalidateQueries({ queryKey: ['inventory', 'scenarios'] });
-  };
-
-  const constraintType = Form.useWatch('constraint_type', form);
-
-  const addItemMutation = useMutation({
-    mutationFn: () => addScenarioItem(id, { item_id: addItemId!, required_quantity: String(addQty) }),
-    onSuccess: () => {
-      setAddItemId(undefined);
-      setAddQty(1);
-      refresh();
-    },
-    onError: () => message.error(t({ id: 'pages.inventory.scenarios.detail.addError' })),
-  });
-
-  const togglePrepared = useMutation({
-    mutationFn: ({ lineId, prepared }: { lineId: string; prepared: boolean }) =>
-      updateScenarioItem(id, lineId, { prepared }),
-    onSuccess: refresh,
-  });
-
-  const setContainer = useMutation({
-    mutationFn: ({ lineId, containerId }: { lineId: string; containerId: string | null }) =>
-      updateScenarioItem(id, lineId, { container_id: containerId }),
-    onSuccess: refresh,
-    onError: () => message.error(t({ id: 'pages.inventory.scenarios.detail.cycleError' })),
-  });
-
-  const removeLineMutation = useMutation({
-    mutationFn: (lineId: string) => deleteScenarioItem(id, lineId),
-    onSuccess: refresh,
-  });
-
-  const addConstraintMutation = useMutation({
-    mutationFn: (values: ConstraintFormValues) =>
-      createConstraint(id, {
-        constraint_type: values.constraint_type,
-        name: values.name ?? '',
-        item_ids: values.item_ids ?? [],
-        limit_value: values.limit_value != null ? String(values.limit_value) : null,
+  // Backlog: server-side case-insensitive substring over name OR spec.
+  const backlogQ = useQuery({
+    queryKey: ['inventory', 'scenario-backlog', search],
+    queryFn: () =>
+      listItems({
+        limit: 20,
+        filters: {
+          groups: [
+            { logic: 'and', conditions: [{ attr: 'name', op: 'contains', val: search }] },
+            { logic: 'and', conditions: [{ attr: 'spec', op: 'contains', val: search }] },
+          ],
+        },
       }),
-    onSuccess: () => {
-      setConstraintModal(false);
-      form.resetFields();
-      refresh();
-    },
-    onError: () => message.error(t({ id: 'pages.inventory.scenarios.detail.constraintError' })),
+    enabled: search.trim().length > 0,
   });
+  const backlogItems = useMemo(
+    () => (backlogQ.data?.results ?? []).filter((item) => !memberItemIds.has(item.id)),
+    [backlogQ.data, memberItemIds],
+  );
 
-  const deleteConstraintMutation = useMutation({
-    mutationFn: (constraintId: string) => deleteConstraint(id, constraintId),
-    onSuccess: refresh,
-  });
-
-  const confirmRemoveLine = (lineId: string, name: string) => {
-    Modal.confirm({
-      title: t({ id: 'pages.inventory.scenarios.detail.removeItem.title' }),
-      content: t({ id: 'pages.inventory.scenarios.detail.removeItem.confirm' }, { name }),
-      okText: t({ id: 'common.remove' }),
-      okType: 'danger',
-      cancelText: t({ id: 'common.cancel' }),
-      onOk: () => removeLineMutation.mutate(lineId),
-    });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['inventory', 'scenario', id] });
+    queryClient.invalidateQueries({ queryKey: ['inventory', 'scenario-backlog'] });
   };
 
-  const confirmDeleteConstraint = (constraintId: string) => {
-    Modal.confirm({
-      title: t({ id: 'pages.inventory.scenarios.detail.deleteConstraint.title' }),
-      content: t({ id: 'pages.inventory.scenarios.detail.deleteConstraint.confirm' }),
-      okText: t({ id: 'common.delete' }),
-      okType: 'danger',
-      cancelText: t({ id: 'common.cancel' }),
-      onOk: () => deleteConstraintMutation.mutate(constraintId),
-    });
+  const addMutation = useMutation({
+    mutationFn: (itemId: string) => addScenarioItem(id, { item_id: itemId }),
+    onSuccess: invalidate,
+    onError: (err: Error) => message.error(err.message),
+  });
+  const removeMutation = useMutation({
+    mutationFn: (lineId: string) => deleteScenarioItem(id, lineId),
+    onSuccess: invalidate,
+  });
+  const moveMutation = useMutation({
+    mutationFn: ({ lineId, container_id, index }: { lineId: string; container_id: string | null; index: number }) =>
+      moveScenarioItem(id, lineId, { container_id, index }),
+    onSuccess: invalidate,
+    onError: () => message.error(t({ id: 'pages.inventory.scenarios.moveFailed' })),
+  });
+
+  // Organize tree: nodes keyed by line id, nested by container, in saved order.
+  const treeData = useMemo<TreeDataNode[]>(() => {
+    const build = (parentId: string | null): TreeDataNode[] =>
+      childrenOf(lines, parentId).map((line) => ({
+        key: line.id,
+        title: (
+          <span>
+            {line.item.name}
+            <Button
+              size="small"
+              type="text"
+              danger
+              aria-label={t({ id: 'pages.inventory.scenarios.organize.remove' })}
+              icon={<DeleteOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                removeMutation.mutate(line.id);
+              }}
+            />
+          </span>
+        ),
+        children: build(line.id),
+      }));
+    return build(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, t]);
+
+  const onDrop: TreeProps['onDrop'] = (info) => {
+    const dragId = String(info.dragNode.key);
+    const dropId = String(info.node.key);
+    const dropPos = info.node.pos.split('-');
+    const relPosition = info.dropPosition - Number(dropPos[dropPos.length - 1]);
+    const target = computeDropTarget(lines, dragId, dropId, info.dropToGap, relPosition);
+    moveMutation.mutate({ lineId: dragId, ...target });
   };
 
-  const selectedItemIds = new Set(lines.map((l) => l.item.id));
-  const addableOptions = allItems
-    .filter((i) => !selectedItemIds.has(i.id))
-    .map((i) => ({ value: i.id, label: i.name }));
-  const scenarioItemOptions = allItems.map((i) => ({ value: i.id, label: i.name }));
-
-  const violationsByConstraint = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const v of checklist?.violations ?? []) {
-      map.set(v.constraint_id, v.message + (v.overage ? ` (+${v.overage})` : ''));
-    }
-    return map;
-  }, [checklist]);
-
-  const progress = checklist?.progress;
+  const panels: CSSProperties = {
+    display: 'flex',
+    flexDirection: isNarrow ? 'column' : 'row',
+    gap: 16,
+    alignItems: 'stretch',
+  };
 
   return (
-    <div style={{ padding: 24 }}>
+    <div ref={ref} style={{ padding: 16 }}>
       <Breadcrumb
         style={{ marginBottom: 12 }}
         items={[
-          { title: <Link to="/inventory/scenarios">{t({ id: 'menu.inventory.scenarios' })}</Link> },
-          { title: scenario?.name ?? '' },
+          { title: <Link to="/inventory/scenarios">{t({ id: 'pages.inventory.scenarios.title' })}</Link> },
+          { title: scenario?.name ?? '…' },
         ]}
       />
-      <Typography.Title level={4} style={{ marginTop: 0, marginBottom: 16 }}>
-        {scenario?.name ?? ''}
+      <Typography.Title level={4} style={{ marginTop: 0 }}>
+        {scenario?.name}
       </Typography.Title>
+      {scenario?.description ? (
+        <Typography.Paragraph type="secondary">{scenario.description}</Typography.Paragraph>
+      ) : null}
 
-      {progress && (
-        <Card style={{ marginBottom: 16 }}>
-          <Space size="large" align="center">
-            <Progress
-              type="circle"
-              size={64}
-              percent={progress.total ? Math.round((progress.prepared_count / progress.total) * 100) : 0}
-            />
-            <Typography.Text>
-              {t(
-                { id: 'pages.inventory.scenarios.detail.progress' },
-                { prepared: progress.prepared_count, total: progress.total },
-              )}
-            </Typography.Text>
-            {progress.complete && progress.total > 0 && (
-              <Tag color="green">{t({ id: 'pages.inventory.scenarios.ready' })}</Tag>
-            )}
-          </Space>
-        </Card>
-      )}
-
-      {(checklist?.violations.length ?? 0) > 0 && (
-        <Alert
-          type="warning"
-          style={{ marginBottom: 16 }}
-          message={t({ id: 'pages.inventory.scenarios.detail.violations' })}
-          description={
-            <ul style={{ margin: 0, paddingLeft: 20 }}>
-              {checklist?.violations.map((v, idx) => (
-                <li key={idx}>
-                  {v.message}
-                  {v.overage ? ` (+${v.overage})` : ''}
-                </li>
-              ))}
-            </ul>
-          }
-        />
-      )}
-
-      <Card
-        title={t({ id: 'pages.inventory.scenarios.detail.checklist' })}
-        style={{ marginBottom: 16 }}
-      >
-        <Space.Compact style={{ marginBottom: 16, width: '100%' }}>
-          <Select
-            style={{ flex: 1 }}
-            showSearch
-            optionFilterProp="label"
-            placeholder={t({ id: 'pages.inventory.scenarios.detail.addItemPlaceholder' })}
-            value={addItemId}
-            onChange={setAddItemId}
-            options={addableOptions}
-          />
-          <InputNumber min={1} value={addQty} onChange={(v) => setAddQty(v ?? 1)} />
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            disabled={!addItemId}
-            onClick={() => addItemMutation.mutate()}
-          >
-            {t({ id: 'pages.inventory.scenarios.detail.addItem' })}
-          </Button>
-        </Space.Compact>
-
-        <List
-          dataSource={lines}
-          locale={{ emptyText: t({ id: 'pages.inventory.scenarios.detail.empty' }) }}
-          renderItem={(line) => {
-            const containerOptions = lines
-              .filter((l) => l.id !== line.id)
-              .map((l) => ({ value: l.id, label: l.item.name }));
-            return (
-              <List.Item
-                actions={[
-                  <Select
-                    key="container"
-                    allowClear
-                    style={{ width: 160 }}
-                    placeholder={t({ id: 'pages.inventory.scenarios.detail.container' })}
-                    value={line.container?.id}
-                    options={containerOptions}
-                    onChange={(v) =>
-                      setContainer.mutate({ lineId: line.id, containerId: v ?? null })
-                    }
-                  />,
-                  <Button
-                    key="remove"
-                    size="small"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => confirmRemoveLine(line.id, line.item.name)}
-                  >
-                    {t({ id: 'common.remove' })}
-                  </Button>,
-                ]}
-              >
-                <List.Item.Meta
-                  avatar={
-                    <Checkbox
-                      checked={line.prepared}
-                      onChange={(e) =>
-                        togglePrepared.mutate({ lineId: line.id, prepared: e.target.checked })
-                      }
-                    />
-                  }
-                  title={<span>{line.item.name}</span>}
-                  description={
-                    <Space size="small">
-                      <span>
-                        {t(
-                          { id: 'pages.inventory.scenarios.detail.required' },
-                          { qty: line.required_quantity },
-                        )}
-                      </span>
-                      {line.container && (
-                        <Tag color="blue">
-                          {t(
-                            { id: 'pages.inventory.scenarios.detail.inside' },
-                            { name: line.container.item_name },
-                          )}
-                        </Tag>
-                      )}
-                    </Space>
-                  }
-                />
-              </List.Item>
-            );
-          }}
-        />
-      </Card>
-
-      <Card
-        title={t({ id: 'pages.inventory.scenarios.detail.constraints' })}
-        extra={
-          <Button icon={<PlusOutlined />} onClick={() => setConstraintModal(true)}>
-            {t({ id: 'pages.inventory.scenarios.detail.addConstraint' })}
-          </Button>
-        }
-      >
-        <List
-          dataSource={constraints}
-          locale={{ emptyText: t({ id: 'pages.inventory.scenarios.detail.noConstraints' }) }}
-          renderItem={(c) => {
-            const violation = violationsByConstraint.get(c.id);
-            return (
-              <List.Item
-                actions={[
-                  <Button
-                    key="del"
-                    size="small"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => confirmDeleteConstraint(c.id)}
-                  >
-                    {t({ id: 'common.delete' })}
-                  </Button>,
-                ]}
-              >
-                <List.Item.Meta
-                  title={
-                    <Space>
-                      <Tag color={violation ? 'red' : 'default'}>
-                        {t({ id: `pages.inventory.constraints.type.${c.constraint_type}` })}
-                      </Tag>
-                      <span>{c.name || c.items.map((i) => i.name).join(', ')}</span>
-                    </Space>
-                  }
-                  description={
-                    violation ? (
-                      <Typography.Text type="danger">{violation}</Typography.Text>
-                    ) : (
-                      <Typography.Text type="success">
-                        {t({ id: 'pages.inventory.scenarios.detail.satisfied' })}
-                      </Typography.Text>
-                    )
-                  }
-                />
-              </List.Item>
-            );
-          }}
-        />
-      </Card>
-
-      <Modal
-        title={t({ id: 'pages.inventory.scenarios.detail.addConstraint' })}
-        open={constraintModal}
-        onCancel={() => {
-          setConstraintModal(false);
-          form.resetFields();
-        }}
-        footer={
-          // Principle VI: Cancel flushed left, primary right.
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button
-              onClick={() => {
-                setConstraintModal(false);
-                form.resetFields();
-              }}
-            >
-              {t({ id: 'common.cancel' })}
-            </Button>
-            <Button type="primary" loading={addConstraintMutation.isPending} onClick={() => form.submit()}>
-              {t({ id: 'common.save' })}
-            </Button>
-          </div>
-        }
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={(v) => addConstraintMutation.mutate(v)}
-          initialValues={{ constraint_type: 'mutual_exclusive' }}
+      <div style={panels}>
+        {/* Backlog: fuzzy-search the catalog, add items to the scenario. */}
+        <Card
+          title={t({ id: 'pages.inventory.scenarios.backlog' })}
+          style={{ flex: 1, minWidth: 0 }}
         >
-          <Form.Item
-            name="constraint_type"
-            label={t({ id: 'pages.inventory.constraints.col.type' })}
-            rules={[{ required: true }]}
-          >
-            <Select
-              options={CONSTRAINT_TYPES.map((ct) => ({
-                value: ct,
-                label: t({ id: `pages.inventory.constraints.type.${ct}` }),
-              }))}
+          <Input.Search
+            placeholder={t({ id: 'pages.inventory.scenarios.backlog.search' })}
+            allowClear
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ marginBottom: 12 }}
+          />
+          <List
+            size="small"
+            loading={backlogQ.isFetching}
+            dataSource={backlogItems}
+            locale={{
+              emptyText: search.trim()
+                ? t({ id: 'pages.inventory.scenarios.backlog.empty' })
+                : ' ',
+            }}
+            renderItem={(item) => (
+              <List.Item
+                actions={[
+                  <Button
+                    key="add"
+                    size="small"
+                    icon={<PlusOutlined />}
+                    loading={addMutation.isPending && addMutation.variables === item.id}
+                    onClick={() => addMutation.mutate(item.id)}
+                  >
+                    {t({ id: 'pages.inventory.scenarios.backlog.add' })}
+                  </Button>,
+                ]}
+              >
+                <List.Item.Meta
+                  title={item.name}
+                  description={item.spec || undefined}
+                />
+              </List.Item>
+            )}
+          />
+        </Card>
+
+        {/* Organize: drag to nest (containment) and order items. */}
+        <Card
+          title={t({ id: 'pages.inventory.scenarios.organize' })}
+          style={{ flex: 1, minWidth: 0 }}
+        >
+          {treeData.length === 0 ? (
+            <Empty description={t({ id: 'pages.inventory.scenarios.organize.empty' })} />
+          ) : (
+            <Tree
+              draggable={{ icon: false }}
+              blockNode
+              defaultExpandAll
+              treeData={treeData}
+              onDrop={onDrop}
             />
-          </Form.Item>
-          {(constraintType === 'mutual_exclusive' || constraintType === 'required') && (
-            <Form.Item name="item_ids" label={t({ id: 'pages.inventory.constraints.col.items' })}>
-              <Select mode="multiple" showSearch optionFilterProp="label" options={scenarioItemOptions} />
-            </Form.Item>
           )}
-          {constraintType === 'weight_limit' && (
-            <Form.Item
-              name="limit_value"
-              label={t({ id: 'pages.inventory.constraints.col.limit' })}
-              rules={[{ required: true }]}
-            >
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-          )}
-        </Form>
-      </Modal>
+        </Card>
+      </div>
     </div>
   );
 }

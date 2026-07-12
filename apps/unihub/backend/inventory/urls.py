@@ -3,7 +3,6 @@ from rest_framework.routers import DefaultRouter
 
 from inventory.views import (
     AcquisitionViewSet,
-    ConstraintViewSet,
     ItemViewSet,
     ScenarioItemViewSet,
     ScenarioViewSet,
@@ -18,10 +17,7 @@ scenario_items = ScenarioItemViewSet.as_view({"get": "list", "post": "create"})
 scenario_item_detail = ScenarioItemViewSet.as_view(
     {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
 )
-constraints = ConstraintViewSet.as_view({"get": "list", "post": "create"})
-constraint_detail = ConstraintViewSet.as_view(
-    {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
-)
+scenario_item_move = ScenarioItemViewSet.as_view({"post": "move"})
 
 urlpatterns = [
     path("", include(router.urls)),
@@ -31,10 +27,9 @@ urlpatterns = [
         scenario_item_detail,
         name="scenario-item-detail",
     ),
-    path("scenarios/<str:scenario_id>/constraints/", constraints, name="scenario-constraints"),
     path(
-        "scenarios/<str:scenario_id>/constraints/<str:pk>/",
-        constraint_detail,
-        name="scenario-constraint-detail",
+        "scenarios/<str:scenario_id>/items/<str:pk>/move/",
+        scenario_item_move,
+        name="scenario-item-move",
     ),
 ]

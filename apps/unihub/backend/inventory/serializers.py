@@ -2,52 +2,86 @@
 
 from decimal import Decimal
 
+from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from rest_framework import serializers
 
-from inventory import units
-from inventory.models import Acquisition, Constraint, CostFactor, Item, Scenario, ScenarioItem
-
-# measure name → (canonical field, unit field, to_canonical, from_canonical, unit table)
-_MEASURES = {
-    "length": (
-        "length_canonical",
-        "length_unit",
-        units.length_to_canonical,
-        units.length_from_canonical,
-        units.LENGTH_UNITS,
-    ),
-    "width": (
-        "width_canonical",
-        "width_unit",
-        units.length_to_canonical,
-        units.length_from_canonical,
-        units.LENGTH_UNITS,
-    ),
-    "height": (
-        "height_canonical",
-        "height_unit",
-        units.length_to_canonical,
-        units.length_from_canonical,
-        units.LENGTH_UNITS,
-    ),
-    "weight": (
-        "weight_canonical",
-        "weight_unit",
-        units.weight_to_canonical,
-        units.weight_from_canonical,
-        units.WEIGHT_UNITS,
-    ),
-    "volume": (
-        "volume_canonical",
-        "volume_unit",
-        units.volume_to_canonical,
-        units.volume_from_canonical,
-        units.VOLUME_UNITS,
-    ),
-}
+from core.attributes import compute_value_fields
+from core.models import AttributeDefinition, AttributeValue
+from inventory.models import Acquisition, CostFactor, Item, Scenario, ScenarioItem
 
 _NON_NEGATIVE = ["quantity", "sku_price"]
+
+
+def _validate_parameters(raw: list) -> list[dict]:
+    """Validate a raw ``parameters`` payload into storable rows.
+
+    Args:
+        raw: List of ``{definition_id, value, unit?}`` dicts.
+
+    Returns:
+        Rows of ``{definition, value, value_unit, value_number}``.
+
+    Raises:
+        serializers.ValidationError: On malformed rows, unknown/foreign
+            definitions, duplicate keys, or type-invalid values.
+    """
+    if not isinstance(raw, list):
+        raise serializers.ValidationError({"parameters": "Expected a list of parameter rows."})
+    item_ct = ContentType.objects.get(app_label="inventory", model="item")
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for entry in raw:
+        if not isinstance(entry, dict) or "definition_id" not in entry:
+            raise serializers.ValidationError(
+                {"parameters": "Each row needs a definition_id and value."}
+            )
+        definition_id = entry["definition_id"]
+        if definition_id in seen:
+            raise serializers.ValidationError(
+                {"parameters": "At most one value per parameter key."}
+            )
+        seen.add(definition_id)
+        definition = AttributeDefinition.objects.filter(
+            pk=definition_id, content_type=item_ct
+        ).first()
+        if definition is None:
+            raise serializers.ValidationError(
+                {"parameters": f"Unknown parameter definition {definition_id!r}."}
+            )
+        value, value_unit, value_number = compute_value_fields(
+            definition, entry.get("value", ""), entry.get("unit", "") or ""
+        )
+        rows.append(
+            {
+                "definition": definition,
+                "value": value,
+                "value_unit": value_unit,
+                "value_number": value_number,
+            }
+        )
+    return rows
+
+
+def _write_parameters(item: Item, rows: list[dict]) -> None:
+    """Upsert-replace the item's parameter values with ``rows``."""
+    item_ct = ContentType.objects.get_for_model(Item)
+    keep: list[str] = []
+    for row in rows:
+        AttributeValue.objects.update_or_create(
+            attribute_definition=row["definition"],
+            content_type=item_ct,
+            object_id=item.id,
+            defaults={
+                "value": row["value"],
+                "value_unit": row["value_unit"],
+                "value_number": row["value_number"],
+            },
+        )
+        keep.append(row["definition"].id)
+    AttributeValue.objects.filter(content_type=item_ct, object_id=item.id).exclude(
+        attribute_definition_id__in=keep
+    ).delete()
 
 
 def _net_cost(acquisition: Acquisition) -> list[dict]:
@@ -88,6 +122,7 @@ class ItemSerializer(serializers.ModelSerializer):
     acquisition = AcquisitionSummarySerializer(read_only=True)
     total_price = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
+    parameters = serializers.SerializerMethodField()
 
     class Meta:
         model = Item
@@ -97,14 +132,13 @@ class ItemSerializer(serializers.ModelSerializer):
             "quantity",
             "spec",
             "remark",
-            "size",
             "sku_price",
             "sku_price_currency",
             "total_price",
-            "color",
             "url",
             "status",
             "deprecate_time",
+            "parameters",
             "acquisition",
             "created_at",
             "updated_at",
@@ -119,50 +153,39 @@ class ItemSerializer(serializers.ModelSerializer):
     def get_status(self, obj: Item) -> str:
         return "deprecated" if obj.deprecate_time is not None else "active"
 
-    # ── Measurement objects ({value, unit}) handled outside declared fields ──
-
-    @staticmethod
-    def _fmt(value: Decimal) -> str:
-        """Format a decimal without trailing zeros or scientific notation."""
-        normalized = value.normalize()
-        return format(normalized, "f")
-
-    def to_representation(self, instance: Item) -> dict:
-        data = super().to_representation(instance)
-        for name, (canon_f, unit_f, _to, _from, _tbl) in _MEASURES.items():
-            canonical = getattr(instance, canon_f)
-            unit = getattr(instance, unit_f)
-            if canonical is None:
-                data[name] = None
-            else:
-                value = _from(canonical, unit)
-                data[name] = {"value": self._fmt(value), "unit": unit}
-        return data
+    def get_parameters(self, obj: Item) -> list[dict]:
+        """The item's parameter rows (shared attribute values), stable order."""
+        values = sorted(
+            obj.attribute_values.all(),
+            key=lambda v: (v.attribute_definition.display_order, v.attribute_definition.name),
+        )
+        return [
+            {
+                "definition_id": v.attribute_definition_id,
+                "name": v.attribute_definition.name,
+                "data_type": v.attribute_definition.data_type,
+                "unit_family": v.attribute_definition.unit_family,
+                "value": v.value,
+                "unit": v.value_unit,
+                "value_number": str(v.value_number) if v.value_number is not None else None,
+            }
+            for v in values
+        ]
 
     def to_internal_value(self, data: dict) -> dict:
-        measures = {}
-        for name, (canon_f, unit_f, to_canon, _from, table) in _MEASURES.items():
-            if name in data:
-                raw = data.get(name)
-                if raw in (None, ""):
-                    measures[canon_f] = None
-                    continue
-                if not isinstance(raw, dict) or "value" not in raw or "unit" not in raw:
-                    raise serializers.ValidationError({name: "Expected an object {value, unit}."})
-                unit = raw["unit"]
-                if unit not in table:
-                    raise serializers.ValidationError({name: f"Unsupported unit {unit!r}."})
-                try:
-                    value = Decimal(str(raw["value"]))
-                except (TypeError, ValueError):
-                    raise serializers.ValidationError({name: "value must be a number."})
-                if value < 0:
-                    raise serializers.ValidationError({name: f"{name} must be >= 0."})
-                measures[canon_f] = to_canon(value, unit)
-                measures[unit_f] = unit
+        """Handle the write-side ``parameters`` list outside declared fields."""
         validated = super().to_internal_value(data)
-        validated.update(measures)
+        if "parameters" in data:
+            validated["_parameters"] = _validate_parameters(data.get("parameters") or [])
         return validated
+
+    @transaction.atomic
+    def update(self, instance: Item, validated_data: dict) -> Item:
+        rows = validated_data.pop("_parameters", None)
+        instance = super().update(instance, validated_data)
+        if rows is not None:
+            _write_parameters(instance, rows)
+        return instance
 
     def validate_name(self, value: str) -> str:
         if not value or not value.strip():
@@ -274,13 +297,21 @@ class AcquisitionSerializer(serializers.ModelSerializer):
                 display_order=order,
             )
 
+    @staticmethod
+    def _create_item(acquisition: Acquisition, item_data: dict) -> Item:
+        parameter_rows = item_data.pop("_parameters", None)
+        item = Item.objects.create(acquisition=acquisition, **item_data)
+        if parameter_rows:
+            _write_parameters(item, parameter_rows)
+        return item
+
     @transaction.atomic
     def create(self, validated_data: dict) -> Acquisition:
         items_data = validated_data.pop("items", [])
         factors_data = validated_data.pop("cost_factors", None) or []
         acquisition = Acquisition.objects.create(**validated_data)
         for item_data in items_data:
-            Item.objects.create(acquisition=acquisition, **item_data)
+            self._create_item(acquisition, item_data)
         # Derived accumulated (per currency) first, then any manual factors.
         self._write_factors(acquisition, self._derive_accumulated(items_data) + list(factors_data))
         return acquisition
@@ -295,7 +326,7 @@ class AcquisitionSerializer(serializers.ModelSerializer):
         # New item rows (no id) are appended; existing items edited/removed via item endpoints.
         if items_data:
             for item_data in items_data:
-                Item.objects.create(acquisition=instance, **item_data)
+                self._create_item(instance, item_data)
         # cost_factors, when provided, replace the whole set in payload order (must remain ≥1).
         if factors_data is not None:
             instance.cost_factors.all().delete()
@@ -305,20 +336,14 @@ class AcquisitionSerializer(serializers.ModelSerializer):
 
 class ScenarioSerializer(serializers.ModelSerializer):
     item_count = serializers.SerializerMethodField()
-    prepared_count = serializers.SerializerMethodField()
-    outstanding_count = serializers.SerializerMethodField()
-    complete = serializers.SerializerMethodField()
 
     class Meta:
         model = Scenario
         fields = [
             "id",
             "name",
-            "notes",
+            "description",
             "item_count",
-            "prepared_count",
-            "outstanding_count",
-            "complete",
             "created_at",
             "updated_at",
         ]
@@ -326,16 +351,6 @@ class ScenarioSerializer(serializers.ModelSerializer):
 
     def get_item_count(self, obj: Scenario) -> int:
         return obj.items.count()
-
-    def get_prepared_count(self, obj: Scenario) -> int:
-        return obj.items.filter(prepared=True).count()
-
-    def get_outstanding_count(self, obj: Scenario) -> int:
-        return obj.items.filter(prepared=False).count()
-
-    def get_complete(self, obj: Scenario) -> bool:
-        total = obj.items.count()
-        return total > 0 and obj.items.filter(prepared=False).count() == 0
 
     def validate_name(self, value: str) -> str:
         if not value or not value.strip():
@@ -359,71 +374,13 @@ class ScenarioItemSerializer(serializers.ModelSerializer):
             "container_id",
             "item",
             "container",
-            "required_quantity",
-            "prepared",
+            "display_order",
             "notes",
             "created_at",
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = ["id", "display_order", "created_at"]
 
     def get_container(self, obj: ScenarioItem) -> dict | None:
         if obj.container_id is None:
             return None
         return {"id": obj.container_id, "item_name": obj.container.item.name}
-
-
-class ConstraintSerializer(serializers.ModelSerializer):
-    item_ids = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
-    items = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Constraint
-        fields = [
-            "id",
-            "name",
-            "constraint_type",
-            "item_ids",
-            "items",
-            "limit_value",
-            "created_at",
-        ]
-        read_only_fields = ["id", "created_at"]
-
-    def get_items(self, obj: Constraint) -> list[dict]:
-        return [{"id": item.id, "name": item.name} for item in obj.items.all()]
-
-    def validate(self, attrs: dict) -> dict:
-        ctype = attrs.get("constraint_type") or getattr(self.instance, "constraint_type", None)
-        item_ids = attrs.get("item_ids")
-        if item_ids is None and self.instance is not None:
-            item_ids = list(self.instance.items.values_list("id", flat=True))
-        item_ids = item_ids or []
-        limit_value = attrs.get("limit_value", getattr(self.instance, "limit_value", None))
-
-        if ctype == "mutual_exclusive" and len(item_ids) < 2:
-            raise serializers.ValidationError(
-                {"item_ids": "A mutual-exclusivity constraint needs at least 2 items."}
-            )
-        if ctype == "required" and len(item_ids) < 1:
-            raise serializers.ValidationError(
-                {"item_ids": "A required constraint needs at least 1 item."}
-            )
-        if ctype == "weight_limit" and (limit_value is None or limit_value <= Decimal("0")):
-            raise serializers.ValidationError(
-                {"limit_value": "A weight-limit constraint needs a positive limit_value."}
-            )
-        return attrs
-
-    def create(self, validated_data: dict) -> Constraint:
-        item_ids = validated_data.pop("item_ids", [])
-        constraint = super().create(validated_data)
-        if item_ids:
-            constraint.items.set(Item.objects.filter(id__in=item_ids))
-        return constraint
-
-    def update(self, instance: Constraint, validated_data: dict) -> Constraint:
-        item_ids = validated_data.pop("item_ids", None)
-        constraint = super().update(instance, validated_data)
-        if item_ids is not None:
-            constraint.items.set(Item.objects.filter(id__in=item_ids))
-        return constraint

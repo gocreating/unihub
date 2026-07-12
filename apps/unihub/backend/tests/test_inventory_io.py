@@ -6,7 +6,9 @@ import pytest
 from django.contrib.auth.models import User
 from django.test import Client
 
+from core.models import AttributeDefinition
 from data_io.registry import get_table
+from tests.conftest import create_item
 
 ACQ = "/api/v1/inventory/acquisitions/"
 
@@ -113,3 +115,35 @@ class TestInventoryDataIoRoundTrip:
         assert item.name == "Gadget" and item.quantity == 2 and item.acquisition_id == acq.id
         cf = CostFactor.objects.get()
         assert cf.type == "accumulated" and cf.acquisition_id == acq.id
+
+
+@pytest.mark.django_db
+class TestItemParameterIoRoundTrip:
+    """Iteration 14: item parameters ride the item CSV as [name]:type columns."""
+
+    def test_parameterized_item_round_trips(self, auth_client):
+        from core.models import AttributeValue
+
+        weight_def = AttributeDefinition.objects.get(
+            content_type__app_label="inventory", content_type__model="item", name="weight"
+        )
+        item = create_item(
+            auth_client,
+            name="IoParam",
+            parameters=[{"definition_id": weight_def.id, "value": "1.5", "unit": "kg"}],
+        )
+        csv_text = _export_csv(auth_client, "inventory.item")
+        header, *rows = csv_text.strip().splitlines()
+        assert "[weight]:dimension" in header
+        target = next(r for r in rows if "IoParam" in r)
+        assert "1.5 kg" in target
+
+        # Wipe the value, re-import, and confirm it is restored with canonicals.
+        AttributeValue.objects.filter(
+            attribute_definition=weight_def, object_id=item["id"]
+        ).delete()
+        _import_csv(auth_client, "inventory.item", csv_text)
+        restored = AttributeValue.objects.get(attribute_definition=weight_def, object_id=item["id"])
+        assert restored.value == "1.5"
+        assert restored.value_unit == "kg"
+        assert float(restored.value_number) == 1500

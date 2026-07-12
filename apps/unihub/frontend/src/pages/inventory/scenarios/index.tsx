@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Modal, Progress, Space, Tag, message } from 'antd';
+import { Button, Form, Input, Modal, Space, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
@@ -24,7 +24,7 @@ import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 interface ScenarioFormValues {
   name: string;
-  notes?: string;
+  description?: string;
 }
 
 export function ScenariosPage() {
@@ -42,16 +42,15 @@ export function ScenariosPage() {
 
   const columnDefs = useMemo<ColumnDef[]>(
     () => [
+      // Exactly three columns (FR-010): Name, Description, Actions.
       { key: 'name', label: t({ id: 'common.name' }), dataType: 'text', visible: true, order: 0 },
-      { key: 'item_count', label: t({ id: 'pages.inventory.scenarios.col.items' }), dataType: 'number', visible: true, order: 1 },
-      { key: 'progress', label: t({ id: 'pages.inventory.scenarios.col.progress' }), dataType: 'number', visible: true, order: 2 },
-      { key: 'complete', label: t({ id: 'pages.inventory.scenarios.col.status' }), dataType: 'boolean', visible: true, order: 3 },
-      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 4 },
+      { key: 'description', label: t({ id: 'pages.inventory.scenarios.col.description' }), dataType: 'text', visible: true, order: 1 },
+      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 2 },
     ],
     [t],
   );
 
-  const table = useEntityTable({ key: 'inventory-scenarios', filterableAttrs, columnDefs });
+  const table = useEntityTable({ key: 'inventory-scenarios-v2', filterableAttrs, columnDefs });
   const { filter, sort, cols } = table;
 
   const { data, isLoading, isError } = useQuery({
@@ -116,7 +115,7 @@ export function ScenariosPage() {
 
   const openEdit = (record: Scenario) => {
     setEditing(record);
-    form.setFieldsValue({ name: record.name, notes: record.notes });
+    form.setFieldsValue({ name: record.name, description: record.description });
     setModalOpen(true);
   };
 
@@ -152,31 +151,17 @@ export function ScenariosPage() {
           ),
           ...makeSortProps('name', t({ id: 'common.name' }), sort),
         },
-        item_count: {
-          dataIndex: 'item_count',
-          ...widthForHeader(t({ id: 'pages.inventory.scenarios.col.items' }), 100),
-          fixed: getFixed('item_count'),
-        },
-        progress: {
-          key: 'progress',
-          ...widthForHeader(t({ id: 'pages.inventory.scenarios.col.progress' }), 160),
-          fixed: getFixed('progress'),
-          render: (_, r) => (
-            <Progress
-              percent={r.item_count ? Math.round((r.prepared_count / r.item_count) * 100) : 0}
-              size="small"
-            />
-          ),
-        },
-        complete: {
-          dataIndex: 'complete',
-          ...widthForHeader(t({ id: 'pages.inventory.scenarios.col.status' }), 120),
-          fixed: getFixed('complete'),
+        description: {
+          key: 'description',
+          title: t({ id: 'pages.inventory.scenarios.col.description' }),
+          ...widthForHeader(t({ id: 'pages.inventory.scenarios.col.description' }), 260),
+          fixed: getFixed('description'),
+          ellipsis: true,
           render: (_, r) =>
-            r.complete ? (
-              <Tag color="green">{t({ id: 'pages.inventory.scenarios.ready' })}</Tag>
-            ) : (
-              <Tag>{t({ id: 'pages.inventory.scenarios.pending' })}</Tag>
+            r.description || (
+              <Typography.Text type="secondary" style={{ userSelect: 'none' }}>
+                —
+              </Typography.Text>
             ),
         },
         actions: {
@@ -263,7 +248,7 @@ export function ScenariosPage() {
           <Form.Item name="name" label={t({ id: 'common.name' })} rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="notes" label={t({ id: 'pages.inventory.scenarios.col.notes' })}>
+          <Form.Item name="description" label={t({ id: 'pages.inventory.scenarios.col.description' })}>
             <Input.TextArea rows={3} />
           </Form.Item>
         </Form>

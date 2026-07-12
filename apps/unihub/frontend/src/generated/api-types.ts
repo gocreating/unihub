@@ -81,6 +81,7 @@ export interface paths {
         delete: operations["v1_core_attribute_definitions_destroy"];
         options?: never;
         head?: never;
+        /** @description Guard system definitions: only display_order/options may change (Principle I). */
         patch: operations["v1_core_attribute_definitions_partial_update"];
         trace?: never;
     };
@@ -427,55 +428,6 @@ export interface paths {
         patch: operations["v1_inventory_scenarios_partial_update"];
         trace?: never;
     };
-    "/api/v1/inventory/scenarios/{id}/checklist/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Return the composite checklist: progress, lines, and violations. */
-        get: operations["v1_inventory_scenarios_checklist_retrieve"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/inventory/scenarios/{scenario_id}/constraints/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["v1_inventory_scenarios_constraints_list"];
-        put?: never;
-        post: operations["v1_inventory_scenarios_constraints_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/inventory/scenarios/{scenario_id}/constraints/{id}/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["v1_inventory_scenarios_constraints_retrieve"];
-        put?: never;
-        post?: never;
-        delete: operations["v1_inventory_scenarios_constraints_destroy"];
-        options?: never;
-        head?: never;
-        patch: operations["v1_inventory_scenarios_constraints_partial_update"];
-        trace?: never;
-    };
     "/api/v1/inventory/scenarios/{scenario_id}/items/": {
         parameters: {
             query?: never;
@@ -506,6 +458,28 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["v1_inventory_scenarios_items_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/inventory/scenarios/{scenario_id}/items/{id}/move/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Drag-drop endpoint: set the line's container and sibling position.
+         *
+         *     Body: ``{"container_id": <line id or null>, "index": <int>}``. Sibling
+         *     display_order values are rewritten densely so order survives reloads.
+         */
+        post: operations["v1_inventory_scenarios_items_move_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/io/export/": {
@@ -833,6 +807,7 @@ export interface components {
             readonly content_type_label: string;
             name: string;
             data_type: components["schemas"]["DataTypeEnum"];
+            unit_family?: components["schemas"]["UnitFamilyEnum"] | components["schemas"]["BlankEnum"];
             readonly is_system: boolean;
             display_order?: number;
             options?: unknown;
@@ -846,26 +821,8 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
-        Constraint: {
-            readonly id: string;
-            name?: string;
-            constraint_type: components["schemas"]["ConstraintTypeEnum"];
-            item_ids?: string[];
-            readonly items: {
-                [key: string]: unknown;
-            }[];
-            /** Format: decimal */
-            limit_value?: string | null;
-            /** Format: date-time */
-            readonly created_at: string;
-        };
-        /**
-         * @description * `mutual_exclusive` - Mutually exclusive
-         *     * `required` - Required
-         *     * `weight_limit` - Weight limit
-         * @enum {string}
-         */
-        ConstraintTypeEnum: "mutual_exclusive" | "required" | "weight_limit";
+        /** @enum {unknown} */
+        BlankEnum: "";
         CostFactor: {
             readonly id: string;
             /** Format: decimal */
@@ -887,9 +844,10 @@ export interface components {
          *     * `date` - Date
          *     * `boolean` - Boolean
          *     * `single_select` - Single Select
+         *     * `dimension` - Dimension
          * @enum {string}
          */
-        DataTypeEnum: "text" | "long_text" | "number" | "date" | "boolean" | "single_select";
+        DataTypeEnum: "text" | "long_text" | "number" | "date" | "boolean" | "single_select" | "dimension";
         ExchangeRate: {
             readonly id: string;
             base_currency: string;
@@ -905,16 +863,18 @@ export interface components {
             quantity?: number;
             spec?: string;
             remark?: string;
-            size?: string;
             /** Format: decimal */
             sku_price?: string | null;
             sku_price_currency?: string;
             readonly total_price: string | null;
-            color?: string;
             url?: string;
             readonly status: string;
             /** Format: date-time */
             deprecate_time?: string | null;
+            /** @description The item's parameter rows (shared attribute values), stable order. */
+            readonly parameters: {
+                [key: string]: unknown;
+            }[];
             readonly acquisition: components["schemas"]["AcquisitionSummary"];
             /** Format: date-time */
             readonly created_at: string;
@@ -1066,6 +1026,7 @@ export interface components {
             readonly content_type_label?: string;
             name?: string;
             data_type?: components["schemas"]["DataTypeEnum"];
+            unit_family?: components["schemas"]["UnitFamilyEnum"] | components["schemas"]["BlankEnum"];
             readonly is_system?: boolean;
             display_order?: number;
             options?: unknown;
@@ -1078,19 +1039,6 @@ export interface components {
             readonly created_at?: string;
             /** Format: date-time */
             readonly updated_at?: string;
-        };
-        PatchedConstraint: {
-            readonly id?: string;
-            name?: string;
-            constraint_type?: components["schemas"]["ConstraintTypeEnum"];
-            item_ids?: string[];
-            readonly items?: {
-                [key: string]: unknown;
-            }[];
-            /** Format: decimal */
-            limit_value?: string | null;
-            /** Format: date-time */
-            readonly created_at?: string;
         };
         PatchedCurrency: {
             code?: string;
@@ -1113,16 +1061,18 @@ export interface components {
             quantity?: number;
             spec?: string;
             remark?: string;
-            size?: string;
             /** Format: decimal */
             sku_price?: string | null;
             sku_price_currency?: string;
             readonly total_price?: string | null;
-            color?: string;
             url?: string;
             readonly status?: string;
             /** Format: date-time */
             deprecate_time?: string | null;
+            /** @description The item's parameter rows (shared attribute values), stable order. */
+            readonly parameters?: {
+                [key: string]: unknown;
+            }[];
             readonly acquisition?: components["schemas"]["AcquisitionSummary"];
             /** Format: date-time */
             readonly created_at?: string;
@@ -1132,11 +1082,8 @@ export interface components {
         PatchedScenario: {
             readonly id?: string;
             name?: string;
-            notes?: string;
+            description?: string;
             readonly item_count?: number;
-            readonly prepared_count?: number;
-            readonly outstanding_count?: number;
-            readonly complete?: boolean;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -1150,9 +1097,7 @@ export interface components {
             readonly container?: {
                 [key: string]: unknown;
             } | null;
-            /** Format: decimal */
-            required_quantity?: string;
-            prepared?: boolean;
+            readonly display_order?: number;
             notes?: string;
             /** Format: date-time */
             readonly created_at?: string;
@@ -1160,11 +1105,8 @@ export interface components {
         Scenario: {
             readonly id: string;
             name: string;
-            notes?: string;
+            description?: string;
             readonly item_count: number;
-            readonly prepared_count: number;
-            readonly outstanding_count: number;
-            readonly complete: boolean;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -1178,13 +1120,18 @@ export interface components {
             readonly container: {
                 [key: string]: unknown;
             } | null;
-            /** Format: decimal */
-            required_quantity?: string;
-            prepared?: boolean;
+            readonly display_order: number;
             notes?: string;
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `length` - Length
+         *     * `weight` - Weight
+         *     * `volume` - Volume
+         * @enum {string}
+         */
+        UnitFamilyEnum: "length" | "weight" | "volume";
     };
     responses: never;
     parameters: never;
@@ -2370,147 +2317,6 @@ export interface operations {
             };
         };
     };
-    v1_inventory_scenarios_checklist_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique value identifying this scenario. */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Scenario"];
-                };
-            };
-        };
-    };
-    v1_inventory_scenarios_constraints_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                scenario_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Constraint"][];
-                };
-            };
-        };
-    };
-    v1_inventory_scenarios_constraints_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                scenario_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Constraint"];
-                "application/x-www-form-urlencoded": components["schemas"]["Constraint"];
-                "multipart/form-data": components["schemas"]["Constraint"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Constraint"];
-                };
-            };
-        };
-    };
-    v1_inventory_scenarios_constraints_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                scenario_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Constraint"];
-                };
-            };
-        };
-    };
-    v1_inventory_scenarios_constraints_destroy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                scenario_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No response body */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    v1_inventory_scenarios_constraints_partial_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                scenario_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PatchedConstraint"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedConstraint"];
-                "multipart/form-data": components["schemas"]["PatchedConstraint"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Constraint"];
-                };
-            };
-        };
-    };
     v1_inventory_scenarios_items_list: {
         parameters: {
             query?: never;
@@ -2617,6 +2423,34 @@ export interface operations {
                 "application/json": components["schemas"]["PatchedScenarioItem"];
                 "application/x-www-form-urlencoded": components["schemas"]["PatchedScenarioItem"];
                 "multipart/form-data": components["schemas"]["PatchedScenarioItem"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioItem"];
+                };
+            };
+        };
+    };
+    v1_inventory_scenarios_items_move_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScenarioItem"];
+                "application/x-www-form-urlencoded": components["schemas"]["ScenarioItem"];
+                "multipart/form-data": components["schemas"]["ScenarioItem"];
             };
         };
         responses: {

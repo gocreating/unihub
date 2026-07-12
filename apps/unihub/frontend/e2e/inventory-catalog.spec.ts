@@ -122,7 +122,15 @@ test('item rows show parameter badges; the Item cell links to the URL', async ({
   const link = page.locator('.ant-table-tbody a[target="_blank"]').first();
   await expect(link).toBeVisible();
   await expect(link).toHaveAttribute('href', /.+/);
-  // At least one item row renders Parameters as Tag badges.
+  // At least one item row renders Parameters as Tag badges (page 1 may hold
+  // parameterless items — raise the page size to cover the data set).
+  await page.locator('.ant-table-footer .ant-select').first().click();
+  await page
+    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+    .getByText(/100/)
+    .first()
+    .click();
+  await page.waitForTimeout(800);
   const tagCount = await page.locator('tr.ant-table-row-level-1 .ant-tag').count();
   expect(tagCount).toBeGreaterThan(0);
 });

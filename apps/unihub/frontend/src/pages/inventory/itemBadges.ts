@@ -1,19 +1,5 @@
-import type { Measurement } from '@/services/unihub-backend/inventory';
-
-/** Badge-relevant item fields — satisfied by both read `Item`s and pending `ItemWrite` drafts. */
-export interface BadgeableItem {
-  quantity?: number;
-  sku_price?: string | null;
-  sku_price_currency?: string;
-  size?: string;
-  color?: string;
-  length?: Measurement | null;
-  width?: Measurement | null;
-  height?: Measurement | null;
-  weight?: Measurement | null;
-  volume?: Measurement | null;
-  spec?: string;
-}
+import type { AttributeDefinition } from '@/services/unihub-backend/core';
+import type { ItemParameter, ItemParameterWrite } from '@/services/unihub-backend/inventory';
 
 // Drop trailing zeros: "10.0000" → "10", "59.9000" → "59.9".
 export function formatDecimal(v: string | number | null | undefined): string {
@@ -22,32 +8,71 @@ export function formatDecimal(v: string | number | null | undefined): string {
   return Number.isFinite(n) ? String(n) : String(v);
 }
 
-// Available (non-empty) item attributes to show as badges on a card body.
-export function itemCardBadges(d: BadgeableItem): string[] {
-  const b: string[] = [];
-  if (d.quantity != null && d.quantity !== 1) b.push(`× ${d.quantity}`);
-  if (d.sku_price) b.push(`${formatDecimal(d.sku_price)} ${d.sku_price_currency ?? ''}`.trim());
-  if (d.size) b.push(d.size);
-  if (d.color) b.push(d.color);
-  if (d.length) b.push(`L ${d.length.value}${d.length.unit}`);
-  if (d.width) b.push(`W ${d.width.value}${d.width.unit}`);
-  if (d.height) b.push(`H ${d.height.value}${d.height.unit}`);
-  if (d.weight) b.push(`${d.weight.value} ${d.weight.unit}`);
-  if (d.volume) b.push(`${d.volume.value} ${d.volume.unit}`);
-  if (d.spec) b.push(d.spec);
-  return b;
+/** The badge-relevant shape of a parameter row (read or resolved draft). */
+export type ParameterLike = Pick<ItemParameter, 'name' | 'data_type' | 'value' | 'unit'>;
+
+// The seven seeded system keys keep their compact value-style formats.
+const SYSTEM_FORMATS: Record<string, (p: ParameterLike) => string> = {
+  color: (p) => p.value,
+  size: (p) => p.value,
+  weight: (p) => `${formatDecimal(p.value)} ${p.unit}`.trim(),
+  length: (p) => `L ${formatDecimal(p.value)}${p.unit}`,
+  width: (p) => `W ${formatDecimal(p.value)}${p.unit}`,
+  height: (p) => `H ${formatDecimal(p.value)}${p.unit}`,
+  volume: (p) => `${formatDecimal(p.value)} ${p.unit}`.trim(),
+};
+
+/** One badge string per parameter row (FR-003a formats). */
+export function parameterBadge(p: ParameterLike): string {
+  const system = SYSTEM_FORMATS[p.name];
+  if (system) return system(p);
+  if (p.data_type === 'dimension') return `${p.name}: ${formatDecimal(p.value)} ${p.unit}`.trim();
+  if (p.data_type === 'number') return `${p.name}: ${formatDecimal(p.value)}`;
+  return `${p.name}: ${p.value}`;
 }
 
-// Catalog "Parameters" derived column (FR-003a): exactly the non-empty of
-// color, weight, length, width, height, volume, size — trailing zeros dropped.
-export function parameterBadges(d: BadgeableItem): string[] {
-  const b: string[] = [];
-  if (d.color) b.push(d.color);
-  if (d.weight) b.push(`${formatDecimal(d.weight.value)} ${d.weight.unit}`);
-  if (d.length) b.push(`L ${formatDecimal(d.length.value)}${d.length.unit}`);
-  if (d.width) b.push(`W ${formatDecimal(d.width.value)}${d.width.unit}`);
-  if (d.height) b.push(`H ${formatDecimal(d.height.value)}${d.height.unit}`);
-  if (d.volume) b.push(`${formatDecimal(d.volume.value)} ${d.volume.unit}`);
-  if (d.size) b.push(d.size);
-  return b;
+export function parameterBadges(params: ParameterLike[] | undefined): string[] {
+  return (params ?? []).map(parameterBadge);
+}
+
+/** Core (non-parameter) card badges: quantity ≠ 1, sku price, spec. */
+export function itemCoreBadges(d: {
+  quantity?: number;
+  sku_price?: string | null;
+  sku_price_currency?: string;
+  spec?: string;
+}): string[] {
+  const badges: string[] = [];
+  if (d.quantity != null && d.quantity !== 1) badges.push(`× ${d.quantity}`);
+  if (d.sku_price) badges.push(`${formatDecimal(d.sku_price)} ${d.sku_price_currency ?? ''}`.trim());
+  if (d.spec) badges.push(d.spec);
+  return badges;
+}
+
+/** Acquisition-card badges: core fields followed by every parameter row. */
+export function itemCardBadges(
+  d: Parameters<typeof itemCoreBadges>[0],
+  params: ParameterLike[] | undefined,
+): string[] {
+  return [...itemCoreBadges(d), ...parameterBadges(params)];
+}
+
+/** Resolve pending ItemWrite parameter rows against the definitions list. */
+export function draftParameters(
+  rows: ItemParameterWrite[] | undefined,
+  definitions: AttributeDefinition[] | undefined,
+): ParameterLike[] {
+  const byId = new Map((definitions ?? []).map((definition) => [definition.id, definition]));
+  const resolved: ParameterLike[] = [];
+  for (const row of rows ?? []) {
+    const definition = byId.get(row.definition_id);
+    if (!definition) continue;
+    resolved.push({
+      name: definition.name,
+      data_type: definition.data_type,
+      value: row.value,
+      unit: row.unit ?? '',
+    });
+  }
+  return resolved;
 }

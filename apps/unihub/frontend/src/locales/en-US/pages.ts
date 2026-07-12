@@ -492,6 +492,34 @@ export default {
   'pages.inventory.catalog.col.acquisition': 'Acquisition',
   'pages.inventory.items.col.deprecateTime': 'Deprecated At',
 
+  // Inventory > dynamic item parameters (iteration 14)
+  'pages.inventory.params.add': 'Add parameter',
+  'pages.inventory.params.key': 'Parameter',
+  'pages.inventory.params.new': '+ New parameter…',
+  'pages.inventory.params.name': 'Parameter name',
+  'pages.inventory.params.typeLabel': 'Type',
+  'pages.inventory.params.type.string': 'Text',
+  'pages.inventory.params.type.numeric': 'Number',
+  'pages.inventory.params.type.select': 'Select',
+  'pages.inventory.params.type.dimension': 'Dimension',
+  'pages.inventory.params.familyLabel': 'Unit family',
+  'pages.inventory.params.family.length': 'Length',
+  'pages.inventory.params.family.weight': 'Weight',
+  'pages.inventory.params.family.volume': 'Volume',
+  'pages.inventory.params.optionsHint': 'Options (comma-separated)',
+  'pages.inventory.params.create': 'Create',
+
+  // Inventory > Scenarios (iteration 14: backlog + organize)
+  'pages.inventory.scenarios.col.description': 'Description',
+  'pages.inventory.scenarios.backlog': 'Backlog',
+  'pages.inventory.scenarios.backlog.search': 'Search items…',
+  'pages.inventory.scenarios.backlog.add': 'Add',
+  'pages.inventory.scenarios.backlog.empty': 'No matching items',
+  'pages.inventory.scenarios.organize': 'Organize',
+  'pages.inventory.scenarios.organize.empty': 'No items yet — add some from the Backlog panel.',
+  'pages.inventory.scenarios.organize.remove': 'Remove from scenario',
+  'pages.inventory.scenarios.moveFailed': 'Could not move the item',
+
   // Inventory > Scenarios
   'pages.inventory.scenarios.title': 'Scenarios',
   'pages.inventory.scenarios.new': 'New Scenario',

@@ -8,6 +8,13 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.filters import BaseFilterBackend, OrderingFilter
 from rest_framework.request import Request
 
+from core.attributes import (
+    annotate_attribute,
+    filter_type_for,
+    parse_attr_key,
+    resolve_view_definition,
+)
+
 
 _NEGATE_OPS: frozenset[str] = frozenset(
     {"not_contains", "not_equals", "neq", "is_not", "is_not_empty"}
@@ -64,7 +71,17 @@ class NullsOrderingFilter(OrderingFilter):
         valid_names = {
             item[0] for item in self.get_valid_fields(queryset, view, {"request": request})
         }
-        return [term for term in fields if self._parse_term(term)[0] in valid_names]
+
+        def is_valid(term: str) -> bool:
+            base = self._parse_term(term)[0]
+            if base in valid_names:
+                return True
+            # attr:<definition_id> keys are valid when the view opts into
+            # attributes and the definition resolves (iteration 14).
+            definition_id = parse_attr_key(base)
+            return bool(definition_id and resolve_view_definition(view, definition_id))
+
+        return [term for term in fields if is_valid(term)]
 
     def filter_queryset(self, request, queryset, view):
         orderings = self.get_ordering(request, queryset, view)
@@ -73,6 +90,12 @@ class NullsOrderingFilter(OrderingFilter):
         expressions = []
         for term in orderings:
             field, desc, nulls_spec = self._parse_term(term)
+            definition_id = parse_attr_key(field)
+            if definition_id:
+                definition = resolve_view_definition(view, definition_id)
+                if definition is None:
+                    continue
+                queryset, field = annotate_attribute(queryset, definition)
             if nulls_spec:
                 f = F(field)
                 if nulls_spec == "first":
@@ -81,7 +104,9 @@ class NullsOrderingFilter(OrderingFilter):
                     expr = f.desc(nulls_last=True) if desc else f.asc(nulls_last=True)
                 expressions.append(expr)
             else:
-                expressions.append(term)
+                expressions.append(f"-{field}" if desc else field)
+        if not expressions:
+            return queryset
         return queryset.order_by(*expressions)
 
 
@@ -140,10 +165,28 @@ class EntityFilterBackend(BaseFilterBackend):
         except (json.JSONDecodeError, TypeError):
             raise ValidationError({"filters": "Invalid filter format."})
 
-        filterable_fields: dict = getattr(view, "filterable_fields", {})
+        filterable_fields: dict = dict(getattr(view, "filterable_fields", {}))
         groups = payload.get("groups", [])
         if not groups:
             return queryset
+
+        # attr:<definition_id> keys (iteration 14): annotate the entity's value
+        # per referenced definition and register a synthetic filterable field.
+        # Unresolvable ids are skipped like any unknown attr key.
+        for group in groups:
+            for cond in group.get("conditions", []):
+                attr_key = cond.get("attr", "")
+                definition_id = parse_attr_key(attr_key)
+                if not definition_id or attr_key in filterable_fields:
+                    continue
+                definition = resolve_view_definition(view, definition_id)
+                if definition is None:
+                    continue
+                queryset, alias = annotate_attribute(queryset, definition)
+                filterable_fields[attr_key] = {
+                    "lookup": alias,
+                    "type": filter_type_for(definition),
+                }
 
         group_qs: list[Q] = []
         for group in groups:

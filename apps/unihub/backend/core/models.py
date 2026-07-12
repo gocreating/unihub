@@ -13,12 +13,24 @@ class AttributeDefinition(models.Model):
         ("date", "Date"),
         ("boolean", "Boolean"),
         ("single_select", "Single Select"),
+        # value + unit from a fixed family, canonical numeric stored for sorting
+        ("dimension", "Dimension"),
+    ]
+
+    UNIT_FAMILY_CHOICES = [
+        ("length", "Length"),
+        ("weight", "Weight"),
+        ("volume", "Volume"),
     ]
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     name = models.CharField(max_length=200)
     data_type = models.CharField(max_length=20, choices=DATA_TYPE_CHOICES)
+    # Required (and only allowed) when data_type == "dimension".
+    unit_family = models.CharField(
+        max_length=10, choices=UNIT_FAMILY_CHOICES, blank=True, default=""
+    )
     is_system = models.BooleanField(default=False)
     display_order = models.PositiveIntegerField(default=0)
     options = models.JSONField(default=list, blank=True)
@@ -40,6 +52,10 @@ class AttributeValue(models.Model):
     object_id = models.CharField(max_length=12)
     entity = GenericForeignKey("content_type", "object_id")
     value = models.TextField(blank=True)
+    # Entered display unit (dimension values only).
+    value_unit = models.CharField(max_length=8, blank=True, default="")
+    # Canonical numeric — dimension: family base unit (mm/g/mL); number: the value.
+    value_number = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
 
     class Meta:
         unique_together = [("attribute_definition", "content_type", "object_id")]

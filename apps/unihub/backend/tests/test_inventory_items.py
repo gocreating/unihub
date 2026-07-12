@@ -33,13 +33,6 @@ class TestItems:
         item = create_item(auth_client, name="NT")
         assert "item_type" not in item
 
-    def test_item_volume_roundtrip_units(self, auth_client):
-        item = create_item(auth_client, name="V", volume={"value": "1.2", "unit": "L"})
-        assert auth_client.get(f"{ITEMS}{item['id']}/").json()["volume"] == {
-            "value": "1.2",
-            "unit": "L",
-        }
-
     def test_deprecate_sets_status_deprecated(self, auth_client):
         item = create_item(auth_client, name="D")
         assert item["status"] == "active"
@@ -147,3 +140,104 @@ class TestItemNestedAcquisitionNetCost:
         row = next(r for r in auth_client.get(ITEMS).json()["results"] if r["id"] == item["id"])
         top = auth_client.get(f"/api/v1/inventory/acquisitions/{row['acquisition']['id']}/").json()
         assert row["acquisition"]["net_cost"] == top["net_cost"]
+
+
+@pytest.mark.django_db
+class TestItemParameters:
+    """Iteration 14: parameters via shared AttributeDefinition/AttributeValue."""
+
+    def _def(self, name, data_type, unit_family="", options=None):
+        from django.contrib.contenttypes.models import ContentType
+
+        from core.models import AttributeDefinition
+
+        return AttributeDefinition.objects.create(
+            content_type=ContentType.objects.get(app_label="inventory", model="item"),
+            name=name,
+            data_type=data_type,
+            unit_family=unit_family,
+            options=options or [],
+        )
+
+    def test_item_create_with_parameters_round_trips(self, auth_client):
+        weight = self._def("heftp", "dimension", unit_family="weight")
+        capacity = self._def("capacityp", "number")
+        item = create_item(
+            auth_client,
+            name="Param",
+            parameters=[
+                {"definition_id": weight.id, "value": "1.5", "unit": "kg"},
+                {"definition_id": capacity.id, "value": "5000"},
+            ],
+        )
+        fetched = auth_client.get(f"{ITEMS}{item['id']}/").json()
+        params = {p["name"]: p for p in fetched["parameters"]}
+        assert params["heftp"]["value"] == "1.5"
+        assert params["heftp"]["unit"] == "kg"
+        assert params["heftp"]["data_type"] == "dimension"
+        assert params["heftp"]["unit_family"] == "weight"
+        assert float(params["heftp"]["value_number"]) == 1500
+        assert params["capacityp"]["value"] == "5000"
+
+    def test_item_patch_parameters_upsert_replace(self, auth_client):
+        color = self._def("colorp", "text")
+        size = self._def("sizep", "text")
+        item = create_item(
+            auth_client,
+            name="Rep",
+            parameters=[
+                {"definition_id": color.id, "value": "red"},
+                {"definition_id": size.id, "value": "M"},
+            ],
+        )
+        # Replace with color only (new value) — size must be deleted.
+        resp = _patch(
+            auth_client, item["id"], {"parameters": [{"definition_id": color.id, "value": "blue"}]}
+        )
+        assert resp.status_code == 200, resp.content
+        params = {p["name"]: p["value"] for p in resp.json()["parameters"]}
+        assert params == {"colorp": "blue"}
+
+    def test_item_duplicate_parameter_key_rejected(self, auth_client):
+        color = self._def("colord", "text")
+        resp = auth_client.post(
+            "/api/v1/inventory/acquisitions/",
+            json.dumps(
+                {
+                    "source": "seed",
+                    "items": [
+                        {
+                            "name": "Dup",
+                            "parameters": [
+                                {"definition_id": color.id, "value": "red"},
+                                {"definition_id": color.id, "value": "blue"},
+                            ],
+                        }
+                    ],
+                }
+            ),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+
+    def test_item_parameter_invalid_select_value_rejected(self, auth_client):
+        grade = self._def("gradep", "single_select", options=["A", "B"])
+        resp = auth_client.post(
+            "/api/v1/inventory/acquisitions/",
+            json.dumps(
+                {
+                    "source": "seed",
+                    "items": [
+                        {"name": "Sel", "parameters": [{"definition_id": grade.id, "value": "Z"}]}
+                    ],
+                }
+            ),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+
+    def test_item_has_no_concrete_parameter_fields(self, auth_client):
+        item = create_item(auth_client, name="NoCols")
+        fetched = auth_client.get(f"{ITEMS}{item['id']}/").json()
+        for gone in ("color", "size", "weight", "length", "width", "height", "volume"):
+            assert gone not in fetched

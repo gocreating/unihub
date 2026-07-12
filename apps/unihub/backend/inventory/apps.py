@@ -37,7 +37,7 @@ class InventoryConfig(AppConfig):
                         },
                     },
                 ),
-                has_user_attributes=False,
+                has_user_attributes=True,
                 import_order=2,
             )
         )

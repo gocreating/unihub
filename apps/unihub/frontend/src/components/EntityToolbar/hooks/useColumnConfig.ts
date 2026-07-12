@@ -48,21 +48,30 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
   const [activeState, setActiveState] = useState<ColumnState>(initial);
   const [pendingState, setPendingState] = useState<ColumnState>(initial);
 
-  // When a parent re-renders with updated column labels (e.g. async currency loads),
-  // patch labels in both states without disturbing visibility/order/sticky config.
-  // Only updates state when a label actually changed to avoid unnecessary re-renders.
+  // When a parent re-renders with updated columns (e.g. async currency labels,
+  // or attribute-definition columns loading after mount — iteration 14):
+  //   - patch labels of existing columns without disturbing visibility/order,
+  //   - append columns whose key is new (e.g. a freshly created parameter),
+  //   - drop columns whose key no longer exists (e.g. a deleted parameter).
+  // Only updates state when something actually changed to avoid re-renders.
   useEffect(() => {
-    const labelMap = new Map(initialColumns.map((c) => [c.key, c.label]));
-    const patchLabels = (state: ColumnState): ColumnState => {
-      const newColumns = state.columns.map((c) => {
-        const newLabel = labelMap.get(c.key);
-        return newLabel !== undefined && newLabel !== c.label ? { ...c, label: newLabel } : c;
+    const byKey = new Map(initialColumns.map((c) => [c.key, c]));
+    const patch = (state: ColumnState): ColumnState => {
+      const kept = state.columns.filter((c) => byKey.has(c.key));
+      const patched = kept.map((c) => {
+        const incoming = byKey.get(c.key)!;
+        return incoming.label !== c.label ? { ...c, label: incoming.label } : c;
       });
-      const changed = newColumns.some((c, i) => c !== state.columns[i]);
-      return changed ? { ...state, columns: newColumns } : state;
+      const seen = new Set(state.columns.map((c) => c.key));
+      const appended = initialColumns.filter((c) => !seen.has(c.key));
+      const changed =
+        kept.length !== state.columns.length ||
+        appended.length > 0 ||
+        patched.some((c, i) => c !== kept[i]);
+      return changed ? { ...state, columns: [...patched, ...appended] } : state;
     };
-    setActiveState(patchLabels);
-    setPendingState(patchLabels);
+    setActiveState(patch);
+    setPendingState(patch);
   }, [initialColumns]);
 
   const apply = useCallback(() => {

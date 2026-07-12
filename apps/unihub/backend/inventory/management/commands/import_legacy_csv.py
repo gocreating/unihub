@@ -66,28 +66,51 @@ def _iso(date_str: str | None) -> str | None:
     return f"{y}-{int(mo):02d}-{int(d):02d}T00:00:00Z"
 
 
+def _parameter_definitions() -> dict[str, str]:
+    """Map the seeded system parameter names to their definition ids."""
+    from django.contrib.contenttypes.models import ContentType
+
+    from core.models import AttributeDefinition
+
+    item_ct = ContentType.objects.get(app_label="inventory", model="item")
+    return {
+        d.name: d.id
+        for d in AttributeDefinition.objects.filter(content_type=item_ct, is_system=True)
+    }
+
+
 def _item_payload(item) -> dict:
     f = item.fields
+    definitions = _parameter_definitions()
     payload: dict = {"name": item.name.replace("\n", " ").strip()[:200]}
+    parameters: list[dict] = []
     if "quantity" in f:
         payload["quantity"] = int(f["quantity"])
     if "size" in f:
-        payload["size"] = str(f["size"])[:100]
+        parameters.append({"definition_id": definitions["size"], "value": str(f["size"])[:100]})
     if "spec" in f:
         payload["spec"] = str(f["spec"])
     if "url" in f:
         payload["url"] = str(f["url"])[:500]
     if "color" in f:
-        payload["color"] = str(f["color"])[:50]
+        parameters.append({"definition_id": definitions["color"], "value": str(f["color"])[:50]})
     if f.get("sku_price") is not None:
         payload["sku_price"] = str(f["sku_price"])
         if f.get("sku_price_currency"):
             payload["sku_price_currency"] = _norm_currency(str(f["sku_price_currency"]))
     for measure in ("weight", "length", "width", "height", "volume"):
         if measure in f and isinstance(f[measure], dict):
-            payload[measure] = {"value": str(f[measure]["value"]), "unit": f[measure]["unit"]}
+            parameters.append(
+                {
+                    "definition_id": definitions[measure],
+                    "value": str(f[measure]["value"]),
+                    "unit": f[measure]["unit"],
+                }
+            )
     if "remark" in f:
         payload["remark"] = str(f["remark"])
+    if parameters:
+        payload["parameters"] = parameters
     return payload
 
 

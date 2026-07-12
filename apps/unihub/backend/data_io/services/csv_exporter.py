@@ -41,7 +41,13 @@ def _serialize_value(field_desc: FieldDescriptor, row: object) -> str:
 
 
 def _get_user_attr_fields(descriptor: TableDescriptor) -> list[tuple[str, str]]:
-    """Return list of (csv_header, attr_name) for user-defined AttributeDefinitions."""
+    """Return list of (csv_header, attr_name) for exportable AttributeDefinitions.
+
+    All of the table's definitions participate — including system ones (e.g.
+    the seeded inventory item parameters) — EXCEPT definitions whose name
+    collides with a concrete system column (e.g. finance Account's
+    name/currency mirrors), which would duplicate a CSV header.
+    """
     from django.contrib.contenttypes.models import ContentType
 
     from core.models import AttributeDefinition
@@ -52,8 +58,11 @@ def _get_user_attr_fields(descriptor: TableDescriptor) -> list[tuple[str, str]]:
     except ContentType.DoesNotExist:
         return []
 
-    user_attrs = AttributeDefinition.objects.filter(content_type=ct, is_system=False).order_by(
-        "display_order", "name"
+    system_names = {f.column_name for f in descriptor.system_fields}
+    user_attrs = (
+        AttributeDefinition.objects.filter(content_type=ct)
+        .exclude(name__in=system_names)
+        .order_by("display_order", "name")
     )
     return [(f"[{ad.name}]:{ad.data_type}", ad.name) for ad in user_attrs]
 
@@ -87,7 +96,11 @@ def export_table(descriptor: TableDescriptor) -> bytes:
             for av in AttributeValue.objects.filter(content_type=ct).select_related(
                 "attribute_definition"
             ):
-                av_by_pk.setdefault(av.object_id, {})[av.attribute_definition.name] = av.value
+                cell = av.value
+                # Dimension values carry their entered unit in the cell ("1.5 kg").
+                if av.attribute_definition.data_type == "dimension" and av.value_unit:
+                    cell = f"{av.value} {av.value_unit}"
+                av_by_pk.setdefault(av.object_id, {})[av.attribute_definition.name] = cell
         except ContentType.DoesNotExist:
             pass
 

@@ -8,34 +8,54 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import enUS from '@/locales/en-US';
 import { CatalogPage } from './index';
 import * as inventoryService from '@/services/unihub-backend/inventory';
+import * as coreService from '@/services/unihub-backend/core';
+import type { AttributeDefinition } from '@/services/unihub-backend/core';
 
 vi.mock('@/services/unihub-backend/inventory');
+vi.mock('@/services/unihub-backend/core');
 
 dayjs.extend(relativeTime);
 
 const REQUESTED = '2026-07-10T00:00:00Z';
 const OBTAINED = '2026-07-11T00:00:00Z';
 
-// Item with URL, spec, and all Parameters attributes.
+// The seven seeded system parameter definitions (iteration 14).
+const DEFS = ['color', 'size', 'weight', 'length', 'width', 'height', 'volume'].map(
+  (name, i) =>
+    ({
+      id: `ad-${name}`,
+      content_type: 7,
+      content_type_label: 'inventory.item',
+      name,
+      data_type: ['weight', 'length', 'width', 'height', 'volume'].includes(name)
+        ? 'dimension'
+        : 'text',
+      unit_family: name === 'weight' ? 'weight' : name === 'volume' ? 'volume' : ['length', 'width', 'height'].includes(name) ? 'length' : '',
+      is_system: true,
+      display_order: i,
+      options: [],
+    }) as AttributeDefinition,
+);
+
+// Item with URL, spec, and parameter rows.
 const ITEM = {
   id: 'itm-1',
   name: 'Backpack',
   quantity: 1,
   spec: 'roomy',
   remark: '',
-  size: 'M',
-  length: null,
-  width: null,
-  height: null,
-  weight: { value: '0.5000', unit: 'kg' },
-  volume: { value: '1.2', unit: 'L' },
   sku_price: '10',
   sku_price_currency: 'USD',
   total_price: '10.0000',
-  color: 'red',
   url: 'https://example.com/backpack',
   status: 'active' as const,
   deprecate_time: null,
+  parameters: [
+    { definition_id: 'ad-color', name: 'color', data_type: 'text', unit_family: '' as const, value: 'red', unit: '', value_number: null },
+    { definition_id: 'ad-weight', name: 'weight', data_type: 'dimension', unit_family: 'weight' as const, value: '0.5000', unit: 'kg', value_number: '500.0000' },
+    { definition_id: 'ad-volume', name: 'volume', data_type: 'dimension', unit_family: 'volume' as const, value: '1.2', unit: 'L', value_number: '1200.0000' },
+    { definition_id: 'ad-size', name: 'size', data_type: 'text', unit_family: '' as const, value: 'M', unit: '', value_number: null },
+  ],
   acquisition: {
     id: 'acq-1',
     source: 'Shop',
@@ -47,20 +67,17 @@ const ITEM = {
   updated_at: OBTAINED,
 };
 
-// Item with no URL, no spec, and no Parameters attributes.
+// Item with no URL, no spec, and no parameters.
 const PLAIN_ITEM = {
   ...ITEM,
   id: 'itm-2',
   name: 'Plain',
   spec: '',
-  size: '',
-  weight: null,
-  volume: null,
   sku_price: null,
   sku_price_currency: '',
   total_price: null,
-  color: '',
   url: '',
+  parameters: [],
 };
 
 const ACQ = {
@@ -105,6 +122,7 @@ const cellOf = (el: HTMLElement) => {
 
 describe('CatalogPage (iteration 13 — derived columns & density)', () => {
   beforeEach(() => {
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 1,
       next: null,

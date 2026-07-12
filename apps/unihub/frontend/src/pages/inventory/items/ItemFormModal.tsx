@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Button, Col, Form, Input, InputNumber, Modal, Row, Select, Space } from 'antd';
 import { useIntl } from 'react-intl';
-import type { Item, ItemWrite, Measurement } from '@/services/unihub-backend/inventory';
-import { LENGTH_UNITS, VOLUME_UNITS, WEIGHT_UNITS } from '@/services/unihub-backend/inventory';
+import type { Item, ItemParameterWrite, ItemWrite } from '@/services/unihub-backend/inventory';
+import { ParameterRowsEditor } from '@/components/ParameterRowsEditor';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 
 interface ItemFormValues {
@@ -10,21 +10,10 @@ interface ItemFormValues {
   quantity: number;
   spec?: string;
   remark?: string;
-  size?: string;
-  color?: string;
   url?: string;
   sku_price?: number | null;
   sku_price_currency?: string;
-  length_value?: number | null;
-  length_unit: string;
-  width_value?: number | null;
-  width_unit: string;
-  height_value?: number | null;
-  height_unit: string;
-  weight_value?: number | null;
-  weight_unit: string;
-  volume_value?: number | null;
-  volume_unit: string;
+  parameters?: ItemParameterWrite[];
 }
 
 interface CurrencyOption {
@@ -42,31 +31,17 @@ interface ItemFormModalProps {
   onCancel: () => void;
 }
 
-function measure(value?: number | null, unit?: string): Measurement | null {
-  if (value === undefined || value === null) return null;
-  return { value: String(value), unit: unit ?? '' };
-}
-
-function toMeasureValue(m: Measurement | null | undefined): number | null {
-  return m ? Number(m.value) : null;
-}
-
 function formValuesToItemWrite(v: ItemFormValues): ItemWrite {
   return {
     name: v.name,
     quantity: v.quantity ?? 1,
     spec: v.spec ?? '',
     remark: v.remark ?? '',
-    size: v.size ?? '',
-    color: v.color ?? '',
     url: v.url ?? '',
     sku_price: v.sku_price != null ? String(v.sku_price) : null,
     sku_price_currency: v.sku_price_currency ?? '',
-    length: measure(v.length_value, v.length_unit),
-    width: measure(v.width_value, v.width_unit),
-    height: measure(v.height_value, v.height_unit),
-    weight: measure(v.weight_value, v.weight_unit),
-    volume: measure(v.volume_value, v.volume_unit),
+    // Incomplete editor rows (no key or no value yet) are simply dropped.
+    parameters: (v.parameters ?? []).filter((p) => p.definition_id && p.value !== ''),
   };
 }
 
@@ -99,62 +74,24 @@ export function ItemFormModal({
         quantity: Number(initial.quantity ?? 1),
         spec: initial.spec,
         remark: initial.remark,
-        size: initial.size,
-        color: initial.color,
         url: initial.url,
         sku_price: initial.sku_price != null ? Number(initial.sku_price) : null,
         sku_price_currency: initial.sku_price_currency || undefined,
-        length_value: toMeasureValue(initial.length),
-        length_unit: initial.length?.unit ?? 'mm',
-        width_value: toMeasureValue(initial.width),
-        width_unit: initial.width?.unit ?? 'mm',
-        height_value: toMeasureValue(initial.height),
-        height_unit: initial.height?.unit ?? 'mm',
-        weight_value: toMeasureValue(initial.weight),
-        weight_unit: initial.weight?.unit ?? 'g',
-        volume_value: toMeasureValue(initial.volume),
-        volume_unit: initial.volume?.unit ?? 'mL',
+        parameters: (initial.parameters ?? []).map((p) => ({
+          definition_id: p.definition_id,
+          value: p.value,
+          unit: p.unit || undefined,
+        })),
       });
     } else {
       form.resetFields();
-      form.setFieldsValue({
-        quantity: 1,
-        length_unit: 'mm',
-        width_unit: 'mm',
-        height_unit: 'mm',
-        weight_unit: 'g',
-        volume_unit: 'mL',
-      });
+      form.setFieldsValue({ quantity: 1, parameters: [] });
     }
   }, [open, initial, form]);
 
   // Disable the currency selector when sku_price is empty or zero.
   const skuPrice = Form.useWatch('sku_price', form);
   const currencyDisabled = skuPrice == null || Number(skuPrice) === 0;
-
-  const lengthUnitOptions = LENGTH_UNITS.map((u) => ({ value: u, label: u }));
-  const weightUnitOptions = WEIGHT_UNITS.map((u) => ({ value: u, label: u }));
-  const volumeUnitOptions = VOLUME_UNITS.map((u) => ({ value: u, label: u }));
-
-  const measureField = (
-    name: 'length' | 'width' | 'height' | 'weight' | 'volume',
-    label: string,
-    unitOptions: { value: string; label: string }[],
-    span: number = third,
-  ) => (
-    <Col span={span}>
-      <Form.Item label={label}>
-        <Space.Compact block>
-          <Form.Item name={`${name}_value`} noStyle>
-            <InputNumber min={0} style={{ width: '65%' }} />
-          </Form.Item>
-          <Form.Item name={`${name}_unit`} noStyle>
-            <Select style={{ width: '35%' }} options={unitOptions} />
-          </Form.Item>
-        </Space.Compact>
-      </Form.Item>
-    </Col>
-  );
 
   return (
     <Modal
@@ -185,8 +122,8 @@ export function ItemFormModal({
           onValuesChange={() => setDirty(true)}
           onFinish={(values) => onOk(formValuesToItemWrite(values))}
         >
-          {/* Order (Principle VI grid): Name, quantity, SKU price, spec, URL,
-              remark, color, size, weight, length, width, height, volume. */}
+          {/* Order (FR-022): Name, quantity, SKU price, spec, URL, remark,
+              then the on-demand Parameters editor (FR-026). */}
           <Row gutter={12}>
             <Col span={half}>
               <Form.Item name="name" label={t({ id: 'common.name' })} rules={[{ required: true }]}>
@@ -227,27 +164,9 @@ export function ItemFormModal({
           <Form.Item name="remark" label={t({ id: 'pages.inventory.items.col.remark' })}>
             <Input.TextArea rows={2} />
           </Form.Item>
-          <Row gutter={12}>
-            <Col span={half}>
-              <Form.Item name="color" label={t({ id: 'pages.inventory.items.col.color' })}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={half}>
-              <Form.Item name="size" label={t({ id: 'pages.inventory.items.col.size' })}>
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={12}>
-            {measureField('weight', t({ id: 'pages.inventory.items.col.weight' }), weightUnitOptions)}
-            {measureField('length', t({ id: 'pages.inventory.items.col.length' }), lengthUnitOptions)}
-            {measureField('width', t({ id: 'pages.inventory.items.col.width' }), lengthUnitOptions)}
-          </Row>
-          <Row gutter={12}>
-            {measureField('height', t({ id: 'pages.inventory.items.col.height' }), lengthUnitOptions, half)}
-            {measureField('volume', t({ id: 'pages.inventory.items.col.volume' }), volumeUnitOptions, half)}
-          </Row>
+          <Form.Item name="parameters" label={t({ id: 'pages.inventory.catalog.col.parameters' })}>
+            <ParameterRowsEditor />
+          </Form.Item>
         </Form>
       </div>
     </Modal>

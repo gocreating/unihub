@@ -99,3 +99,11 @@ Unchanged **except** the checklist response **drops `shortfall`** — each line 
 ## Iteration 13 delta (2026-07-12)
 
 - `GET /api/v1/inventory/items/` (+ detail): the nested `acquisition` summary gains read-only **`net_cost: NetCostEntry[]`** — per-currency sum of the acquisition's cost-factor values, identical shape/semantics to the top-level `Acquisition.net_cost`. No other contract change; regenerated `src/generated/api-types.ts` accordingly.
+
+## Iteration 14 delta (2026-07-12)
+
+- **Item** (`GET/PATCH /api/v1/inventory/items/…`): concrete `color/size/length/width/height/weight/volume` fields REMOVED; new read field **`parameters[]`** (`{definition_id, name, data_type, unit_family, value, unit, value_number}`) and write field **`parameters[]`** (`{definition_id, value, unit?}`, full-list upsert-replace). Filter/sort on parameters via **`attr:<definition_id>`** keys in `filters`/`ordering` (nulls suffixes honoured).
+- **core attribute-definitions**: `data_type` gains **`dimension`**; new **`unit_family`** (length|weight|volume, required for dimension). System definitions: rename/type change now 400. `attribute-values` rows carry **`value_unit`**/**`value_number`**; `bulk-upsert` accepts `unit`.
+- **Scenario**: `notes` → **`description`**; progress fields (`prepared_count`, `outstanding_count`, `complete`) removed. `GET /scenarios/{id}/checklist/` REMOVED.
+- **ScenarioItem**: `prepared`/`required_quantity` removed; **`display_order`** added (read-only). New **`POST /scenarios/{sid}/items/{id}/move/`** `{container_id, index}` → re-parents + rewrites dense sibling order (400 on cycle/self).
+- **Constraints**: all `/scenarios/{sid}/constraints/…` endpoints REMOVED.

@@ -1,10 +1,7 @@
+from django.contrib.contenttypes.fields import GenericRelation
 from django.db import models
 
 from core.nanoid import generate_id
-
-LENGTH_UNIT_CHOICES = [("mm", "mm"), ("cm", "cm"), ("m", "m"), ("in", "in")]
-WEIGHT_UNIT_CHOICES = [("g", "g"), ("kg", "kg"), ("lb", "lb")]
-VOLUME_UNIT_CHOICES = [("mL", "mL"), ("L", "L")]
 
 
 class Acquisition(models.Model):
@@ -71,31 +68,23 @@ class CostFactor(models.Model):
 
 
 class Item(models.Model):
-    """An individual physical thing the user owns or consumes. May be a container."""
+    """An individual physical thing the user owns or consumes. May be a container.
+
+    Descriptive parameters (color, size, measurements, and any user-defined
+    keys) live in the shared core AttributeDefinition/AttributeValue
+    infrastructure as of iteration 14 — not as concrete columns.
+    """
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     name = models.CharField(max_length=200)
     quantity = models.IntegerField(default=1)
     spec = models.TextField(blank=True)
     remark = models.TextField(blank=True)
-    # Dimensions: canonical value stored in millimetres + the display unit.
-    length_canonical = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
-    length_unit = models.CharField(max_length=4, choices=LENGTH_UNIT_CHOICES, default="mm")
-    width_canonical = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
-    width_unit = models.CharField(max_length=4, choices=LENGTH_UNIT_CHOICES, default="mm")
-    height_canonical = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
-    height_unit = models.CharField(max_length=4, choices=LENGTH_UNIT_CHOICES, default="mm")
-    size = models.CharField(max_length=100, blank=True)
-    # Weight: canonical value stored in grams + the display unit.
-    weight_canonical = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
-    weight_unit = models.CharField(max_length=4, choices=WEIGHT_UNIT_CHOICES, default="g")
-    # Volume: canonical value stored in millilitres + the display unit.
-    volume_canonical = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
-    volume_unit = models.CharField(max_length=4, choices=VOLUME_UNIT_CHOICES, default="mL")
     sku_price = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
     sku_price_currency = models.CharField(max_length=3, blank=True)
-    color = models.CharField(max_length=50, blank=True)
     url = models.CharField(max_length=500, blank=True)
+    # Parameters (generic relation enables prefetching + cascade delete).
+    attribute_values = GenericRelation("core.AttributeValue")
     # Lifecycle: deprecated when deprecate_time is set (status is derived, not stored).
     deprecate_time = models.DateTimeField(null=True, blank=True)
     acquisition = models.ForeignKey(
@@ -118,7 +107,7 @@ class Scenario(models.Model):
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     name = models.CharField(max_length=200)
-    notes = models.TextField(blank=True)
+    description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -130,13 +119,15 @@ class Scenario(models.Model):
 
 
 class ScenarioItem(models.Model):
-    """A checklist line: an item required for a scenario, with packing state."""
+    """A scenario membership: an item in the packing tree (container + order).
+
+    The preparation checklist (prepared/required_quantity) was removed in
+    iteration 14; ordering within a container persists via display_order.
+    """
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE, related_name="items")
     item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="scenario_items")
-    required_quantity = models.DecimalField(max_digits=20, decimal_places=4, default=1)
-    prepared = models.BooleanField(default=False)
     container = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,
@@ -144,36 +135,13 @@ class ScenarioItem(models.Model):
         blank=True,
         related_name="contained_items",
     )
+    display_order = models.IntegerField(default=0)  # sibling order within a container
     notes = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["created_at"]
+        ordering = ["display_order", "created_at"]
         unique_together = [("scenario", "item")]
 
     def __str__(self) -> str:
         return f"{self.scenario.name} / {self.item.name}"
-
-
-class Constraint(models.Model):
-    """A packing rule attached to a scenario, evaluated against its selection."""
-
-    TYPE_CHOICES = [
-        ("mutual_exclusive", "Mutually exclusive"),
-        ("required", "Required"),
-        ("weight_limit", "Weight limit"),
-    ]
-
-    id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
-    scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE, related_name="constraints")
-    name = models.CharField(max_length=200, blank=True)
-    constraint_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    items = models.ManyToManyField(Item, related_name="constraints", blank=True)
-    limit_value = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["created_at"]
-
-    def __str__(self) -> str:
-        return f"{self.scenario.name} / {self.constraint_type}"

@@ -67,15 +67,15 @@ class TestContainment:
         cam = _add(auth_client, s["id"], _item(auth_client, "Camera")["id"])
         _set_container(auth_client, s["id"], cam["id"], bag["id"])
         auth_client.delete(f"{SCEN}{s['id']}/items/{bag['id']}/")
-        checklist = auth_client.get(f"{SCEN}{s['id']}/checklist/").json()
-        cam_line = next(line for line in checklist["lines"] if line["id"] == cam["id"])
+        lines = auth_client.get(f"{SCEN}{s['id']}/items/").json()
+        cam_line = next(line for line in lines if line["id"] == cam["id"])
         assert cam_line["container"] is None
 
-    def test_checklist_line_reports_container(self, auth_client):
+    def test_line_reports_container(self, auth_client):
         s = _scenario(auth_client)
         bag = _add(auth_client, s["id"], _item(auth_client, "Backpack")["id"])
         cam = _add(auth_client, s["id"], _item(auth_client, "Camera")["id"])
         _set_container(auth_client, s["id"], cam["id"], bag["id"])
-        checklist = auth_client.get(f"{SCEN}{s['id']}/checklist/").json()
-        cam_line = next(line for line in checklist["lines"] if line["id"] == cam["id"])
+        lines = auth_client.get(f"{SCEN}{s['id']}/items/").json()
+        cam_line = next(line for line in lines if line["id"] == cam["id"])
         assert cam_line["container"]["item_name"] == "Backpack"

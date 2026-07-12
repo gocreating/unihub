@@ -7,15 +7,14 @@ from rest_framework.response import Response
 
 from core.filters import EntityFilterBackend, NullsOrderingFilter
 from core.pagination import EntityOffsetPagination
-from inventory.models import Acquisition, Constraint, Item, Scenario, ScenarioItem
+from inventory.models import Acquisition, Item, Scenario, ScenarioItem
 from inventory.serializers import (
     AcquisitionSerializer,
-    ConstraintSerializer,
     ItemSerializer,
     ScenarioItemSerializer,
     ScenarioSerializer,
 )
-from inventory.services import build_checklist, would_create_cycle
+from inventory.services import would_create_cycle
 
 
 class ItemViewSet(viewsets.ModelViewSet):
@@ -24,21 +23,16 @@ class ItemViewSet(viewsets.ModelViewSet):
     queryset = Item.objects.all()
     serializer_class = ItemSerializer
     filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    # Opt into attr:<definition_id> filter/sort keys (dynamic parameters).
+    attribute_content_type = "inventory.item"
     # Keys are the real field paths so a single toolbar key works for BOTH filter
     # and sort (the ordering filter validates the raw field name against
     # ordering_fields). The Catalog's flat mode sends these paths directly.
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
         "spec": {"lookup": "spec", "type": "text"},
-        "size": {"lookup": "size", "type": "text"},
-        "color": {"lookup": "color", "type": "text"},
         "quantity": {"lookup": "quantity", "type": "number"},
         "sku_price": {"lookup": "sku_price", "type": "number"},
-        "weight_canonical": {"lookup": "weight_canonical", "type": "number"},
-        "length_canonical": {"lookup": "length_canonical", "type": "number"},
-        "width_canonical": {"lookup": "width_canonical", "type": "number"},
-        "height_canonical": {"lookup": "height_canonical", "type": "number"},
-        "volume_canonical": {"lookup": "volume_canonical", "type": "number"},
         "url": {"lookup": "url", "type": "text"},
         "deprecated": {"lookup": "deprecate_time", "type": "date"},
         "deprecate_time": {"lookup": "deprecate_time", "type": "date"},
@@ -46,19 +40,13 @@ class ItemViewSet(viewsets.ModelViewSet):
         "acquisition__source": {"lookup": "acquisition__source", "type": "text"},
         "acquisition__request_time": {"lookup": "acquisition__request_time", "type": "date"},
         "acquisition__obtained_at": {"lookup": "acquisition__obtained_at", "type": "date"},
+        # Parameters (color/size/measurements/…) filter via attr:<definition_id>.
     }
     ordering_fields = [
         "name",
         "spec",
-        "size",
-        "color",
         "quantity",
         "sku_price",
-        "weight_canonical",
-        "length_canonical",
-        "width_canonical",
-        "height_canonical",
-        "volume_canonical",
         "url",
         "deprecate_time",
         "acquisition__source",
@@ -71,12 +59,16 @@ class ItemViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # No implicit exclusion — deprecate_time is a normal filterable attribute.
-        # cost_factors feeds the nested acquisition.net_cost aggregation.
+        # cost_factors feeds the nested acquisition.net_cost aggregation;
+        # attribute_values feeds the parameters list.
         return (
             super()
             .get_queryset()
             .select_related("acquisition")
-            .prefetch_related("acquisition__cost_factors")
+            .prefetch_related(
+                "acquisition__cost_factors",
+                "attribute_values__attribute_definition",
+            )
         )
 
     def destroy(self, request, *args, **kwargs):
@@ -87,7 +79,9 @@ class ItemViewSet(viewsets.ModelViewSet):
 
 
 class AcquisitionViewSet(viewsets.ModelViewSet):
-    queryset = Acquisition.objects.all()
+    queryset = Acquisition.objects.prefetch_related(
+        "cost_factors", "items__attribute_values__attribute_definition"
+    )
     serializer_class = AcquisitionSerializer
     filter_backends = [EntityFilterBackend, NullsOrderingFilter]
     filterable_fields = {
@@ -122,12 +116,6 @@ class ScenarioViewSet(viewsets.ModelViewSet):
     ordering = ["name"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
-
-    @action(detail=True, methods=["get"], url_path="checklist")
-    def checklist(self, request, pk=None):
-        """Return the composite checklist: progress, lines, and violations."""
-        scenario = self.get_object()
-        return Response(build_checklist(scenario))
 
 
 class ScenarioItemViewSet(viewsets.ModelViewSet):
@@ -175,14 +163,16 @@ class ScenarioItemViewSet(viewsets.ModelViewSet):
         if error:
             return error
 
+        # New lines append at the end of their sibling group (Organize tree order).
+        siblings = ScenarioItem.objects.filter(scenario=scenario, container=container)
+        next_order = siblings.count()
         try:
             line = ScenarioItem.objects.create(
                 scenario=scenario,
                 item_id=data["item_id"],
-                required_quantity=data.get("required_quantity", 1),
-                prepared=data.get("prepared", False),
                 notes=data.get("notes", ""),
                 container=container,
+                display_order=next_order,
             )
         except IntegrityError:
             return Response(
@@ -206,10 +196,44 @@ class ScenarioItemViewSet(viewsets.ModelViewSet):
                 return error
             line.container = container
 
-        for field in ("required_quantity", "prepared", "notes"):
-            if field in data:
-                setattr(line, field, data[field])
+        if "notes" in data:
+            line.notes = data["notes"]
         line.save()
+        return Response(self.get_serializer(line).data)
+
+    def move(self, request, *args, **kwargs):
+        """Drag-drop endpoint: set the line's container and sibling position.
+
+        Body: ``{"container_id": <line id or null>, "index": <int>}``. Sibling
+        display_order values are rewritten densely so order survives reloads.
+        """
+        line = self.get_object()
+        scenario = line.scenario
+
+        container, error = self._resolve_container(
+            scenario, request.data.get("container_id"), line=line
+        )
+        if error:
+            return error
+
+        try:
+            index = int(request.data.get("index", 0))
+        except (TypeError, ValueError):
+            return Response({"detail": "index must be an integer."}, status=400)
+
+        siblings = list(
+            ScenarioItem.objects.filter(scenario=scenario, container=container)
+            .exclude(pk=line.pk)
+            .order_by("display_order", "created_at")
+        )
+        index = max(0, min(index, len(siblings)))
+        siblings.insert(index, line)
+        line.container = container
+        for order, sibling in enumerate(siblings):
+            sibling.display_order = order
+        line.save(update_fields=["container"])
+        ScenarioItem.objects.bulk_update(siblings, ["display_order"])
+        line.refresh_from_db()
         return Response(self.get_serializer(line).data)
 
     def destroy(self, request, *args, **kwargs):
@@ -218,17 +242,3 @@ class ScenarioItemViewSet(viewsets.ModelViewSet):
         line.contained_items.update(container=None)
         line.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class ConstraintViewSet(viewsets.ModelViewSet):
-    serializer_class = ConstraintSerializer
-    pagination_class = None
-    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
-
-    def get_queryset(self):
-        return Constraint.objects.filter(scenario_id=self.kwargs["scenario_id"]).prefetch_related(
-            "items"
-        )
-
-    def perform_create(self, serializer):
-        serializer.save(scenario_id=self.kwargs["scenario_id"])

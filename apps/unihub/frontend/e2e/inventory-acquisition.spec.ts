@@ -54,7 +54,7 @@ test('accumulated cost rows are labelled "Items" with an icon-only reset', async
 test('item card header opens the URL in a new tab when a URL is set', async ({ page }) => {
   await gotoNewAcquisition(page);
   // Open the item modal, fill name + URL, save.
-  await page.getByRole('button', { name: /Add Item/i }).click();
+  await page.locator('.ant-card', { hasText: 'Items' }).first().locator('button').filter({ hasText: /^Add$/ }).first().click();
   await page.waitForSelector('.ant-modal', { timeout: 5_000 });
   await page.locator('.ant-modal #name, .ant-modal input[id$="name"]').first().fill('Linked thing');
   // URL field (label "URL").
@@ -71,23 +71,49 @@ test('item card header opens the URL in a new tab when a URL is set', async ({ p
 test('a manual cost-factor type shows its localized label, not the raw key', async ({ page }) => {
   await gotoNewAcquisition(page);
   const cost = page.locator('.ant-card', { hasText: 'Cost' }).last();
-  await cost.getByRole('button', { name: /Add Factor/i }).click();
+  await cost.locator('button').filter({ hasText: /^Add$/ }).first().click();
   await page.waitForTimeout(300);
-  // Pick the "Shipping" suggestion; the field must display the label "Shipping",
-  // never the raw key "shipping".
-  const typeInput = cost.locator('.ant-select-selection-search input, input.ant-input').first();
-  await typeInput.click();
-  await page.getByText('Shipping', { exact: true }).first().click();
-  await expect(cost.locator('input[value="Shipping"], input').first()).toHaveValue(/Shipping/);
+  // Pick the "Shipping" suggestion on the NEWLY ADDED manual row (the
+  // accumulated row's type control is disabled); the field must display the
+  // label "Shipping", never the raw key "shipping".
+  const typeSelect = cost
+    .locator('.ant-select', {
+      has: page.locator('.ant-select-selection-placeholder', { hasText: 'Type' }),
+    })
+    .first();
+  await typeSelect.locator('input').click();
+  await page.keyboard.type('Ship');
+  await page
+    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+    .getByText('Shipping', { exact: true })
+    .first()
+    .click();
+  // Some combobox in the Cost card now displays the localized label "Shipping"
+  // (never the raw key "shipping").
+  await expect(async () => {
+    const combos = cost.getByRole('combobox');
+    const count = await combos.count();
+    const values: string[] = [];
+    for (let i = 0; i < count; i++) values.push(await combos.nth(i).inputValue());
+    expect(values).toContain('Shipping');
+    expect(values).not.toContain('shipping');
+  }).toPass({ timeout: 5_000 });
 });
 
-test('item cards render available attributes as Tag badges', async ({ page }) => {
+test('item cards render parameter rows as Tag badges (iteration 14)', async ({ page }) => {
   await gotoNewAcquisition(page);
-  await page.getByRole('button', { name: /Add Item/i }).click();
+  const itemsCard = page.locator('.ant-card', { hasText: 'Items' }).first();
+  await itemsCard.locator('button').filter({ hasText: /^Add$/ }).first().click();
   await page.waitForSelector('.ant-modal', { timeout: 5_000 });
   await page.locator('.ant-modal input[id$="name"]').first().fill('Badged item');
-  const colorItem = page.locator('.ant-modal .ant-form-item', { hasText: 'Color' }).first();
-  await colorItem.locator('input').fill('Blue');
+  // Add a "Color" parameter row via the on-demand editor (FR-026).
+  await page.locator('.ant-modal').getByRole('button', { name: /Add parameter/ }).click();
+  await page.locator('.ant-modal .ant-select-selector').last().click();
+  await page
+    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+    .getByText('Color', { exact: true })
+    .click();
+  await page.locator('.ant-modal .ant-space-compact input.ant-input').last().fill('Blue');
   await page.locator('.ant-modal button', { hasText: /Save/i }).click();
   await page.waitForTimeout(400);
   const card = page.locator('.ant-card-small', { hasText: 'Badged item' }).first();
@@ -101,7 +127,7 @@ test('number inputs are right-aligned (cost panel + Add-Item modal)', async ({ p
   await expect(costInput).toBeVisible();
   expect(await costInput.evaluate((el) => getComputedStyle(el).textAlign)).toBe('right');
   // Add-Item modal quantity input.
-  await page.getByRole('button', { name: /^Add$/ }).first().click();
+  await page.locator('.ant-card', { hasText: 'Items' }).first().locator('button').filter({ hasText: /^Add$/ }).first().click();
   await page.waitForSelector('.ant-modal', { timeout: 5_000 });
   const qty = page.locator('.ant-modal .ant-input-number-input').first();
   expect(await qty.evaluate((el) => getComputedStyle(el).textAlign)).toBe('right');
@@ -110,7 +136,7 @@ test('number inputs are right-aligned (cost panel + Add-Item modal)', async ({ p
 test('Add-Item modal fields stack at a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 480, height: 900 });
   await gotoNewAcquisition(page);
-  await page.getByRole('button', { name: /^Add$/ }).first().click();
+  await page.locator('.ant-card', { hasText: 'Items' }).first().locator('button').filter({ hasText: /^Add$/ }).first().click();
   await page.waitForSelector('.ant-modal', { timeout: 5_000 });
   await page.waitForTimeout(400);
   // Narrow modal → the Name field's grid column must be full-width (ant-col-24).
@@ -123,7 +149,7 @@ test('Add-Item modal fields stack at a narrow viewport', async ({ page }) => {
 
 test('Add-Item modal footer: Cancel flushed left, Save right', async ({ page }) => {
   await gotoNewAcquisition(page);
-  await page.getByRole('button', { name: /^Add$/ }).first().click();
+  await page.locator('.ant-card', { hasText: 'Items' }).first().locator('button').filter({ hasText: /^Add$/ }).first().click();
   await page.waitForSelector('.ant-modal', { timeout: 5_000 });
   const cancel = page.locator('.ant-modal-footer button', { hasText: 'Cancel' });
   const save = page.locator('.ant-modal-footer button', { hasText: 'Save' });

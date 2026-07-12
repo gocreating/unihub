@@ -10,25 +10,36 @@
  *      possible only because useContainerWidth uses a callback ref (AntD Modal
  *      lazy-mounts its children, so a mount-effect observer never attached).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import enUS from '@/locales/en-US';
 import { ItemFormModal } from './ItemFormModal';
+import * as coreService from '@/services/unihub-backend/core';
 import { ResizeObserverMock } from '../../../test-setup';
 
+vi.mock('@/services/unihub-backend/core');
+
+beforeEach(() => {
+  vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue([]);
+});
+
 function renderModal() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <IntlProvider locale="en-US" messages={enUS}>
-      <ItemFormModal
-        open
-        title="Add Item"
-        initial={null}
-        currencyOptions={[]}
-        onOk={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    </IntlProvider>,
+    <QueryClientProvider client={qc}>
+      <IntlProvider locale="en-US" messages={enUS}>
+        <ItemFormModal
+          open
+          title="Add Item"
+          initial={null}
+          currencyOptions={[]}
+          onOk={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </IntlProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -60,7 +71,7 @@ describe('ItemFormModal (Principle VI)', () => {
     expect(order.indexOf(cancel)).toBeLessThan(order.indexOf(save));
   });
 
-  it('orders fields: Name, Quantity, SKU Price, Spec, URL, Remark, Color, Size, Weight, Length, Width, Height, Volume', () => {
+  it('orders fields: Name, Quantity, SKU Price, Spec, URL, Remark, Parameters (FR-022)', () => {
     renderModal();
     const labels = Array.from(document.querySelectorAll('.ant-form-item-label label')).map(
       (l) => l.textContent,
@@ -72,14 +83,10 @@ describe('ItemFormModal (Principle VI)', () => {
       'Spec',
       'URL',
       'Remark',
-      'Color',
-      'Size',
-      'Weight',
-      'Length',
-      'Width',
-      'Height',
-      'Volume',
+      'Parameters',
     ]);
+    // The fixed per-attribute inputs are gone; the parameters editor is present.
+    expect(screen.getByRole('button', { name: /Add parameter/ })).toBeInTheDocument();
   });
 
   it('stacks fields to full-width columns when the modal content is narrow', async () => {

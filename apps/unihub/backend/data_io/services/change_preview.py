@@ -218,9 +218,15 @@ def _upsert_attribute_values(
     pk_val: str,
     csv_row: dict[str, str],
 ) -> None:
-    """Upsert AttributeValues for user-defined attribute columns in the CSV row."""
+    """Upsert AttributeValues for attribute columns in the CSV row.
+
+    Applies to any of the table's definitions (system parameters included).
+    Dimension cells arrive as "<value> <unit>"; the canonical numeric fields
+    are recomputed on the way in via core.attributes.compute_value_fields.
+    """
     from django.contrib.contenttypes.models import ContentType
 
+    from core.attributes import compute_value_fields
     from core.models import AttributeDefinition, AttributeValue
 
     app_label, model_name = descriptor.content_type_label.split(".")
@@ -229,19 +235,30 @@ def _upsert_attribute_values(
     except ContentType.DoesNotExist:
         return
 
-    for header, value in csv_row.items():
+    for header, raw in csv_row.items():
         if not (header.startswith("[") and "]:" in header):
             continue
         attr_name = header.split("]:")[0][1:]
         try:
-            ad = AttributeDefinition.objects.get(content_type=ct, name=attr_name, is_system=False)
+            ad = AttributeDefinition.objects.get(content_type=ct, name=attr_name)
         except AttributeDefinition.DoesNotExist:
             continue
+        cell = (raw or "").strip()
+        if not cell:
+            # Blank cell = no value for this key on this row.
+            AttributeValue.objects.filter(
+                attribute_definition=ad, content_type=ct, object_id=pk_val
+            ).delete()
+            continue
+        unit = ""
+        if ad.data_type == "dimension" and " " in cell:
+            cell, unit = cell.rsplit(" ", 1)
+        value, value_unit, value_number = compute_value_fields(ad, cell, unit)
         AttributeValue.objects.update_or_create(
             attribute_definition=ad,
             content_type=ct,
             object_id=pk_val,
-            defaults={"value": value},
+            defaults={"value": value, "value_unit": value_unit, "value_number": value_number},
         )
 
 

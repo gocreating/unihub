@@ -492,6 +492,34 @@ export default {
   'pages.inventory.catalog.col.acquisition': '取得',
   'pages.inventory.items.col.deprecateTime': '棄用時間',
 
+  // Inventory > dynamic item parameters (iteration 14)
+  'pages.inventory.params.add': '新增參數',
+  'pages.inventory.params.key': '參數',
+  'pages.inventory.params.new': '＋ 新參數…',
+  'pages.inventory.params.name': '參數名稱',
+  'pages.inventory.params.typeLabel': '類型',
+  'pages.inventory.params.type.string': '文字',
+  'pages.inventory.params.type.numeric': '數值',
+  'pages.inventory.params.type.select': '選項',
+  'pages.inventory.params.type.dimension': '量測',
+  'pages.inventory.params.familyLabel': '單位系列',
+  'pages.inventory.params.family.length': '長度',
+  'pages.inventory.params.family.weight': '重量',
+  'pages.inventory.params.family.volume': '容量',
+  'pages.inventory.params.optionsHint': '選項（以逗號分隔）',
+  'pages.inventory.params.create': '建立',
+
+  // Inventory > Scenarios (iteration 14: backlog + organize)
+  'pages.inventory.scenarios.col.description': '描述',
+  'pages.inventory.scenarios.backlog': '待選清單',
+  'pages.inventory.scenarios.backlog.search': '搜尋物品…',
+  'pages.inventory.scenarios.backlog.add': '加入',
+  'pages.inventory.scenarios.backlog.empty': '沒有符合的物品',
+  'pages.inventory.scenarios.organize': '整理',
+  'pages.inventory.scenarios.organize.empty': '尚無物品 — 請從待選清單加入。',
+  'pages.inventory.scenarios.organize.remove': '自情境移除',
+  'pages.inventory.scenarios.moveFailed': '無法移動此物品',
+
   // Inventory > Scenarios
   'pages.inventory.scenarios.title': '情境',
   'pages.inventory.scenarios.new': '新增情境',

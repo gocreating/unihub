@@ -233,3 +233,40 @@ describe('useColumnConfig', () => {
     expect(result.current.isDirty).toBe(false);
   });
 });
+
+// Iteration 14: async columns (attribute definitions) merge without disturbing config.
+describe('useColumnConfig async column merging', () => {
+  it('appends new keys and drops removed keys, preserving existing config', async () => {
+    const { renderHook, act } = await import('@testing-library/react');
+    const initial = [
+      { key: 'a', label: 'A', dataType: 'text' as const, visible: true, order: 0 },
+      { key: 'b', label: 'B', dataType: 'text' as const, visible: true, order: 1 },
+    ];
+    const { result, rerender } = renderHook(
+      ({ cols }) => useColumnConfig(cols),
+      { initialProps: { cols: initial } },
+    );
+    // User hides column b.
+    act(() =>
+      result.current.setPendingState({
+        ...result.current.pendingState,
+        columns: result.current.pendingState.columns.map((c) =>
+          c.key === 'b' ? { ...c, visible: false } : c,
+        ),
+      }),
+    );
+    act(() => result.current.apply());
+    // Async definitions arrive: b removed, attr:x appended (hidden).
+    rerender({
+      cols: [
+        { key: 'a', label: 'A2', dataType: 'text' as const, visible: true, order: 0 },
+        { key: 'attr:x', label: 'X', dataType: 'text' as const, visible: false, order: 2 },
+      ],
+    });
+    const keys = result.current.activeState.columns.map((c) => c.key);
+    expect(keys).toEqual(['a', 'attr:x']);
+    // Label patched; appended column stays hidden.
+    expect(result.current.activeState.columns[0]?.label).toBe('A2');
+    expect(result.current.activeState.columns[1]?.visible).toBe(false);
+  });
+});

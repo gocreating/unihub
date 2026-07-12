@@ -1,27 +1,28 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.16.0 → 1.17.0 (minor — Principle I (Entity-Centric Domain
-  Architecture) gains a non-negotiable "Data-portability (data_io) consistency"
-  rule: every concrete domain model MUST register a data_io TableDescriptor in its
-  AppConfig.ready(), and every schema change MUST keep the domain consistent with
-  data_io in the same change; registry-unrepresentable relations (e.g. M2M) MUST be
-  explicitly recorded as deferred. Sourced from discovering the inventory app had
-  never been registered with data_io, 2026-07-11.)
+Version change: 1.17.0 → 1.18.0 (minor — Principle VI "Datetime display" rule
+  redefined from the single-line canonical format `YYYY-MM-DD HH:mm (X days ago)`
+  to a two-row default: absolute datetime string as the primary row, relative
+  time as a muted secondary row. Bump rationale: material change to existing
+  guidance within a principle (not a principle removal/redefinition → not MAJOR;
+  more than wording → not PATCH). Sourced from Catalog readability feedback,
+  2026-07-12.)
 Modified principles:
-  - I. Entity-Centric Domain Architecture — added the data_io registration +
-    schema-consistency rule; rationale extended
-Added sections: none (bullet added within Principle I; Domain Addition Protocol
-  step referencing it)
+  - VI. UI/UX Reference: ov-fleet — "Datetime display" bullet: two-row
+    (absolute primary / relative secondary) rendering is now the default for
+    table cells, detail views, and cards; single-line format superseded.
+Added sections: none
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check is
-    generic and already gates all principles)
+    generic and already gates all principles; no datetime references)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: Register the inventory tables with data_io (this iteration:
-  acquisition/item/costfactor/scenario/scenarioitem; Constraint deferred — M2M).
-  Audit other domains for any unregistered concrete models.
+Follow-up TODOs: Existing surfaces rendering the superseded single-line format
+  (e.g. inventory Catalog `formatDateShort`, finance/visiting datetime columns)
+  MUST migrate to the two-row default as they are next touched; the active
+  014-inventory-app iteration adopts it for Requested/Obtained columns.
 -->
 
 # UniHub Constitution
@@ -188,11 +189,20 @@ reference implementation to follow.
   locale file for each supported locale MUST be imported at app entry.
 - **Datetime display**: Every datetime value rendered in a table cell, detail
   view, or card MUST display both the absolute timestamp and the relative time.
-  The canonical format is `YYYY-MM-DD HH:mm (X days ago)` — implemented with
-  `dayjs(val).format('YYYY-MM-DD HH:mm')` and `dayjs(val).fromNow()` (requires
-  `dayjs/plugin/relativeTime` registered at app entry via `dayjs.extend(relativeTime)`).
-  When space is constrained, the relative time MAY be placed in an Ant Design
-  `<Tooltip>` on hover, but MUST NOT be omitted entirely.
+  The default rendering is **two stacked rows** inside the cell/field:
+  - **Primary row**: the absolute datetime string —
+    `dayjs(val).format('YYYY-MM-DD HH:mm')`.
+  - **Secondary row**: the relative time — `dayjs(val).fromNow()` — rendered as
+    muted secondary text (`<Typography.Text type="secondary">`), visually
+    subordinate to the primary row.
+  `dayjs/plugin/relativeTime` MUST be registered at app entry via
+  `dayjs.extend(relativeTime)`. The former single-line canonical format
+  `YYYY-MM-DD HH:mm (X days ago)` is superseded by the two-row default. A
+  feature spec MAY override the absolute string's precision for a specific
+  surface (e.g. date-only `YYYY-MM-DD`) but MUST keep the two-row
+  absolute-primary / relative-secondary structure. Only when vertical space
+  genuinely cannot accommodate two rows MAY the relative time move to an Ant
+  Design `<Tooltip>` on hover; it MUST NOT be omitted entirely.
 - **Empty cell display**: Every table cell or detail-view field whose value is
   absent (null, undefined, or empty string) MUST display a visually distinct
   placeholder rather than leaving the cell blank or rendering raw `null`. The
@@ -655,4 +665,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.17.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-11
+**Version**: 1.18.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-12

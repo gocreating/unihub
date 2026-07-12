@@ -116,3 +116,7 @@ Scenario    1 ──< Constraint  *>──< Item      (M2M target set)
 
 - **Item**: drop `item_type` from filter/order; keep name/spec/size/measures/sku_price/deprecate_time/`acquisition__obtained_at` (default sort).
 - **Acquisition**: source, request_time, obtained_at (cost filter drops — cost is now per-factor).
+
+## Iteration 13 note (2026-07-12)
+
+No schema change — presentation-only iteration. The single API-contract delta is a **derived, read-only `net_cost`** added to the *nested* acquisition summary on Item reads (`ItemSerializer.acquisition`), computed per-currency from cost factors exactly like the top-level `Acquisition.net_cost`. No migration; `data_io` descriptors unchanged (Principle I no-op).

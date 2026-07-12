@@ -1,28 +1,24 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.17.0 → 1.18.0 (minor — Principle VI "Datetime display" rule
-  redefined from the single-line canonical format `YYYY-MM-DD HH:mm (X days ago)`
-  to a two-row default: absolute datetime string as the primary row, relative
-  time as a muted secondary row. Bump rationale: material change to existing
-  guidance within a principle (not a principle removal/redefinition → not MAJOR;
-  more than wording → not PATCH). Sourced from Catalog readability feedback,
-  2026-07-12.)
+Version change: 1.18.0 → 1.19.0 (minor — Principle VII (PageTable Layout) gains
+  a "Footer layout" rule: non-interactive information (record count) on the
+  LEFT; all interactive controls on the RIGHT, ordered per-page selector then
+  pagination. Bump rationale: new rule added within a principle. Sourced from
+  user mockup feedback, 2026-07-12.)
 Modified principles:
-  - VI. UI/UX Reference: ov-fleet — "Datetime display" bullet: two-row
-    (absolute primary / relative secondary) rendering is now the default for
-    table cells, detail views, and cards; single-line format superseded.
+  - VII. PageTable Layout — added the "Footer layout (information left,
+    controls right)" rule; applies immediately to the shared footers
+    (EntityOffsetFooter / EntityCursorFooter), not per-page code.
 Added sections: none
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed (Constitution Check is
-    generic and already gates all principles; no datetime references)
+    generic and already gates all principles; no footer references)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: Existing surfaces rendering the superseded single-line format
-  (e.g. inventory Catalog `formatDateShort`, finance/visiting datetime columns)
-  MUST migrate to the two-row default as they are next touched; the active
-  014-inventory-app iteration adopts it for Requested/Obtained columns.
+Follow-up TODOs: none — the rule is enforced in the shared footer components,
+  so all table pages inherit it in one change.
 -->
 
 # UniHub Constitution
@@ -316,6 +312,19 @@ system page that renders a table).
   the layout; they are acceptable siblings to `PageTable` in the page JSX.
 - All column widths MUST use `widthForHeader()`, `measureTextWidth()`, and
   `computeScrollX()` exported from `PageTable`.
+- **Footer layout (information left, controls right)**: The standard table
+  footer (`EntityOffsetFooter` / `EntityCursorFooter`) MUST place
+  **non-interactive information on the LEFT** — the total record count (e.g.
+  "123 records") — and **ALL interactive controls on the RIGHT**, ordered as
+  the **per-page size selector first, then the pagination**, flush right:
+
+  ```
+  123 records               [25/page v] < 1 [2] 3 4 >
+  ```
+
+  No interactive control may sit on the left side of the footer. Because the
+  footers are shared components, this rule is enforced there once — pages MUST
+  NOT re-implement or re-order the footer locally.
 - The `PageTable` component lives at
   `apps/unihub/frontend/src/components/PageTable/`.
 
@@ -665,4 +674,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.18.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-12
+**Version**: 1.19.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-12

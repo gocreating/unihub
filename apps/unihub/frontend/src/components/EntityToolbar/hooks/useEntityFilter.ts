@@ -115,11 +115,26 @@ export interface UseEntityFilterReturn {
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function useEntityFilter(_key: string): UseEntityFilterReturn {
-  const [activeGroups, setActiveGroups] = useState<FilterGroup[]>([]);
-  const [pendingGroups, setPendingGroupsState] = useState<FilterGroup[]>([emptyGroup()]);
-  const [pendingRoot, setPendingRootState] = useState<FilterGroupItem>(emptyRoot);
+/**
+ * `defaultGroups` seeds the INITIAL filter state (active + pending) so a page
+ * can ship a default filter (e.g. the Catalog's YTD view) — the filter twin of
+ * `useEntitySort`'s default rules. The seed is ordinary state: the user can
+ * edit or clear it; apply-gate semantics are unchanged.
+ */
+export function useEntityFilter(
+  _key: string,
+  defaultGroups?: FilterPayload['groups'],
+): UseEntityFilterReturn {
+  const [seed] = useState<FilterGroup[]>(() =>
+    defaultGroups?.length ? payloadToGroups({ groups: defaultGroups }) : [],
+  );
+  const [activeGroups, setActiveGroups] = useState<FilterGroup[]>(seed);
+  const [pendingGroups, setPendingGroupsState] = useState<FilterGroup[]>(() =>
+    seed.length > 0 ? seed : [emptyGroup()],
+  );
+  const [pendingRoot, setPendingRootState] = useState<FilterGroupItem>(() =>
+    seed.length > 0 ? groupsToTree(seed) : emptyRoot(),
+  );
 
   const setPendingGroups = useCallback((groups: FilterGroup[]) => {
     setPendingGroupsState(groups);

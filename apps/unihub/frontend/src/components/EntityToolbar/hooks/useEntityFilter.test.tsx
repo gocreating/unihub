@@ -283,3 +283,46 @@ describe('useEntityFilter — tree API', () => {
     expect(param?.groups[1]!.conditions[0]!.attr).toBe('score');
   });
 });
+
+// Iteration 17: pages can seed a default filter (Catalog YTD + pending).
+describe('useEntityFilter defaultGroups seed', () => {
+  const SEED = [
+    { logic: 'and' as const, conditions: [{ attr: 'acquisition__obtained_at', op: 'gte' as const, val: '2026-01-01' }] },
+    { logic: 'and' as const, conditions: [{ attr: 'acquisition__obtained_at', op: 'is_empty' as const, val: '' }] },
+  ];
+
+  it('seeds both active and pending state and lights isActive', () => {
+    const { result } = renderHook(() => useEntityFilter('k', SEED));
+    expect(result.current.isActive).toBe(true);
+    expect(result.current.toApiParam()).toEqual({ groups: SEED.map(({ logic, conditions }) => ({ logic, conditions })) });
+    // The panel opens showing the seed (pending mirrors active — not dirty).
+    expect(result.current.pendingGroups.map((g) => g.conditions.map((c) => c.op))).toEqual([
+      ['gte'],
+      ['is_empty'],
+    ]);
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  it('keeps the apply-gate: pending edits change nothing until apply', () => {
+    const { result } = renderHook(() => useEntityFilter('k', SEED));
+    act(() => {
+      result.current.setPendingRoot(emptyRoot());
+    });
+    expect(result.current.toApiParam()).toBeDefined();
+    act(() => {
+      result.current.apply();
+    });
+    // Cleared and applied → no filter payload (shows everything).
+    expect(result.current.toApiParam()).toBeUndefined();
+    expect(result.current.isActive).toBe(false);
+  });
+
+  it('reset clears the seed too (clearable default)', () => {
+    const { result } = renderHook(() => useEntityFilter('k', SEED));
+    act(() => {
+      result.current.reset();
+    });
+    expect(result.current.isActive).toBe(false);
+    expect(result.current.toApiParam()).toBeUndefined();
+  });
+});

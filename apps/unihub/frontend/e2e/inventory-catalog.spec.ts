@@ -119,6 +119,40 @@ test('caret has its own dedicated column (not merged into a data column)', async
   await expect(caretCell.locator('.anticon-caret-down, .anticon-caret-right')).toHaveCount(1);
 });
 
+test('seeded YTD default filter, 50/page, plain Name, capped URL (iter 17)', async ({ page }) => {
+  // The seeded default filter lights the Filter toolbar button.
+  await expect(page.getByRole('button', { name: /Filter/ })).toHaveClass(/ant-btn-primary/);
+  // Default page size is 50.
+  await expect(page.locator('.ant-table-footer .ant-select-selection-item').first()).toContainText(
+    '50',
+  );
+  // Toggle Name + URL visible.
+  await page.getByRole('button', { name: /Columns/ }).click();
+  const panel = page.locator('.ant-dropdown').last();
+  for (const label of ['Name', 'URL']) {
+    const row = panel.locator('li, .ant-space, div', { hasText: new RegExp(`^${label}$`) }).last();
+    await row.locator('input[type="checkbox"]').first().check();
+  }
+  await panel.getByRole('button', { name: /^Apply$/ }).click();
+  await page.waitForTimeout(600);
+  // Name header present, and Name cells carry NO hyperlink (Item column keeps it).
+  const nameIdx = (await page.locator('.ant-table-thead th').allInnerTexts()).findIndex((h) =>
+    h.trim().startsWith('Name'),
+  );
+  expect(nameIdx).toBeGreaterThan(-1);
+  const nameCells = page.locator(
+    `.ant-table-tbody tr.ant-table-row td:nth-child(${nameIdx + 1})`,
+  );
+  const withText = nameCells.filter({ hasText: /\S/ });
+  expect(await withText.count()).toBeGreaterThan(0);
+  await expect(nameCells.locator('a')).toHaveCount(0);
+  // URL column width is capped to its 320px render (measure-what-you-render),
+  // never sized to the full raw URL text.
+  const urlHeader = page.locator('.ant-table-thead th', { hasText: /^URL/ }).first();
+  const urlBox = await urlHeader.boundingBox();
+  expect(urlBox!.width).toBeLessThanOrEqual(345);
+});
+
 test('Toggle column is listed in the Columns dropdown and pinned by default (iter 16)', async ({ page }) => {
   // Pinned by default: the leading caret cell carries the fixed-left class.
   const firstBodyRow = page.locator('.ant-table-tbody tr.ant-table-row').first();
@@ -199,14 +233,17 @@ test('default sort is Obtained desc NULLS FIRST and the action button says "New"
   await expect(action).toBeVisible();
   // The seeded default sort lights the Sort toolbar button (isActive).
   await expect(page.getByRole('button', { name: /Sort/ })).toHaveClass(/ant-btn-primary/);
-  // Default order via the derived Acquisition column's date range: acquisitions
-  // without an Obtained date ("~ —" or no range) sort before dated ones.
+  // Default order via the derived Acquisition column's dates: acquisitions
+  // without an Obtained date sort before obtained ones. Obtained renders as
+  // "req ~ obt" or a bare trailing date (iter 15 four-case rule); pending is
+  // date-less or "req ~" (trailing tilde).
   const summaryCells = await page
     .locator('.ant-table-tbody tr.ant-table-row-level-0 td:nth-child(2)')
     .allInnerTexts();
-  const isDated = (c: string) => /~ \d{4}-\d{2}-\d{2}/.test(c);
-  const firstDatedIdx = summaryCells.findIndex(isDated);
-  const lastPendingIdx = summaryCells.map((c) => !isDated(c)).lastIndexOf(true);
+  const hasObtained = (c: string) =>
+    /~ \d{4}-\d{2}-\d{2}/.test(c) || /\d{4}-\d{2}-\d{2}\s*$/.test(c.trim());
+  const firstDatedIdx = summaryCells.findIndex(hasObtained);
+  const lastPendingIdx = summaryCells.map((c) => !hasObtained(c)).lastIndexOf(true);
   if (lastPendingIdx !== -1 && firstDatedIdx !== -1) {
     expect(lastPendingIdx).toBeLessThan(firstDatedIdx);
   }

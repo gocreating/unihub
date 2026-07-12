@@ -128,9 +128,14 @@ def _factor_payloads(acq) -> tuple[list[dict], list[dict]]:
             # Blank legacy amount = unrecorded (FR-029a c): keep the derived
             # item-price accumulated instead of fabricating a 0 override.
             continue
+        value = Decimal(str(cf.value))
+        # Sheet formulas derive float amounts with >4 decimal places (e.g.
+        # 退稅 -762.675402) — round to the CostFactor field's 4dp precision.
+        if -value.as_tuple().exponent > 4:
+            value = value.quantize(Decimal("0.0001"))
         row = {
             "type": cf.type,
-            "value": str(Decimal(str(cf.value))),
+            "value": str(value),
             "currency": _norm_currency(cf.currency),
         }
         (accumulated if cf.type == "accumulated" else manual).append(row)

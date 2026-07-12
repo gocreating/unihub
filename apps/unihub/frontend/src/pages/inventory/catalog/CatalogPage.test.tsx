@@ -365,8 +365,8 @@ describe('CatalogPage (iteration 15 — merged rows, layers, footer)', () => {
     const row = lantern.closest('tr')!;
     const caret = within(row).getByLabelText(/caret-right/i, { selector: 'span[role="img"]' });
     fireEvent.click(caret.closest('span[style]') ?? caret);
-    // Two rows now: the parent shows the item count, the child shows the item.
-    expect(await screen.findByText('1 items')).toBeInTheDocument();
+    // Two rows now: the parent shows the item count (singular! iteration 17).
+    expect(await screen.findByText('1 item')).toBeInTheDocument();
     expect(container.querySelectorAll('tr.ant-table-row-level-1').length).toBeGreaterThan(2);
   });
 
@@ -489,5 +489,98 @@ describe('CatalogPage (iteration 16 — Toggle column)', () => {
         '.ant-table-tbody tr.ant-table-row td .anticon-caret-down, .ant-table-tbody tr.ant-table-row td .anticon-caret-right',
       ),
     ).toBeNull();
+  });
+});
+
+describe('CatalogPage (iteration 17 — plurals, name link, url width, seeded defaults)', () => {
+  beforeEach(() => {
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
+      count: 3,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 3, items: 4 },
+      results: [ACQ, ACQ_SOLO, ACQ_REQ],
+    });
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 4,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 3, items: 4 },
+      results: [ITEM, PLAIN_ITEM, SOLO_ITEM, REQ_ITEM],
+    });
+  });
+
+  const toggleColumn = async (label: string) => {
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    const el = await screen.findByText(label);
+    const row = el.closest('li, .ant-space, div') as HTMLElement;
+    fireEvent.click(within(row).getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
+  };
+
+  // CAT17-01 (FR-003): footer totals pluralize correctly.
+  it('pluralizes the footer totals', async () => {
+    vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
+      count: 1,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 1, items: 1 },
+      results: [ACQ_SOLO],
+    });
+    renderPage();
+    await screen.findByText('Lantern');
+    expect(screen.getByText('1 acquisition, 1 item')).toBeInTheDocument();
+  });
+
+  // CAT17-02 (FR-003): the Name column renders plain text — Item keeps the link.
+  it('renders the Name column without a hyperlink', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    await toggleColumn('Name');
+    await waitFor(() => {
+      // Backpack now renders twice: Item cell (link) + Name cell (plain).
+      const occurrences = screen.getAllByText('Backpack');
+      expect(occurrences.length).toBeGreaterThanOrEqual(2);
+      const linked = occurrences.filter((el) => el.closest('a'));
+      expect(linked).toHaveLength(1);
+    });
+  });
+
+  // CAT17-03 (FR-003): url cell renders capped (320px) with the full URL text.
+  it('caps the url cell render at 320px', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    await toggleColumn('URL');
+    const links = await screen.findAllByText('https://example.com/backpack');
+    const link = links.find((el) => el.closest('td'))!;
+    const anchor = link.closest('a')!;
+    expect(anchor.style.maxWidth).toBe('320px');
+  });
+
+  // CAT17-04 (FR-003): the YTD+pending default filter is seeded and lit.
+  it('seeds the default filter (obtained >= year start OR empty) and lights Filter', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    expect(screen.getByRole('button', { name: /Filter/ }).className).toContain('ant-btn-primary');
+    const call = vi.mocked(inventoryService.listAcquisitions).mock.calls.at(-1)![0]!;
+    const yearStart = dayjs().startOf('year').format('YYYY-MM-DD');
+    expect(call.filters).toEqual({
+      groups: [
+        { logic: 'and', conditions: [{ attr: 'obtained_at', op: 'gte', val: yearStart }] },
+        { logic: 'and', conditions: [{ attr: 'obtained_at', op: 'is_empty', val: '' }] },
+      ],
+    });
+  });
+
+  // CAT17-05 (FR-003): default page size is 50.
+  it('defaults to 50 per page', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    expect(
+      container.querySelector('.ant-table-footer .ant-select-selection-item')?.textContent,
+    ).toContain('50');
+    const call = vi.mocked(inventoryService.listAcquisitions).mock.calls.at(-1)![0]!;
+    expect(call.limit).toBe(50);
   });
 });

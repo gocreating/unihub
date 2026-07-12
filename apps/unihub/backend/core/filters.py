@@ -240,11 +240,16 @@ class EntityFilterBackend(BaseFilterBackend):
             return None
 
         lookup: str = filterable_fields[attr].get("lookup", attr)
+        # The empty-string leg only makes sense on text columns — comparing a
+        # datetime/number column to "" raises at the ORM layer (iteration 17).
+        is_text = filterable_fields[attr].get("type", "text") == "text"
 
         if op == "is_empty":
-            return Q(**{f"{lookup}__isnull": True}) | Q(**{lookup: ""})
+            empty = Q(**{f"{lookup}__isnull": True})
+            return empty | Q(**{lookup: ""}) if is_text else empty
         if op == "is_not_empty":
-            return ~(Q(**{f"{lookup}__isnull": True}) | Q(**{lookup: ""}))
+            empty = Q(**{f"{lookup}__isnull": True})
+            return ~(empty | Q(**{lookup: ""})) if is_text else ~empty
 
         suffix = _OP_SUFFIX.get(op)
         if suffix is None:

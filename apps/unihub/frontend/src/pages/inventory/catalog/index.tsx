@@ -216,6 +216,25 @@ export function CatalogPage() {
     defaultSortRules: [{ field: 'acquisition__obtained_at', direction: 'desc', nulls: 'first' }],
     // The Toggle (caret) column is pinned by default (FR-003, iteration 16).
     defaultSticky: { left: true },
+    // Default view (iteration 17): YTD acquisitions + pending (no obtained
+    // date yet) — lit in the Filter toolbar, freely editable/clearable.
+    defaultFilterGroups: [
+      {
+        logic: 'and',
+        conditions: [
+          {
+            attr: 'acquisition__obtained_at',
+            op: 'gte',
+            val: dayjs().startOf('year').format('YYYY-MM-DD'),
+          },
+        ],
+      },
+      {
+        logic: 'and',
+        conditions: [{ attr: 'acquisition__obtained_at', op: 'is_empty', val: '' }],
+      },
+    ],
+    defaultPageSize: 50,
   });
   const { filter, sort, cols } = table;
 
@@ -558,21 +577,25 @@ export function CatalogPage() {
                 ? (r.acquisition?.source ?? EMPTY)
                 : EMPTY,
         },
+        // Plain text — the derived Item column carries the sole hyperlink (iter 17).
         name: {
           key: 'name',
           title: t({ id: 'common.name' }),
           ...wId('name', 'common.name'),
           fixed: getFixed('name'),
           ...makeSortProps('name', t({ id: 'common.name' }), sort),
-          render: (_, r) => {
-            const it = itemFor(r);
-            return it ? nameLink(it) : EMPTY;
-          },
+          render: (_, r) => itemFor(r)?.name || EMPTY,
         },
         url: {
           key: 'url',
           title: t({ id: 'pages.inventory.items.col.url' }),
-          ...wId('url', 'pages.inventory.items.col.url'),
+          // Measure-what-you-render (iter 17): the cell caps its render at
+          // 320px, so the measured width is capped to match — never sized to
+          // the unrendered full URL text.
+          ...widthForHeader(
+            t({ id: 'pages.inventory.items.col.url' }),
+            Math.min(dataWidths['url'] ?? 0, 320),
+          ),
           fixed: getFixed('url'),
           ...makeSortProps('url', t({ id: 'pages.inventory.items.col.url' }), sort),
           render: (_, r) =>
@@ -585,12 +608,11 @@ export function CatalogPage() {
                   display: 'inline-block',
                   maxWidth: 320,
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                   verticalAlign: 'bottom',
                 }}
               >
-                {itemFor(r)!.url}
+                <OverflowTooltip title={itemFor(r)!.url}>{itemFor(r)!.url}</OverflowTooltip>
               </a>
             ) : (
               EMPTY

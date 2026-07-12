@@ -492,8 +492,8 @@ export default {
   'pages.inventory.catalog.col.acquisition': 'Acquisition',
   'pages.inventory.catalog.col.toggle': 'Toggle',
   'pages.inventory.items.col.deprecateTime': 'Deprecated At',
-  'pages.inventory.catalog.footerTotals': '{acquisitions} acquisitions, {items} items',
-  'pages.inventory.catalog.itemCount': '{count} items',
+  'pages.inventory.catalog.footerTotals': '{acquisitions, plural, one {# acquisition} other {# acquisitions}}, {items, plural, one {# item} other {# items}}',
+  'pages.inventory.catalog.itemCount': '{count, plural, one {# item} other {# items}}',
 
   // Inventory > dynamic item parameters (iteration 14)
   'pages.inventory.params.add': 'Add parameter',

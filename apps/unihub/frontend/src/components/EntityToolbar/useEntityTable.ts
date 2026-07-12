@@ -13,7 +13,7 @@ import { useEntitySort } from './hooks/useEntitySort';
 import type { UseEntitySortReturn } from './hooks/useEntitySort';
 import { useColumnConfig } from './hooks/useColumnConfig';
 import type { UseColumnConfigReturn } from './hooks/useColumnConfig';
-import type { ColumnDef, EntityListParams, FilterableAttribute, SortRule } from './types';
+import type { ColumnDef, EntityListParams, FilterableAttribute, FilterPayload, SortRule } from './types';
 
 export const ENTITY_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 export type EntityPageSize = (typeof ENTITY_PAGE_SIZE_OPTIONS)[number];
@@ -28,6 +28,8 @@ export interface UseEntityTableOptions {
   defaultSortRules?: SortRule[];
   /** Seed the default column pin flags (e.g. a pinned-by-default Toggle column). */
   defaultSticky?: { left?: boolean; right?: boolean };
+  /** Seed a default filter applied before any user interaction (lit + clearable). */
+  defaultFilterGroups?: FilterPayload['groups'];
 }
 
 export interface EntityPaginationProps {
@@ -61,8 +63,9 @@ export function useEntityTable({
   defaultPageSize = 25,
   defaultSortRules,
   defaultSticky,
+  defaultFilterGroups,
 }: UseEntityTableOptions): UseEntityTableReturn {
-  const filter = useEntityFilter(key);
+  const filter = useEntityFilter(key, defaultFilterGroups);
   const sort = useEntitySort(key, defaultSortRules);
   const cols = useColumnConfig(columnDefs, defaultSticky);
 

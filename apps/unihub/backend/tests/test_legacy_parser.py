@@ -118,3 +118,31 @@ class TestImportCommand:
         first = (Acquisition.objects.count(), Item.objects.count())
         self._run(tmp_path, "--commit", "--wipe")
         assert (Acquisition.objects.count(), Item.objects.count()) == first
+
+
+# Iteration 17 (FR-029b): the 2025 sheet carries float-derived tax refunds with
+# more than 4 decimal places (e.g. -762.675402 JPY) on their own keyword row —
+# the importer must round to the CostFactor field's 4dp precision instead of
+# failing serializer validation.
+LONG_DECIMAL_FIXTURE = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>ItemJ</td><td>3740</td><td>JPY</td><td>ShopJ</td>
+<td>2025/10/05</td><td>單價：3740 JPY</td></tr>
+<tr><td>2</td><td>退稅</td><td>-762.675402</td><td>JPY</td><td></td><td></td><td></td></tr>
+</table>
+"""
+
+
+@pytest.mark.django_db
+def test_long_decimal_factor_rounds_to_4dp(tmp_path, auth_client):
+    from django.core.management import call_command
+
+    from inventory.models import Acquisition
+
+    path = tmp_path / "fixture.html"
+    path.write_text(LONG_DECIMAL_FIXTURE, encoding="utf-8")
+    call_command("import_legacy_csv", str(path), "--commit")
+    shop_j = Acquisition.objects.get(source="ShopJ")
+    refund = shop_j.cost_factors.exclude(type="accumulated").get()
+    assert float(refund.value) == pytest.approx(-762.6754)

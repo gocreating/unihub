@@ -261,3 +261,36 @@ class TestAcquisitions:
         _post(auth_client, ACQ, {"source": "B&H", "items": [{"name": "C"}]})
         sources = auth_client.get(f"{ACQ}sources/?q=ama").json()
         assert sources == ["Amazon"]
+
+
+@pytest.mark.django_db
+class TestIsEmptyOnDateFields:
+    """Iteration 17: is_empty on a datetime column must not 500 (the empty-
+    string leg of the lookup only applies to text fields)."""
+
+    def _filters(self, groups):
+        import urllib.parse
+
+        return urllib.parse.quote(json.dumps({"groups": groups}))
+
+    def test_obtained_is_empty_returns_pending_only(self, auth_client):
+        _post(auth_client, ACQ, {"source": "Dated", "obtained_at": "2026-01-04T00:00:00Z", "items": [{"name": "A"}]})
+        _post(auth_client, ACQ, {"source": "Pending", "items": [{"name": "B"}]})
+        qs = self._filters([{"logic": "and", "conditions": [{"attr": "obtained_at", "op": "is_empty", "val": ""}]}])
+        resp = auth_client.get(f"{ACQ}?filters={qs}")
+        assert resp.status_code == 200, resp.content
+        sources = [a["source"] for a in resp.json()["results"]]
+        assert sources == ["Pending"]
+
+    def test_ytd_or_empty_seeded_default_filter(self, auth_client):
+        _post(auth_client, ACQ, {"source": "Old", "obtained_at": "2024-03-01T00:00:00Z", "items": [{"name": "O"}]})
+        _post(auth_client, ACQ, {"source": "ThisYear", "obtained_at": "2026-02-01T00:00:00Z", "items": [{"name": "T"}]})
+        _post(auth_client, ACQ, {"source": "Pending", "items": [{"name": "P"}]})
+        qs = self._filters([
+            {"logic": "and", "conditions": [{"attr": "obtained_at", "op": "gte", "val": "2026-01-01"}]},
+            {"logic": "and", "conditions": [{"attr": "obtained_at", "op": "is_empty", "val": ""}]},
+        ])
+        resp = auth_client.get(f"{ACQ}?filters={qs}")
+        assert resp.status_code == 200, resp.content
+        sources = {a["source"] for a in resp.json()["results"]}
+        assert sources == {"ThisYear", "Pending"}

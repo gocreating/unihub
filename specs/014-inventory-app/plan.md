@@ -1,86 +1,69 @@
-# Implementation Plan: Inventory App — Iteration 16 (Toggle column, parameter editor polish, scenario organize redesign)
+# Implementation Plan: Inventory App — Iteration 17 (Catalog polish + 2025 import)
 
 **Branch**: `014-inventory-app` | **Date**: 2026-07-12 | **Spec**: [spec.md](spec.md)
 
-**Input**: spec.md — Session 2026-07-12 iteration 16; FR-003 (Toggle column), FR-011/FR-012 (Organize redesign, `organized` flag), FR-026 (parameter editor grid + definition deletion). Constitution v1.20.0.
+**Input**: spec.md — Session 2026-07-12 iteration 17; FR-003/FR-003a revisions (plurals, Name link removal, URL width cap, default YTD filter, page size 50), FR-029b (2025 append-import). Constitution v1.20.0.
 
 ## Summary
 
-1. **Catalog Toggle column** — the caret column becomes a real `ColumnDef` (`__caret`, label "Toggle") listed in the Columns dropdown and **pinned (sticky-left) in the default state**; `useEntityTable`/`useColumnConfig` gain a `defaultSticky` seed since the initial ColumnState hardcodes `stickyLeft:false`.
-2. **Parameter editor polish** — rows move onto the form-grid (fields fill the row, stack on narrow content width via `useContainerWidth`); the key dropdown gains a **delete affordance on user-defined definitions** (`optionRender` with a stop-propagation delete icon → count-confirm via the existing two-step delete API → definition queries invalidated).
-3. **Scenario Organize redesign** — detail page = name/description Card + Organize Card whose header "Add" button opens a **search modal** (server substring search; `<mark>`-highlighted matches; item-name links to `url`; members listed **disabled**). Body = AntD **Splitter** (left/right wide, top/bottom narrow via `useContainerWidth`): left = **unorganized** flat list (remove button), right = **organized tree** (existing drag logic). **Cross-pane drag both ways** via native HTML5 DnD bridging (below). Tree items are only removable by sending them back left.
-4. **Backend** — `ScenarioItem.organized` boolean (default false; migration 0013), `move` action gains an `organized` flag (organize = set true + container/index dense reorder among organized siblings; unorganize = false + container null + children re-parent to organized top level); serializer exposes `organized`; contracts regen.
+1. **Plurals** — the Item-cell count and the footer totals switch to ICU plural messages in en-US (`{count, plural, one {# item} other {# items}}`; footer pluralizes both acquisitions and items). zh-TW texts unchanged.
+2. **Name column** — drop the hyperlink; plain text (the derived Item column keeps the sole link).
+3. **URL width (defect)** — measure-what-you-render: the `url` column's measured width is capped to the 320px render cap (`min(dataWidths.url, 320)` fed to `widthForHeader`), and the ellipsised link gains a truncation-gated `OverflowTooltip` with the full URL.
+4. **Default YTD filter** — `useEntityFilter` gains a `defaultGroups` seed (mirroring `useEntitySort`'s `defaultRules`): initial active+pending state = the seed; the Filter button lights via the existing `isActive`. The Catalog seeds two OR-groups on `acquisition__obtained_at`: `gte <Jan 1 of current year>` OR `is_empty` (pending stays visible; acquisition-level field → tree mode preserved). Threaded through `useEntityTable` as `defaultFilterGroups`.
+5. **Page size 50** — `defaultPageSize: 50` on the Catalog's `useEntityTable` (options unchanged).
+6. **2025 import** — run `import_legacy_csv data/財產們/2025.html --commit` WITHOUT `--wipe` from the host (`DATABASE_URL=postgresql://unihub:unihub@localhost:5433/unihub`), then verify totals and spot-checks over the live API.
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.7, Python 3.12
+**Language/Version**: TypeScript 5.7 (backend untouched — no schema/API change; the importer is reused as-is)
 
-**Primary Dependencies**: AntD 5.29 (**`Splitter`** verified available); no new packages — cross-pane drag uses native HTML5 DnD, not dnd-kit.
+**Primary Dependencies**: react-intl ICU plural (already available); no new packages.
 
-**Storage**: PostgreSQL 16 — one migration (`ScenarioItem.organized`, default false; scenarios are currently empty post-re-import, so no backfill decisions).
+**Storage**: No migration. The 2025 import is a data operation only.
 
-**Testing**: pytest (move/organize semantics, children re-parent, serializer), RTL (editor grid/delete flow, detail page modal/panes/highlight, drop-handler units), Playwright (modal add → left pane; cross-pane drag via DragEvent dispatch; reload persistence).
+**Testing**: RTL first (plural texts, Name plain text, URL width cap + tooltip, seeded filter state + lit Filter button, page size 50); useEntityFilter hook specs for `defaultGroups` (seeded active/pending, clearable, apply-gate untouched); e2e updates (default-filtered footer, page-size 50, Name column, seeded Filter button lit). Import verified live (counts + spot checks), not unit-tested beyond the existing parser suite.
 
-**Target Platform / Project Type**: unihub dashboard SPA, monorepo.
+**Constraints**: The seeded filter value "Jan 1 of current year" is computed at page load (`dayjs().startOf('year').format('YYYY-MM-DD')`); RTL fixes the assertion via the same computation, not a hardcoded year. Existing RTL specs asserting "1 items" and e2e specs assuming 25/page or unfiltered defaults must be updated in the same change.
 
-**Performance Goals**: No new endpoints; search modal reuses `listItems` (+`totals` ignored); tree/pane recompute is render-time.
-
-**Constraints**: rc-tree's `onDrop` only fires for its own nodes — **external drops need manual handlers**: left items are `draggable` spans (line id via ref + dataTransfer); tree node **titles** (`titleRender`) and the tree wrapper carry `onDragOver`/`onDrop` for left→right (title = nest, wrapper background = top-level append); the left pane wrapper accepts drops of tree drags (tracked via Tree `onDragStart` ref) for right→left. Internal tree drags keep the existing rc-tree path.
-
-**Scale/Scope**: EntityToolbar sticky seed + catalog caret def; ParameterRowsEditor rework; scenarios/detail.tsx full rewrite + `organizeTree.ts` extension (`organized` filter); new `HighlightText` helper (or inline `<mark>` splitter); backend migration + move rework; locales ×2; RTL/pytest/e2e updates.
+**Scale/Scope**: Locale edits ×2; catalog page (name/url colDefs, defaultPageSize, defaultFilterGroups seed); `useEntityFilter` + `useEntityTable` seed plumbing; RTL/e2e updates; one host-side import run.
 
 ## Constitution Check
 
-*GATE evaluated against v1.20.0 — pre-Phase-0 PASS; re-check post-Phase-1 PASS.*
+*GATE vs v1.20.0 — PASS (pre-Phase-0 and post-Phase-1).*
 
 | Principle | Gate | Status |
 |---|---|---|
-| I / data_io | `organized` is a schema change → scenarioitem descriptor auto-fields pick it up (`auto_system_fields`), verified by the io round-trip test in the same change. | PASS |
-| IV Contracts | Serializer/move changes → OpenAPI + types regen before frontend consumption. | PASS (task-ordered) |
-| V TDD | Backend move/organize tests first; RTL first for editor + detail page; drop handlers unit-tested as pure functions where possible. | PASS |
-| VI v1.20.0 | Parameter rows adopt the form grid (fixing a live violation); tooltips stay truncation-gated; EmptyValue everywhere; search modal keeps Cancel-left/primary-right + dirty guard n/a (search-only modal, closable). | PASS |
-| VII PageTable | Catalog layout unchanged; Toggle column integrates into the existing column-config mechanics (pin = the standard sticky-left flag, seeded true). | PASS |
-| VIII i18n | New keys (Toggle label, organize panes, search modal, delete-definition confirm) in BOTH locales. | PASS |
-| XII Toolbar | `defaultSticky` seed extends `useColumnConfig` without changing apply-gate semantics; PageTable remount key already includes sticky state. | PASS |
-
-No violations → Complexity Tracking empty.
+| VI UI rules | URL tooltip becomes truncation-gated (fixing an omission); placeholders unchanged. | PASS |
+| VII PageTable/footer | Footer layout untouched; only the total text pluralizes. | PASS |
+| VIII i18n | Plural forms land in BOTH locales in the same commit (zh-TW re-uses existing strings — no plural inflection). | PASS |
+| XII Toolbar | `defaultGroups` extends the filter hook exactly like `defaultRules` extended sort (apply-gate + isActive semantics unchanged). | PASS |
+| V TDD | Hook + page RTL specs precede implementation; e2e updated with the behavior change. | PASS |
 
 ## Project Structure
 
 ```text
-apps/unihub/backend/
-├── inventory/migrations/0013_scenarioitem_organized.py
-├── inventory/models.py / serializers.py / views.py   # organized field; move(organized) semantics; send-back re-parent
-└── tests/test_inventory_scenarios.py                 # organize/unorganize/move/re-parent coverage
-
 apps/unihub/frontend/src/
-├── components/EntityToolbar/{useEntityTable,hooks/useColumnConfig}.ts  # defaultSticky seed
-├── components/ParameterRowsEditor/index.tsx           # form-grid rows + definition delete affordance
-├── pages/inventory/catalog/index.tsx                  # __caret ColumnDef ("Toggle", pinned default; hidden cells in flat mode)
-├── pages/inventory/scenarios/detail.tsx               # rewrite: info Card + Organize Card (modal, Splitter, panes, DnD bridge)
-├── pages/inventory/scenarios/organizeTree.ts          # organized-aware childrenOf/computeDropTarget + pane-drop helpers
-├── services/unihub-backend/inventory.ts               # organized on ScenarioItem; move(organized)
-└── locales/{en-US,zh-TW}/pages.ts
-
-apps/unihub/frontend/e2e/inventory-scenario.spec.ts    # modal add, cross-pane drag, persistence
+├── components/EntityToolbar/hooks/useEntityFilter.ts   # defaultGroups seed (+ test)
+├── components/EntityToolbar/useEntityTable.ts          # defaultFilterGroups pass-through
+├── pages/inventory/catalog/index.tsx                   # name plain text; url cap+tooltip; seeds (filter, pageSize 50)
+├── locales/{en-US,zh-TW}/pages.ts                      # ICU plural itemCount + footerTotals
+apps/unihub/frontend/e2e/inventory-catalog.spec.ts      # updated defaults
 ```
 
-**Structure Decision**: Existing layout; sticky-seed goes into the shared toolbar hooks so other pages can pin defaults later.
+**Structure Decision**: Existing layout; the filter seed lives in the shared toolbar hooks so other pages can ship default filters later.
 
-## Phase 0 — Research (research.md R16.1–R16.5)
+## Phase 0 — Research (research.md R17.1–R17.3)
 
-- **R16.1 Splitter**: available in installed antd 5.29.3; orientation switches on `useContainerWidth` (content width, not viewport).
-- **R16.2 Cross-pane DnD**: rc-tree ignores external drags → native HTML5 bridge (draggable left rows; drop handlers on tree node titles + wrapper; Tree `onDragStart` ref enables right→left drops). No new dependency.
-- **R16.3 Pin-by-default**: `useColumnConfig` hardcodes `stickyLeft:false`; extend with an initial-sticky seed passed through `useEntityTable` (`defaultSticky: {left: true}` for the Catalog).
-- **R16.4 Definition delete UX**: reuse the two-step core API (`DELETE` → 400 with `affected_entity_count` → `?confirm=true`) surfaced as `Modal.confirm` (okType danger, count in body) from the key dropdown's `optionRender`.
-- **R16.5 organized semantics**: unorganized pane sorted by `created_at`; tree = `organized=true` lines only (`childrenOf` filters); `move {organized:false}` clears container and re-parents children to organized top level; adds default `organized=false`.
+- **R17.1 URL width root cause (CONFIRMED)**: cell renders `maxWidth: 320` ellipsis; `displayText('url')` returns the raw URL so `measureTextWidth` sizes the column to the full string. Fix at the width source: cap the url entry fed to `widthForHeader`. Tooltip: wrap the link content in `OverflowTooltip` (measures its own span; title only when truncated).
+- **R17.2 Filter seeding**: `useEntityFilter` currently initializes empty. Mirror `useEntitySort`: accept `defaultGroups`, seed active+pending, keep clear/apply semantics (clearing shows everything — no reset-to-seed requirement in spec). `isActive` already lights the button for non-empty active groups.
+- **R17.3 Import scope**: 2025.html exists alongside 2026.html; append-import (no `--wipe`). The default YTD filter means 2025 rows won't show on the default Catalog view — expected and intended (clear/edit the filter to see them). e2e specs that raise the page size to find multi-item acquisitions keep working against the 2026 YTD subset.
 
 ## Phase 1 — Design & Contracts
 
-- **Contracts**: ScenarioItem gains `organized`; `move` body `{container_id, index, organized}`; regen OpenAPI + `api-types.ts`; delta appended to contracts/inventory-api.md.
-- **data-model.md**: iteration-16 note (ScenarioItem.organized).
-- **Agent context**: CLAUDE.md SPECKIT block → iteration 16.
+- **Contracts**: none (no API change).
+- **data-model.md**: none (no schema change).
+- **Agent context**: CLAUDE.md SPECKIT block → iteration 17.
 
 ## Complexity Tracking
 
-*(no constitution violations — intentionally empty)*
+*(no violations — empty)*

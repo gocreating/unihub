@@ -1,32 +1,23 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.19.0 → 1.20.0 (minor — Principle VI gains/redefines three UI
-  rules from user feedback, 2026-07-12: (1) the empty-content placeholder is
-  REDEFINED from the em-dash "—" to a SHORT dimmed disabled non-selectable "-"
-  via a shared <EmptyValue /> component — the em-dash read like real content;
-  applies also to disabled-control placeholder slots (e.g. currency selector at
-  amount 0/empty) and composed strings (date ranges); (2) NEW "Dropdowns fit
-  the viewport" rule — panels/overlays MUST max-height + scroll internally,
-  never overflow vertically (Catalog Columns panel overflowed after dynamic
-  parameter columns); (3) NEW "Truncation-gated tooltips" rule — same-content
-  tooltips MUST appear only when the text is actually truncated, via the shared
-  <OverflowTooltip> component (unconditional badge tooltips were redundant).)
+Version change: 1.20.0 → 1.21.0 (minor — Principle VI gains one NEW UI rule
+  from user feedback, 2026-07-12: "Panel-header actions (responsive kebab)" —
+  a panel's action buttons sit on the RIGHT of the panel header; advanced /
+  destructive actions (e.g. Delete) fold into a kebab (⋯) menu by default;
+  on a narrow area the otherwise-visible buttons fold into the kebab as width
+  demands; the kebab dropdown right-aligns to its trigger and opens leftward.)
 Modified principles:
-  - VI. UI/UX Reference: ov-fleet — "Empty cell display" redefined (short "-",
-    EmptyValue component); added "Dropdowns fit the viewport"; added
-    "Truncation-gated tooltips".
-  - IX. Base Currency Net Worth Valuation — placeholder markup reference
-    updated to <EmptyValue />.
+  - VI. UI/UX Reference: ov-fleet — added "Panel-header actions (responsive
+    kebab)".
 Added sections: none
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed (generic gate)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: none — enforced in shared components (EmptyValue,
-  OverflowTooltip, EntityToolbar panels) and swept across all render sites in
-  the same change.
+Follow-up TODOs: none — applied to the live panel headers (scenario detail,
+  acquisition edit) in the same iteration (spec FR updates).
 -->
 
 # UniHub Constitution
@@ -239,6 +230,17 @@ reference implementation to follow.
   overflow (scrollWidth vs clientWidth) and attaches the tooltip conditionally.
   Tooltips that add information beyond the visible text are exempt.
   Unconditional same-content tooltips are a constitution violation.
+- **Panel-header actions (responsive kebab)**: A panel's (Card's) action
+  buttons MUST sit on the **right-hand side of the panel header** (the AntD
+  Card `extra` slot). Which actions are directly visible is context-dependent,
+  with two non-negotiable rules: (1) **advanced/destructive actions (e.g.
+  Delete) MUST fold into a kebab (⋯) menu by default** — never a bare
+  always-visible destructive button in the header; (2) on a **narrow area**,
+  otherwise-visible buttons MUST progressively fold into the kebab menu as the
+  available width demands (judged by content width, per the form-grid rule).
+  The kebab trigger is the right-most control; its dropdown MUST right-align
+  to the trigger and open toward the left so it never overflows the panel or
+  viewport edge.
 - **Foreign-key value display**: Any table cell or detail-view field that renders
   a value sourced from a related/foreign record (e.g., a currency code that
   resolves to a Currency entity, a category resolved from a Categories table)
@@ -294,7 +296,10 @@ dismissed accidentally, whereas a page cannot. A consistent, gap-free responsive
 form grid (with content-width stacking) removes a recurring class of layout bugs —
 half-filled rows, fields that overflow on narrow content areas, and inconsistent
 field widths between forms — and right-aligned number inputs make numeric columns
-readable and comparable at a glance.
+readable and comparable at a glance. Right-aligned panel-header actions with a
+default-folded kebab keep destructive controls out of accidental reach, keep
+panel headers scannable, and give narrow layouts a graceful degradation path
+instead of wrapped or clipped button rows.
 
 ### VII. PageTable Layout — NON-NEGOTIABLE
 
@@ -702,4 +707,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.20.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-12
+**Version**: 1.21.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-12

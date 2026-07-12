@@ -284,3 +284,76 @@ test('iteration 19: caret collapse, modal add-button tooltip, narrow panel fold'
   await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();
   await page.waitForURL(/\/inventory\/scenarios$/, { timeout: 10_000 });
 });
+
+test('iteration 20: tree drag keeps rows in place (no reflow jitter)', async ({ page }) => {
+  await page.goto('/inventory/scenarios');
+  await page.waitForSelector('.ant-table-tbody', { timeout: 10_000 });
+  const name = `E2E Jitter ${Date.now()}`;
+  await page.locator('button').filter({ hasText: /New/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.locator('.ant-modal input[id$="name"]').fill(name);
+  await page.locator('.ant-modal button', { hasText: /Save/ }).click();
+  await page.waitForTimeout(500);
+  await page.locator('.ant-table-tbody a', { hasText: name }).first().click();
+  await page.waitForSelector('.ant-splitter', { timeout: 10_000 });
+
+  // Seed: two items, both organized (one nested).
+  await page.locator('.ant-card', { hasText: 'Organize' }).first()
+    .locator('button').filter({ hasText: /^Add$/ }).first().click();
+  const modal = page.locator('.ant-modal', { hasText: 'Add items' }).first();
+  await modal.locator('input').first().fill('a');
+  const enabledAdds = modal.locator('.ant-list-item button:not([disabled])').filter({ hasText: /Add/ });
+  await expect(enabledAdds.first()).toBeVisible({ timeout: 10_000 });
+  await enabledAdds.first().click();
+  await page.waitForTimeout(500);
+  await enabledAdds.first().click();
+  await page.waitForTimeout(500);
+  await modal.locator('.ant-modal-close').click();
+  await expect(modal).toBeHidden();
+  await page.waitForTimeout(300);
+
+  const flatPane = page.getByTestId('unorganized-pane');
+  const orgPane = page.getByTestId('organized-pane');
+  const orgBox = (await orgPane.boundingBox())!;
+  await mouseDrag(page, flatPane.locator('[data-testid^="flat-row-"]').first(),
+    orgBox.x + orgBox.width / 2, orgBox.y + 40);
+  const firstRow = orgPane.locator('[data-testid^="org-row-"]').first();
+  const rBox = (await firstRow.boundingBox())!;
+  await mouseDrag(page, flatPane.locator('[data-testid^="flat-row-"]').first(),
+    rBox.x + 120, rBox.y + rBox.height * 0.8);
+  await expect(orgPane.locator('[data-testid^="org-row-"]')).toHaveCount(2, { timeout: 10_000 });
+
+  // Start dragging the CONTAINER row (has a nested child) — mid-drag, both
+  // rows must remain rendered (dimmed), no list reflow.
+  const container = orgPane.locator('[data-testid^="org-row-"]').first();
+  const cBox = (await container.boundingBox())!;
+  await page.mouse.move(cBox.x + 60, cBox.y + cBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cBox.x + 60, cBox.y + cBox.height / 2 + 30, { steps: 6 });
+  await expect(orgPane.locator('[data-testid^="org-row-"]')).toHaveCount(2);
+  const opacity = await container.evaluate((el) => (el as HTMLElement).style.opacity);
+  expect(Number(opacity)).toBeLessThan(1);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  await expect(orgPane.locator('[data-testid^="org-row-"]')).toHaveCount(2);
+
+  // Modal tooltip on a truncated long-name result.
+  await page.locator('.ant-card', { hasText: 'Organize' }).first()
+    .locator('button').filter({ hasText: /^Add$/ }).first().click();
+  await modal.locator('input').first().fill('超轻');
+  const title = modal.locator('.ant-list-item-meta-title span').first();
+  await expect(title).toBeVisible({ timeout: 10_000 });
+  await title.hover();
+  await page.waitForTimeout(600);
+  // Tooltip appears only when the title actually truncates — with these long
+  // taobao names in a 520px modal it always does.
+  await expect(page.locator('.ant-tooltip:not(.ant-tooltip-hidden)')).toBeVisible();
+
+  // Cleanup.
+  await page.keyboard.press('Escape');
+  await page.getByLabel('scenario-actions').click();
+  await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
+  await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();
+  await page.waitForURL(/\/inventory\/scenarios$/, { timeout: 10_000 });
+});

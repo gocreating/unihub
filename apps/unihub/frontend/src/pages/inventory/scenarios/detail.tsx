@@ -181,11 +181,13 @@ function OrgRow({
   row,
   hasChildren,
   collapsed,
+  dimmed,
   onToggle,
 }: {
   row: FlatRow;
   hasChildren: boolean;
   collapsed: boolean;
+  dimmed?: boolean;
   onToggle: () => void;
 }) {
   const drag = useDraggable({ id: `tree-${row.line.id}` });
@@ -207,7 +209,7 @@ function OrgRow({
         paddingLeft: row.depth * INDENT,
         borderBottom: '1px solid rgba(5,5,5,0.06)',
         cursor: 'grab',
-        opacity: drag.isDragging ? 0.4 : 1,
+        opacity: drag.isDragging || dimmed ? 0.4 : 1,
         touchAction: 'none',
       }}
     >
@@ -267,14 +269,26 @@ export function ScenarioDetailPage() {
   const rows = useMemo(() => flattenOrganized(lines), [lines]);
   const lineById = useMemo(() => new Map(lines.map((l) => [l.id, l])), [lines]);
 
-  // While dragging a tree row, its subtree collapses away (it travels along).
-  const renderRows = useMemo(
+  // Projection/cycle math operates on the subtree-EXCLUDED working list, but
+  // RENDERING keeps every row in place during tree drags (iteration 20 — the
+  // list must never reflow/jitter; the active subtree just dims).
+  const working = useMemo(
     () => workingRows(rows, drag?.from === 'tree' ? drag.lineId : null),
     [rows, drag],
   );
+  const activeSubtreeIds = useMemo(() => {
+    if (drag?.from !== 'tree') return new Set<string>();
+    const kept = new Set(working.map((r) => r.line.id));
+    return new Set(rows.filter((r) => !kept.has(r.line.id)).map((r) => r.line.id));
+  }, [rows, working, drag]);
   // Caret collapse state (iteration 19) — rendered rows hide collapsed subtrees.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
-  const shownRows = useMemo(() => visibleRows(renderRows, collapsedIds), [renderRows, collapsedIds]);
+  const shownRows = useMemo(() => visibleRows(rows, collapsedIds), [rows, collapsedIds]);
+  // Valid drop targets in visible coordinates (active subtree excluded).
+  const mappingVisible = useMemo(
+    () => shownRows.filter((r) => !activeSubtreeIds.has(r.line.id)),
+    [shownRows, activeSubtreeIds],
+  );
   const containerIds = useMemo(
     () => new Set(rows.map((r) => r.parentId).filter((v): v is string => v !== null)),
     [rows],
@@ -384,21 +398,29 @@ export function ScenarioDetailPage() {
     setOverFlat(false);
     // The pointer targets VISIBLE rows; map the slot back to WORKING
     // coordinates (a slot after a collapsed container lands after its whole
-    // subtree — iteration 19).
+    // subtree — iteration 19). Slots inside the dragged subtree are invalid
+    // (iteration 20 — the subtree stays rendered but cannot host itself).
     let visGap: number;
     let workingGap: number;
     if (overId === 'org-end') {
       visGap = shownRows.length;
-      workingGap = renderRows.length;
+      workingGap = working.length;
     } else if (overId.startsWith('orgrow-')) {
-      const visIdx = shownRows.findIndex((r) => r.line.id === lineIdOf(overId));
-      if (visIdx === -1) return;
+      const overLineId = lineIdOf(overId);
+      if (activeSubtreeIds.has(overLineId)) {
+        setIndicator(null);
+        projRef.current = null;
+        return;
+      }
+      const shownIdx = shownRows.findIndex((r) => r.line.id === overLineId);
+      const mapIdx = mappingVisible.findIndex((r) => r.line.id === overLineId);
+      if (shownIdx === -1 || mapIdx === -1) return;
       const translated = active.rect.current.translated;
       const activeCenter = translated ? translated.top + translated.height / 2 : 0;
       const overCenter = over.rect.top + over.rect.height / 2;
       const after = activeCenter > overCenter;
-      visGap = after ? visIdx + 1 : visIdx;
-      workingGap = gapFromVisible(renderRows, shownRows, visIdx, after);
+      visGap = after ? shownIdx + 1 : shownIdx;
+      workingGap = gapFromVisible(working, mappingVisible, mapIdx, after);
     } else {
       return;
     }
@@ -425,6 +447,7 @@ export function ScenarioDetailPage() {
       }
       return;
     }
+    if (overId.startsWith('orgrow-') && activeSubtreeIds.has(lineIdOf(overId))) return;
     if ((overId === 'org-end' || overId.startsWith('orgrow-')) && proj) {
       const payload = projectDrop(
         rows,
@@ -467,15 +490,29 @@ export function ScenarioDetailPage() {
   const modalItemTitle = (item: Item): ReactNode => {
     const display = item.alias_name || item.name;
     const highlighted = <HighlightText text={display} query={search} />;
-    let node: ReactNode = item.url ? (
+    const linked: ReactNode = item.url ? (
       <a href={item.url} target="_blank" rel="noopener noreferrer">
         {highlighted}
       </a>
     ) : (
-      <span>{highlighted}</span>
+      highlighted
     );
-    if (item.alias_name) node = <Tooltip title={item.name}>{node}</Tooltip>;
-    return <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node}</div>;
+    if (item.alias_name) {
+      // Informational tooltip (FR-030) — reveals the hidden original name.
+      return (
+        <Tooltip title={item.name}>
+          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {linked}
+          </div>
+        </Tooltip>
+      );
+    }
+    // Truncation-gated tooltip (constitution VI, iteration 20).
+    return (
+      <OverflowTooltip title={display} style={{ maxWidth: '100%' }}>
+        {linked}
+      </OverflowTooltip>
+    );
   };
   // Acquisition context on results (iteration 19): source + date summary.
   const modalItemDescription = (item: Item): ReactNode => {
@@ -483,17 +520,23 @@ export function ScenarioDetailPage() {
       ? acquisitionSummaryLines(item.acquisition, untitled)
       : null;
     if (!item.spec && !summary) return undefined;
+    const contextLine = summary
+      ? `${summary.primary}${summary.secondary ? ` · ${summary.secondary}` : ''}`
+      : '';
     return (
       <div style={{ overflow: 'hidden' }}>
         {item.spec ? (
-          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {item.spec}
+          <div>
+            <OverflowTooltip title={item.spec} style={{ maxWidth: '100%' }}>
+              {item.spec}
+            </OverflowTooltip>
           </div>
         ) : null}
-        {summary ? (
-          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {summary.primary}
-            {summary.secondary ? ` · ${summary.secondary}` : ''}
+        {contextLine ? (
+          <div>
+            <OverflowTooltip title={contextLine} style={{ maxWidth: '100%' }}>
+              {contextLine}
+            </OverflowTooltip>
           </div>
         ) : null}
       </div>
@@ -607,6 +650,7 @@ export function ScenarioDetailPage() {
                           row={row}
                           hasChildren={containerIds.has(row.line.id)}
                           collapsed={collapsedIds.has(row.line.id)}
+                          dimmed={activeSubtreeIds.has(row.line.id)}
                           onToggle={() => toggleCollapsed(row.line.id)}
                         />
                       </div>

@@ -146,3 +146,101 @@ def test_long_decimal_factor_rounds_to_4dp(tmp_path, auth_client):
     shop_j = Acquisition.objects.get(source="ShopJ")
     refund = shop_j.cost_factors.exclude(type="accumulated").get()
     assert float(refund.value) == pytest.approx(-762.6754)
+
+
+# Iteration 20 (FR-029d): a rowspan-carried 項目 row must NOT mint a new item —
+# its own 備註 content merges into the current item's spec (the LG 24MP68VQ-P
+# ×4 duplication regression).
+CONTINUATION_FIXTURE = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td rowspan="3">LG Monitor</td><td rowspan="3">6099</td>
+<td rowspan="3">TWD</td><td rowspan="3">ShopF</td><td rowspan="3">2016/11/11</td>
+<td>2019/03/04 嚴重閃爍故障</td></tr>
+<tr><td>2</td><td>2019/03/12 報修，維修單號: RNP123</td></tr>
+<tr><td>3</td><td>2019/03/15 更換面板後送回</td></tr>
+<tr><td>4</td><td>OtherThing</td><td>100</td><td>TWD</td><td>ShopG</td>
+<td>2016/12/01</td><td></td></tr>
+</table>
+"""
+
+
+@pytest.fixture()
+def continuation_acqs(parser, tmp_path):
+    path = tmp_path / "cont.html"
+    path.write_text(CONTINUATION_FIXTURE, encoding="utf-8")
+    return parser.build_html(str(path))
+
+
+def test_carried_item_rows_merge_remarks_into_spec(continuation_acqs):
+    shop_f = next(a for a in continuation_acqs if a.source == "ShopF")
+    assert len(shop_f.items) == 1
+    item = shop_f.items[0]
+    assert item.name == "LG Monitor"
+    # Continuation-row 備註 lines land in spec, newline-joined, sheet order.
+    spec = item.fields.get("spec", "")
+    assert "2019/03/12 報修，維修單號: RNP123" in spec
+    assert "2019/03/15 更換面板後送回" in spec
+    assert spec.index("2019/03/12") < spec.index("2019/03/15")
+    # The own-row bare line keeps the iteration-15 rule (remark).
+    assert "2019/03/04 嚴重閃爍故障" in item.fields.get("remark", "")
+    # The following acquisition is untouched.
+    shop_g = next(a for a in continuation_acqs if a.source == "ShopG")
+    assert len(shop_g.items) == 1
+
+
+def test_date_rules_locked(parser):
+    # Single date → obtained only; open range → requested only; same-day
+    # range → both; ??~date → obtained only.
+    assert parser.parse_date("2026/07/10")[:2] == (None, "2026-07-10")
+    assert parser.parse_date("2026/07/10~")[:2] == ("2026-07-10", None)
+    assert parser.parse_date("2026/07/09~2026/07/09")[:2] == ("2026-07-09", "2026-07-09")
+    req, obt = parser.parse_date("??~2016/11/03")[:2]
+    assert obt == "2016-11-03"
+    assert req is None  # garbage left side never becomes a date
+
+
+# Iteration 20 (FR-029d, sweep-surfaced): no 備註 content may be lost.
+def test_colonless_price_with_qty_expression(parser):
+    fields, _ = parser.parse_remark("單價 179 * 2 件")
+    assert fields.get("quantity") == 2
+    assert fields.get("sku_price") == 179.0  # the price part must not be lost
+
+
+def test_variant_quantity_line_survives_in_remark(parser):
+    fields, flags = parser.parse_remark("數量：深藍x2，灰色x1")
+    assert any(f.startswith("variant_qty") for f in flags)
+    # The descriptive text persists (remark) — flags alone are not storage.
+    assert "深藍x2，灰色x1" in fields.get("remark", "")
+
+
+def test_prose_around_matched_keys_survives(parser):
+    # A line with prose AROUND resolved keys keeps the full line in remark
+    # (extraction is a bonus, never a licence to drop context — FR-029d).
+    fields, _ = parser.parse_remark("大傘，可兩人撐，原價850，搭配活動折價125")
+    assert fields.get("sku_price") == 850.0
+    assert "大傘，可兩人撐" in fields.get("remark", "")
+    assert "搭配活動折價125" in fields.get("remark", "")
+    # A fully-consumed key:value line still leaves NO residue.
+    clean, _ = parser.parse_remark("尺寸：L")
+    assert "remark" not in clean
+
+
+def test_factor_amounts_with_currency_adornments(parser, tmp_path):
+    # 退稅-style factor rows carry their amount in 備註 with unicode minus /
+    # currency symbols / words — the amount must survive into the factor.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>ItemK</td><td>1500</td><td>JPY</td><td>ShopK</td>
+<td>2026/01/05</td><td>單價：1500 JPY</td></tr>
+<tr><td>2</td><td>退稅</td><td></td><td></td><td></td><td></td><td>−￥1,450</td></tr>
+<tr><td>3</td><td>折價</td><td></td><td></td><td></td><td></td><td>-735yen</td></tr>
+</table>
+"""
+    path = tmp_path / "factors.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    values = {cf.type: (cf.value, cf.currency) for cf in acq.cost_factors if cf.type != "accumulated"}
+    assert values["tax_refund"] == (-1450.0, "JPY")
+    assert values["discount"] == (-735.0, "JPY")

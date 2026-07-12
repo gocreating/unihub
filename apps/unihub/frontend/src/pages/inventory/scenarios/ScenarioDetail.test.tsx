@@ -261,6 +261,27 @@ describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes
     expect(within(camRow).queryByLabelText('toggle-children')).toBeNull();
   });
 
+  // SD20-01 (FR-011): modal result titles carry truncation-gated tooltips.
+  it('shows a gated tooltip on a truncated modal result title', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    const modal = (await screen.findByText('Add items')).closest('.ant-modal') as HTMLElement;
+    fireEvent.change(within(modal).getByPlaceholderText('Search items…'), {
+      target: { value: 'an' },
+    });
+    const lantern = await within(modal).findByText(
+      (_, el) => el?.tagName === 'A' && el.textContent === 'Lantern',
+    );
+    // The measuring span wraps the link; force an overflow, then hover.
+    const span = lantern.closest('span')!;
+    Object.defineProperty(span, 'scrollWidth', { value: 300, configurable: true });
+    Object.defineProperty(span, 'clientWidth', { value: 100, configurable: true });
+    fireEvent.mouseEnter(span);
+    const tooltips = await screen.findAllByRole('tooltip');
+    expect(tooltips.some((el) => el.textContent === 'Lantern')).toBe(true);
+  });
+
   // SD19-02 (FR-011): truncation-gated tooltips via ItemName truncate mode —
   // the aliased row's tooltip reveals the original name.
   it('shows the original name tooltip on an aliased organized row', async () => {

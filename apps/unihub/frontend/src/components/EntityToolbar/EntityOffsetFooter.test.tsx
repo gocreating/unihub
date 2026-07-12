@@ -24,6 +24,18 @@ describe('EntityOffsetFooter', () => {
   });
 
   // O-02: zero total
+  // O-02b (constitution v1.22.0): singular counts never render a plural noun.
+  it('pluralizes correctly: "1 record", "2 records"', () => {
+    const { rerender } = render(
+      <EntityOffsetFooter total={1} pageSize={25} current={1} onChange={vi.fn()} />,
+      { wrapper },
+    );
+    expect(screen.getByText('1 record')).toBeInTheDocument();
+    expect(screen.queryByText('1 records')).toBeNull();
+    rerender(<EntityOffsetFooter total={2} pageSize={25} current={1} onChange={vi.fn()} />);
+    expect(screen.getByText('2 records')).toBeInTheDocument();
+  });
+
   it('displays 0 records when total is 0', () => {
     render(
       <EntityOffsetFooter total={0} pageSize={25} current={1} onChange={vi.fn()} />,

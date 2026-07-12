@@ -47,6 +47,14 @@ def norm_num(s: str) -> float | None:
         return None
 
 
+def extract_amount(s: str) -> float | None:
+    """Signed amount from currency-adorned text (e.g. "−￥1,450", "-735yen")."""
+    cleaned = s.strip().replace(",", "").replace("，", "").replace("−", "-")
+    cleaned = cleaned.replace("¥", "").replace("￥", "").replace("$", "")
+    m = re.search(r"-?\d+(?:\.\d+)?", cleaned)
+    return float(m.group(0)) if m else None
+
+
 def parse_currency(text: str) -> str | None:
     for tok, code in CURRENCY_TOKENS.items():
         if tok in text:
@@ -63,7 +71,8 @@ def parse_date(cell: str) -> tuple[str | None, str | None, list[str]]:
 
     def iso(d: str) -> str | None:
         d = d.strip().replace("/", "-")
-        return d or None
+        # Garbage tokens (e.g. "??") never become dates.
+        return d if d and any(ch.isdigit() for ch in d) else None
 
     if "~" in cell:
         left, right = (cell.split("~", 1) + [""])[:2]
@@ -78,7 +87,7 @@ def parse_date(cell: str) -> tuple[str | None, str | None, list[str]]:
 RE_SIZE = re.compile(r"(?:尺寸|[Ss]ize)[:：]\s*(.+)")
 RE_SPEC = re.compile(r"規格[:：]\s*(.+)")
 RE_COLOR = re.compile(r"(?:顏色|款式)[:：]\s*(.+)")
-RE_PRICE = re.compile(r"(?:原價|單價)[:：]\s*([\d.,]+)\s*([A-Za-z]+|元|円|¥|￥)?")
+RE_PRICE = re.compile(r"(?:原價|單價)[:：]?\s*([\d.,]+)\s*([A-Za-z]+|元|円|¥|￥)?")
 RE_WEIGHT = re.compile(r"(?:重量|淨重)[:：]\s*([\d.]+)\s*(g|kg|克)?")
 RE_LENGTH = re.compile(r"長度[:：]\s*([\d.]+)\s*(mm|cm|m)?")
 RE_VOLUME = re.compile(r"容量[:：]\s*([\d.]+)\s*(mL|ml|L|毫升|公升)")
@@ -107,10 +116,12 @@ def parse_remark(remark: str) -> tuple[dict, list[str]]:
         if not line:
             continue
         matched = False
+        spans: list[tuple[int, int]] = []
 
         if m := RE_URL_KEY.search(line):
             fields.setdefault("url", m.group(1).strip())
             matched = True
+            spans.append(m.span())
         elif m := RE_SHIPPING.match(line):
             value = norm_num(m.group(2))
             if value is not None:
@@ -124,51 +135,74 @@ def parse_remark(remark: str) -> tuple[dict, list[str]]:
                     currency = "RMB"
                 fields.setdefault("_shipping", []).append({"value": value, "currency": currency})
                 matched = True
+            spans.append(m.span())
 
         if m := RE_SIZE.search(line):
             fields["size"] = m.group(1).strip()
             matched = True
+            spans.append(m.span())
         if m := RE_SPEC.search(line):
             fields["spec"] = m.group(1).strip()
             matched = True
+            spans.append(m.span())
         if m := RE_COLOR.search(line):
             fields.setdefault("color", m.group(1).strip())
             matched = True
+            spans.append(m.span())
         if m := RE_PRICE.search(line):
             fields["sku_price"] = norm_num(m.group(1))
             cur = parse_currency(line) or (m.group(2) or "").upper() or None
             if cur:
                 fields["sku_price_currency"] = CURRENCY_TOKENS.get(cur, cur)
             matched = True
+            spans.append(m.span())
         if m := RE_WEIGHT.search(line):
             fields["weight"] = {"value": m.group(1), "unit": m.group(2) or "g"}
             matched = True
+            spans.append(m.span())
         if m := RE_LENGTH.search(line):
             fields["length"] = {"value": m.group(1), "unit": m.group(2) or "m"}
             matched = True
+            spans.append(m.span())
         if m := RE_VOLUME.search(line):
             unit = {"ml": "mL", "毫升": "mL", "公升": "L"}.get(m.group(2), m.group(2))
             fields["volume"] = {"value": m.group(1), "unit": unit}
             matched = True
+            spans.append(m.span())
         if m := RE_DIMS.search(line):
             unit = m.group(4) or "cm"
             fields["length"] = {"value": m.group(1), "unit": unit}
             fields["width"] = {"value": m.group(2), "unit": unit}
             fields["height"] = {"value": m.group(3), "unit": unit}
             matched = True
-        if RE_VARIANT.search(line):
+            spans.append(m.span())
+        if mv := RE_VARIANT.search(line):
             flags.append(f"variant_qty:{line}")
             fields.setdefault("quantity", 1)
             matched = True
+            spans.append(mv.span())
         elif m := RE_QTY.search(line):
             fields["quantity"] = int(m.group(1))
             matched = True
+            spans.append(m.span())
         elif m := RE_QTY_EXPR.search(line):
             fields["quantity"] = int(m.group(1))
             matched = True
+            spans.append(m.span())
 
         if not matched:
             residue.append(line)
+        else:
+            # No-data-loss (FR-029d): if meaningful content remains OUTSIDE
+            # the matched key/value spans, keep the WHOLE line as remark —
+            # extraction must never drop surrounding prose.
+            blanked = list(line)
+            for start, end in spans:
+                for i in range(start, end):
+                    blanked[i] = " "
+            leftover = "".join(blanked)
+            if re.search(r"[\u4e00-\u9fff]{2,}|[A-Za-z]{2,}|\d", leftover):
+                residue.append(line)
 
     if residue:
         fields["remark"] = " / ".join(residue)
@@ -195,6 +229,7 @@ class Acquisition:
     source: str
     request_time: str | None
     obtained_at: str | None
+    remark: str = ""
     items: list[Item] = field(default_factory=list)
     cost_factors: list[CostFactor] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
@@ -233,6 +268,17 @@ def build_from_rows(rows: list[tuple[str, str, str, str, str, str, str]]) -> lis
         # location/date context; carried cells provide values (e.g. a merged
         # 購買日期 shared across acquisitions) without splitting groups.
         has_ctx = rest[0] if rest else bool(location or date)
+        own_name = rest[1] if len(rest) > 1 else True
+
+        # A rowspan-carried 項目 row is NOT a new item (FR-029d): its own 備註
+        # content belongs to the CURRENT item — merged into spec, sheet order.
+        if not own_name and not has_ctx:
+            if acquisitions and acquisitions[-1].items and remark:
+                fields = acquisitions[-1].items[-1].fields
+                fields["spec"] = "\n".join(
+                    part for part in (fields.get("spec", ""), remark) if part
+                )
+            continue
 
         if has_ctx:
             src = location or last_source
@@ -261,10 +307,27 @@ def build_from_rows(rows: list[tuple[str, str, str, str, str, str, str]]) -> lis
         if ftype:
             val = norm_num(price)
             cur = currency or None
+            remark_used_for_value = False
             if val is None:  # value may live in the remark (e.g. −￥1,450)
-                val = norm_num(remark)
+                val = extract_amount(remark)
                 cur = cur or parse_currency(remark)
+                remark_used_for_value = val is not None
             acq.cost_factors.append(CostFactor(ftype, val, cur))
+            # No-data-loss (FR-029d): factor-row 備註 prose survives on the
+            # acquisition remark. A remark FULLY consumed as the factor's
+            # amount (number + currency adornments only) needs no copy.
+            if remark:
+                leftover = remark
+                if remark_used_for_value:
+                    cleaned = (remark.replace(",", "").replace("，", "")
+                               .replace("−", "-").replace("¥", " ")
+                               .replace("￥", " ").replace("$", " "))
+                    cleaned = re.sub(r"-?\d+(?:\.\d+)?", " ", cleaned, count=1)
+                    for token in CURRENCY_TOKENS:
+                        cleaned = cleaned.replace(token, " ")
+                    leftover = cleaned
+                if re.search(r"[\u4e00-\u9fff]{2,}|[A-Za-z]{2,}|\d{2,}", leftover):
+                    acq.remark = f"{acq.remark}\n{remark}".strip() if acq.remark else remark
         else:
             _add_item(acq, name, remark, url)
 
@@ -279,7 +342,7 @@ def build(csv_path: str) -> list[Acquisition]:
     for row in raw[1:]:  # skip header
         row = (row + [""] * 6)[:6]
         name, price, currency, location, date, remark = (c.strip() for c in row)
-        rows.append((name, price, currency, location, date, remark, ""))
+        rows.append((name, price, currency, location, date, remark, "", bool(location or date), True))
     return build_from_rows(rows)
 
 
@@ -422,6 +485,7 @@ def build_html(html_path: str) -> list[Acquisition]:
                 cell("備註")["text"].strip(),
                 name_cell["link"].strip(),
                 own("購買地點") or own("購買日期"),
+                own("項目"),
             )
         )
     if col_idx is None:

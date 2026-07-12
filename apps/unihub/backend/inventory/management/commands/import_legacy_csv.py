@@ -211,6 +211,7 @@ class Command(BaseCommand):
                         "source": (a.source or "")[:200],
                         "request_time": _iso(a.request_time),
                         "obtained_at": _iso(a.obtained_at),
+                        "remark": getattr(a, "remark", "") or "",
                         "items": items,
                     }
                 )

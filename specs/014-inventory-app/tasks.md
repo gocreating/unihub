@@ -10,10 +10,10 @@ description: "Task list for Inventory App — Iteration 24 (2026-07-13)"
 
 ## Phase 2: Fix (US1)
 
-- [ ] T001 [US1] Update the RTL payload assertion in `apps/unihub/frontend/src/pages/inventory/catalog/CatalogPage.test.tsx` (CAT17-04): `filters` = ONE `{logic:'or'}` group with the two plain conditions; add a backend pytest in `apps/unihub/backend/tests/test_inventory_acquisitions.py` asserting the single-or-group payload returns YTD + pending rows
-- [ ] T002 [US1] Reshape `defaultFilterGroups` in `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx` to the single or-group; T001 green
-- [ ] T003 [US1] Live-verify: the Filter panel shows two flat condition rows joined by OR (no nested groups); screenshot
+- [X] T001 [US1] Update the RTL payload assertion in `apps/unihub/frontend/src/pages/inventory/catalog/CatalogPage.test.tsx` (CAT17-04): `filters` = ONE `{logic:'or'}` group with the two plain conditions; add a backend pytest in `apps/unihub/backend/tests/test_inventory_acquisitions.py` asserting the single-or-group payload returns YTD + pending rows
+- [X] T002 [US1] Reshape `defaultFilterGroups` in `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx` to the single or-group; T001 green
+- [X] T003 [US1] Live-verify: the Filter panel shows two flat condition rows joined by OR (no nested groups); screenshot
 
 ## Phase 3: Polish
 
-- [ ] T004 Loops (frontend + backend), docker frontend rebuild, ALL inventory e2e, commit + push
+- [X] T004 Loops (frontend + backend), docker frontend rebuild, ALL inventory e2e, commit + push

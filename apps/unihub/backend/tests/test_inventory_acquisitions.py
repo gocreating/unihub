@@ -294,3 +294,23 @@ class TestIsEmptyOnDateFields:
         assert resp.status_code == 200, resp.content
         sources = {a["source"] for a in resp.json()["results"]}
         assert sources == {"ThisYear", "Pending"}
+
+    def test_single_or_group_matches_ytd_or_empty(self, auth_client):
+        # Iteration 24: the catalog's default seed is ONE or-group with two
+        # plain conditions — identical semantics to the former two groups.
+        _post(auth_client, ACQ, {"source": "Old", "obtained_at": "2024-03-01T00:00:00Z", "items": [{"name": "O"}]})
+        _post(auth_client, ACQ, {"source": "ThisYear", "obtained_at": "2026-02-01T00:00:00Z", "items": [{"name": "T"}]})
+        _post(auth_client, ACQ, {"source": "Pending", "items": [{"name": "P"}]})
+        qs = self._filters([
+            {
+                "logic": "or",
+                "conditions": [
+                    {"attr": "obtained_at", "op": "gte", "val": "2026-01-01"},
+                    {"attr": "obtained_at", "op": "is_empty", "val": ""},
+                ],
+            }
+        ])
+        resp = auth_client.get(f"{ACQ}?filters={qs}")
+        assert resp.status_code == 200, resp.content
+        sources = {a["source"] for a in resp.json()["results"]}
+        assert sources == {"ThisYear", "Pending"}

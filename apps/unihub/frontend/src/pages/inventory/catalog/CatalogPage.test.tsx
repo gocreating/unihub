@@ -573,10 +573,16 @@ describe('CatalogPage (iteration 17 — plurals, name link, url width, seeded de
     expect(screen.getByRole('button', { name: /Filter/ }).className).toContain('ant-btn-primary');
     const call = vi.mocked(inventoryService.listAcquisitions).mock.calls.at(-1)![0]!;
     const yearStart = dayjs().startOf('year').format('YYYY-MM-DD');
+    // ONE or-group with plain conditions (iteration 24) — no nested groups.
     expect(call.filters).toEqual({
       groups: [
-        { logic: 'and', conditions: [{ attr: 'obtained_at', op: 'gte', val: yearStart }] },
-        { logic: 'and', conditions: [{ attr: 'obtained_at', op: 'is_empty', val: '' }] },
+        {
+          logic: 'or',
+          conditions: [
+            { attr: 'obtained_at', op: 'gte', val: yearStart },
+            { attr: 'obtained_at', op: 'is_empty', val: '' },
+          ],
+        },
       ],
     });
   });

@@ -194,22 +194,20 @@ export function CatalogPage() {
     defaultSortRules: [{ field: 'acquisition__obtained_at', direction: 'desc', nulls: 'first' }],
     // The Toggle (caret) column is pinned by default (FR-003, iteration 16).
     defaultSticky: { left: true },
-    // Default view (iteration 17): YTD acquisitions + pending (no obtained
-    // date yet) — lit in the Filter toolbar, freely editable/clearable.
+    // Default view (iterations 17→24): YTD acquisitions + pending (no
+    // obtained date yet) — ONE or-group with plain conditions, lit in the
+    // Filter toolbar, freely editable/clearable.
     defaultFilterGroups: [
       {
-        logic: 'and',
+        logic: 'or',
         conditions: [
           {
             attr: 'acquisition__obtained_at',
             op: 'gte',
             val: dayjs().startOf('year').format('YYYY-MM-DD'),
           },
+          { attr: 'acquisition__obtained_at', op: 'is_empty', val: '' },
         ],
-      },
-      {
-        logic: 'and',
-        conditions: [{ attr: 'acquisition__obtained_at', op: 'is_empty', val: '' }],
       },
     ],
     defaultPageSize: 50,

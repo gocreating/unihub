@@ -213,3 +213,9 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 ## Iteration 24 research (default-filter shape, 2026-07-13)
 
 - **R24.1 — Verified**: `EntityFilterBackend` combines conditions WITHIN a group per `group.logic` ("or" supported) and ORs groups together. The iteration-17 seed used two groups only because the panel-side implication wasn't checked; one `logic:"or"` group with two conditions is semantically identical, renders as flat condition rows with a correct OR connector, and removes the nested-group boxes.
+
+## Iteration 25 research (verbatim 備註, per-row prices, stable refs, 2026-07-13)
+
+- **R25.1 — Price loss (MEASURED)**: Matador (2025, 蝦皮 order) is a multi-item acquisition whose continuation rows each carry their OWN 實際支付價錢 — `build_from_rows`' attachment path used row price only for factor rows, dropping item-row prices; the accumulated override held just the header's 479. Zenfone 3 (2016): single-row price 5600 became the paid override only, never `sku_price`. Fix at a new FINALIZE phase: own-price rows → sku (÷qty sans 單價); ≥2 own-price rows → override = per-currency sum; carried-price (rowspan-total) style unchanged.
+- **R25.2 — Verbatim strategy**: destinations decided at finalize by item count (>1 → item.spec, =1 → acquisition.remark); parse_remark keeps extracting structured fields but stops writing spec/remark residues. Sweep: item-row 備註 lines must be findable near-verbatim.
+- **R25.3 — Stable refs**: ordinal refs `year:acqIdx[:itemIdx]` from parse order; upsert keyed on them preserves PKs → scenario memberships survive re-imports. Transition stamping: per year, parser order == import creation order (imports were sequential), verified per row by (item name, source) before stamping; mismatches reported and excluded. Limitation (documented): mid-sheet insertions shift later ordinals for that year.

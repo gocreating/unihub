@@ -23,8 +23,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from inventory.models import Acquisition
-from inventory.serializers import AcquisitionSerializer
+from inventory.models import Acquisition, Item
+from inventory.serializers import AcquisitionSerializer, ItemSerializer, _write_parameters
 
 REPO_ROOT = Path(settings.BASE_DIR).resolve().parents[2]
 PARSER_PATH = REPO_ROOT / "specs" / "014-inventory-app" / "scripts" / "preview_legacy_import.py"
@@ -155,6 +155,12 @@ class Command(BaseCommand):
             action="store_true",
             help="Delete ALL existing acquisitions (and their items, via cascade) before importing.",
         )
+        parser.add_argument(
+            "--stamp-refs",
+            action="store_true",
+            help="One-time transition: stamp legacy_ref onto EXISTING rows by "
+            "order-matching the sheet (verified by item name + source); no data changes.",
+        )
 
     def handle(self, *args, **opts):
         raw = opts["csv_path"]
@@ -189,44 +195,155 @@ class Command(BaseCommand):
             + ", ".join(f"{v} {k}" for k, v in sorted(totals.items()))
         )
 
+        year_match = re.search(r"(20\d{2})", csv_path.stem)
+        year = year_match.group(1) if year_match else csv_path.stem
+        refs = [(f"{year}:{i}", a) for i, a in enumerate(planned)]
+
+        if opts["stamp_refs"]:
+            self._stamp_refs(year, refs)
+            return
+
         if not opts["commit"]:
             self.stdout.write(
                 self.style.WARNING("DRY-RUN — no data written. Re-run with --commit.")
             )
             for a in planned[:5]:
-                self.stdout.write(f"  · {a.source or '(no source)'}: {len(a.items)} item(s)")
+                self.stdout.write(f"  e.g. {a.source} — {len(a.items)} item(s)")
             return
 
         created = 0
+        updated = 0
         with transaction.atomic():
             if opts["wipe"]:
                 wiped = Acquisition.objects.count()
                 Acquisition.objects.all().delete()
                 self.stdout.write(self.style.WARNING(f"Wiped {wiped} existing acquisitions."))
-            for a in planned:
+            existing = {
+                acq.legacy_ref: acq
+                for acq in Acquisition.objects.filter(legacy_ref__startswith=f"{year}:")
+            }
+            seen: set[str] = set()
+            for ref, a in refs:
+                seen.add(ref)
                 items = [_item_payload(it) for it in a.items]
                 acc, manual = _factor_payloads(a)
-                create_ser = AcquisitionSerializer(
-                    data={
-                        "source": (a.source or "")[:200],
-                        "request_time": _iso(a.request_time),
-                        "obtained_at": _iso(a.obtained_at),
-                        "remark": getattr(a, "remark", "") or "",
-                        "items": items,
-                    }
-                )
-                create_ser.is_valid(raise_exception=True)
-                instance = create_ser.save()
-                # Override the derived accumulated with the legacy actual-paid +
-                # manual factors — only when the sheet actually recorded amounts.
-                if acc or manual:
-                    update_ser = AcquisitionSerializer(
-                        instance, data={"cost_factors": acc + manual}, partial=True
-                    )
-                    update_ser.is_valid(raise_exception=True)
-                    update_ser.save()
-                created += 1
+                scalars = {
+                    "source": (a.source or "")[:200],
+                    "request_time": _iso(a.request_time),
+                    "obtained_at": _iso(a.obtained_at),
+                    "remark": getattr(a, "remark", "") or "",
+                }
+                instance = existing.get(ref)
+                if instance is None:
+                    create_ser = AcquisitionSerializer(data={**scalars, "items": items})
+                    create_ser.is_valid(raise_exception=True)
+                    instance = create_ser.save()
+                    if acc or manual:
+                        update_ser = AcquisitionSerializer(
+                            instance, data={"cost_factors": acc + manual}, partial=True
+                        )
+                        update_ser.is_valid(raise_exception=True)
+                        update_ser.save()
+                    instance.legacy_ref = ref
+                    instance.save(update_fields=["legacy_ref"])
+                    for j, item in enumerate(instance.items.order_by("created_at", "pk")):
+                        item.legacy_ref = f"{ref}:{j}"
+                        item.save(update_fields=["legacy_ref"])
+                    created += 1
+                else:
+                    self._upsert_existing(instance, ref, scalars, items, acc, manual)
+                    updated += 1
+            # Refs present in the DB but gone from the sheet (e.g. newly
+            # struck rows) are deleted; ref-less manual records are untouched.
+            for ref, instance in existing.items():
+                if ref not in seen:
+                    instance.delete()
 
         self.stdout.write(
-            self.style.SUCCESS(f"Imported {created} acquisitions from {csv_path.name}.")
+            self.style.SUCCESS(
+                f"Imported from {csv_path.name}: {created} created, {updated} updated."
+            )
         )
+        return
+
+    def _upsert_existing(self, instance, ref, scalars, items, acc, manual):
+        """Update an acquisition IN PLACE (FR-029f c) — item PKs survive."""
+        scal_ser = AcquisitionSerializer(instance, data=scalars, partial=True)
+        scal_ser.is_valid(raise_exception=True)
+        scal_ser.save()
+
+        existing_items = {it.legacy_ref: it for it in instance.items.all() if it.legacy_ref}
+        seen_items: set[str] = set()
+        for j, payload in enumerate(items):
+            iref = f"{ref}:{j}"
+            seen_items.add(iref)
+            target = existing_items.get(iref)
+            if target is not None:
+                # NEVER overwrite user data (alias_name is absent from the
+                # payload by design).
+                item_ser = ItemSerializer(target, data=payload, partial=True)
+                item_ser.is_valid(raise_exception=True)
+                item_ser.save()
+            else:
+                item_ser = ItemSerializer(data=payload)
+                item_ser.is_valid(raise_exception=True)
+                validated = dict(item_ser.validated_data)
+                rows = validated.pop("_parameters", None)
+                item = Item.objects.create(acquisition=instance, legacy_ref=iref, **validated)
+                if rows:
+                    _write_parameters(item, rows)
+        for iref, item in existing_items.items():
+            if iref not in seen_items:
+                item.delete()
+        if acc or manual:
+            fac_ser = AcquisitionSerializer(
+                instance, data={"cost_factors": acc + manual}, partial=True
+            )
+            fac_ser.is_valid(raise_exception=True)
+            fac_ser.save()
+
+    def _stamp_refs(self, year, refs):
+        """Order-match the sheet to unstamped DB rows and stamp legacy_refs.
+
+        Verification: the candidate acquisition must match on source AND its
+        items (in creation order) on name. Mismatches abort with a report —
+        stamping never mutates anything but legacy_ref.
+        """
+        candidates = list(
+            Acquisition.objects.filter(legacy_ref__isnull=True)
+            .prefetch_related("items")
+            .order_by("created_at", "pk")
+        )
+        used: set[str] = set()
+        stamped = 0
+        problems: list[str] = []
+        for ref, a in refs:
+            wanted_names = [it.name.replace("\n", " ").strip()[:200] for it in a.items]
+            match = None
+            for cand in candidates:
+                if cand.pk in used:
+                    continue
+                if (cand.source or "") != (a.source or "")[:200]:
+                    continue
+                db_items = list(cand.items.order_by("created_at", "pk"))
+                if [i.name for i in db_items] != wanted_names:
+                    continue
+                match = cand
+                break
+            if match is None:
+                problems.append(f"{ref}: no unique match for source={a.source!r} items={wanted_names}")
+                continue
+            used.add(match.pk)
+            match.legacy_ref = ref
+            match.save(update_fields=["legacy_ref"])
+            for j, item in enumerate(match.items.order_by("created_at", "pk")):
+                item.legacy_ref = f"{ref}:{j}"
+                item.save(update_fields=["legacy_ref"])
+            stamped += 1
+        if problems:
+            self.stdout.write(self.style.WARNING(f"{len(problems)} unmatched ref(s):"))
+            for line in problems[:10]:
+                self.stdout.write(f"  {line}")
+        self.stdout.write(self.style.SUCCESS(f"Stamped {stamped}/{len(refs)} refs for {year}."))
+        return
+

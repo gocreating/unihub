@@ -60,9 +60,12 @@ def test_rowspan_date_reaches_following_acquisition(acquisitions):
 
 
 def test_bare_remark_lines_survive(acquisitions):
-    """代買 (keyless 備註 line) lands in the item remark — no data loss."""
+    # FR-029f b: ShopB has ONE item — its whole 備註 (incl. the bare 代買
+    # line) is preserved verbatim on the ACQUISITION remark.
     shop_b = next(a for a in acquisitions if a.source == "ShopB")
-    assert shop_b.items[0].fields.get("remark") == "代買"
+    assert "代買" in shop_b.remark
+    assert "單價：80 RMB" in shop_b.remark
+    # Extraction still ran on top (單價 → sku).
     assert shop_b.items[0].fields.get("sku_price") == 80.0
 
 
@@ -106,8 +109,8 @@ class TestImportCommand:
         # ShopB's explicit 0 stays an explicit 0 override.
         shop_b = Acquisition.objects.get(source="ShopB")
         assert float(shop_b.cost_factors.get(type="accumulated").value) == 0.0
-        # Bare 備註 line survived into the item remark.
-        assert shop_b.items.first().remark == "代買"
+        # Bare 備註 line survived verbatim on the acquisition remark.
+        assert "代買" in shop_b.remark
         # Rowspan-shared date reached ShopB.
         assert shop_b.obtained_at is not None
 
@@ -182,8 +185,10 @@ def test_carried_item_rows_merge_remarks_into_spec(continuation_acqs):
     assert "2019/03/12 報修，維修單號: RNP123" in spec
     assert "2019/03/15 更換面板後送回" in spec
     assert spec.index("2019/03/12") < spec.index("2019/03/15")
-    # The own-row bare line keeps the iteration-15 rule (remark).
-    assert "2019/03/04 嚴重閃爍故障" in item.fields.get("remark", "")
+    # The own-row 備註 is preserved verbatim on the acquisition (single-item
+    # acquisition, FR-029f b).
+    shop_f_acq = next(a for a in continuation_acqs if a.source == "ShopF")
+    assert "2019/03/04 嚴重閃爍故障" in shop_f_acq.remark
     # The following acquisition is untouched.
     shop_g = next(a for a in continuation_acqs if a.source == "ShopG")
     assert len(shop_g.items) == 1
@@ -319,3 +324,155 @@ def test_struck_item_rows_are_skipped(parser, tmp_path):
     shop_d = next(a for a in acqs if a.source == "ShopD")
     assert shop_d.items == []
     assert shop_d.obtained_at == "2019-01-05"
+
+
+# Iteration 25 (FR-029f a+b): per-row prices + verbatim 備註 destinations.
+MATADOR_FIXTURE = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>Matador Tube</td><td>479</td><td>TWD</td>
+<td rowspan="3">蝦皮S</td><td rowspan="3">2025/12/09~2025/12/11</td>
+<td>顏色：黑</td></tr>
+<tr><td>2</td><td>Matador Case</td><td>999</td><td>TWD</td><td>顏色：黑 重量：28.8g</td></tr>
+<tr><td>3</td><td>Matador Bag</td><td>1299</td><td>TWD</td><td>容量：30L</td></tr>
+</table>
+"""
+
+
+def test_per_row_prices_become_skus_and_sum_override(parser, tmp_path):
+    path = tmp_path / "mat.html"
+    path.write_text(MATADOR_FIXTURE, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    skus = {i.name: i.fields.get("sku_price") for i in acq.items}
+    assert skus == {"Matador Tube": 479.0, "Matador Case": 999.0, "Matador Bag": 1299.0}
+    # Paid override = per-currency SUM of the own row prices (not just 479).
+    acc = [cf for cf in acq.cost_factors if cf.type == "accumulated"]
+    assert len(acc) == 1 and acc[0].value == 479.0 + 999.0 + 1299.0 and acc[0].currency == "TWD"
+    # Verbatim 備註 → item.spec (multi-item acquisition).
+    case = next(i for i in acq.items if i.name == "Matador Case")
+    assert "顏色：黑 重量：28.8g" in case.fields.get("spec", "")
+    # Extraction still runs on top.
+    assert case.fields.get("weight", {}).get("value") == "28.8"
+
+
+def test_single_row_price_becomes_sku(parser, tmp_path):
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>ASUS Zenfone 3</td><td>5600</td><td>TWD</td><td>ShopZ</td>
+<td>2016/08/06</td><td>忘記實際花了多少錢，約5600</td></tr>
+</table>
+"""
+    path = tmp_path / "z.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    assert acq.items[0].fields.get("sku_price") == 5600.0
+    # Verbatim 備註 → acquisition.remark (single-item acquisition).
+    assert "忘記實際花了多少錢" in acq.remark
+
+
+def test_qty_row_price_divides_into_unit_sku(parser, tmp_path):
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>Socks</td><td>300</td><td>TWD</td><td>ShopQ</td>
+<td>2020/01/05</td><td>數量：3</td></tr>
+</table>
+"""
+    path = tmp_path / "q.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    item = acq.items[0]
+    assert item.fields.get("quantity") == 3
+    assert item.fields.get("sku_price") == 100.0  # 300 / 3
+
+
+def test_rowspan_total_style_unchanged(parser, tmp_path):
+    # ShopA style: price cell rowspans (a TOTAL), items get 備註 單價.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>ItemA1</td><td rowspan="2">100</td><td rowspan="2">RMB</td>
+<td rowspan="2">ShopT</td><td rowspan="2">2026/04/25</td><td>單價：50 RMB</td></tr>
+<tr><td>2</td><td>ItemA2</td><td>單價：30 RMB</td></tr>
+</table>
+"""
+    path = tmp_path / "t.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    acc = [cf for cf in acq.cost_factors if cf.type == "accumulated"]
+    assert len(acc) == 1 and acc[0].value == 100.0  # the header TOTAL stands
+    skus = {i.name: i.fields.get("sku_price") for i in acq.items}
+    assert skus == {"ItemA1": 50.0, "ItemA2": 30.0}
+
+
+# Iteration 25 (FR-029f c): stable-ref UPSERT — re-imports preserve item PKs.
+UPSERT_FIXTURE_V1 = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>KeeperA</td><td>100</td><td>TWD</td><td>ShopU</td>
+<td>2021/03/05</td><td>first note</td></tr>
+<tr><td>2</td><td>KeeperB</td><td>200</td><td>TWD</td><td>ShopV</td>
+<td>2021/03/06</td><td></td></tr>
+</table>
+"""
+UPSERT_FIXTURE_V2 = UPSERT_FIXTURE_V1.replace("first note", "edited note")
+UPSERT_FIXTURE_V3 = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>KeeperA</td><td>100</td><td>TWD</td><td>ShopU</td>
+<td>2021/03/05</td><td>first note</td></tr>
+</table>
+"""
+
+
+@pytest.mark.django_db
+class TestUpsertImport:
+    def _run(self, tmp_path, content, *flags):
+        from django.core.management import call_command
+
+        path = tmp_path / "2021.html"
+        path.write_text(content, encoding="utf-8")
+        call_command("import_legacy_csv", str(path), "--commit", *flags)
+
+    def test_reimport_preserves_item_pks_and_memberships(self, tmp_path, auth_client):
+        from inventory.models import Item, Scenario, ScenarioItem
+
+        self._run(tmp_path, UPSERT_FIXTURE_V1)
+        keeper = Item.objects.get(name="KeeperA")
+        assert keeper.legacy_ref == "2021:0:0"
+        # Attach a scenario membership (the data re-imports must never clear).
+        scenario = Scenario.objects.create(name="Trip")
+        membership = ScenarioItem.objects.create(scenario=scenario, item=keeper)
+        # Re-import with an edited 備註 → UPDATE IN PLACE.
+        self._run(tmp_path, UPSERT_FIXTURE_V2)
+        keeper.refresh_from_db()
+        assert Item.objects.get(name="KeeperA").pk == keeper.pk
+        assert "edited note" in keeper.acquisition.remark
+        assert ScenarioItem.objects.filter(pk=membership.pk, item=keeper).exists()
+        # A row removed from the sheet deletes its (and only its) records.
+        self._run(tmp_path, UPSERT_FIXTURE_V3)
+        assert Item.objects.filter(name="KeeperA").exists()
+        assert not Item.objects.filter(name="KeeperB").exists()
+
+    def test_manual_records_untouched_and_alias_preserved(self, tmp_path, auth_client):
+        from inventory.models import Acquisition, Item
+
+        self._run(tmp_path, UPSERT_FIXTURE_V1)
+        # Alias set by the user must survive a re-import.
+        keeper = Item.objects.get(name="KeeperA")
+        keeper.alias_name = "My keeper"
+        keeper.save(update_fields=["alias_name"])
+        # A manual (ref-less) acquisition must be untouched by re-imports.
+        manual = Acquisition.objects.create(source="Manual")
+        Item.objects.create(acquisition=manual, name="Manual item")
+        self._run(tmp_path, UPSERT_FIXTURE_V1)
+        assert Item.objects.get(name="KeeperA").alias_name == "My keeper"
+        assert Item.objects.filter(name="Manual item").exists()
+
+    def test_legacy_ref_not_in_api_payload(self, tmp_path, auth_client):
+        self._run(tmp_path, UPSERT_FIXTURE_V1)
+        data = auth_client.get("/api/v1/inventory/items/").json()["results"][0]
+        assert "legacy_ref" not in data
+        acq = auth_client.get("/api/v1/inventory/acquisitions/").json()["results"][0]
+        assert "legacy_ref" not in acq

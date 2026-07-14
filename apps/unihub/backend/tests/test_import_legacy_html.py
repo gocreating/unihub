@@ -96,10 +96,13 @@ class TestHtmlLegacyParser:
         # currency inherited from the acquisition's paid currency
         assert shipping[0].currency == "RMB"
 
-    def test_unresolvable_lines_kept_in_remark(self, acquisitions):
-        remark = acquisitions[0].items[0].fields["remark"]
-        assert "型號：NH100" in remark
-        assert "神秘的一行" in remark
+    def test_unresolvable_lines_kept_verbatim(self, acquisitions):
+        # FR-029f b: the whole 備註 is preserved verbatim — on the acquisition
+        # remark for a single-item acquisition, on item.spec for multi-item.
+        acq = acquisitions[0]
+        haystack = acq.remark if len(acq.items) == 1 else acq.items[0].fields.get("spec", "")
+        assert "型號：NH100" in haystack
+        assert "神秘的一行" in haystack
 
     def test_colspan_expansion_keeps_remark_column_aligned(self, acquisitions):
         # The second acquisition's row uses colspan=4 over its empty

@@ -309,6 +309,7 @@ def build_from_rows(
     acquisitions: list[Acquisition] = []
     last_source = ""
     skipped_struck: list[str] = []
+    own_prices: dict[int, list] = {}
     global LAST_SKIPPED_STRUCK
 
     for row in rows:
@@ -322,6 +323,7 @@ def build_from_rows(
         has_ctx = rest[0] if rest else bool(location or date)
         own_name = rest[1] if len(rest) > 1 else True
         struck = rest[2] if len(rest) > 2 else False
+        own_price = rest[3] if len(rest) > 3 else bool(price)
 
         # Crossed-out ITEMS are intentionally SKIPPED (FR-029e b) — but a
         # struck HEADER row still creates its acquisition (source/date/paid),
@@ -338,8 +340,8 @@ def build_from_rows(
         if not own_name and not has_ctx:
             if acquisitions and acquisitions[-1].items and remark:
                 fields = acquisitions[-1].items[-1].fields
-                fields["spec"] = "\n".join(
-                    part for part in (fields.get("spec", ""), remark) if part
+                fields["_cont_spec"] = "\n".join(
+                    part for part in (fields.get("_cont_spec", ""), remark) if part
                 )
             continue
 
@@ -361,6 +363,12 @@ def build_from_rows(
             # the header row is itself an item — unless it is crossed out.
             if not skip_item_only:
                 _add_item(acq, name, remark, url)
+                acq.items[-1].fields["_raw_remark"] = remark
+                if own_price and pv is not None:
+                    own_prices.setdefault(id(acq), []).append((acq.items[-1], pv, currency or None))
+            elif own_price and pv is not None:
+                # A struck item's paid amount still belongs to the acquisition.
+                own_prices.setdefault(id(acq), []).append((None, pv, currency or None))
             continue
 
         # attachment row (no location, no date)
@@ -397,9 +405,63 @@ def build_from_rows(
                     acq.remark = f"{acq.remark}\n{remark}".strip() if acq.remark else remark
         else:
             _add_item(acq, name, remark, url)
+            acq.items[-1].fields["_raw_remark"] = remark
+            pv = norm_num(price)
+            if own_price and pv is not None:
+                own_prices.setdefault(id(acq), []).append((acq.items[-1], pv, currency or None))
 
+    _finalize(acquisitions, own_prices)
     LAST_SKIPPED_STRUCK = skipped_struck
     return acquisitions
+
+
+def _finalize(acquisitions: list["Acquisition"], own_prices: dict[int, list]) -> None:
+    """FR-029f: per-row prices → skus (+ summed override) and verbatim 備註.
+
+    (a) Item rows with OWN price cells feed ``sku_price`` (÷ quantity when
+    qty > 1 and 備註 gave no explicit 單價); when TWO or more rows carried own
+    prices, the acquisition's paid override becomes their per-currency SUM
+    (the old header-only override under-counted multi-priced orders).
+    (b) Item-row 備註 is preserved VERBATIM — ``item.spec`` when the
+    acquisition holds several items, ``acquisition.remark`` when it holds
+    exactly one; continuation-row 備註 keeps appending to the item's spec.
+    """
+    for acq in acquisitions:
+        own = own_prices.get(id(acq), [])
+        if len(own) >= 2:
+            sums: dict = {}
+            for _item, value, cur in own:
+                key = cur or "?"
+                sums[key] = sums.get(key, 0.0) + value
+            acq.cost_factors = [cf for cf in acq.cost_factors if cf.type != "accumulated"]
+            for cur, total in sums.items():
+                acq.cost_factors.append(
+                    CostFactor("accumulated", round(total, 4), None if cur == "?" else cur)
+                )
+        for item, value, cur in own:
+            if item is None or item.fields.get("sku_price") is not None:
+                continue
+            qty = item.fields.get("quantity") or 1
+            item.fields["sku_price"] = round(value / qty, 4) if qty > 1 else value
+            if cur:
+                item.fields.setdefault("sku_price_currency", cur)
+
+        multi = len(acq.items) > 1
+        for item in acq.items:
+            raw = (item.fields.pop("_raw_remark", "") or "").strip()
+            cont = (item.fields.pop("_cont_spec", "") or "").strip()
+            if multi:
+                parts = [p for p in (raw, cont) if p]
+                if parts:
+                    item.fields["spec"] = "\n".join(parts)
+                item.fields.pop("remark", None)
+            else:
+                if raw:
+                    acq.remark = f"{acq.remark}\n{raw}".strip() if acq.remark else raw
+                    item.fields.pop("remark", None)
+                if cont:
+                    existing = item.fields.get("spec", "")
+                    item.fields["spec"] = f"{existing}\n{cont}".strip() if existing else cont
 
 
 LAST_SKIPPED_STRUCK: list[str] = []
@@ -413,7 +475,7 @@ def build(csv_path: str) -> list[Acquisition]:
     for row in raw[1:]:  # skip header
         row = (row + [""] * 6)[:6]
         name, price, currency, location, date, remark = (c.strip() for c in row)
-        rows.append((name, price, currency, location, date, remark, "", bool(location or date), True, False))
+        rows.append((name, price, currency, location, date, remark, "", bool(location or date), True, False, bool(price)))
     return build_from_rows(rows)
 
 
@@ -579,6 +641,7 @@ def build_html(html_path: str) -> list[Acquisition]:
                 own("購買地點") or own("購買日期"),
                 own("項目"),
                 bool(name_cell.get("struck")) and not name_cell.get("carried", False),
+                own("實際支付價錢"),
             )
         )
     if col_idx is None:

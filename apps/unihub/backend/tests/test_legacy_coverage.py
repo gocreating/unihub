@@ -147,9 +147,20 @@ def test_no_legacy_content_lost(sheet):
 
         remark_cell = cell("備註")
         if not remark_cell.get("carried"):
+            # FR-029f: ITEM rows preserve 備註 verbatim → STRICT containment;
+            # factor-keyword rows keep the lexical-run fallback (amounts are
+            # transformed into factors by design).
+            factor_row = bool(name and parser.classify_cost_factor(name))
             for line in remark_cell["text"].splitlines():
                 line = line.strip()
-                if line and not _line_covered(line, blob, parser):
+                if not line:
+                    continue
+                covered = (
+                    _line_covered(line, blob, parser)
+                    if factor_row
+                    else _norm(line) in blob
+                )
+                if not covered:
                     misses.append(f"row {row_no} 備註 line: {line!r}")
 
     assert not misses, f"{sheet.name}: {len(misses)} lost fragment(s):\n" + "\n".join(misses[:25])

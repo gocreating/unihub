@@ -12,6 +12,8 @@ class Acquisition(models.Model):
     """
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
+    # Stable legacy-import key (FR-029f c) — importer-internal, not in the API.
+    legacy_ref = models.CharField(max_length=32, null=True, blank=True, db_index=True, editable=False)
     source = models.CharField(max_length=200, blank=True)  # store, seller, or person
     request_time = models.DateTimeField(null=True, blank=True)  # when the order was initiated
     obtained_at = models.DateTimeField(null=True, blank=True)  # when received
@@ -76,6 +78,10 @@ class Item(models.Model):
     """
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
+    # Stable legacy-import key (FR-029f c): "<year>:<acq>:<item>" — lets
+    # re-imports UPSERT in place so item PKs (and scenario memberships)
+    # survive. Never exposed through the API.
+    legacy_ref = models.CharField(max_length=32, null=True, blank=True, db_index=True, editable=False)
     name = models.CharField(max_length=200)
     # The user's own familiar name — preferred in displays (FR-030).
     alias_name = models.CharField(max_length=200, blank=True)

@@ -178,6 +178,9 @@ test('Add-Item modal footer: Cancel flushed left, Save right', async ({ page }) 
   await gotoNewAcquisition(page);
   await page.locator('.ant-card', { hasText: 'Items' }).first().locator('button').filter({ hasText: /^Add$/ }).first().click();
   await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  // Let the zoom-in animation settle — measuring mid-transform reads a
+  // scaled bounding box near the trigger button (flake source).
+  await page.waitForTimeout(500);
   const cancel = page.locator('.ant-modal-footer button', { hasText: 'Cancel' });
   const save = page.locator('.ant-modal-footer button', { hasText: 'Save' });
   const cBox = await cancel.boundingBox();

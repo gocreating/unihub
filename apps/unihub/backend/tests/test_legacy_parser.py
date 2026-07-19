@@ -220,10 +220,10 @@ def test_variant_quantity_line_survives_in_remark(parser):
 
 
 def test_prose_around_matched_keys_survives(parser):
-    # A line with prose AROUND resolved keys keeps the full line in remark
-    # (extraction is a bonus, never a licence to drop context — FR-029d).
+    # Colonless 原價/單價 inside prose is NOT a key-value pair (iteration 35) —
+    # nothing extracts and the full line survives in remark (FR-029d).
     fields, _ = parser.parse_remark("大傘，可兩人撐，原價850，搭配活動折價125")
-    assert fields.get("sku_price") == 850.0
+    assert "sku_price" not in fields
     assert "大傘，可兩人撐" in fields.get("remark", "")
     assert "搭配活動折價125" in fields.get("remark", "")
     # A fully-consumed key:value line still leaves NO residue.
@@ -559,3 +559,68 @@ def test_keyed_temperature_with_signed_range_and_unit_normalization(parser):
     assert "remark" not in t
     t2, _ = parser.parse_remark("耐溫：120℃")
     assert t2.get("temperature") == {"value": "120", "unit": "°C"}
+
+
+# Iteration 35 (FR-029f): price extraction requires a key-value form.
+def test_colon_price_still_extracts(parser):
+    fields, _ = parser.parse_remark("原價：850")
+    assert fields.get("sku_price") == 850.0
+    unit, _ = parser.parse_remark("單價：7.74 RMB")
+    assert unit.get("sku_price") == 7.74
+
+
+def test_colonless_prose_price_does_not_extract(parser):
+    # 2025 雨傘王: "原價 650，舊換新打8折 = 520" — prose, not a pair.
+    fields, _ = parser.parse_remark("原價 650，舊換新打8折 = 520")
+    assert "sku_price" not in fields
+    assert "原價 650" in fields.get("remark", "")
+
+
+def test_colonless_qty_expression_price_still_extracts(parser):
+    # The quantity-expression form stays colonless ("單價 179 * 2 件").
+    fields, _ = parser.parse_remark("單價 179 * 2 件")
+    assert fields.get("sku_price") == 179.0
+    assert fields.get("quantity") == 2
+    muji, _ = parser.parse_remark("原價 199 * 3 件 - 折價券 30")
+    assert muji.get("sku_price") == 199.0
+    assert muji.get("quantity") == 3
+
+
+def test_adorned_paid_cell_parses(parser):
+    # "¥4,200" in the 實際支付價錢 column → 4200 (currency from its own column).
+    assert parser.extract_amount("¥4,200") == 4200.0
+    assert parser.norm_num("¥4,200") is None  # documents why extract_amount is used
+
+
+def test_adorned_paid_cell_full_pipeline(parser, tmp_path):
+    # 2016 東京迪士尼: the paid cell is "¥4,200" with JPY in the currency
+    # column — 4200 JPY, and the single-row price becomes the item's sku.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>維尼披風</td><td>¥4,200</td><td>JPY</td><td>東京迪士尼</td>
+<td>2016/03/21</td><td></td></tr>
+</table>
+"""
+    path = tmp_path / "yen.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    assert acq.items[0].fields.get("sku_price") == 4200.0
+    assert any(cf.value == 4200.0 and cf.currency == "JPY" for cf in acq.cost_factors)
+
+
+def test_umbrella_prose_price_uses_paid_not_prose(parser, tmp_path):
+    # 2016 雨傘王: 備註 has NO key-value pair — the sku derives from the paid
+    # column (725), never from "原價850" inside prose (iteration 35).
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>雨傘王雨傘</td><td>725</td><td>TWD</td><td>新竹光復路一段雨傘王專店</td>
+<td>2016/1/15</td><td>大傘，可兩人撐，原價850，搭配活動折價125</td></tr>
+</table>
+"""
+    path = tmp_path / "umb.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    assert acq.items[0].fields.get("sku_price") == 725.0
+    assert "原價850" in acq.remark

@@ -135,7 +135,11 @@ def parse_date(cell: str, default_year: int | None = None):
 RE_SIZE = re.compile(r"(?:尺寸|[Ss]ize)[:：]\s*(.+)")
 RE_SPEC = re.compile(r"規格[:：]\s*(.+)")
 RE_COLOR = re.compile(r"(?:顏色|款式)[:：]\s*(.+)")
-RE_PRICE = re.compile(r"(?:原價|單價)[:：]?\s*([\d.,]+)\s*([A-Za-z]+|元|円|¥|￥)?")
+# Colon REQUIRED for plain prices (iteration 35): "原價850" inside prose is
+# NOT a key-value pair and must not extract. The colonless form survives ONLY
+# for the quantity expression ("單價 179 * 2 件") via RE_PRICE_QTY.
+RE_PRICE = re.compile(r"(?:原價|單價)[:：]\s*([\d.,]+)\s*([A-Za-z]+|元|円|¥|￥)?")
+RE_PRICE_QTY = re.compile(r"(?:原價|單價)[:：]?\s*([\d.,]+)()(?=\s*\*\s*\d+\s*件)")
 # Keyed numeric values may be min~max/min-max ranges (FR-029h, iterations
 # 28→30) — the whole range text is captured verbatim; the backend computes
 # min/max. The SIGNED grammar (temperature) allows negative bounds with `~`
@@ -231,7 +235,7 @@ def parse_remark(remark: str) -> tuple[dict, list[str]]:
             fields.setdefault("color", m.group(1).strip())
             matched = True
             spans.append(m.span())
-        if m := RE_PRICE.search(line):
+        if m := (RE_PRICE.search(line) or RE_PRICE_QTY.search(line)):
             fields["sku_price"] = norm_num(m.group(1))
             cur = parse_currency(line) or (m.group(2) or "").upper() or None
             if cur:
@@ -418,7 +422,7 @@ def build_from_rows(
                 acq.remark = date_leftover
             acquisitions.append(acq)
             # header row's paid amount → per-currency accumulated (override)
-            pv = norm_num(price)
+            pv = extract_amount(price)  # paid cells may be adorned ("¥4,200")
             if pv is not None and currency:
                 acq.cost_factors.append(CostFactor("accumulated", pv, currency))
             # the header row is itself an item — unless it is crossed out.
@@ -441,7 +445,7 @@ def build_from_rows(
 
         ftype = classify_cost_factor(name)
         if ftype:
-            val = norm_num(price)
+            val = extract_amount(price)  # adorned amounts parse too (iteration 35)
             cur = currency or None
             remark_used_for_value = False
             if val is None:  # value may live in the remark (e.g. −￥1,450)
@@ -467,7 +471,7 @@ def build_from_rows(
         else:
             _add_item(acq, name, remark, url)
             acq.items[-1].fields["_raw_remark"] = remark
-            pv = norm_num(price)
+            pv = extract_amount(price)  # paid cells may be adorned ("¥4,200")
             if own_price and pv is not None:
                 own_prices.setdefault(id(acq), []).append((acq.items[-1], pv, currency or None))
 

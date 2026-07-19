@@ -83,7 +83,13 @@ function RowContent({ line }: { line: ScenarioItem }) {
   return (
     <div style={{ flex: '1 1 auto', minWidth: 0 }}>
       {/* Truncation-gated tooltips (constitution VI); key-value pairs (FR-031). */}
-      <ItemDisplay item={line.item} parameters={line.item.parameters} showParameters truncate />
+      <ItemDisplay
+        item={line.item}
+        parameters={line.item.parameters}
+        showParameters
+        truncate
+        showDeprecatedWarning
+      />
     </div>
   );
 }
@@ -737,6 +743,7 @@ export function ScenarioDetailPage() {
                       item={item}
                       truncate
                       highlight={search}
+                      showDeprecatedWarning
                       extraSecondary={modalItemContext(item)}
                     />
                   </div>

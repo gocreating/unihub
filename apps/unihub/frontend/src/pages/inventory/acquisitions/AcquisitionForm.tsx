@@ -670,6 +670,7 @@ function writeToItemLike(data?: ItemWrite): Item | null {
     total_price: null,
     url: data.url ?? '',
     status: 'active',
+    deprecated: false,
     deprecate_time: null,
     parameters: (data.parameters ?? []).map((p) => ({
       definition_id: p.definition_id,

@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { Space, Tag, Typography } from 'antd';
+import { Space, Tag, Tooltip, Typography } from 'antd';
+import { CommentOutlined, WarningOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
 import { ItemName } from '@/components/ItemName';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
@@ -32,7 +34,10 @@ export interface ItemDisplayItem {
   alias_name: string;
   url?: string;
   spec?: string;
+  remark?: string;
   quantity?: number;
+  deprecated?: boolean;
+  deprecate_time?: string | null;
 }
 
 export interface ItemDisplayProps {
@@ -44,6 +49,8 @@ export interface ItemDisplayProps {
   truncate?: boolean;
   /** Search query — matches inside the primary text render as <mark>. */
   highlight?: string;
+  /** Show the ⚠ deprecated warning (opt-in — scenario surfaces, FR-011). */
+  showDeprecatedWarning?: boolean;
   /** Extra secondary line below the spec (e.g. acquisition context). */
   extraSecondary?: ReactNode;
   /** Surface-specific value tags rendered before the parameter pairs. */
@@ -63,20 +70,48 @@ export function ItemDisplay({
   showParameters,
   truncate,
   highlight,
+  showDeprecatedWarning,
   extraSecondary,
   extraTags,
   style,
 }: ItemDisplayProps) {
   const intl = useIntl();
   const t = (id: string) => intl.formatMessage({ id });
+  const t2 = (id: string, values: Record<string, string>) => intl.formatMessage({ id }, values) as string;
   const pairs = showParameters ? parameterPairs(parameters, t) : [];
   const tags: ParameterPair[] = [
     ...(extraTags ?? []).map((label) => ({ emoji: '', label })),
     ...pairs,
   ];
+  const deprecatedTip = item.deprecate_time
+    ? t2('pages.inventory.items.deprecatedAt', {
+        date: dayjs(item.deprecate_time).format('YYYY-MM-DD'),
+      })
+    : t('pages.inventory.items.deprecatedTooltip');
   return (
     <div style={{ minWidth: 0, ...style }}>
-      <ItemName item={item} linkify truncate={truncate} highlight={highlight} />
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
+        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+          <ItemName item={item} linkify truncate={truncate} highlight={highlight} />
+        </div>
+        {item.remark ? (
+          // Informational tooltip: reveals the (hidden) remark — never noise.
+          <Tooltip title={item.remark}>
+            <CommentOutlined
+              data-testid="remark-icon"
+              style={{ flex: 'none', color: 'rgba(0,0,0,0.45)' }}
+            />
+          </Tooltip>
+        ) : null}
+        {showDeprecatedWarning && item.deprecated ? (
+          <Tooltip title={deprecatedTip}>
+            <WarningOutlined
+              data-testid="deprecated-warning"
+              style={{ flex: 'none', color: '#faad14' }}
+            />
+          </Tooltip>
+        ) : null}
+      </div>
       {item.spec ? (
         <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
           <OverflowTooltip title={item.spec} style={{ maxWidth: '100%' }}>

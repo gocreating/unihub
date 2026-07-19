@@ -313,3 +313,43 @@ class TestItemAlias:
         ordered = auth_client.get(f"{ITEMS}?ordering=alias_name").json()["results"]
         aliases = [i["alias_name"] for i in ordered if i["alias_name"]]
         assert aliases == sorted(aliases)
+
+
+@pytest.mark.django_db
+class TestUnknownTimeDeprecation:
+    """Iteration 36 (FR-001): deprecated is a STORED flag; time is optional."""
+
+    def test_deprecate_with_unknown_time(self, auth_client):
+        item = create_item(auth_client, name="Mystery")
+        resp = _patch(auth_client, item["id"], {"deprecated": True, "deprecate_time": None})
+        assert resp.status_code == 200, resp.content
+        body = resp.json()
+        assert body["status"] == "deprecated"
+        assert body["deprecated"] is True
+        assert body["deprecate_time"] is None
+
+    def test_dated_deprecation_still_works(self, auth_client):
+        item = create_item(auth_client, name="Dated")
+        resp = _patch(
+            auth_client,
+            item["id"],
+            {"deprecated": True, "deprecate_time": "2026-01-01T00:00:00Z"},
+        )
+        assert resp.json()["status"] == "deprecated"
+        assert resp.json()["deprecate_time"] is not None
+
+    def test_restore_clears_flag_and_time(self, auth_client):
+        item = create_item(auth_client, name="Back")
+        _patch(auth_client, item["id"], {"deprecated": True, "deprecate_time": None})
+        resp = _patch(auth_client, item["id"], {"deprecated": False, "deprecate_time": None})
+        assert resp.json()["status"] == "active"
+        assert resp.json()["deprecated"] is False
+
+    def test_legacy_dated_rows_backfilled(self, auth_client):
+        # Setting only deprecate_time (old client shape) keeps working: the
+        # serializer derives the flag when it is absent from the payload.
+        item = create_item(auth_client, name="OldFlow")
+        resp = _patch(auth_client, item["id"], {"deprecate_time": "2026-01-01T00:00:00Z"})
+        assert resp.json()["status"] == "deprecated"
+        resp = _patch(auth_client, item["id"], {"deprecate_time": None})
+        assert resp.json()["status"] == "active"

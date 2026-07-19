@@ -54,6 +54,7 @@ const ITEM = {
   total_price: '10.0000',
   url: 'https://example.com/backpack',
   status: 'active' as const,
+  deprecated: false,
   deprecate_time: null,
   parameters: [
     { definition_id: 'ad-color', name: 'color', data_type: 'text', unit_family: '' as const, emoji: '', value: 'red', unit: '', value_number: null, value_number_max: null },

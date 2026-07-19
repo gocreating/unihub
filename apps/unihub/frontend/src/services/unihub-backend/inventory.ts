@@ -87,6 +87,7 @@ export interface Item {
   total_price: string | null;
   url: string;
   status: ItemStatus;
+  deprecated: boolean;
   deprecate_time: string | null;
   parameters: ItemParameter[];
   acquisition: AcquisitionSummary | null;
@@ -103,6 +104,7 @@ export interface ItemWrite {
   sku_price?: string | null;
   sku_price_currency?: string;
   url?: string;
+  deprecated?: boolean;
   deprecate_time?: string | null;
   parameters?: ItemParameterWrite[];
 }

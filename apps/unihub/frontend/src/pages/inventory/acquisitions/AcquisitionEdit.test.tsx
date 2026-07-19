@@ -37,6 +37,7 @@ const ACQ: Acquisition = {
       total_price: '10.0000',
       url: '',
       status: 'active',
+      deprecated: false,
       deprecate_time: null,
       parameters: [],
       acquisition: null,

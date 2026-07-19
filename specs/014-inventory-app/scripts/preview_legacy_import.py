@@ -160,6 +160,12 @@ RE_DIMS = re.compile(
 # Two-part 長×寬 (e.g. 37*19.8cm) — the unit is REQUIRED so bare "a x b" text
 # (variant counts, quantities) never turns dimensional.
 RE_DIMS2 = re.compile(r"(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)\b")
+# Per-unit dims (iteration 36): the unit rides EACH number — "50cm * 75cm",
+# "172cm x 58 cm x 4 mm" (mixed units kept per part), "183cmx 61cm" (no \b:
+# 'cmx' chains must split; mm|cm|m longest-first).
+_NUM_U = r"(\d+(?:\.\d+)?)\s*(mm|cm|m)"
+RE_DIMS_U3 = re.compile(rf"{_NUM_U}\s*[x×X*]\s*{_NUM_U}\s*[x×X*]\s*{_NUM_U}")
+RE_DIMS_U2 = re.compile(rf"{_NUM_U}\s*[x×X*]\s*{_NUM_U}")
 RE_QTY = re.compile(r"數量[:：]\s*(\d+)")
 RE_QTY_EXPR = re.compile(r"\*\s*(\d+)\s*件")
 RE_VARIANT = re.compile(r"x\s*\d+.*[，,].*x\s*\d+")  # e.g. 深藍x2，灰色x1
@@ -183,7 +189,8 @@ def _size_fully_dimensional(size_match: re.Match, dims_match: re.Match) -> bool:
         + " " * (dims_match.end() - dims_match.start())
         + content[dims_match.end() - start :]
     )
-    return not re.search(r"[一-鿿]{2,}|[A-Za-z]{2,}|\d", blanked)
+    # ANY letter/han/digit is meaningful (iteration 36 — "S" is a real size).
+    return not re.search(r"[一-鿿]|[A-Za-z]|\d", blanked)
 
 
 def parse_remark(remark: str) -> tuple[dict, list[str]]:
@@ -272,7 +279,22 @@ def parse_remark(remark: str) -> tuple[dict, list[str]]:
             fields["volume"] = {"value": m.group(1), "unit": unit}
             matched = True
             spans.append(m.span())
-        if m := RE_DIMS.search(line):
+        if m := RE_DIMS_U3.search(line):
+            fields["length"] = {"value": m.group(1), "unit": m.group(2)}
+            fields["width"] = {"value": m.group(3), "unit": m.group(4)}
+            fields["height"] = {"value": m.group(5), "unit": m.group(6)}
+            matched = True
+            spans.append(m.span())
+            if size_m and _size_fully_dimensional(size_m, m):
+                fields.pop("size", None)
+        elif m := RE_DIMS_U2.search(line):
+            fields["length"] = {"value": m.group(1), "unit": m.group(2)}
+            fields["width"] = {"value": m.group(3), "unit": m.group(4)}
+            matched = True
+            spans.append(m.span())
+            if size_m and _size_fully_dimensional(size_m, m):
+                fields.pop("size", None)
+        elif m := RE_DIMS.search(line):
             unit = m.group(4) or "cm"
             fields["length"] = {"value": m.group(1), "unit": unit}
             fields["width"] = {"value": m.group(2), "unit": unit}

@@ -624,3 +624,32 @@ def test_umbrella_prose_price_uses_paid_not_prose(parser, tmp_path):
     (acq,) = parser.build_html(str(path))
     assert acq.items[0].fields.get("sku_price") == 725.0
     assert "原價850" in acq.remark
+
+
+# Iteration 36 (FR-029g): per-unit dims — the unit rides EACH number.
+def test_per_unit_two_part_dims(parser):
+    fields, _ = parser.parse_remark("50cm * 75cm")
+    assert fields.get("length") == {"value": "50", "unit": "cm"}
+    assert fields.get("width") == {"value": "75", "unit": "cm"}
+    tight, _ = parser.parse_remark("183cmx 61cm")
+    assert tight.get("length") == {"value": "183", "unit": "cm"}
+    assert tight.get("width") == {"value": "61", "unit": "cm"}
+    mm, _ = parser.parse_remark("3.5mmx1.3mm 60cm")
+    assert mm.get("length") == {"value": "3.5", "unit": "mm"}
+    assert mm.get("width") == {"value": "1.3", "unit": "mm"}
+
+
+def test_per_unit_triplet_keeps_mixed_units(parser):
+    fields, _ = parser.parse_remark("172cm x 58 cm x 4 mm")
+    assert fields.get("length") == {"value": "172", "unit": "cm"}
+    assert fields.get("width") == {"value": "58", "unit": "cm"}
+    assert fields.get("height") == {"value": "4", "unit": "mm"}
+
+
+def test_size_label_with_parenthesised_dims_keeps_size(parser):
+    # 尺寸：S (40cm x 80cm) — the dims extract AND the verbatim size "S (…)"
+    # survives (the single letter S is meaningful — tightened residue rule).
+    fields, _ = parser.parse_remark("尺寸：S (40cm x 80cm)")
+    assert fields.get("length") == {"value": "40", "unit": "cm"}
+    assert fields.get("width") == {"value": "80", "unit": "cm"}
+    assert fields.get("size") == "S (40cm x 80cm)"

@@ -29,6 +29,7 @@ const item = (
     total_price: null,
     url: extra.url ?? '',
     status: 'active',
+    deprecated: false,
     deprecate_time: null,
     parameters: extra.parameters ?? [],
     acquisition: extra.acquisition ?? null,

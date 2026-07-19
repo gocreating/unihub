@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, DatePicker, Modal, Space, Tag, Typography, message } from 'antd';
+import { Button, Checkbox, DatePicker, Modal, Space, Tag, Typography, message } from 'antd';
 import {
   CaretDownOutlined,
   CaretRightOutlined,
@@ -112,6 +112,7 @@ export function CatalogPage() {
   const currencySymbolsMap = useCurrencySymbols();
   const [deprecateTarget, setDeprecateTarget] = useState<Item | null>(null);
   const [deprecateDate, setDeprecateDate] = useState<dayjs.Dayjs | null>(null);
+  const [deprecateUnknown, setDeprecateUnknown] = useState(false);
   // Ids whose default expansion state was flipped by the user. Defaults:
   // multi-item acquisitions expanded; single-item acquisitions collapsed
   // (rendered as ONE merged row — FR-003b).
@@ -296,7 +297,8 @@ export function CatalogPage() {
   };
 
   const deprecateMutation = useMutation({
-    mutationFn: ({ id, ts }: { id: string; ts: string | null }) => updateItem(id, { deprecate_time: ts }),
+    mutationFn: ({ id, flag, ts }: { id: string; flag: boolean; ts: string | null }) =>
+      updateItem(id, { deprecated: flag, deprecate_time: ts }),
     onSuccess: () => {
       invalidate();
       setDeprecateTarget(null);
@@ -307,6 +309,7 @@ export function CatalogPage() {
   const openDeprecate = (item: Item) => {
     setDeprecateTarget(item);
     setDeprecateDate(dayjs().startOf('day'));
+    setDeprecateUnknown(false);
   };
 
   const untitled = t({ id: 'pages.inventory.acquisitions.new.untitled' });
@@ -657,8 +660,8 @@ export function CatalogPage() {
             // Item-side actions: Deprecate/Restore only — no Delete (items are
             // hard-deleted on the acquisition edit page, FR-003).
             const itemActions = (it: Item) =>
-              it.deprecate_time ? (
-                <Button size="small" icon={<UndoOutlined />} onClick={() => deprecateMutation.mutate({ id: it.id, ts: null })}>
+              it.deprecated ? (
+                <Button size="small" icon={<UndoOutlined />} onClick={() => deprecateMutation.mutate({ id: it.id, flag: false, ts: null })}>
                   {t({ id: 'pages.inventory.items.restore' })}
                 </Button>
               ) : (
@@ -823,7 +826,11 @@ export function CatalogPage() {
                 deprecateTarget &&
                 deprecateMutation.mutate({
                   id: deprecateTarget.id,
-                  ts: (deprecateDate ?? dayjs().startOf('day')).toISOString(),
+                  flag: true,
+                  // Unknown time (iteration 36): deprecated with no timestamp.
+                  ts: deprecateUnknown
+                    ? null
+                    : (deprecateDate ?? dayjs().startOf('day')).toISOString(),
                 })
               }
             >
@@ -833,7 +840,20 @@ export function CatalogPage() {
         }
       >
         <p>{t({ id: 'pages.inventory.items.deprecate.confirm' })}</p>
-        <DatePicker showTime style={{ width: '100%' }} value={deprecateDate} onChange={setDeprecateDate} />
+        <DatePicker
+          showTime
+          style={{ width: '100%' }}
+          value={deprecateDate}
+          onChange={setDeprecateDate}
+          disabled={deprecateUnknown}
+        />
+        <Checkbox
+          style={{ marginTop: 8 }}
+          checked={deprecateUnknown}
+          onChange={(e) => setDeprecateUnknown(e.target.checked)}
+        >
+          {t({ id: 'pages.inventory.items.deprecate.unknown' })}
+        </Checkbox>
       </Modal>
     </>
   );

@@ -146,3 +146,39 @@ describe('parameter emoji (FR-032)', () => {
     expect(screen.getByText('capacity: 1500').textContent).toBe('capacity: 1500');
   });
 });
+
+describe('remark icon + deprecated warning (iteration 36)', () => {
+  it('shows a comment icon with the remark in a tooltip when remark is set', async () => {
+    wrap(<ItemDisplay item={{ ...base, remark: 'gifted by A\nsecond line' }} />);
+    const icon = document.querySelector('[data-testid="remark-icon"]')!;
+    expect(icon).toBeTruthy();
+    fireEvent.mouseEnter(icon);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('gifted by A');
+    // No icon without a remark.
+    wrap(<ItemDisplay item={base} />);
+    expect(document.querySelectorAll('[data-testid="remark-icon"]')).toHaveLength(1);
+  });
+
+  it('shows the deprecated warning only when opted in', async () => {
+    const dep = { ...base, deprecated: true, deprecate_time: '2026-01-05T00:00:00Z' };
+    const { rerender } = wrap(<ItemDisplay item={dep} />);
+    expect(document.querySelector('[data-testid="deprecated-warning"]')).toBeNull();
+    rerender(
+      <IntlProvider locale="en" messages={enUS}>
+        <ItemDisplay item={dep} showDeprecatedWarning />
+      </IntlProvider>,
+    );
+    const warn = document.querySelector('[data-testid="deprecated-warning"]')!;
+    expect(warn).toBeTruthy();
+    fireEvent.mouseEnter(warn);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent(/Deprecated/);
+    expect(tooltip).toHaveTextContent(/2026-01-05/);
+  });
+
+  it('omits the warning for active items even when opted in', () => {
+    wrap(<ItemDisplay item={{ ...base, deprecated: false }} showDeprecatedWarning />);
+    expect(document.querySelector('[data-testid="deprecated-warning"]')).toBeNull();
+  });
+});

@@ -93,7 +93,9 @@ class Item(models.Model):
     url = models.CharField(max_length=500, blank=True)
     # Parameters (generic relation enables prefetching + cascade delete).
     attribute_values = GenericRelation("core.AttributeValue")
-    # Lifecycle: deprecated when deprecate_time is set (status is derived, not stored).
+    # Lifecycle (iteration 36): `deprecated` is the STORED flag (status derives
+    # from it); `deprecate_time` records WHEN — optional, null = unknown time.
+    deprecated = models.BooleanField(default=False)
     deprecate_time = models.DateTimeField(null=True, blank=True)
     acquisition = models.ForeignKey(
         Acquisition,

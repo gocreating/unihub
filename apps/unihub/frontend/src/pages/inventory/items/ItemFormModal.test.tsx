@@ -133,6 +133,7 @@ describe('ItemFormModal (iteration 26 — unsaved edits survive parent re-render
       total_price: null,
       url: '',
       status: 'active' as const,
+      deprecated: false,
       deprecate_time: null,
       parameters: [],
       acquisition: null,

@@ -140,6 +140,7 @@ class ItemSerializer(serializers.ModelSerializer):
             "total_price",
             "url",
             "status",
+            "deprecated",
             "deprecate_time",
             "parameters",
             "acquisition",
@@ -154,7 +155,7 @@ class ItemSerializer(serializers.ModelSerializer):
         return str((obj.sku_price * obj.quantity).quantize(Decimal("0.0001")))
 
     def get_status(self, obj: Item) -> str:
-        return "deprecated" if obj.deprecate_time is not None else "active"
+        return "deprecated" if obj.deprecated else "active"
 
     def get_parameters(self, obj: Item) -> list[dict]:
         """The item's parameter rows (shared attribute values), stable order."""
@@ -182,6 +183,10 @@ class ItemSerializer(serializers.ModelSerializer):
     def to_internal_value(self, data: dict) -> dict:
         """Handle the write-side ``parameters`` list outside declared fields."""
         validated = super().to_internal_value(data)
+        # Back-compat (iteration 36): a payload setting only deprecate_time
+        # derives the stored flag from it (old client shape keeps working).
+        if "deprecate_time" in data and "deprecated" not in data:
+            validated["deprecated"] = validated.get("deprecate_time") is not None
         if "parameters" in data:
             validated["_parameters"] = _validate_parameters(data.get("parameters") or [])
         return validated

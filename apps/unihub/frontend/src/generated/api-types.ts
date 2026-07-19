@@ -875,6 +875,7 @@ export interface components {
             readonly total_price: string | null;
             url?: string;
             readonly status: string;
+            deprecated?: boolean;
             /** Format: date-time */
             deprecate_time?: string | null;
             /** @description The item's parameter rows (shared attribute values), stable order. */
@@ -1103,6 +1104,7 @@ export interface components {
             readonly total_price?: string | null;
             url?: string;
             readonly status?: string;
+            deprecated?: boolean;
             /** Format: date-time */
             deprecate_time?: string | null;
             /** @description The item's parameter rows (shared attribute values), stable order. */

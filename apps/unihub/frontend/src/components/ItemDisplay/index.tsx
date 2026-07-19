@@ -3,6 +3,7 @@ import { Space, Tag, Tooltip, Typography } from 'antd';
 import { CommentOutlined, WarningOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
+import { HighlightText } from '@/components/HighlightText';
 import { ItemName } from '@/components/ItemName';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
 import { pairText, parameterPairs } from './format';
@@ -129,7 +130,8 @@ export function ItemDisplay({
       {item.spec ? (
         <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
           <OverflowTooltip title={item.spec} style={{ maxWidth: '100%' }}>
-            {item.spec}
+            {/* Search marks reach every displayed text (FR-011, iter 43). */}
+            {highlight ? <HighlightText text={item.spec} query={highlight} /> : item.spec}
           </OverflowTooltip>
         </Typography.Text>
       ) : null}

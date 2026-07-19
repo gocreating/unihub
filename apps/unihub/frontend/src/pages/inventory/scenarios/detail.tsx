@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -49,6 +50,7 @@ import {
 import type { Item, ScenarioItem } from '@/services/unihub-backend/inventory';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { useCurrencySymbols } from '@/hooks/useCurrencySymbols';
+import { HighlightText } from '@/components/HighlightText';
 import { ItemDisplay } from '@/components/ItemDisplay';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
 import { PanelHeaderActions } from '@/components/PanelHeaderActions';
@@ -171,12 +173,18 @@ function OrgRow({
   hasChildren,
   collapsed,
   dimmed,
+  nestTarget,
+  inNestBlock,
   onToggle,
 }: {
   row: FlatRow;
   hasChildren: boolean;
   collapsed: boolean;
   dimmed?: boolean;
+  /** Prospective nest-drop container — strong tint (FR-011, iteration 43). */
+  nestTarget?: boolean;
+  /** Inside the prospective container's block — light tint. */
+  inNestBlock?: boolean;
   onToggle: () => void;
 }) {
   const drag = useDraggable({ id: `tree-${row.line.id}` });
@@ -188,6 +196,7 @@ function OrgRow({
         drop.setNodeRef(node);
       }}
       data-testid={`org-row-${row.line.id}`}
+      data-nest-target={nestTarget ? 'true' : undefined}
       {...drag.attributes}
       {...drag.listeners}
       style={{
@@ -200,6 +209,13 @@ function OrgRow({
         cursor: 'grab',
         opacity: drag.isDragging || dimmed ? 0.4 : 1,
         touchAction: 'none',
+        // Nest-drop tint (iteration 43): strong on the container, light on
+        // its block — replaces the ambiguous indented line.
+        background: nestTarget
+          ? 'rgba(22,119,255,0.18)'
+          : inNestBlock
+            ? 'rgba(22,119,255,0.07)'
+            : undefined,
       }}
     >
       {/* Caret toggler (iteration 19): containers collapse/expand; childless
@@ -241,7 +257,9 @@ export function ScenarioDetailPage() {
 
   // ── Drag state (one dnd-kit system for all three motions, FR-011) ──
   const [drag, setDrag] = useState<DragState | null>(null);
-  const [indicator, setIndicator] = useState<{ gapIndex: number; depth: number } | null>(null);
+  const [indicator, setIndicator] = useState<
+    { gapIndex: number; depth: number; containerId: string | null } | null
+  >(null);
   const [overFlat, setOverFlat] = useState(false);
   const projRef = useRef<{ gapIndex: number; dragDepth: number } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -440,7 +458,7 @@ export function ScenarioDetailPage() {
     const dragDepth = Math.max(0, baseDepth + Math.round(delta.x / INDENT));
     const projected = projectDrop(rows, drag.from === 'tree' ? drag.lineId : null, workingGap, dragDepth);
     projRef.current = { gapIndex: workingGap, dragDepth };
-    setIndicator({ gapIndex: visGap, depth: projected.depth });
+    setIndicator({ gapIndex: visGap, depth: projected.depth, containerId: projected.container_id ?? null });
   };
 
   const onDragEnd = ({ over }: DragEndEvent) => {
@@ -482,7 +500,9 @@ export function ScenarioDetailPage() {
     projRef.current = null;
   };
 
-  const dropIndicator = (
+  // Sibling insertions show the line; nest-drops replace it with the
+  // container/block tint (FR-011, iteration 43).
+  const dropIndicator = indicator?.containerId ? null : (
     <div
       data-testid="drop-indicator"
       style={{
@@ -497,6 +517,19 @@ export function ScenarioDetailPage() {
       }}
     />
   );
+
+  const nestTargetId = indicator?.containerId ?? null;
+  const nestBlockIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!nestTargetId) return ids;
+    const idx = shownRows.findIndex((r) => r.line.id === nestTargetId);
+    if (idx === -1) return ids;
+    const base = shownRows[idx]!.depth;
+    for (let i = idx + 1; i < shownRows.length && shownRows[i]!.depth > base; i++) {
+      ids.add(shownRows[i]!.line.id);
+    }
+    return ids;
+  }, [nestTargetId, shownRows]);
 
   const draggedLine = drag ? lineById.get(drag.lineId) : null;
 
@@ -513,7 +546,8 @@ export function ScenarioDetailPage() {
     const contextLine = `${summary.primary}${summary.secondary ? ` · ${summary.secondary}` : ''}`;
     return (
       <OverflowTooltip title={contextLine} style={{ maxWidth: '100%' }}>
-        {contextLine}
+        {/* Search marks reach every displayed text (FR-011, iteration 43). */}
+        {search.trim() ? <HighlightText text={contextLine} query={search} /> : contextLine}
       </OverflowTooltip>
     );
   };
@@ -626,6 +660,8 @@ export function ScenarioDetailPage() {
                           hasChildren={containerIds.has(row.line.id)}
                           collapsed={collapsedIds.has(row.line.id)}
                           dimmed={activeSubtreeIds.has(row.line.id)}
+                          nestTarget={row.line.id === nestTargetId}
+                          inNestBlock={nestBlockIds.has(row.line.id)}
                           onToggle={() => toggleCollapsed(row.line.id)}
                         />
                       </div>
@@ -636,6 +672,10 @@ export function ScenarioDetailPage() {
               </PaneDroppable>
             </Splitter.Panel>
           </Splitter>
+          {/* Portal (iteration 43): transformed ancestors (ProLayout/Splitter
+              animations) displace a fixed overlay rendered in the page tree —
+              anchoring to document.body keeps the grab offset from pixel one. */}
+          {createPortal(
           <DragOverlay zIndex={900}>
             {draggedLine ? (
               // Faithful preview (FR-011, iteration 29): the SAME row content
@@ -660,7 +700,9 @@ export function ScenarioDetailPage() {
                 <RowContent line={draggedLine} />
               </div>
             ) : null}
-          </DragOverlay>
+          </DragOverlay>,
+          document.body,
+          )}
         </DndContext>
       </Card>
 

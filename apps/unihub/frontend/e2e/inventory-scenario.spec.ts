@@ -516,6 +516,10 @@ test('iteration 29: drag overlay mirrors the grabbed row', async ({ page }) => {
   const overlayBox = (await overlay.boundingBox())!;
   // Same width as the grabbed row (±2px) — never a compact chip.
   expect(Math.abs(overlayBox.width - rowBox.width)).toBeLessThanOrEqual(2);
+  // Grab-offset anchor (iteration 43, portal): the overlay origin equals the
+  // source row origin + pointer delta — no jump on activation.
+  expect(Math.abs(overlayBox.x - (rowBox.x + 28))).toBeLessThanOrEqual(3);
+  expect(Math.abs(overlayBox.y - (rowBox.y + 10))).toBeLessThanOrEqual(3);
   // Same content — spec/parameter context included, not just the name.
   const overlayText = (await overlay.innerText()).trim();
   expect(overlayText).toBe(rowText);
@@ -592,6 +596,77 @@ test('iteration 31: drop indicator paints above the semi-transparent preview', a
     await expect(
       page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }),
     ).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
+  await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
+  await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();
+  await page.waitForTimeout(500);
+});
+
+
+// Iteration 43 (FR-011): a nest-drop colors the container row + block instead
+// of the indicator line.
+test('iteration 43: nest-drop highlights the prospective container', async ({ page }) => {
+  const name = `E2E Nest43 ${Date.now()}`;
+  await page.goto('/inventory/scenarios');
+  await page.waitForSelector('.ant-table-thead', { timeout: 10_000 });
+  await page.locator('button').filter({ hasText: /New/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.locator('.ant-modal input[id$="name"]').fill(name);
+  await page.locator('.ant-modal button', { hasText: /Save/ }).click();
+  await page.waitForTimeout(500);
+  await page.locator('.ant-table-tbody a', { hasText: name }).first().click();
+  await page.waitForSelector('.ant-card', { timeout: 10_000 });
+
+  // Two items: one into the tree, one kept flat.
+  await page.locator('.ant-card', { hasText: 'Organize' }).first()
+    .locator('button').filter({ hasText: /^Add$/ }).first().click();
+  const modal = page.locator('.ant-modal', { hasText: 'Add items' }).first();
+  const addButtons = modal.locator('.ant-list-item button:not([disabled])').filter({ hasText: /Add/ });
+  await expect(addButtons.first()).toBeVisible({ timeout: 10_000 });
+  await addButtons.first().click();
+  const flatPane = page.getByTestId('unorganized-pane');
+  await expect(async () => {
+    expect(await flatPane.locator('[data-testid^="flat-row-"]').count()).toBeGreaterThanOrEqual(1);
+  }).toPass({ timeout: 10_000 });
+  await addButtons.first().click();
+  await expect(async () => {
+    expect(await flatPane.locator('[data-testid^="flat-row-"]').count()).toBeGreaterThanOrEqual(2);
+  }).toPass({ timeout: 10_000 });
+  await modal.locator('.ant-modal-close').click();
+  await expect(modal).toBeHidden();
+
+  const orgPane = page.getByTestId('organized-pane');
+  const orgBox = (await orgPane.boundingBox())!;
+  await mouseDrag(
+    page,
+    flatPane.locator('[data-testid^="flat-row-"]').first(),
+    orgBox.x + orgBox.width / 2,
+    orgBox.y + 40,
+  );
+  await expect(orgPane.locator('[data-testid^="org-row-"]')).toHaveCount(1, { timeout: 10_000 });
+
+  // Hover a nested position (lower half + indent): the container row tints
+  // and the indicator line hides.
+  const firstRow = orgPane.locator('[data-testid^="org-row-"]').first();
+  const rowBox = (await firstRow.boundingBox())!;
+  const src = flatPane.locator('[data-testid^="flat-row-"]').first();
+  const srcBox = (await src.boundingBox())!;
+  await page.mouse.move(srcBox.x + 12, srcBox.y + srcBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(srcBox.x + 24, srcBox.y + srcBox.height / 2, { steps: 3 });
+  await page.mouse.move(rowBox.x + 120, rowBox.y + rowBox.height * 0.8, { steps: 12 });
+  await page.mouse.move(rowBox.x + 120, rowBox.y + rowBox.height * 0.8 + 1);
+  await expect(orgPane.locator('[data-nest-target="true"]')).toHaveCount(1, { timeout: 3_000 });
+  await expect(page.getByTestId('drop-indicator')).toHaveCount(0);
+  await page.mouse.up();
+  await expect(orgPane.locator('[data-testid^="org-row-"]')).toHaveCount(2, { timeout: 10_000 });
+  await page.mouse.click(8, 400);
+  await page.waitForTimeout(300);
+
+  // Cleanup.
+  await expect(async () => {
+    await page.getByLabel('scenario-actions').click();
+    await expect(page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' })).toBeVisible({ timeout: 1_000 });
   }).toPass({ timeout: 10_000 });
   await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
   await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();

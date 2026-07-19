@@ -239,7 +239,9 @@ describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes
       true,
     );
     // Acquisition context line on results that carry one (iteration 19).
-    expect(within(modal).getByText(/LanternShop/)).toBeInTheDocument();
+    // The context line now carries highlight marks (iteration 43), which
+    // split direct text nodes — assert on the composed text instead.
+    expect(modal.textContent).toContain('LanternShop');
     const lanternRow = lantern.closest('.ant-list-item') as HTMLElement;
     fireEvent.click(within(lanternRow).getByRole('button', { name: /Add/ }));
     await waitFor(() =>
@@ -365,5 +367,23 @@ describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes
     const lantern = await within(modal).findByText('Lantern');
     expect(lantern).toBeInTheDocument();
     expect(within(modal).getAllByRole('button', { name: /Add/ }).length).toBeGreaterThan(0);
+  });
+
+  // SD43-01 (FR-011): the search query highlights in EVERY displayed text.
+  it('highlights the query in spec and acquisition context, not just the name', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    const modal = (await screen.findByText('Add items')).closest('.ant-modal') as HTMLElement;
+    // "tern" matches the Lantern name AND the LanternShop context; use a
+    // query hitting the spec too.
+    fireEvent.change(within(modal).getByPlaceholderText('Search items…'), {
+      target: { value: 'Lantern' },
+    });
+    await waitFor(() => expect(vi.mocked(inventoryService.listItems)).toHaveBeenCalled());
+    await within(modal).findAllByText(/Lantern/);
+    const marks = Array.from(modal.querySelectorAll('mark')).map((m) => m.textContent);
+    // Name mark (existing) AND the acquisition-context mark (LanternShop).
+    expect(marks.filter((t) => t === 'Lantern').length).toBeGreaterThanOrEqual(2);
   });
 });

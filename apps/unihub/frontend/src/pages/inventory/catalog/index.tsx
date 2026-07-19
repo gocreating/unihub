@@ -834,6 +834,25 @@ export function CatalogPage() {
           </div>
         }
       >
+        {/* Item preview (FR-003c, iteration 47): the user verifies WHICH item
+            is being deprecated — shared ItemDisplay with parameter pairs. */}
+        {deprecateTarget ? (
+          <div
+            data-testid="deprecate-preview"
+            style={{
+              border: '1px solid rgba(5,5,5,0.1)',
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 12,
+            }}
+          >
+            <ItemDisplay
+              item={deprecateTarget}
+              parameters={deprecateTarget.parameters}
+              showParameters
+            />
+          </div>
+        ) : null}
         <p>{t({ id: 'pages.inventory.items.deprecate.confirm' })}</p>
         <DatePicker
           showTime

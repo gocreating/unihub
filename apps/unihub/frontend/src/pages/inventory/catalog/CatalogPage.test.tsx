@@ -765,3 +765,20 @@ describe('CatalogPage (iteration 34 — reactive currency symbols, FR-033)', () 
     });
   });
 });
+
+describe('CatalogPage (iteration 47 — deprecate-modal item preview, FR-003c)', () => {
+  // CAT47-01: the Deprecate modal previews the target item (shared
+  // ItemDisplay: name, spec, parameter pairs) so the user can verify it.
+  it('shows the target item preview inside the Deprecate modal', async () => {
+    renderPage();
+    const name = await screen.findByText('Backpack');
+    fireEvent.click(within(name.closest('tr')!).getByRole('button', { name: /Deprecate/ }));
+    const modal = await screen.findByRole('dialog');
+    const preview = within(modal).getByTestId('deprecate-preview');
+    expect(preview.textContent).toContain('Backpack');
+    expect(preview.textContent).toContain('roomy');
+    expect(preview.textContent).toContain('Color: red');
+    // The unknown-time controls stay (iteration 36).
+    expect(within(modal).getByRole('checkbox')).toBeInTheDocument();
+  });
+});

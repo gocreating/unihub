@@ -69,6 +69,7 @@ const COLOR_PARAM: ItemParameter = {
   value: 'red',
   unit: '',
   value_number: null,
+  value_number_max: null,
 };
 
 // Organized tree: Backpack (top) > Camera (aliased "Cammy"). Flat pane: Tent
@@ -181,15 +182,16 @@ describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes
     expect(within(camRow).getByText('Cammy')).toBeInTheDocument();
   });
 
-  // SD18-04 (FR-011): rich row context — link, spec, parameter badges.
-  it('renders spec, badges, and the url link on pane rows', async () => {
+  // SD18-04 (FR-011): rich row context — link, spec, key-value parameter pairs.
+  it('renders spec, parameter pairs, and the url link on pane rows', async () => {
     renderPage();
     await screen.findAllByText('Camping');
     const tentRow = screen.getByTestId('flat-row-l-tent');
     const link = within(tentRow).getByText('Tent').closest('a')!;
     expect(link).toHaveAttribute('href', 'https://example.com/tent');
     expect(within(tentRow).getByText('green 2p')).toBeInTheDocument();
-    expect(within(tentRow).getByText('red')).toBeInTheDocument();
+    // Localized key-value pairs (FR-031) replaced value-only badges.
+    expect(within(tentRow).getByText('Color: red')).toBeInTheDocument();
   });
 
   // SD18-05 (FR-011): remove stays flat-pane-only.

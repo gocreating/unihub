@@ -253,12 +253,17 @@ def _upsert_attribute_values(
         unit = ""
         if ad.data_type == "dimension" and " " in cell:
             cell, unit = cell.rsplit(" ", 1)
-        value, value_unit, value_number = compute_value_fields(ad, cell, unit)
+        value, value_unit, value_number, value_number_max = compute_value_fields(ad, cell, unit)
         AttributeValue.objects.update_or_create(
             attribute_definition=ad,
             content_type=ct,
             object_id=pk_val,
-            defaults={"value": value, "value_unit": value_unit, "value_number": value_number},
+            defaults={
+                "value": value,
+                "value_unit": value_unit,
+                "value_number": value_number,
+                "value_number_max": value_number_max,
+            },
         )
 
 

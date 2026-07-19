@@ -21,6 +21,9 @@ class AttributeDefinition(models.Model):
         ("length", "Length"),
         ("weight", "Weight"),
         ("volume", "Volume"),
+        ("temperature", "Temperature"),
+        ("time", "Time"),
+        ("battery", "Battery capacity"),
     ]
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
@@ -29,7 +32,7 @@ class AttributeDefinition(models.Model):
     data_type = models.CharField(max_length=20, choices=DATA_TYPE_CHOICES)
     # Required (and only allowed) when data_type == "dimension".
     unit_family = models.CharField(
-        max_length=10, choices=UNIT_FAMILY_CHOICES, blank=True, default=""
+        max_length=12, choices=UNIT_FAMILY_CHOICES, blank=True, default=""
     )
     is_system = models.BooleanField(default=False)
     display_order = models.PositiveIntegerField(default=0)
@@ -54,8 +57,13 @@ class AttributeValue(models.Model):
     value = models.TextField(blank=True)
     # Entered display unit (dimension values only).
     value_unit = models.CharField(max_length=8, blank=True, default="")
-    # Canonical numeric — dimension: family base unit (mm/g/mL); number: the value.
+    # Canonical numeric — dimension: family base unit (mm/g/mL/s/mAh/°C);
+    # number: the value. For a range value this is the canonical MINIMUM.
     value_number = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
+    # Canonical range maximum (dimension ranges only); NULL for single values.
+    value_number_max = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True
+    )
 
     class Meta:
         unique_together = [("attribute_definition", "content_type", "object_id")]

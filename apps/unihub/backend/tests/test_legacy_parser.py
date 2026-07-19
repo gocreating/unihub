@@ -476,3 +476,46 @@ class TestUpsertImport:
         assert "legacy_ref" not in data
         acq = auth_client.get("/api/v1/inventory/acquisitions/").json()["results"][0]
         assert "legacy_ref" not in acq
+
+
+# Iteration 26 (FR-029g): 尺寸 triplets/pairs split into 長/寬/高 parameters.
+def test_size_triplet_splits_into_lwh(parser):
+    fields, _ = parser.parse_remark("尺寸：14 x 15 x 5cm")
+    assert fields.get("length") == {"value": "14", "unit": "cm"}
+    assert fields.get("width") == {"value": "15", "unit": "cm"}
+    assert fields.get("height") == {"value": "5", "unit": "cm"}
+    assert "size" not in fields  # fully consumed → no separate size param
+    assert "remark" not in fields
+
+
+def test_size_uppercase_and_star_separators(parser):
+    fields, _ = parser.parse_remark("14X15X5cm")
+    assert fields.get("length") == {"value": "14", "unit": "cm"}
+    assert fields.get("width") == {"value": "15", "unit": "cm"}
+    assert fields.get("height") == {"value": "5", "unit": "cm"}
+    pair, _ = parser.parse_remark("尺寸：37*19.8cm")
+    assert pair.get("length") == {"value": "37", "unit": "cm"}
+    assert pair.get("width") == {"value": "19.8", "unit": "cm"}
+    assert "height" not in pair
+    assert "size" not in pair
+
+
+def test_size_triplet_honours_unit(parser):
+    fields, _ = parser.parse_remark("尺寸：10 × 20 × 30 mm")
+    assert fields.get("length") == {"value": "10", "unit": "mm"}
+    assert fields.get("width") == {"value": "20", "unit": "mm"}
+    assert fields.get("height") == {"value": "30", "unit": "mm"}
+
+
+def test_non_dimensional_size_stays_size_param(parser):
+    fields, _ = parser.parse_remark("尺寸：L")
+    assert fields.get("size") == "L"
+    assert "length" not in fields
+
+
+def test_size_with_extra_prose_keeps_verbatim_size(parser):
+    # Dims still extracted, but un-consumed prose means the verbatim size
+    # content must survive (FR-029d — extraction never drops context).
+    fields, _ = parser.parse_remark("尺寸：14 x 15 x 5cm 附收納袋")
+    assert fields.get("length") == {"value": "14", "unit": "cm"}
+    assert fields.get("size") == "14 x 15 x 5cm 附收納袋"

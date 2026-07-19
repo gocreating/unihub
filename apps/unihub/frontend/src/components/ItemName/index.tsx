@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Tooltip } from 'antd';
 import type { CSSProperties } from 'react';
+import { HighlightText } from '@/components/HighlightText';
 
 export interface ItemNameProps {
   item: { name: string; alias_name: string; url?: string };
@@ -12,6 +13,8 @@ export interface ItemNameProps {
    * the display text gated on actual truncation. Never nests tooltips.
    */
   truncate?: boolean;
+  /** Search query — matches inside the visible text render as <mark>. */
+  highlight?: string;
   style?: CSSProperties;
 }
 
@@ -21,7 +24,7 @@ export interface ItemNameProps {
  * reveals hidden content, never repeats visible text), else the raw `name`.
  * With `linkify`, the displayed name links to the item's `url` in a new tab.
  */
-export function ItemName({ item, linkify, truncate, style }: ItemNameProps) {
+export function ItemName({ item, linkify, truncate, highlight, style }: ItemNameProps) {
   const [truncated, setTruncated] = useState(false);
   const check = (node: HTMLElement | null) => {
     if (node) setTruncated(node.scrollWidth > node.clientWidth);
@@ -29,15 +32,16 @@ export function ItemName({ item, linkify, truncate, style }: ItemNameProps) {
   const measureRef = useCallback((node: HTMLSpanElement | null) => check(node), []);
 
   const display = item.alias_name || item.name;
+  const visible = highlight ? <HighlightText text={display} query={highlight} /> : display;
   const content =
     linkify && item.url ? (
       <a href={item.url} target="_blank" rel="noopener noreferrer" style={truncate ? undefined : style}>
-        {display}
+        {visible}
       </a>
     ) : truncate ? (
-      display
+      visible
     ) : (
-      <span style={style}>{display}</span>
+      <span style={style}>{visible}</span>
     );
 
   if (!truncate) {

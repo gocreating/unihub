@@ -140,13 +140,36 @@ RE_WEIGHT = re.compile(r"(?:重量|淨重)[:：]\s*([\d.]+)\s*(g|kg|克)?")
 RE_LENGTH = re.compile(r"長度[:：]\s*([\d.]+)\s*(mm|cm|m)?")
 RE_VOLUME = re.compile(r"容量[:：]\s*([\d.]+)\s*(mL|ml|L|毫升|公升)")
 RE_URL_KEY = re.compile(r"官網連結[:：]\s*(\S+)")
-RE_DIMS = re.compile(r"(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)?")
+RE_DIMS = re.compile(
+    r"(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)?"
+)
+# Two-part 長×寬 (e.g. 37*19.8cm) — the unit is REQUIRED so bare "a x b" text
+# (variant counts, quantities) never turns dimensional.
+RE_DIMS2 = re.compile(r"(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)\b")
 RE_QTY = re.compile(r"數量[:：]\s*(\d+)")
 RE_QTY_EXPR = re.compile(r"\*\s*(\d+)\s*件")
 RE_VARIANT = re.compile(r"x\s*\d+.*[，,].*x\s*\d+")  # e.g. 深藍x2，灰色x1
 # Simple shipping note (whole line) → a shipping cost factor on the acquisition.
 # Complex combos (運費60-國慶折抵70…) intentionally do NOT match → remark.
 RE_SHIPPING = re.compile(r"^運費[:：]?\s*([¥￥$]?)([\d.,]+)\s*(元|RMB|TWD|USD|NT)?$")
+
+
+def _size_fully_dimensional(size_match: re.Match, dims_match: re.Match) -> bool:
+    """True when the 尺寸 content is nothing but the matched dims expression.
+
+    Only then may the size param be dropped in favour of 長/寬/高 (FR-029g);
+    any extra prose keeps the verbatim size content (FR-029d).
+    """
+    start, end = size_match.start(1), size_match.end(1)
+    if dims_match.start() < start or dims_match.end() > end:
+        return False
+    content = size_match.string[start:end]
+    blanked = (
+        content[: dims_match.start() - start]
+        + " " * (dims_match.end() - dims_match.start())
+        + content[dims_match.end() - start :]
+    )
+    return not re.search(r"[一-鿿]{2,}|[A-Za-z]{2,}|\d", blanked)
 
 
 def parse_remark(remark: str) -> tuple[dict, list[str]]:
@@ -185,10 +208,11 @@ def parse_remark(remark: str) -> tuple[dict, list[str]]:
                 matched = True
             spans.append(m.span())
 
-        if m := RE_SIZE.search(line):
-            fields["size"] = m.group(1).strip()
+        size_m = RE_SIZE.search(line)
+        if size_m:
+            fields["size"] = size_m.group(1).strip()
             matched = True
-            spans.append(m.span())
+            spans.append(size_m.span())
         if m := RE_SPEC.search(line):
             fields["spec"] = m.group(1).strip()
             matched = True
@@ -224,6 +248,16 @@ def parse_remark(remark: str) -> tuple[dict, list[str]]:
             fields["height"] = {"value": m.group(3), "unit": unit}
             matched = True
             spans.append(m.span())
+            if size_m and _size_fully_dimensional(size_m, m):
+                fields.pop("size", None)
+        elif m := RE_DIMS2.search(line):
+            unit = m.group(3)
+            fields["length"] = {"value": m.group(1), "unit": unit}
+            fields["width"] = {"value": m.group(2), "unit": unit}
+            matched = True
+            spans.append(m.span())
+            if size_m and _size_fully_dimensional(size_m, m):
+                fields.pop("size", None)
         if mv := RE_VARIANT.search(line):
             flags.append(f"variant_qty:{line}")
             fields.setdefault("quantity", 1)

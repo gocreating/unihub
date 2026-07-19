@@ -11,7 +11,7 @@
  *      lazy-mounts its children, so a mount-effect observer never attached).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import enUS from '@/locales/en-US';
@@ -116,5 +116,55 @@ describe('ItemFormModal (Principle VI)', () => {
     await act(async () => instance!.trigger());
     expect(gridCol('Name').className).toContain('ant-col-24');
     expect(gridCol('Quantity').className).toContain('ant-col-24');
+  });
+});
+
+describe('ItemFormModal (iteration 26 — unsaved edits survive parent re-renders)', () => {
+  const mkInitial = () =>
+    ({
+      id: 'i1',
+      name: 'Original',
+      alias_name: '',
+      quantity: 1,
+      spec: '',
+      remark: '',
+      sku_price: null,
+      sku_price_currency: '',
+      total_price: null,
+      url: '',
+      status: 'active' as const,
+      deprecate_time: null,
+      parameters: [],
+      acquisition: null,
+      created_at: '',
+      updated_at: '',
+    });
+
+  // A parent re-render hands the modal a FRESH initial object (identity
+  // changes, content equal — AcquisitionForm derives it per render). The open
+  // modal must NOT re-initialize and wipe unsaved edits (the bug that erased a
+  // freshly-created parameter row when the definitions query invalidated).
+  it('does not reset the form when initial changes identity while open', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (initial: ReturnType<typeof mkInitial>) => (
+      <QueryClientProvider client={qc}>
+        <IntlProvider locale="en-US" messages={enUS}>
+          <ItemFormModal
+            open
+            title="Edit Item"
+            initial={initial}
+            currencyOptions={[]}
+            onOk={vi.fn()}
+            onCancel={vi.fn()}
+          />
+        </IntlProvider>
+      </QueryClientProvider>
+    );
+    const view = render(ui(mkInitial()));
+    const name = await screen.findByDisplayValue('Original');
+    fireEvent.change(name, { target: { value: 'Edited' } });
+    expect(screen.getByDisplayValue('Edited')).toBeInTheDocument();
+    view.rerender(ui(mkInitial()));
+    expect(screen.getByDisplayValue('Edited')).toBeInTheDocument();
   });
 });

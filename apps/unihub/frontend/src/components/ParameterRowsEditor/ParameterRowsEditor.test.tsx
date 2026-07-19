@@ -15,6 +15,7 @@ const DEFS = [
   { id: 'd-color', content_type: 7, content_type_label: 'inventory.item', name: 'color', data_type: 'text', unit_family: '', is_system: true, display_order: 0, options: [] },
   { id: 'd-weight', content_type: 7, content_type_label: 'inventory.item', name: 'weight', data_type: 'dimension', unit_family: 'weight', is_system: true, display_order: 2, options: [] },
   { id: 'd-capacity', content_type: 7, content_type_label: 'inventory.item', name: 'capacity', data_type: 'number', unit_family: '', is_system: false, display_order: 10, options: [] },
+  { id: 'd-batt', content_type: 7, content_type_label: 'inventory.item', name: 'batt', data_type: 'dimension', unit_family: 'battery', is_system: false, display_order: 11, options: [] },
 ] as AttributeDefinition[];
 
 function Harness({
@@ -207,5 +208,44 @@ describe('ParameterRowsEditor (iteration 16 — form grid + definition delete)',
     await waitFor(() =>
       expect(vi.mocked(coreService.listAttributeDefinitions).mock.calls.length).toBeGreaterThan(1),
     );
+  });
+
+  // PRE-08 (iteration 26, FR-002b): the three new unit families are offered
+  // when creating a dimension definition, and their units drive the unit select.
+  it('offers temperature/time/battery families and their units', async () => {
+    renderEditor([{ definition_id: 'd-batt', value: '10', unit: 'Ah' }]);
+    // Battery row exposes its family units in the unit select.
+    expect(await screen.findByText('Ah')).toBeInTheDocument();
+    // New-definition draft: family select lists the new families.
+    fireEvent.click(screen.getByRole('button', { name: /Add parameter/ }));
+    const selects = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(selects[selects.length - 1]!);
+    fireEvent.click(within(lastDropdown()).getByText('+ New parameter…'));
+    const typeSelect = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(typeSelect[typeSelect.length - 1]!);
+    fireEvent.click(within(lastDropdown()).getByText('Dimension'));
+    const familySelect = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(familySelect[familySelect.length - 1]!);
+    const listbox = lastDropdown();
+    expect(within(listbox).getByText('Temperature')).toBeInTheDocument();
+    expect(within(listbox).getByText('Time')).toBeInTheDocument();
+    expect(within(listbox).getByText('Battery capacity')).toBeInTheDocument();
+  });
+
+  // PRE-09 (iteration 26, FR-002b): dimension values accept "5" and "5-10";
+  // an invalid range shows the localized validation message.
+  it('accepts single and range dimension values, flags invalid ranges', async () => {
+    const onChange = vi.fn();
+    renderEditor([{ definition_id: 'd-weight', value: '1.5', unit: 'kg' }], onChange);
+    const input = await screen.findByDisplayValue('1.5');
+    fireEvent.change(input, { target: { value: '5-10' } });
+    expect(onChange).toHaveBeenLastCalledWith([
+      { definition_id: 'd-weight', value: '5-10', unit: 'kg' },
+    ]);
+    expect(screen.queryByText('Enter a number or a min-max range (e.g. 5-10)')).toBeNull();
+    fireEvent.change(screen.getByDisplayValue('5-10'), { target: { value: '10-5' } });
+    expect(
+      await screen.findByText('Enter a number or a min-max range (e.g. 5-10)'),
+    ).toBeInTheDocument();
   });
 });

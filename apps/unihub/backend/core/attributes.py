@@ -6,6 +6,7 @@ DRF filter backends can treat them like concrete columns; rows lacking a value
 annotate to NULL (honouring the ``__nullsfirst``/``__nullslast`` suffixes).
 """
 
+import re
 from decimal import Decimal, InvalidOperation
 
 from django.db.models import DecimalField, OuterRef, QuerySet, Subquery, TextField
@@ -13,6 +14,12 @@ from rest_framework import serializers
 
 from core import units
 from core.models import AttributeDefinition, AttributeValue
+
+# "5-10" / "5~10" (dash max must be non-negative so "-5" stays a single value;
+# "~" separates signed bounds, e.g. "-10~-5").
+_RANGE_RE = re.compile(
+    r"^\s*(-?\d+(?:\.\d+)?)\s*(?:~\s*(-?\d+(?:\.\d+)?)|-\s*(\d+(?:\.\d+)?))\s*$"
+)
 
 ATTR_KEY_PREFIX = "attr:"
 
@@ -106,48 +113,85 @@ def filter_type_for(definition: AttributeDefinition) -> str:
     return "number" if definition.data_type in NUMERIC_DATA_TYPES else "text"
 
 
+def _parse_dimension_number(text: str, key: str) -> tuple[Decimal, Decimal | None]:
+    """Parse a dimension value as a single number or a min-max range.
+
+    Args:
+        text: The raw entered value, e.g. ``"5"``, ``"5-10"``, ``"5 ~ 10"``.
+        key: The definition name, used as the validation-error key.
+
+    Returns:
+        ``(minimum, maximum)`` in the entered unit; ``maximum`` is None for a
+        single value.
+
+    Raises:
+        serializers.ValidationError: On non-numeric text or a range whose
+            minimum exceeds its maximum.
+    """
+    try:
+        return Decimal(text), None
+    except (InvalidOperation, TypeError):
+        pass
+    match = _RANGE_RE.match(text or "")
+    if not match:
+        raise serializers.ValidationError(
+            {key: "value must be a number or a min-max range (e.g. 5-10)."}
+        )
+    low = Decimal(match.group(1))
+    high = Decimal(match.group(2) or match.group(3))
+    if low > high:
+        raise serializers.ValidationError(
+            {key: "range minimum must not exceed its maximum."}
+        )
+    return low, high
+
+
 def compute_value_fields(
     definition: AttributeDefinition, value, unit: str = ""
-) -> tuple[str, str, Decimal | None]:
+) -> tuple[str, str, Decimal | None, Decimal | None]:
     """Validate and normalise a raw attribute value for storage.
 
     Args:
         definition: The attribute definition the value belongs to.
-        value: The raw entered value.
+        value: The raw entered value. Dimension values accept a single number
+            or a ``min-max`` / ``min~max`` range.
         unit: The entered unit (dimension definitions only).
 
     Returns:
-        ``(value, value_unit, value_number)`` ready for AttributeValue fields.
+        ``(value, value_unit, value_number, value_number_max)`` ready for
+        AttributeValue fields; ``value_number_max`` is None except for
+        dimension ranges (canonical maximum).
 
     Raises:
         serializers.ValidationError: On a non-numeric value for numeric or
-            dimension types, a unit outside the definition's family, or a
-            select value outside the definition's options.
+            dimension types, an invalid range, a unit outside the definition's
+            family, or a select value outside the definition's options.
     """
     text = "" if value is None else str(value)
     if definition.data_type == "dimension":
-        table = units.FAMILY_UNITS.get(definition.unit_family)
-        if table is None:
+        family = definition.unit_family
+        symbols = units.family_unit_symbols(family)
+        if symbols is None:
             raise serializers.ValidationError(
                 {definition.name: "Definition has no valid unit family."}
             )
-        if unit not in table:
+        if unit not in symbols:
             raise serializers.ValidationError(
-                {
-                    definition.name: f"Unsupported unit {unit!r} for family {definition.unit_family!r}."
-                }
+                {definition.name: f"Unsupported unit {unit!r} for family {family!r}."}
             )
-        try:
-            number = Decimal(text)
-        except (InvalidOperation, TypeError):
-            raise serializers.ValidationError({definition.name: "value must be a number."})
-        return text, unit, units.to_canonical(number, unit, table)
+        low, high = _parse_dimension_number(text, definition.name)
+        return (
+            text,
+            unit,
+            units.family_to_canonical(family, low, unit),
+            units.family_to_canonical(family, high, unit),
+        )
     if definition.data_type == "number":
         try:
             number = Decimal(text)
         except (InvalidOperation, TypeError):
             raise serializers.ValidationError({definition.name: "value must be a number."})
-        return text, "", number
+        return text, "", number, None
     if (
         definition.data_type == "single_select"
         and definition.options
@@ -156,4 +200,4 @@ def compute_value_fields(
         raise serializers.ValidationError(
             {definition.name: "Value must be one of the defined options."}
         )
-    return text, "", None
+    return text, "", None, None

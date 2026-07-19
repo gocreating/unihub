@@ -512,6 +512,10 @@ export default {
   'pages.inventory.params.family.length': 'Length',
   'pages.inventory.params.family.weight': 'Weight',
   'pages.inventory.params.family.volume': 'Volume',
+  'pages.inventory.params.family.temperature': 'Temperature',
+  'pages.inventory.params.family.time': 'Time',
+  'pages.inventory.params.family.battery': 'Battery capacity',
+  'pages.inventory.params.rangeInvalid': 'Enter a number or a min-max range (e.g. 5-10)',
   'pages.inventory.params.optionsHint': 'Options (comma-separated)',
   'pages.inventory.params.create': 'Create',
 

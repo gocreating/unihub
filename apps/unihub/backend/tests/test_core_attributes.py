@@ -187,3 +187,62 @@ class TestAttributeFilterAndOrdering:
         resp = auth_client.get(f"{ITEMS}?filters={filters}")
         assert resp.status_code == 200
         assert len(self._names(resp)) == 3
+
+
+@pytest.mark.django_db
+class TestNewFamiliesAndRanges:
+    """Iteration 26 (FR-002b): temperature/time/battery families + ranges."""
+
+    def test_temperature_fahrenheit_converts_affine(self, auth_client):
+        d = _make_def("comfort", "dimension", unit_family="temperature")
+        item = create_item(auth_client, name="Bag")
+        resp = _upsert(auth_client, item["id"], d, "32", unit="°F")
+        assert resp.status_code == 200, resp.content
+        stored = AttributeValue.objects.get(attribute_definition=d, object_id=item["id"])
+        assert stored.value_number == pytest.approx(0)  # 32°F = 0°C
+
+    def test_time_and_battery_canonicals(self, auth_client):
+        t = _make_def("boil", "dimension", unit_family="time")
+        b = _make_def("cap", "dimension", unit_family="battery")
+        item = create_item(auth_client, name="Stove")
+        assert _upsert(auth_client, item["id"], t, "2", unit="h").status_code == 200
+        assert _upsert(auth_client, item["id"], b, "10", unit="Ah").status_code == 200
+        tv = AttributeValue.objects.get(attribute_definition=t, object_id=item["id"])
+        bv = AttributeValue.objects.get(attribute_definition=b, object_id=item["id"])
+        assert tv.value_number == pytest.approx(7200)  # 2h → s
+        assert bv.value_number == pytest.approx(10000)  # 10Ah → mAh
+
+    def test_range_value_stores_min_and_max(self, auth_client):
+        d = _make_def("load", "dimension", unit_family="weight")
+        item = create_item(auth_client, name="Rack")
+        resp = _upsert(auth_client, item["id"], d, "5-10", unit="kg")
+        assert resp.status_code == 200, resp.content
+        stored = AttributeValue.objects.get(attribute_definition=d, object_id=item["id"])
+        assert stored.value == "5-10"
+        assert stored.value_number == pytest.approx(5000)  # canonical MIN
+        assert stored.value_number_max == pytest.approx(10000)  # canonical MAX
+        # Tilde variant + whitespace.
+        assert _upsert(auth_client, item["id"], d, "5 ~ 10", unit="kg").status_code == 200
+
+    def test_single_value_leaves_max_null(self, auth_client):
+        d = _make_def("solo", "dimension", unit_family="weight")
+        item = create_item(auth_client, name="One")
+        _upsert(auth_client, item["id"], d, "3", unit="kg")
+        stored = AttributeValue.objects.get(attribute_definition=d, object_id=item["id"])
+        assert stored.value_number_max is None
+
+    def test_invalid_ranges_rejected(self, auth_client):
+        d = _make_def("bad", "dimension", unit_family="weight")
+        item = create_item(auth_client, name="Bad")
+        assert _upsert(auth_client, item["id"], d, "10-5", unit="kg").status_code == 400
+        assert _upsert(auth_client, item["id"], d, "5-abc", unit="kg").status_code == 400
+
+    def test_ranges_sort_by_canonical_min(self, auth_client):
+        d = _make_def("span", "dimension", unit_family="length")
+        a = create_item(auth_client, name="SpanA")
+        b = create_item(auth_client, name="SpanB")
+        _upsert(auth_client, a["id"], d, "5-90", unit="cm")
+        _upsert(auth_client, b["id"], d, "10", unit="cm")
+        resp = auth_client.get(f"{ITEMS}?ordering={quote(f'attr:{d.id}')}")
+        names = [i["name"] for i in resp.json()["results"] if i["name"].startswith("Span")]
+        assert names == ["SpanA", "SpanB"]  # 50mm min < 100mm

@@ -50,6 +50,7 @@ class AttributeValueSerializer(serializers.ModelSerializer):
             "value",
             "value_unit",
             "value_number",
+            "value_number_max",
         ]
         read_only_fields = ["id"]
 

@@ -52,10 +52,10 @@ const ITEM = {
   status: 'active' as const,
   deprecate_time: null,
   parameters: [
-    { definition_id: 'ad-color', name: 'color', data_type: 'text', unit_family: '' as const, value: 'red', unit: '', value_number: null },
-    { definition_id: 'ad-weight', name: 'weight', data_type: 'dimension', unit_family: 'weight' as const, value: '0.5000', unit: 'kg', value_number: '500.0000' },
-    { definition_id: 'ad-volume', name: 'volume', data_type: 'dimension', unit_family: 'volume' as const, value: '1.2', unit: 'L', value_number: '1200.0000' },
-    { definition_id: 'ad-size', name: 'size', data_type: 'text', unit_family: '' as const, value: 'M', unit: '', value_number: null },
+    { definition_id: 'ad-color', name: 'color', data_type: 'text', unit_family: '' as const, value: 'red', unit: '', value_number: null, value_number_max: null },
+    { definition_id: 'ad-weight', name: 'weight', data_type: 'dimension', unit_family: 'weight' as const, value: '0.5000', unit: 'kg', value_number: '500.0000', value_number_max: null },
+    { definition_id: 'ad-volume', name: 'volume', data_type: 'dimension', unit_family: 'volume' as const, value: '1.2', unit: 'L', value_number: '1200.0000', value_number_max: null },
+    { definition_id: 'ad-size', name: 'size', data_type: 'text', unit_family: '' as const, value: 'M', unit: '', value_number: null, value_number_max: null },
   ],
   acquisition: {
     id: 'acq-1',
@@ -233,7 +233,7 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     const name = await screen.findByText('Backpack');
     const row = name.closest('tr')!;
     const tags = Array.from(row.querySelectorAll('.ant-tag')).map((t) => t.textContent);
-    expect(tags).toEqual(expect.arrayContaining(['red', '0.5 kg', '1.2 L', 'M']));
+    expect(tags).toEqual(expect.arrayContaining(['Color: red', 'Weight: 0.5 kg', 'Volume: 1.2 L', 'Size: M']));
     // The no-parameters item shows the standard placeholder in its Parameters cell.
     const plainRow = screen.getByText('Plain').closest('tr')!;
     expect(plainRow.querySelectorAll('.ant-tag').length).toBe(0);

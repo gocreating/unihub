@@ -49,7 +49,7 @@ def _validate_parameters(raw: list) -> list[dict]:
             raise serializers.ValidationError(
                 {"parameters": f"Unknown parameter definition {definition_id!r}."}
             )
-        value, value_unit, value_number = compute_value_fields(
+        value, value_unit, value_number, value_number_max = compute_value_fields(
             definition, entry.get("value", ""), entry.get("unit", "") or ""
         )
         rows.append(
@@ -58,6 +58,7 @@ def _validate_parameters(raw: list) -> list[dict]:
                 "value": value,
                 "value_unit": value_unit,
                 "value_number": value_number,
+                "value_number_max": value_number_max,
             }
         )
     return rows
@@ -76,6 +77,7 @@ def _write_parameters(item: Item, rows: list[dict]) -> None:
                 "value": row["value"],
                 "value_unit": row["value_unit"],
                 "value_number": row["value_number"],
+                "value_number_max": row["value_number_max"],
             },
         )
         keep.append(row["definition"].id)
@@ -169,6 +171,9 @@ class ItemSerializer(serializers.ModelSerializer):
                 "value": v.value,
                 "unit": v.value_unit,
                 "value_number": str(v.value_number) if v.value_number is not None else None,
+                "value_number_max": (
+                    str(v.value_number_max) if v.value_number_max is not None else None
+                ),
             }
             for v in values
         ]

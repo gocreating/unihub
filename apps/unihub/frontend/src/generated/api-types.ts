@@ -1165,9 +1165,12 @@ export interface components {
          * @description * `length` - Length
          *     * `weight` - Weight
          *     * `volume` - Volume
+         *     * `temperature` - Temperature
+         *     * `time` - Time
+         *     * `battery` - Battery capacity
          * @enum {string}
          */
-        UnitFamilyEnum: "length" | "weight" | "volume";
+        UnitFamilyEnum: "length" | "weight" | "volume" | "temperature" | "time" | "battery";
     };
     responses: never;
     parameters: never;

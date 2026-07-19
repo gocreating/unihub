@@ -22,7 +22,6 @@ import PageTable, {
 import { DateTimeCell, dateTimeLines } from '@/components/DateTimeCell';
 import { EmptyValue } from '@/components/EmptyValue';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
-import { ItemName } from '@/components/ItemName';
 import { acquisitionSummaryLines, formatNetCost } from '../acquisitionSummary';
 import { parameterKeyLabel } from '@/components/ParameterRowsEditor';
 import { listAttributeDefinitions } from '@/services/unihub-backend/core';
@@ -45,7 +44,7 @@ import type {
   OffsetPaginatedResponse,
 } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
-import { formatDecimal, parameterBadges } from '../itemBadges';
+import { ItemDisplay, formatDecimal, parameterPairs } from '@/components/ItemDisplay';
 
 const EMPTY = <EmptyValue />;
 
@@ -351,7 +350,7 @@ export function CatalogPage() {
       case 'item_summary':
         return widest([r.alias_name || r.name, r.spec ?? '', r.quantity > 1 ? `×${r.quantity}` : '']);
       case 'parameters':
-        return parameterBadges(r.parameters).join('   ');
+        return parameterPairs(r.parameters, (id) => t({ id })).join('   ');
       case 'remark':
         return r.remark ?? '';
       case 'acquisition__source':
@@ -395,13 +394,6 @@ export function CatalogPage() {
   }, [measuredRows, columnDefs, t, flatMode]);
 
   const actionsColWidth = useActionsColWidth(rows);
-
-  // Truncation-gated tooltip (constitution v1.20.0): only when ellipsised.
-  const ellipsisSecondary = (text: string) => (
-    <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12, maxWidth: 420 }}>
-      <OverflowTooltip title={text}>{text}</OverflowTooltip>
-    </Typography.Text>
-  );
 
   const colDefMap = useMemo<Record<string, ProColumns<CatalogRow>>>(
     () => {
@@ -482,19 +474,8 @@ export function CatalogPage() {
                 EMPTY
               );
             }
-            return (
-              <div>
-                <div>
-                  <ItemName item={it} linkify />
-                </div>
-                {it.spec ? ellipsisSecondary(it.spec) : null}
-                {it.quantity > 1 ? (
-                  <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
-                    ×{it.quantity}
-                  </Typography.Text>
-                ) : null}
-              </div>
-            );
+            // Shared item display (FR-031); parameters live in their own column.
+            return <ItemDisplay item={it} />;
           },
         },
         // Derived "Parameters" (FR-003a): one badge per parameter row.
@@ -506,13 +487,14 @@ export function CatalogPage() {
           render: (_, r) => {
             const it = itemFor(r);
             if (!it) return EMPTY;
-            const badges = parameterBadges(it.parameters);
-            if (badges.length === 0) return EMPTY;
+            // Key-value pairs (FR-031) — value-only badges retired from mixed lists.
+            const pairs = parameterPairs(it.parameters, (id) => t({ id }));
+            if (pairs.length === 0) return EMPTY;
             return (
               <Space size={[4, 4]} wrap style={{ maxWidth: '100%' }}>
-                {badges.map((badge, i) => (
+                {pairs.map((pair, i) => (
                   <Tag key={i} style={{ marginInlineEnd: 0, maxWidth: '100%' }}>
-                    <OverflowTooltip title={badge}>{badge}</OverflowTooltip>
+                    <OverflowTooltip title={pair}>{pair}</OverflowTooltip>
                   </Tag>
                 ))}
               </Space>

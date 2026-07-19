@@ -6,7 +6,7 @@ export interface AttributeDefinition {
   content_type_label: string;
   name: string;
   data_type: 'text' | 'long_text' | 'number' | 'date' | 'boolean' | 'single_select' | 'dimension';
-  unit_family: 'length' | 'weight' | 'volume' | '';
+  unit_family: 'length' | 'weight' | 'volume' | 'temperature' | 'time' | 'battery' | '';
   is_system: boolean;
   display_order: number;
   options: string[];
@@ -20,6 +20,7 @@ export interface AttributeValue {
   value: string;
   value_unit: string;
   value_number: string | null;
+  value_number_max: string | null;
 }
 
 function getCsrfToken(): string {

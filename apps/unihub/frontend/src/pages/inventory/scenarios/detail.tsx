@@ -10,7 +10,6 @@ import {
   List,
   Modal,
   Splitter,
-  Tag,
   Tooltip,
   Typography,
   message,
@@ -49,12 +48,10 @@ import {
 } from '@/services/unihub-backend/inventory';
 import type { Item, ScenarioItem } from '@/services/unihub-backend/inventory';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
-import { HighlightText } from '@/components/HighlightText';
-import { ItemName } from '@/components/ItemName';
+import { ItemDisplay } from '@/components/ItemDisplay';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
 import { PanelHeaderActions } from '@/components/PanelHeaderActions';
 import { acquisitionSummaryLines } from '../acquisitionSummary';
-import { parameterBadges } from '../itemBadges';
 import {
   flattenOrganized,
   gapFromVisible,
@@ -78,29 +75,12 @@ interface DragState {
 const lineIdOf = (dndId: string | number): string =>
   String(dndId).replace(/^(tree|flat|orgrow)-/, '');
 
-/** Rich shared row content: alias-preferred link, spec, parameter badges. */
+/** Rich shared row content: the shared ItemDisplay with opt-in parameters. */
 function RowContent({ line }: { line: ScenarioItem }) {
-  const badges = parameterBadges(line.item.parameters);
   return (
     <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-      {/* Truncation-gated tooltips (constitution VI, iteration 19). */}
-      <ItemName item={line.item} linkify truncate />
-      {line.item.spec ? (
-        <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
-          <OverflowTooltip title={line.item.spec} style={{ maxWidth: '100%' }}>
-            {line.item.spec}
-          </OverflowTooltip>
-        </Typography.Text>
-      ) : null}
-      {badges.length > 0 ? (
-        <div style={{ overflow: 'hidden' }}>
-          {badges.map((badge) => (
-            <Tag key={badge} style={{ fontSize: 11, marginTop: 2 }}>
-              {badge}
-            </Tag>
-          ))}
-        </div>
-      ) : null}
+      {/* Truncation-gated tooltips (constitution VI); key-value pairs (FR-031). */}
+      <ItemDisplay item={line.item} parameters={line.item.parameters} showParameters truncate />
     </div>
   );
 }
@@ -415,10 +395,17 @@ export function ScenarioDetailPage() {
       const shownIdx = shownRows.findIndex((r) => r.line.id === overLineId);
       const mapIdx = mappingVisible.findIndex((r) => r.line.id === overLineId);
       if (shownIdx === -1 || mapIdx === -1) return;
+      // Before/after from the POINTER, not the active rect: the DragOverlay
+      // (whose rect dnd-kit measures) can be more compact than the grabbed
+      // source row, so its center lags the pointer and misclassifies drops
+      // near a row's lower half (iteration 26).
+      const activator = event.activatorEvent as Partial<PointerEvent>;
+      const startY = typeof activator.clientY === 'number' ? activator.clientY : 0;
       const translated = active.rect.current.translated;
       const activeCenter = translated ? translated.top + translated.height / 2 : 0;
+      const pointerY = startY > 0 ? startY + delta.y : activeCenter;
       const overCenter = over.rect.top + over.rect.height / 2;
-      const after = activeCenter > overCenter;
+      const after = pointerY > overCenter;
       visGap = after ? shownIdx + 1 : shownIdx;
       workingGap = gapFromVisible(working, mappingVisible, mapIdx, after);
     } else {
@@ -484,62 +471,20 @@ export function ScenarioDetailPage() {
 
   const draggedLine = drag ? lineById.get(drag.lineId) : null;
 
-  // Modal result title: highlighted alias-preferred name, linked, tooltip original.
   const searchResults = searchQ.data?.results ?? [];
   const untitled = t({ id: 'pages.inventory.acquisitions.new.untitled' });
-  const modalItemTitle = (item: Item): ReactNode => {
-    const display = item.alias_name || item.name;
-    const highlighted = <HighlightText text={display} query={search} />;
-    const linked: ReactNode = item.url ? (
-      <a href={item.url} target="_blank" rel="noopener noreferrer">
-        {highlighted}
-      </a>
-    ) : (
-      highlighted
-    );
-    if (item.alias_name) {
-      // Informational tooltip (FR-030) — reveals the hidden original name.
-      return (
-        <Tooltip title={item.name}>
-          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {linked}
-          </div>
-        </Tooltip>
-      );
-    }
-    // Truncation-gated tooltip (constitution VI, iteration 20).
-    return (
-      <OverflowTooltip title={display} style={{ maxWidth: '100%' }}>
-        {linked}
-      </OverflowTooltip>
-    );
-  };
-  // Acquisition context on results (iteration 19): source + date summary.
-  const modalItemDescription = (item: Item): ReactNode => {
+  // Acquisition context on results (iteration 19): source + date summary,
+  // truncation-gated (constitution VI, iteration 20).
+  const modalItemContext = (item: Item): ReactNode => {
     const summary = item.acquisition
       ? acquisitionSummaryLines(item.acquisition, untitled)
       : null;
-    if (!item.spec && !summary) return undefined;
-    const contextLine = summary
-      ? `${summary.primary}${summary.secondary ? ` · ${summary.secondary}` : ''}`
-      : '';
+    if (!summary) return undefined;
+    const contextLine = `${summary.primary}${summary.secondary ? ` · ${summary.secondary}` : ''}`;
     return (
-      <div style={{ overflow: 'hidden' }}>
-        {item.spec ? (
-          <div>
-            <OverflowTooltip title={item.spec} style={{ maxWidth: '100%' }}>
-              {item.spec}
-            </OverflowTooltip>
-          </div>
-        ) : null}
-        {contextLine ? (
-          <div>
-            <OverflowTooltip title={contextLine} style={{ maxWidth: '100%' }}>
-              {contextLine}
-            </OverflowTooltip>
-          </div>
-        ) : null}
-      </div>
+      <OverflowTooltip title={contextLine} style={{ maxWidth: '100%' }}>
+        {contextLine}
+      </OverflowTooltip>
     );
   };
 
@@ -739,10 +684,13 @@ export function ScenarioDetailPage() {
                   style={{ display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%' }}
                 >
                   <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-                    {modalItemTitle(item)}
-                    <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
-                      {modalItemDescription(item)}
-                    </Typography.Text>
+                    {/* Shared item display (FR-031) with search-match highlighting. */}
+                    <ItemDisplay
+                      item={item}
+                      truncate
+                      highlight={search}
+                      extraSecondary={modalItemContext(item)}
+                    />
                   </div>
                   <div style={{ flex: 'none' }}>
                     {isMember ? (

@@ -23,15 +23,24 @@ export const COST_FACTOR_TYPES: CostFactorType[] = [
 export type LengthUnit = 'mm' | 'cm' | 'm' | 'in';
 export type WeightUnit = 'g' | 'kg' | 'lb';
 export type VolumeUnit = 'mL' | 'L';
+export type TemperatureUnit = '°C' | '°F';
+export type TimeUnit = 's' | 'min' | 'h';
+export type BatteryUnit = 'mAh' | 'Ah';
 export const LENGTH_UNITS: LengthUnit[] = ['mm', 'cm', 'm', 'in'];
 export const WEIGHT_UNITS: WeightUnit[] = ['g', 'kg', 'lb'];
 export const VOLUME_UNITS: VolumeUnit[] = ['mL', 'L'];
+export const TEMPERATURE_UNITS: TemperatureUnit[] = ['°C', '°F'];
+export const TIME_UNITS: TimeUnit[] = ['s', 'min', 'h'];
+export const BATTERY_UNITS: BatteryUnit[] = ['mAh', 'Ah'];
 
-export type UnitFamily = 'length' | 'weight' | 'volume';
+export type UnitFamily = 'length' | 'weight' | 'volume' | 'temperature' | 'time' | 'battery';
 export const UNIT_FAMILY_OPTIONS: Record<UnitFamily, readonly string[]> = {
   length: LENGTH_UNITS,
   weight: WEIGHT_UNITS,
   volume: VOLUME_UNITS,
+  temperature: TEMPERATURE_UNITS,
+  time: TIME_UNITS,
+  battery: BATTERY_UNITS,
 };
 
 export interface Measurement {
@@ -48,6 +57,7 @@ export interface ItemParameter {
   value: string;
   unit: string;
   value_number: string | null;
+  value_number_max: string | null;
 }
 
 export interface ItemParameterWrite {

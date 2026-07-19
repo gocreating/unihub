@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Col, Input, InputNumber, Modal, Row, Select, Space, message } from 'antd';
+import { Button, Card, Col, Input, InputNumber, Modal, Row, Select, Space, Typography, message } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useIntl } from 'react-intl';
 import type { IntlShape } from 'react-intl';
@@ -28,7 +28,23 @@ const FAMILY_CHOICES = [
   { value: 'length', labelId: 'pages.inventory.params.family.length' },
   { value: 'weight', labelId: 'pages.inventory.params.family.weight' },
   { value: 'volume', labelId: 'pages.inventory.params.family.volume' },
+  { value: 'temperature', labelId: 'pages.inventory.params.family.temperature' },
+  { value: 'time', labelId: 'pages.inventory.params.family.time' },
+  { value: 'battery', labelId: 'pages.inventory.params.family.battery' },
 ] as const;
+
+// Mirrors the backend range grammar (core.attributes): "5", "5-10", "-10~40".
+const DIMENSION_VALUE_RE =
+  /^\s*-?\d+(?:\.\d+)?\s*$|^\s*(-?\d+(?:\.\d+)?)\s*(?:~\s*(-?\d+(?:\.\d+)?)|-\s*(\d+(?:\.\d+)?))\s*$/;
+
+/** Empty and valid single/range dimension texts pass; min>max fails. */
+function isDimensionValueValid(text: string): boolean {
+  if (text === '') return true;
+  const m = DIMENSION_VALUE_RE.exec(text);
+  if (!m) return false;
+  if (m[1] === undefined) return true; // single value
+  return Number(m[1]) <= Number(m[2] ?? m[3]);
+}
 
 /** Localized label for a parameter key: known system keys map to column labels. */
 const SYSTEM_LABEL_KEYS: Record<string, string> = {
@@ -196,21 +212,30 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
     const definition = byId.get(row.definition_id);
     if (definition?.data_type === 'dimension' && definition.unit_family) {
       const units = UNIT_FAMILY_OPTIONS[definition.unit_family as UnitFamily];
+      // Single value or min-max range (FR-002b) — validated text input.
+      const valid = isDimensionValueValid(row.value);
       return (
-        <Space.Compact block>
-          <InputNumber
-            min={0}
-            style={{ width: '65%' }}
-            value={row.value === '' ? null : Number(row.value)}
-            onChange={(v) => setRow(index, { ...row, value: v == null ? '' : String(v) })}
-          />
-          <Select
-            style={{ width: '35%' }}
-            value={row.unit || units[0]}
-            options={units.map((u) => ({ value: u, label: u }))}
-            onChange={(unit) => setRow(index, { ...row, unit })}
-          />
-        </Space.Compact>
+        <>
+          <Space.Compact block>
+            <Input
+              style={{ width: '65%' }}
+              status={valid ? undefined : 'error'}
+              value={row.value}
+              onChange={(e) => setRow(index, { ...row, value: e.target.value })}
+            />
+            <Select
+              style={{ width: '35%' }}
+              value={row.unit || units[0]}
+              options={units.map((u) => ({ value: u, label: u }))}
+              onChange={(unit) => setRow(index, { ...row, unit })}
+            />
+          </Space.Compact>
+          {!valid && (
+            <Typography.Text type="danger" style={{ fontSize: 12 }}>
+              {t({ id: 'pages.inventory.params.rangeInvalid' })}
+            </Typography.Text>
+          )}
+        </>
       );
     }
     if (definition?.data_type === 'number') {

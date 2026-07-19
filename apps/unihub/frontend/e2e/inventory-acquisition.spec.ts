@@ -62,8 +62,8 @@ test('item card header opens the URL in a new tab when a URL is set', async ({ p
   await urlItem.locator('input').fill('https://example.com/widget');
   await page.locator('.ant-modal button', { hasText: /Save/i }).click();
   await page.waitForTimeout(400);
-  // The new card's header is an anchor opening a new tab.
-  const link = page.locator('.ant-card-small .ant-card-head a', { hasText: 'Linked thing' }).first();
+  // The card's primary name (ItemDisplay body, iter 26) is a new-tab anchor.
+  const link = page.locator('.ant-card-small .ant-card-body a', { hasText: 'Linked thing' }).first();
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('href', 'https://example.com/widget');
 });
@@ -202,7 +202,7 @@ test('item card Duplicate appends a copy to the end of the list', async ({ page 
   // Duplicate → two cards with the same name, copy appended at the end.
   await page.locator('.ant-card-small .anticon-copy').first().click();
   await page.waitForTimeout(200);
-  const titles = await page.locator('.ant-card-small .ant-card-head').allInnerTexts();
+  const titles = await page.locator('.ant-card-small .ant-card-body').allInnerTexts();
   expect(titles.filter((t) => t.includes('Dup me'))).toHaveLength(2);
   expect(titles[titles.length - 1]).toContain('Dup me');
 });

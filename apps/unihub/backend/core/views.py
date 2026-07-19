@@ -108,14 +108,19 @@ class AttributeValueViewSet(viewsets.ViewSet):
         results = []
         for item in upsert_serializer.validated_data:
             definition = definitions[item["attribute_definition_id"]]
-            value, value_unit, value_number = compute_value_fields(
+            value, value_unit, value_number, value_number_max = compute_value_fields(
                 definition, item["value"], item.get("unit", "")
             )
             obj, _ = AttributeValue.objects.update_or_create(
                 attribute_definition_id=definition.id,
                 content_type=ct,
                 object_id=object_id,
-                defaults={"value": value, "value_unit": value_unit, "value_number": value_number},
+                defaults={
+                    "value": value,
+                    "value_unit": value_unit,
+                    "value_number": value_number,
+                    "value_number_max": value_number_max,
+                },
             )
             results.append(obj)
 

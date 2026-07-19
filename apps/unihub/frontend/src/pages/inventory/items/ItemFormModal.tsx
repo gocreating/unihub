@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Col, Form, Input, InputNumber, Modal, Row, Select, Space } from 'antd';
 import { useIntl } from 'react-intl';
 import type { Item, ItemParameterWrite, ItemWrite } from '@/services/unihub-backend/inventory';
@@ -67,8 +67,15 @@ export function ItemFormModal({
   // First row: Name 12 / Quantity 4 / SKU Price 8 — the currency select clipped at 6.
   const sixth = isNarrow ? 24 : 4;
 
+  // Initialize ONLY when the modal opens. `initial` is derived per parent
+  // render (fresh identity), so re-running on its changes while open would
+  // wipe unsaved edits — e.g. a just-created parameter row when the
+  // definitions query invalidates (iteration 26).
+  const prevOpen = useRef(false);
   useEffect(() => {
-    if (!open) return;
+    const justOpened = open && !prevOpen.current;
+    prevOpen.current = open;
+    if (!justOpened) return;
     setDirty(false);
     if (initial) {
       form.setFieldsValue({

@@ -14,7 +14,6 @@ import {
   Row,
   Select,
   Space,
-  Tag,
   Typography,
   message,
 } from 'antd';
@@ -46,9 +45,9 @@ import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import type { Acquisition, CostFactorWrite, Item, ItemWrite } from '@/services/unihub-backend/inventory';
-import { draftParameters, itemCardBadges } from '../itemBadges';
+import { draftParameters } from '../itemBadges';
+import { ItemDisplay, formatDecimal } from '@/components/ItemDisplay';
 import { EmptyValue } from '@/components/EmptyValue';
-import { OverflowTooltip } from '@/components/OverflowTooltip';
 import { listAttributeDefinitions } from '@/services/unihub-backend/core';
 import {
   COST_FACTOR_TYPES,
@@ -63,7 +62,6 @@ import { listCurrencies } from '@/services/unihub-backend/finance';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { ItemFormModal } from '../items/ItemFormModal';
 import { PanelHeaderActions } from '@/components/PanelHeaderActions';
-import { ItemName } from '@/components/ItemName';
 
 interface AcquisitionFieldValues {
   source?: string;
@@ -401,8 +399,12 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     });
   };
 
-  const modalInitial: Item | null =
-    editingIndex !== null ? writeToItemLike(cards[editingIndex]?.data) : null;
+  // Memoized: a fresh object per render would defeat the modal's
+  // initialize-on-open guard for consumers keying off identity.
+  const modalInitial: Item | null = useMemo(
+    () => (editingIndex !== null ? writeToItemLike(cards[editingIndex]?.data) : null),
+    [editingIndex, cards],
+  );
 
   const accumulatedRows = factors.filter((f) => f.kind === 'accumulated');
   const manualRows = factors.filter((f) => f.kind === 'manual');
@@ -493,29 +495,29 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
             <Col span={third} key={card.id ?? `new-${idx}`}>
               <Card
                 size="small"
-                title={
-                  <ItemName
-                    item={{
-                      name: card.data.name || t({ id: 'pages.inventory.acquisitions.new.untitled' }),
-                      alias_name: card.data.alias_name ?? '',
-                      url: card.data.url,
-                    }}
-                    linkify
-                  />
-                }
                 actions={[
                   <EditOutlined key="edit" onClick={() => openEditCard(idx)} />,
                   <CopyOutlined key="dup" onClick={() => duplicateCard(idx)} />,
                   <DeleteOutlined key="del" onClick={() => removeCard(idx)} />,
                 ]}
               >
-                <Space size={[4, 4]} wrap style={{ maxWidth: '100%' }}>
-                  {itemCardBadges(card.data, draftParameters(card.data.parameters, parameterDefs)).map((badge, i) => (
-                    <Tag key={i} style={{ marginInlineEnd: 0, maxWidth: '100%' }}>
-                      <OverflowTooltip title={badge}>{badge}</OverflowTooltip>
-                    </Tag>
-                  ))}
-                </Space>
+                {/* Shared item display (FR-031); price stays a surface tag. */}
+                <ItemDisplay
+                  item={{
+                    name: card.data.name || t({ id: 'pages.inventory.acquisitions.new.untitled' }),
+                    alias_name: card.data.alias_name ?? '',
+                    url: card.data.url,
+                    spec: card.data.spec,
+                    quantity: card.data.quantity,
+                  }}
+                  parameters={draftParameters(card.data.parameters, parameterDefs)}
+                  showParameters
+                  extraTags={
+                    card.data.sku_price
+                      ? [`${formatDecimal(card.data.sku_price)} ${card.data.sku_price_currency ?? ''}`.trim()]
+                      : []
+                  }
+                />
               </Card>
             </Col>
           ))}
@@ -678,6 +680,7 @@ function writeToItemLike(data?: ItemWrite): Item | null {
       value: p.value,
       unit: p.unit ?? '',
       value_number: null,
+      value_number_max: null,
     })),
     acquisition: null,
     created_at: '',

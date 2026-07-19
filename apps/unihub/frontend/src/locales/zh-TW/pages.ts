@@ -512,6 +512,10 @@ export default {
   'pages.inventory.params.family.length': '長度',
   'pages.inventory.params.family.weight': '重量',
   'pages.inventory.params.family.volume': '容量',
+  'pages.inventory.params.family.temperature': '溫度',
+  'pages.inventory.params.family.time': '時間',
+  'pages.inventory.params.family.battery': '電池容量',
+  'pages.inventory.params.rangeInvalid': '請輸入數字或最小-最大範圍（例如 5-10）',
   'pages.inventory.params.optionsHint': '選項（以逗號分隔）',
   'pages.inventory.params.create': '建立',
 

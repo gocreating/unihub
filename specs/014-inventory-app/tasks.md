@@ -1,30 +1,29 @@
 ---
-description: "Task list for Inventory App — Iteration 26 (2026-07-19)"
+description: "Task list for Inventory App — Iteration 27 (2026-07-19)"
 ---
 
-# Tasks: Inventory App — Iteration 26 (New families, range values, triplet split, ItemDisplay)
+# Tasks: Inventory App — Iteration 27 (Emoji keys, price format, catalog/nav/modal polish, data refresh)
 
-**Input**: [plan.md](plan.md), [spec.md](spec.md) — FR-002b revised, FR-029g/FR-031 new. Constitution **v1.22.0**.
+**Input**: [plan.md](plan.md), [spec.md](spec.md) — FR-032/033/034 new; FR-003/003a/006/011/031 amended. Constitution **v1.22.0**.
 
-**Baseline**: Iteration 25 shipped at `c28f55f` (+ local `67efb6a`). Decisions in R26.1–R26.4.
+**Baseline**: Iteration 26 shipped at `6ad279e`. Decisions in R27.1–R27.8.
 
-## Phase 2: Core families + ranges
+## Phase 2: Parameter emoji (FR-032)
 
-- [x] T001 Failing pytests (`tests/test_core_attributes.py` or the existing core suite): °F→°C affine both ways; time min/h→s; battery Ah→mAh; range `"5-10" kg` → value_number 5000 / value_number_max 10000; `"5~10"` variant; single value → max null; invalid range (min>max, garbage) → 400; ranges sort by min via `attr:` ordering
-- [x] T002 Implement: `core/units.py` per-family converters (+3 families); `UNIT_FAMILY_CHOICES` + `AttributeValue.value_number_max` (+ migration); `compute_value_fields` 4-tuple; serializers/bulk-upsert expose `value_number_max`; T001 green; OpenAPI + `api-types.ts` regen (UNIT_FAMILY_OPTIONS + ItemParameter.value_number_max in the service layer)
+- [ ] T001 Backend TDD: failing pytests — `AttributeDefinition.emoji` persists via serializer; seed migration stamps 🎨 color / 👕 size / ⚖ weight / 📏 length·width·height / 🧴 volume; item `parameters` payload carries each definition's emoji. Implement field + migration + serializers; OpenAPI + `api-types.ts` + service types regen.
+- [ ] T002 Frontend TDD: failing RTL — `parameterPairs`/ItemDisplay render a set emoji as a monochrome prefix (`KeyEmoji` silhouette span, R27.2) before the localized key; key picker options show it; the inline definition-creation form offers an optional emoji input (locales ×2). Then implement.
 
-## Phase 3: Parser triplet split
+## Phase 3: Price format (FR-033)
 
-- [x] T003 Failing fixtures in `tests/test_legacy_parser.py`: `尺寸：14 x 15 x 5cm` → 長14/寬15/高5 cm and NO size param; `14X15X5cm`, `37*19.8cm` (2-part → 長/寬, decimal), `10 × 20 × 30 mm` unit honored; non-dimension 尺寸 values (e.g. `尺寸：L`) still → size param — then implement in `preview_legacy_import.py`; suite + sweep green
-- [x] T004 Upsert re-import all 12 sheets (NO wipe — refs preserve scenario memberships); verify 長/寬/高 populated for known triplet rows and memberships/pks unchanged
+- [ ] T003 Failing RTL for the shared currency module: symbol map, `formatPrice` → `"TWD $ 129"`, trailing zeros dropped, zero/empty → "-" (no code/symbol); PriceInput ([symbol select][numeric], placeholder while empty/0). Then implement the module + component.
+- [ ] T004 Adopt at every surface — display: catalog SKU column + `displayText`, net cost cells, acquisition summary line, item-card price tag, cost totals; input: ItemFormModal SKU price, cost-factor rows. Update existing RTL/e2e expecting the old `TWD 129` format.
 
-## Phase 4: ItemDisplay + editor
+## Phase 4: Catalog + shell + panes
 
-- [x] T005 Failing RTL for `src/components/ItemDisplay/`: primary alias/name (+link, tooltip rules via ItemName), secondary spec (gated tooltip), `showParameters` renders localized `key: value` Tags incl. a range `5 - 10 kg`; then implement
-- [x] T006 Adopt ItemDisplay at the four surfaces (catalog Item cell, AcquisitionForm cards, scenario pane rows, Add-modal rows) — RTL updates per surface; retire value-only badge composition from mixed lists (`attr:` columns stay value-only)
-- [x] T007 Editor: family picker + units for temperature/time/battery; dimension value input → validated text input accepting `5` / `5-10`; locales ×2 (family labels, range validation msg); RTL updates
-- [x] T008 e2e: create a definition with a new family; enter a range value; catalog + scenario surfaces show `key: value` pairs; existing suites green
+- [ ] T005 Catalog: Actions column `fixed: 'right'` in the default column state (+ persistence-version bump); Item column measured from the primary name line only with spec truncating at column width (R27.4); Remark column renders one ellipsised line with gated tooltip, measurement capped to the render. RTL/e2e updates.
+- [ ] T006 Shell/panes: side-nav items as real router `<Link>` hyperlinks (FR-034); acquisition item cards equal height per row (FR-006); Add-items modal wider + viewport-anchored bottom with inner-scrolling results (FR-011, R27.6) — e2e geometry locks.
 
-## Phase 5: Polish
+## Phase 5: Data refresh + polish
 
-- [x] T009 Full loops both sides; docker rebuild; ALL inventory e2e; screenshots; commit (+push when SSH restored)
+- [ ] T007 Re-run parser suite + coverage sweep against the UPDATED sheets (fix parser regressions the new content surfaces, if any); then ref-keyed upsert re-import of all sheets (NO wipe); verify counts, stable PKs, scenario memberships, spot-checks.
+- [ ] T008 Full loops both sides; docker rebuild; ALL inventory e2e; screenshots; commit + push.

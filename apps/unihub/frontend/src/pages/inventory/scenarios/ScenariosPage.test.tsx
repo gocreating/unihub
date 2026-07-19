@@ -76,3 +76,32 @@ describe('ScenariosPage (iteration 18 — 2 columns, actions in detail)', () => 
     expect(row.textContent).toContain('-');
   });
 });
+
+describe('ScenariosPage (iteration 45 — real links + tab title)', () => {
+  beforeEach(() => {
+    vi.mocked(inventoryService.listScenarios).mockResolvedValue({
+      count: 2,
+      next: null,
+      previous: null,
+      results: SCENARIOS,
+    });
+  });
+
+  // SP-03 (FR-010): the Name cell is a REAL hyperlink (href), not an onClick
+  // anchor — new-tab/middle-click/copy-link must work.
+  it('renders the name as a real router link with an href', async () => {
+    renderPage();
+    const link = (await screen.findByText('Camping')).closest('a')!;
+    expect(link).not.toBeNull();
+    expect(link.getAttribute('href')).toBe('/inventory/scenarios/sc-1');
+  });
+
+  // SP-04 (FR-035): the list page sets the browser tab title and restores it.
+  it('sets document.title while mounted and restores on unmount', async () => {
+    const { unmount } = renderPage();
+    await screen.findByText('Camping');
+    expect(document.title).toBe('Scenarios · Unihub');
+    unmount();
+    expect(document.title).toBe('Unihub');
+  });
+});

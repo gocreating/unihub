@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Space, Tag, Tooltip, Typography } from 'antd';
 import { CommentOutlined, WarningOutlined } from '@ant-design/icons';
@@ -13,21 +14,66 @@ import type { ParameterDisplay, ParameterPair } from './format';
 export { formatDecimal, pairText, parameterPairs } from './format';
 export type { ParameterDisplay, ParameterPair } from './format';
 
+// Per-glyph INK compensation (FR-032, iteration 45): emoji fonts place their
+// ink inside the glyph box per their OWN metrics, so a perfectly centered CSS
+// box can still LOOK offset (⚖/🧴 hang low, 👕 sinks ~2px) — and the offset
+// differs per glyph AND per platform font. The residual is measurable:
+// canvas TextMetrics gives the actual ink box vs the font box, both relative
+// to the shared baseline; flex centering aligns the FONT box, so
+// (inkMid − fontMid) is exactly the translateY that centers the visible ink.
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+const inkShiftCache = new Map<string, number>();
+
+function emojiInkShift(emoji: string, font: string): number {
+  const key = `${emoji}|${font}`;
+  const cached = inkShiftCache.get(key);
+  if (cached !== undefined) return cached;
+  if (measureCtx === undefined) {
+    measureCtx =
+      typeof document !== 'undefined'
+        ? document.createElement('canvas').getContext('2d')
+        : null;
+  }
+  let shift = 0;
+  if (measureCtx && font) {
+    measureCtx.font = font;
+    const m = measureCtx.measureText(emoji);
+    const inkMid = (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
+    const fontMid = (m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2;
+    if (Number.isFinite(inkMid) && Number.isFinite(fontMid)) {
+      shift = inkMid - fontMid;
+    }
+  }
+  inkShiftCache.set(key, shift);
+  return shift;
+}
+
 /**
  * Monochrome emoji (FR-032): the transparent-fill + currentColor-shadow
  * silhouette renders the glyph in the inherited text color — color emoji
- * fonts otherwise ignore CSS `color`.
+ * fonts otherwise ignore CSS `color`. The glyph's visible INK is centered on
+ * the row middle via the measured per-glyph shift (iteration 45).
  */
 export function KeyEmoji({ emoji }: { emoji: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !emoji) return;
+    const cs = window.getComputedStyle(el);
+    const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const shift = emojiInkShift(emoji, font);
+    el.style.transform = shift ? `translateY(${shift.toFixed(2)}px)` : '';
+  }, [emoji]);
   if (!emoji) return null;
   return (
     <span
+      ref={ref}
       aria-hidden
+      data-testid="key-emoji"
       style={{
         WebkitTextFillColor: 'transparent',
         textShadow: '0 0 0 currentcolor',
-        // Centered on the key's text line (iteration 41): emoji glyphs carry
-        // a taller ascent than the small tag text and sat visibly high.
+        // Box centering (iteration 41) + ink compensation (iteration 45).
         display: 'inline-flex',
         alignItems: 'center',
         verticalAlign: 'middle',

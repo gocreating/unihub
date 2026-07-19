@@ -4,8 +4,9 @@ import { Button, message } from 'antd';
 import { EmptyValue } from '@/components/EmptyValue';
 import { PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useIntl } from 'react-intl';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import PageTable, {
   computeScrollX,
   measureTextWidth,
@@ -20,8 +21,9 @@ import { ScenarioFormModal } from './ScenarioFormModal';
 
 export function ScenariosPage() {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { formatMessage: t } = useIntl();
+  // Browser tab title (FR-035).
+  usePageTitle(t({ id: 'pages.inventory.scenarios.title' }));
   const [modalOpen, setModalOpen] = useState(false);
 
   const filterableAttrs = useMemo<FilterableAttribute[]>(
@@ -81,7 +83,9 @@ export function ScenariosPage() {
           ...widthForHeader(t({ id: 'common.name' }), Math.max(160, nameWidth)),
           fixed: getFixed('name'),
           render: (val, record) => (
-            <a onClick={() => navigate(`/inventory/scenarios/${record.id}`)}>{val as string}</a>
+            // Real hyperlink (FR-010, iteration 45): browser affordances
+            // (new tab, copy link) need an href, not an onClick.
+            <Link to={`/inventory/scenarios/${record.id}`}>{val as string}</Link>
           ),
           ...makeSortProps('name', t({ id: 'common.name' }), sort),
         },
@@ -96,7 +100,7 @@ export function ScenariosPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, nameWidth, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns, navigate],
+    [t, nameWidth, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<Scenario>[]>(

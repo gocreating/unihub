@@ -387,3 +387,41 @@ describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes
     expect(marks.filter((t) => t === 'Lantern').length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe('ScenarioDetailPage (iteration 45 — modal parameters + tab title)', () => {
+  beforeEach(() => {
+    vi.mocked(inventoryService.getScenario).mockResolvedValue(SCENARIO);
+    vi.mocked(inventoryService.listScenarioItems).mockResolvedValue(LINES);
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [
+        item('i-new', 'Lantern', {
+          url: 'https://example.com/lantern',
+          parameters: [COLOR_PARAM],
+        }),
+      ],
+    });
+  });
+
+  // SD45-01 (FR-011): Add-modal results render the item's parameter pairs.
+  it('shows parameter tags in the Add-modal results', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    fireEvent.click(screen.getByRole('button', { name: /add/i }));
+    const modal = await screen.findByRole('dialog');
+    await within(modal).findByText('Lantern');
+    // COLOR_PARAM renders as the localized "Color: red" pair tag.
+    expect(modal.textContent).toContain('Color: red');
+  });
+
+  // SD45-02 (FR-035): the detail page titles the tab with the scenario name.
+  it('sets document.title to the scenario name and restores on unmount', async () => {
+    const { unmount } = renderPage();
+    await screen.findByText('Backpack');
+    await waitFor(() => expect(document.title).toBe('Camping · Unihub'));
+    unmount();
+    expect(document.title).toBe('Unihub');
+  });
+});

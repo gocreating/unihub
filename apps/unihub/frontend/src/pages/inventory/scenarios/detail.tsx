@@ -50,6 +50,7 @@ import {
 import type { Item, ScenarioItem } from '@/services/unihub-backend/inventory';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { useCurrencySymbols } from '@/hooks/useCurrencySymbols';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { HighlightText } from '@/components/HighlightText';
 import { ItemDisplay } from '@/components/ItemDisplay';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
@@ -117,7 +118,8 @@ function FlatPaneRow({
       {...listeners}
       style={{
         display: 'flex',
-        alignItems: 'flex-start',
+        // Row-middle alignment (FR-011, iteration 45) — same rule as the tree.
+        alignItems: 'center',
         gap: 8,
         padding: '6px 4px',
         borderBottom: '1px solid rgba(5,5,5,0.06)',
@@ -126,7 +128,7 @@ function FlatPaneRow({
         touchAction: 'none',
       }}
     >
-      <HolderOutlined style={{ marginTop: 4, color: 'rgba(0,0,0,0.45)', flex: 'none' }} />
+      <HolderOutlined style={{ color: 'rgba(0,0,0,0.45)', flex: 'none' }} />
       <RowContent line={line} />
       <Button
         size="small"
@@ -201,7 +203,10 @@ function OrgRow({
       {...drag.listeners}
       style={{
         display: 'flex',
-        alignItems: 'flex-start',
+        // Row-middle alignment (FR-011, iteration 45): the caret and holder
+        // center on the FULL row box — pixel nudges are banned (regression
+        // re-reported repeatedly; locked by e2e geometry assertions).
+        alignItems: 'center',
         gap: 8,
         padding: '6px 4px',
         paddingLeft: row.depth * INDENT,
@@ -224,7 +229,7 @@ function OrgRow({
       {hasChildren ? (
         <span
           aria-label="toggle-children"
-          style={{ marginTop: 4, cursor: 'pointer', flex: 'none' }}
+          style={{ cursor: 'pointer', flex: 'none', display: 'inline-flex', alignItems: 'center' }}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
@@ -236,7 +241,7 @@ function OrgRow({
       ) : (
         <span style={{ width: 14, flex: 'none' }} />
       )}
-      <HolderOutlined style={{ marginTop: 4, color: 'rgba(0,0,0,0.45)', flex: 'none' }} />
+      <HolderOutlined style={{ color: 'rgba(0,0,0,0.45)', flex: 'none' }} />
       <RowContent line={row.line} />
     </div>
   );
@@ -271,6 +276,8 @@ export function ScenarioDetailPage() {
     ],
   });
   const scenario = scenarioQ.data;
+  // Browser tab title (FR-035): the scenario's name once loaded.
+  usePageTitle(scenario?.name ?? t({ id: 'pages.inventory.scenarios.title' }));
   const lines = useMemo(() => linesQ.data ?? [], [linesQ.data]);
   const memberItemIds = useMemo(() => new Set(lines.map((l) => l.item.id)), [lines]);
   const flatLines = useMemo(() => unorganizedLines(lines), [lines]);
@@ -685,7 +692,7 @@ export function ScenarioDetailPage() {
                 data-testid="drag-overlay"
                 style={{
                   display: 'flex',
-                  alignItems: 'flex-start',
+                  alignItems: 'center',
                   gap: 8,
                   padding: '6px 4px',
                   boxSizing: 'border-box',
@@ -696,7 +703,7 @@ export function ScenarioDetailPage() {
                   opacity: 0.75,
                 }}
               >
-                <HolderOutlined style={{ marginTop: 4, color: 'rgba(0,0,0,0.45)', flex: 'none' }} />
+                <HolderOutlined style={{ color: 'rgba(0,0,0,0.45)', flex: 'none' }} />
                 <RowContent line={draggedLine} />
               </div>
             ) : null}
@@ -780,9 +787,12 @@ export function ScenarioDetailPage() {
                   style={{ display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%' }}
                 >
                   <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-                    {/* Shared item display (FR-031) with search-match highlighting. */}
+                    {/* Shared item display (FR-031) with search-match highlighting
+                        and parameter pairs (FR-011, iteration 45). */}
                     <ItemDisplay
                       item={item}
+                      parameters={item.parameters}
+                      showParameters
                       truncate
                       highlight={search}
                       showDeprecatedWarning

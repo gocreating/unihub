@@ -303,3 +303,7 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 
 - **R40.1 — Delimiter survey (MEASURED)**: all size-key lines across the sheets segment cleanly on `，`/`、`/SPACED `/`; bare slashes only appear INSIDE values (`43/46`, `180ml/灰色登山扣款`, `ERU 36/30`). Delimiter-spanning patterns that must see the whole line: `原價X，N折`, variant counts (`深藍x2，灰色x1`), whole-line 運費 — routed before segmentation. English `color:` exists (2021) and joins RE_COLOR.
 - **R40.2 — Residue granularity**: segment-level residue supersedes the whole-line rule for delimited lines (the user wants `size: L，白色` → remark 白色, not the whole line); FR-029f's verbatim copy already preserves full context, so no data loss.
+
+## Iteration 41 research (emoji vertical alignment, 2026-07-19)
+
+- **R41.1**: emoji glyphs have a taller ascent/different baseline box than the 11px tag text, so the baseline-flow KeyEmoji span sat visibly high (AntD's anticons solve the same problem with a vertical-align nudge). `display: inline-flex; align-items: center; vertical-align: middle; line-height: 1` centers the glyph box on the text line; the trailing space becomes a margin so centering isn't skewed.

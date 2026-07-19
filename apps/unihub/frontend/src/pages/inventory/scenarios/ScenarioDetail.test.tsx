@@ -1,0 +1,427 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { IntlProvider } from 'react-intl';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import enUS from '@/locales/en-US';
+import { ScenarioDetailPage } from './detail';
+import * as inventoryService from '@/services/unihub-backend/inventory';
+import type { Item, ItemParameter, ScenarioItem } from '@/services/unihub-backend/inventory';
+
+vi.mock('@/services/unihub-backend/inventory');
+
+const item = (
+  id: string,
+  name: string,
+  extra: Partial<Pick<Item, 'url' | 'alias_name' | 'spec' | 'acquisition'>> & {
+    parameters?: ItemParameter[];
+  } = {},
+): Item =>
+  ({
+    id,
+    name,
+    alias_name: extra.alias_name ?? '',
+    quantity: 1,
+    spec: extra.spec ?? '',
+    remark: '',
+    sku_price: null,
+    sku_price_currency: '',
+    total_price: null,
+    url: extra.url ?? '',
+    status: 'active',
+    deprecated: false,
+    deprecate_time: null,
+    parameters: extra.parameters ?? [],
+    acquisition: extra.acquisition ?? null,
+    created_at: '2026-07-01T00:00:00Z',
+    updated_at: '2026-07-01T00:00:00Z',
+  }) as Item;
+
+const line = (
+  id: string,
+  it: Item,
+  containerId: string | null,
+  order: number,
+  organized: boolean,
+): ScenarioItem => ({
+  id,
+  item: it,
+  container: containerId ? { id: containerId, item_name: '' } : null,
+  display_order: order,
+  organized,
+  notes: '',
+  created_at: `2026-07-0${1 + order}T00:00:00Z`,
+});
+
+const SCENARIO = {
+  id: 'sc-1',
+  name: 'Camping',
+  description: 'Weekend trip',
+  item_count: 3,
+  created_at: '2026-07-01T00:00:00Z',
+  updated_at: '2026-07-01T00:00:00Z',
+};
+
+const COLOR_PARAM: ItemParameter = {
+  definition_id: 'ad-color',
+  name: 'color',
+  data_type: 'text',
+  unit_family: '',
+  emoji: '',
+  value: 'red',
+  unit: '',
+  value_number: null,
+  value_number_max: null,
+};
+
+// Organized tree: Backpack (top) > Camera (aliased "Cammy"). Flat pane: Tent
+// (rich context: spec + color badge + url).
+const LINES = [
+  line('l-bag', item('item-bag', 'Backpack'), null, 0, true),
+  line('l-cam', item('item-cam', 'Camera', { alias_name: 'Cammy' }), 'l-bag', 0, true),
+  line(
+    'l-tent',
+    item('item-tent', 'Tent', {
+      spec: 'green 2p',
+      url: 'https://example.com/tent',
+      parameters: [COLOR_PARAM],
+    }),
+    null,
+    0,
+    false,
+  ),
+];
+
+function renderPage() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <IntlProvider locale="en-US" messages={enUS}>
+        <MemoryRouter initialEntries={['/inventory/scenarios/sc-1']}>
+          <Routes>
+            <Route path="/inventory/scenarios/:id" element={<ScenarioDetailPage />} />
+            <Route path="/inventory/scenarios" element={<div>LIST-PAGE</div>} />
+          </Routes>
+        </MemoryRouter>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes)', () => {
+  beforeEach(() => {
+    vi.mocked(inventoryService.getScenario).mockResolvedValue(SCENARIO);
+    vi.mocked(inventoryService.listScenarioItems).mockResolvedValue(LINES);
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 2,
+      next: null,
+      previous: null,
+      results: [
+        item('item-bag', 'Backpack'),
+        item('i-new', 'Lantern', {
+          url: 'https://example.com/lantern',
+          acquisition: {
+            id: 'acq-l',
+            source: 'LanternShop',
+            request_time: null,
+            obtained_at: '2026-03-05T00:00:00Z',
+            net_cost: [],
+          },
+        }),
+      ],
+    });
+    vi.mocked(inventoryService.addScenarioItem).mockResolvedValue(LINES[2]!);
+    vi.mocked(inventoryService.moveScenarioItem).mockResolvedValue(LINES[0]!);
+    vi.mocked(inventoryService.deleteScenarioItem).mockResolvedValue(undefined);
+    vi.mocked(inventoryService.updateScenario).mockResolvedValue(SCENARIO);
+    vi.mocked(inventoryService.deleteScenario).mockResolvedValue(undefined);
+  });
+
+  // SD18-01 (FR-011): info-panel Edit opens the pre-filled form and PATCHes.
+  it('edits the scenario from the info panel', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Edit/ }));
+    const nameInput = await screen.findByDisplayValue('Camping');
+    fireEvent.change(nameInput, { target: { value: 'Camping v2' } });
+    fireEvent.click(screen.getByRole('button', { name: /OK|Save/ }));
+    await waitFor(() =>
+      expect(vi.mocked(inventoryService.updateScenario)).toHaveBeenCalledWith(
+        'sc-1',
+        expect.objectContaining({ name: 'Camping v2' }),
+      ),
+    );
+  });
+
+  // SD18-02 (FR-011): Delete lives in the kebab menu; confirms + navigates.
+  it('deletes the scenario via the kebab menu and returns to the list', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByLabelText('scenario-actions'));
+    fireEvent.click(await screen.findByText('Delete'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /Delete/ }));
+    await waitFor(() =>
+      expect(vi.mocked(inventoryService.deleteScenario)).toHaveBeenCalledWith('sc-1'),
+    );
+    expect(await screen.findByText('LIST-PAGE')).toBeInTheDocument();
+  });
+
+  // SD18-03 (FR-011): panes without titles; flattened depth-indented tree.
+  it('renders untitled panes with a depth-indented organized list', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    expect(screen.queryByText('Unorganized')).toBeNull();
+    expect(screen.queryByText('Organized')).toBeNull();
+    const flatPane = screen.getByTestId('unorganized-pane');
+    expect(within(flatPane).getByText('Tent')).toBeInTheDocument();
+    // Organized rows carry their depth as indentation.
+    const bagRow = screen.getByTestId('org-row-l-bag');
+    const camRow = screen.getByTestId('org-row-l-cam');
+    expect(bagRow.style.paddingLeft).toBe('0px');
+    expect(camRow.style.paddingLeft).toBe('24px');
+    // The aliased item displays its alias in the tree.
+    expect(within(camRow).getByText('Cammy')).toBeInTheDocument();
+  });
+
+  // SD18-04 (FR-011): rich row context — link, spec, key-value parameter pairs.
+  it('renders spec, parameter pairs, and the url link on pane rows', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    const tentRow = screen.getByTestId('flat-row-l-tent');
+    const link = within(tentRow).getByText('Tent').closest('a')!;
+    expect(link).toHaveAttribute('href', 'https://example.com/tent');
+    expect(within(tentRow).getByText('green 2p')).toBeInTheDocument();
+    // Localized key-value pairs (FR-031) replaced value-only badges.
+    expect(within(tentRow).getByText('Color: red')).toBeInTheDocument();
+  });
+
+  // SD18-05 (FR-011): remove stays flat-pane-only.
+  it('removes memberships only from the unorganized pane', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    const flatPane = screen.getByTestId('unorganized-pane');
+    fireEvent.click(within(flatPane).getByRole('button', { name: /Remove from scenario/ }));
+    await waitFor(() =>
+      expect(vi.mocked(inventoryService.deleteScenarioItem)).toHaveBeenCalledWith('sc-1', 'l-tent'),
+    );
+    const treePane = screen.getByTestId('organized-pane');
+    expect(within(treePane).queryByRole('button', { name: /Remove from scenario/ })).toBeNull();
+  });
+
+  // SD18-06 (FR-011/FR-030): the Add modal searches name OR alias OR spec.
+  it('searches the Add modal over name, alias, and spec with member rows disabled', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    const modal = (await screen.findByText('Add items')).closest('.ant-modal') as HTMLElement;
+    fireEvent.change(within(modal).getByPlaceholderText('Search items…'), {
+      target: { value: 'an' },
+    });
+    await waitFor(() => expect(vi.mocked(inventoryService.listItems)).toHaveBeenCalled());
+    const call = vi.mocked(inventoryService.listItems).mock.calls.at(-1)![0]!;
+    expect(call.filters!.groups).toHaveLength(3); // name OR alias OR spec
+    const attrs = call.filters!.groups.map((g) => g.conditions[0]!.attr).sort();
+    expect(attrs).toEqual(['alias_name', 'name', 'spec']);
+    // Highlighted match + member disabled + add call (carried from iter 16).
+    const lantern = await within(modal).findByText(
+      (_, el) => el?.tagName === 'A' && el.textContent === 'Lantern',
+    );
+    expect(lantern.querySelector('mark')?.textContent).toBe('an');
+    const memberRow = within(modal).getByText('Backpack').closest('.ant-list-item') as HTMLElement;
+    // Iteration 19: single Add button per row — DISABLED for members, with an
+    // "Added" tooltip instead of a tag.
+    const memberAdd = within(memberRow).getByRole('button', { name: /Add/ });
+    expect(memberAdd).toBeDisabled();
+    expect(within(memberRow).queryByText('Added')).toBeNull();
+    fireEvent.mouseEnter(memberAdd.parentElement!);
+    expect((await screen.findAllByRole('tooltip')).some((el) => el.textContent === 'Added')).toBe(
+      true,
+    );
+    // Acquisition context line on results that carry one (iteration 19).
+    // The context line now carries highlight marks (iteration 43), which
+    // split direct text nodes — assert on the composed text instead.
+    expect(modal.textContent).toContain('LanternShop');
+    const lanternRow = lantern.closest('.ant-list-item') as HTMLElement;
+    fireEvent.click(within(lanternRow).getByRole('button', { name: /Add/ }));
+    await waitFor(() =>
+      expect(vi.mocked(inventoryService.addScenarioItem)).toHaveBeenCalledWith('sc-1', {
+        item_id: 'i-new',
+      }),
+    );
+  });
+
+  // SD19-01 (FR-011): container rows show a caret toggler; collapse hides the subtree.
+  it('collapses and expands a container subtree via the caret', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    const bagRow = screen.getByTestId('org-row-l-bag');
+    // Backpack has a child (Camera) → caret present; Camera has none → spacer.
+    const caret = within(bagRow).getByLabelText('toggle-children');
+    expect(screen.getByTestId('org-row-l-cam')).toBeInTheDocument();
+    fireEvent.click(caret);
+    expect(screen.queryByTestId('org-row-l-cam')).toBeNull();
+    fireEvent.click(within(bagRow).getByLabelText('toggle-children'));
+    expect(screen.getByTestId('org-row-l-cam')).toBeInTheDocument();
+    const camRow = screen.getByTestId('org-row-l-cam');
+    expect(within(camRow).queryByLabelText('toggle-children')).toBeNull();
+  });
+
+  // SD20-01 (FR-011): modal result titles carry truncation-gated tooltips.
+  it('shows a gated tooltip on a truncated modal result title', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    const modal = (await screen.findByText('Add items')).closest('.ant-modal') as HTMLElement;
+    fireEvent.change(within(modal).getByPlaceholderText('Search items…'), {
+      target: { value: 'an' },
+    });
+    const lantern = await within(modal).findByText(
+      (_, el) => el?.tagName === 'A' && el.textContent === 'Lantern',
+    );
+    // The measuring span wraps the link; force an overflow, then hover.
+    const span = lantern.closest('span')!;
+    Object.defineProperty(span, 'scrollWidth', { value: 300, configurable: true });
+    Object.defineProperty(span, 'clientWidth', { value: 100, configurable: true });
+    fireEvent.mouseEnter(span);
+    const tooltips = await screen.findAllByRole('tooltip');
+    expect(tooltips.some((el) => el.textContent === 'Lantern')).toBe(true);
+  });
+
+  // SD21-02 (FR-011): both splitter panes use the AntD Empty component.
+  it('renders consistent Empty states in both panes when the scenario is empty', async () => {
+    vi.mocked(inventoryService.listScenarioItems).mockResolvedValue([]);
+    renderPage();
+    await screen.findAllByText('Camping');
+    expect(
+      within(screen.getByTestId('unorganized-pane')).getByText('Nothing left to organize')
+        .closest('.ant-empty'),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId('organized-pane')).getByText('Drag items here to organize them')
+        .closest('.ant-empty'),
+    ).toBeTruthy();
+  });
+
+  // SD22-01 (FR-011): modal rows OWN their layout — no List actions slot
+  // (its ul/li wrappers carry library margins that broke the right edge).
+  it('renders modal rows with an owned flex layout, not the List actions slot', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    const modal = (await screen.findByText('Add items')).closest('.ant-modal') as HTMLElement;
+    fireEvent.change(within(modal).getByPlaceholderText('Search items…'), {
+      target: { value: 'an' },
+    });
+    await within(modal).findByText(
+      (_, el) => el?.tagName === 'A' && el.textContent === 'Lantern',
+    );
+    expect(modal.querySelector('.ant-list-item-action')).toBeNull();
+    // The Add button is a flex:none sibling inside the row's flex container.
+    const row = within(modal).getByText('Backpack').closest('.ant-list-item') as HTMLElement;
+    const flexWrap = row.querySelector('[data-testid="modal-row"]') as HTMLElement;
+    expect(flexWrap.style.display).toBe('flex');
+    expect(within(flexWrap).getByRole('button', { name: /Add/ })).toBeInTheDocument();
+  });
+
+  // SD21-01 (FR-011): modal result rows carry no horizontal indentation.
+  it('renders modal result rows without horizontal padding', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    const modal = (await screen.findByText('Add items')).closest('.ant-modal') as HTMLElement;
+    fireEvent.change(within(modal).getByPlaceholderText('Search items…'), {
+      target: { value: 'an' },
+    });
+    await within(modal).findByText(
+      (_, el) => el?.tagName === 'A' && el.textContent === 'Lantern',
+    );
+    const row = within(modal).getByText('Backpack').closest('.ant-list-item') as HTMLElement;
+    expect(row.style.paddingLeft).toBe('0px');
+    expect(row.style.paddingRight).toBe('0px');
+  });
+
+  // SD19-02 (FR-011): truncation-gated tooltips via ItemName truncate mode —
+  // the aliased row's tooltip reveals the original name.
+  it('shows the original name tooltip on an aliased organized row', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    const cammy = within(screen.getByTestId('org-row-l-cam')).getByText('Cammy');
+    fireEvent.mouseEnter(cammy.closest('span')!);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('Camera');
+  });
+
+  // SD31-01 (FR-011): an EMPTY search lists the 10 most recently acquired items.
+  it('lists recent items by default while the search box is empty', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    const modal = (await screen.findByText('Add items')).closest('.ant-modal') as HTMLElement;
+    // The default query fires WITHOUT typing: recent-first, limit 10.
+    await waitFor(() => expect(vi.mocked(inventoryService.listItems)).toHaveBeenCalled());
+    const call = vi.mocked(inventoryService.listItems).mock.calls.at(-1)![0]!;
+    expect(call.ordering).toBe('-acquisition__obtained_at__nullsfirst');
+    expect(call.limit).toBe(10);
+    // The mocked results render as normal rows (Add button present).
+    const lantern = await within(modal).findByText('Lantern');
+    expect(lantern).toBeInTheDocument();
+    expect(within(modal).getAllByRole('button', { name: /Add/ }).length).toBeGreaterThan(0);
+  });
+
+  // SD43-01 (FR-011): the search query highlights in EVERY displayed text.
+  it('highlights the query in spec and acquisition context, not just the name', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    const modal = (await screen.findByText('Add items')).closest('.ant-modal') as HTMLElement;
+    // "tern" matches the Lantern name AND the LanternShop context; use a
+    // query hitting the spec too.
+    fireEvent.change(within(modal).getByPlaceholderText('Search items…'), {
+      target: { value: 'Lantern' },
+    });
+    await waitFor(() => expect(vi.mocked(inventoryService.listItems)).toHaveBeenCalled());
+    await within(modal).findAllByText(/Lantern/);
+    const marks = Array.from(modal.querySelectorAll('mark')).map((m) => m.textContent);
+    // Name mark (existing) AND the acquisition-context mark (LanternShop).
+    expect(marks.filter((t) => t === 'Lantern').length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('ScenarioDetailPage (iteration 45 — modal parameters + tab title)', () => {
+  beforeEach(() => {
+    vi.mocked(inventoryService.getScenario).mockResolvedValue(SCENARIO);
+    vi.mocked(inventoryService.listScenarioItems).mockResolvedValue(LINES);
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [
+        item('i-new', 'Lantern', {
+          url: 'https://example.com/lantern',
+          parameters: [COLOR_PARAM],
+        }),
+      ],
+    });
+  });
+
+  // SD45-01 (FR-011): Add-modal results render the item's parameter pairs.
+  it('shows parameter tags in the Add-modal results', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    fireEvent.click(screen.getByRole('button', { name: /add/i }));
+    const modal = await screen.findByRole('dialog');
+    await within(modal).findByText('Lantern');
+    // COLOR_PARAM renders as the localized "Color: red" pair tag.
+    expect(modal.textContent).toContain('Color: red');
+  });
+
+  // SD45-02 (FR-035): the detail page titles the tab with the scenario name.
+  it('sets document.title to the scenario name and restores on unmount', async () => {
+    const { unmount } = renderPage();
+    await screen.findByText('Backpack');
+    await waitFor(() => expect(document.title).toBe('Camping · Unihub'));
+    unmount();
+    expect(document.title).toBe('Unihub');
+  });
+});

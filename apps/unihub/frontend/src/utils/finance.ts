@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js';
+import { currencySymbol } from '@/utils/currency';
 import type { Balance, ExchangeRate } from '@/services/unihub-backend/finance';
 
 const fmt = new Intl.NumberFormat('en-US', {
@@ -12,19 +13,11 @@ export function formatAmount(value: string | number): string {
   return fmt.format(n);
 }
 
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  TWD: 'NT$',
-  USD: '$',
-  EUR: '€',
-  JPY: '¥',
-  GBP: '£',
-  CNY: '¥',
-  HKD: 'HK$',
-  SGD: 'S$',
-};
-
+// Registry-backed (FR-033, iteration 34): finance.Currency.symbol is the
+// single symbol authority — no local table. Unseeded codes fall back to the
+// code itself (this helper's original contract).
 export function getCurrencySymbol(code: string): string {
-  return CURRENCY_SYMBOLS[code] ?? code;
+  return currencySymbol(code) || code;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Modal, Space, Switch, Typography, message } from 'antd';
+import { EmptyValue } from '@/components/EmptyValue';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useIntl } from 'react-intl';
@@ -146,7 +147,7 @@ export function CurrenciesPage() {
         ...widthForHeader('Symbol', dataWidths.symbol),
         fixed: getFixed('symbol'),
         render: (val) =>
-          val ? String(val) : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
+          val ? String(val) : <EmptyValue />,
         ...makeSortProps('symbol', t({ id: 'pages.finance.currencies.col.symbol' }), table.sort),
       },
       is_base_currency: {

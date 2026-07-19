@@ -5,7 +5,9 @@ export interface AttributeDefinition {
   content_type: number;
   content_type_label: string;
   name: string;
-  data_type: 'text' | 'long_text' | 'number' | 'date' | 'boolean' | 'single_select';
+  data_type: 'text' | 'long_text' | 'number' | 'date' | 'boolean' | 'single_select' | 'dimension';
+  unit_family: 'length' | 'weight' | 'volume' | 'temperature' | 'time' | 'battery' | '';
+  emoji: string;
   is_system: boolean;
   display_order: number;
   options: string[];
@@ -17,6 +19,9 @@ export interface AttributeValue {
   content_type: number;
   object_id: string;
   value: string;
+  value_unit: string;
+  value_number: string | null;
+  value_number_max: string | null;
 }
 
 function getCsrfToken(): string {
@@ -44,7 +49,11 @@ export function listAttributeDefinitions(contentType?: string): Promise<Attribut
 }
 
 export function createAttributeDefinition(
-  data: Pick<AttributeDefinition, 'content_type' | 'name' | 'data_type'> & { options?: string[] },
+  data: Pick<AttributeDefinition, 'content_type' | 'name' | 'data_type'> & {
+    options?: string[];
+    unit_family?: AttributeDefinition['unit_family'];
+    emoji?: string;
+  },
 ): Promise<AttributeDefinition> {
   return fetchJson<AttributeDefinition>('/api/v1/core/attribute-definitions/', {
     method: 'POST',

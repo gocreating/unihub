@@ -129,6 +129,8 @@ export interface OffsetPaginatedResponse<T> {
   count: number;
   next: string | null;
   previous: string | null;
+  /** Footer totals over the filtered queryset (view-defined, iteration 15). */
+  totals?: Record<string, number>;
   results: T[];
 }
 

@@ -38,3 +38,6 @@ htmlcov/
 
 # Build artefacts
 *.log
+
+# Personal local notes — never commit
+apps/unihub/prompts.md

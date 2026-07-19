@@ -1,19 +1,23 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.13.0 → 1.13.1 (patch — added delete confirmation rule to
-  Development Constraints. Codifies existing practice as a non-negotiable
-  invariant: Modal.confirm with okType:'danger' required before all destructive
-  actions. Reflects UI fixes feature (branch 011) completed 2026-06-03.)
-Modified principles: none
-Added sections:
-  - Development Constraints: Delete confirmation rule
+Version change: 1.21.0 → 1.22.0 (minor — Principle VIII gains one NEW mandatory
+  rule from user feedback, 2026-07-12: "Grammatical number (plurals)" — every
+  English message that embeds a count MUST use ICU plural syntax
+  ({n, plural, one {...} other {...}}); "1 records"-style output is a
+  violation. Applies to ALL existing keys immediately (audited in the same
+  change); zh-TW keeps its uninflected forms.)
+Modified principles:
+  - VIII. Internationalisation (i18n) — added "Grammatical number (plurals)"
+    mandatory rule.
+Added sections: none
 Removed sections: none
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ No changes needed
+  - .specify/templates/plan-template.md ✅ No changes needed (generic gate)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: None.
+Follow-up TODOs: none — all count-bearing en-US keys audited/converted in the
+  same iteration (EntityOffsetFooter "records" default and any others).
 -->
 
 # UniHub Constitution
@@ -37,6 +41,16 @@ all domains — current and future.
 - Deleting a user-defined AttributeDefinition that has existing values MUST
   display a confirmation warning showing the count of affected entities; upon
   confirmation, all associated AttributeValues are permanently removed.
+- **Data-portability (`data_io`) consistency**: Every concrete domain model MUST
+  be registered with the shared **`data_io`** import/export registry — a
+  `TableDescriptor` declared in the domain's `AppConfig.ready()` (with
+  `fk_content_type_label` overrides for every foreign key and an `import_order`
+  that writes parents before children) — so all domain data participates in the
+  standard CSV backup / restore / change-preview flow. **Any schema change MUST
+  keep the domain consistent with `data_io` in the same change**: a new model MUST
+  add its `TableDescriptor`; adding, removing, or renaming a field MUST update that
+  descriptor. A relation the registry cannot yet represent (e.g. a many-to-many)
+  MUST be **explicitly recorded as deferred**, never silently omitted.
 
 **Rationale**: The shared entity/attribute infrastructure is the central value
 proposition of UniHub. Bypassing it — even for convenience — fragments the
@@ -170,22 +184,63 @@ reference implementation to follow.
   locale file for each supported locale MUST be imported at app entry.
 - **Datetime display**: Every datetime value rendered in a table cell, detail
   view, or card MUST display both the absolute timestamp and the relative time.
-  The canonical format is `YYYY-MM-DD HH:mm (X days ago)` — implemented with
-  `dayjs(val).format('YYYY-MM-DD HH:mm')` and `dayjs(val).fromNow()` (requires
-  `dayjs/plugin/relativeTime` registered at app entry via `dayjs.extend(relativeTime)`).
-  When space is constrained, the relative time MAY be placed in an Ant Design
-  `<Tooltip>` on hover, but MUST NOT be omitted entirely.
+  The default rendering is **two stacked rows** inside the cell/field:
+  - **Primary row**: the absolute datetime string —
+    `dayjs(val).format('YYYY-MM-DD HH:mm')`.
+  - **Secondary row**: the relative time — `dayjs(val).fromNow()` — rendered as
+    muted secondary text (`<Typography.Text type="secondary">`), visually
+    subordinate to the primary row.
+  `dayjs/plugin/relativeTime` MUST be registered at app entry via
+  `dayjs.extend(relativeTime)`. The former single-line canonical format
+  `YYYY-MM-DD HH:mm (X days ago)` is superseded by the two-row default. A
+  feature spec MAY override the absolute string's precision for a specific
+  surface (e.g. date-only `YYYY-MM-DD`) but MUST keep the two-row
+  absolute-primary / relative-secondary structure. Only when vertical space
+  genuinely cannot accommodate two rows MAY the relative time move to an Ant
+  Design `<Tooltip>` on hover; it MUST NOT be omitted entirely.
 - **Empty cell display**: Every table cell or detail-view field whose value is
-  absent (null, undefined, or empty string) MUST display a visually distinct
-  placeholder rather than leaving the cell blank or rendering raw `null`. The
-  canonical implementation is:
-  `<Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>`.
-  Two requirements are non-negotiable: (1) the placeholder MUST be styled with a
-  muted/disabled color (`type="secondary"`) to distinguish it from real data, and
-  (2) it MUST be non-selectable (`userSelect: 'none'`) so users cannot accidentally
-  copy it and to signal that the absence is intentional, not an error. Rendering
-  nothing, a blank string, or the literal string `"null"` or `"undefined"` is a
-  constitution violation.
+  absent (null, undefined, or empty string) MUST display the standard empty
+  placeholder: a **SHORT dimmed hyphen "-"** — NOT the long em-dash "—", which
+  reads like real content and misleads users. The canonical implementation is
+  the shared **`<EmptyValue />`** component
+  (`apps/unihub/frontend/src/components/EmptyValue/`), which renders
+  `<Typography.Text disabled style={{ userSelect: 'none' }}>-</Typography.Text>`.
+  Non-negotiable: (1) dimmed/disabled color; (2) non-selectable
+  (`userSelect: 'none'`); (3) the SHORT `-` character EVERYWHERE the absence of
+  content is shown — including the placeholder slot of a disabled control
+  (e.g. a currency selector disabled because its amount is 0/empty shows
+  placeholder `-`) and inside composed strings (a date range with a missing
+  side reads `2026-07-10 ~ -`). Ad-hoc placeholder markup, the em-dash, plain
+  selectable placeholder text, rendering nothing, or the literal
+  `"null"`/`"undefined"` are constitution violations.
+- **Dropdowns fit the viewport**: Any dropdown, popup panel, or overlay menu
+  (the toolbar Filter/Sort/Columns panels, select dropdowns, context menus)
+  MUST constrain its height to the visible viewport and scroll internally — it
+  MUST NEVER overflow the viewport vertically. Canonical implementation: a
+  max-height with internal scrolling on the panel's list body (e.g.
+  `maxHeight: '60vh'`, `overflowY: 'auto'`), keeping the panel's action footer
+  visible. Content of unbounded length (e.g. one Columns entry per parameter
+  definition) MUST remain fully reachable by scrolling within the panel.
+- **Truncation-gated tooltips**: A tooltip whose content merely repeats the
+  target's own text MUST appear ONLY when that text is actually truncated
+  (ellipsised/overflowing). Fully visible content MUST NOT carry a
+  same-content tooltip — it is redundant and annoying. Canonical
+  implementation: the shared **`<OverflowTooltip>`** component
+  (`apps/unihub/frontend/src/components/OverflowTooltip/`), which measures
+  overflow (scrollWidth vs clientWidth) and attaches the tooltip conditionally.
+  Tooltips that add information beyond the visible text are exempt.
+  Unconditional same-content tooltips are a constitution violation.
+- **Panel-header actions (responsive kebab)**: A panel's (Card's) action
+  buttons MUST sit on the **right-hand side of the panel header** (the AntD
+  Card `extra` slot). Which actions are directly visible is context-dependent,
+  with two non-negotiable rules: (1) **advanced/destructive actions (e.g.
+  Delete) MUST fold into a kebab (⋯) menu by default** — never a bare
+  always-visible destructive button in the header; (2) on a **narrow area**,
+  otherwise-visible buttons MUST progressively fold into the kebab menu as the
+  available width demands (judged by content width, per the form-grid rule).
+  The kebab trigger is the right-most control; its dropdown MUST right-align
+  to the trigger and open toward the left so it never overflows the panel or
+  viewport edge.
 - **Foreign-key value display**: Any table cell or detail-view field that renders
   a value sourced from a related/foreign record (e.g., a currency code that
   resolves to a Currency entity, a category resolved from a Categories table)
@@ -194,6 +249,36 @@ reference implementation to follow.
   default `<Tag>` appearance; the goal is to make relational references
   scannable at a glance. Example: currency columns in the Finance Exchange Rates
   page MUST render `<Tag>{currency}</Tag>` rather than a plain string.
+- **Standalone-page navigation (no Cancel button)**: Full-page create, edit, and
+  detail views (e.g. an entity create/edit page, a record detail page) MUST use a
+  breadcrumb for navigation (parent → current) and MUST NOT render a Cancel button.
+  The user abandons or leaves the page via the breadcrumb (or the browser back
+  affordance), not a page-level Cancel control. A single primary action (e.g.
+  Save / Create) is permitted; a redundant Cancel next to it is a violation.
+- **Modal form controls**: Modal (dialog) forms are the exception — they MUST keep
+  a Cancel button. **Footer action placement**: the **primary action** (e.g.
+  Save / Create / OK) MUST be on the **right-hand side** of the footer, and **all
+  other actions** (Cancel and any secondary/tertiary buttons) MUST be grouped on
+  the **left-hand side**. Cancel remains the **left-most** control. A modal MUST NOT
+  close on outside/overlay click (or `Esc`) while its form is **dirty** (has unsaved
+  changes); it may close on outside click only when the form is pristine. This
+  prevents accidental loss of in-progress input. On narrow screens, modal form
+  fields MUST stack (single column) rather than overflow horizontally.
+- **Form field layout (grid, responsive, right-aligned numbers)**: Every form —
+  page-level or modal — MUST arrange its fields on a **grid** (Ant Design
+  `Row`/`Col`), never as free-floating or fixed-pixel-width controls. Within a
+  single row, **each field MUST stretch to fill its allotted column** and the
+  fields together MUST fill the full row width (no dead horizontal space, no
+  fixed-`px` field widths that leave gaps or overflow). The grid MUST be
+  **responsive**: on a **narrow area the fields MUST stack to a single full-width
+  column** so nothing overflows its row. Narrowness MUST be judged by the actual
+  **content width** (e.g. a container-width hook / `ResizeObserver`), not the raw
+  viewport, because a collapsed-sidebar-narrow content area must also stack —
+  Ant Design `Col` `xs/sm` breakpoints follow the viewport and are therefore
+  insufficient on their own. **Number inputs MUST right-align their content**
+  (`InputNumber` with right-aligned text), not the default left alignment, so
+  digits line up for scanning and comparison. These rules apply **immediately to
+  all existing forms**, not only new ones, for a consistent experience.
 
 **Rationale**: Maintaining a living reference implementation prevents UI drift
 and reduces design decisions to a lookup rather than a debate. ov-fleet is
@@ -203,7 +288,18 @@ Relative timestamps reduce cognitive load — users should never need to calcula
 layout collapse and signal intentional absence of data, reducing confusion when
 users scan sparse tables. Tag-wrapped foreign-key values give users an instant
 visual cue that the field is a reference to another record rather than arbitrary
-text, improving scannability across data-dense tables.
+text, improving scannability across data-dense tables. Removing the Cancel button
+from full-page flows eliminates a redundant, ambiguous control (breadcrumb already
+communicates "where back is"), while the dirty-guard on modals protects
+in-progress work — the two surfaces differ because a modal overlays and can be
+dismissed accidentally, whereas a page cannot. A consistent, gap-free responsive
+form grid (with content-width stacking) removes a recurring class of layout bugs —
+half-filled rows, fields that overflow on narrow content areas, and inconsistent
+field widths between forms — and right-aligned number inputs make numeric columns
+readable and comparable at a glance. Right-aligned panel-header actions with a
+default-folded kebab keep destructive controls out of accidental reach, keep
+panel headers scannable, and give narrow layouts a graceful degradation path
+instead of wrapped or clipped button rows.
 
 ### VII. PageTable Layout — NON-NEGOTIABLE
 
@@ -250,6 +346,19 @@ system page that renders a table).
   the layout; they are acceptable siblings to `PageTable` in the page JSX.
 - All column widths MUST use `widthForHeader()`, `measureTextWidth()`, and
   `computeScrollX()` exported from `PageTable`.
+- **Footer layout (information left, controls right)**: The standard table
+  footer (`EntityOffsetFooter` / `EntityCursorFooter`) MUST place
+  **non-interactive information on the LEFT** — the total record count (e.g.
+  "123 records") — and **ALL interactive controls on the RIGHT**, ordered as
+  the **per-page size selector first, then the pagination**, flush right:
+
+  ```
+  123 records               [25/page v] < 1 [2] 3 4 >
+  ```
+
+  No interactive control may sit on the left side of the footer. Because the
+  footers are shared components, this rule is enforced there once — pages MUST
+  NOT re-implement or re-order the footer locally.
 - The `PageTable` component lives at
   `apps/unihub/frontend/src/components/PageTable/`.
 
@@ -284,6 +393,12 @@ corresponding entry in the other is a violation.
 - When a new component or page is added, ALL its user-facing strings MUST be
   added to both locale files in the same commit. No deferred i18n.
 - `react-intl` is the ONLY permitted i18n library. Do not introduce alternatives.
+- **Grammatical number (plurals)**: every English message embedding a count
+  MUST use ICU plural syntax — `{n, plural, one {# record} other {# records}}`
+  — so singular counts never render a plural noun ("1 records" is a
+  violation). This applies to table footers, cell counts, confirmations, and
+  any other count-bearing string, existing keys included. zh-TW keeps its
+  uninflected forms (Chinese has no plural inflection).
 - Navigation items MUST use `t({ id: 'menu.*' })` in `AppShell.tsx` — never
   hardcode nav labels directly in the route config.
 - The language selector (Principle VI) and its `localStorage` persistence
@@ -334,8 +449,7 @@ original amount.
   with `base_currency = account_currency` and `quote_currency = base_currency`
   (or the inverse and divide). Use the latest `date` among matching records.
 - When no `ExchangeRate` record covers a given pair, the net worth valuation cell
-  MUST display the standard empty-cell placeholder
-  (`<Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>`)
+  MUST display the standard empty-cell placeholder (`<EmptyValue />` — Principle VI)
   rather than crashing, hiding the column, or displaying a raw error.
 - In tree-aggregated views, the tree root node MUST display the total net worth as
   the sum of all leaf-level converted amounts. Leaves with missing exchange rates
@@ -568,6 +682,9 @@ steps may be skipped or reordered:
    (Principle VIII).
 6. Add a service file at `apps/unihub/frontend/src/services/<domain>.ts` with
    types generated from the updated OpenAPI schema.
+7. Register every concrete model with the **`data_io`** registry in the domain's
+   `AppConfig.ready()` (Principle I data-portability rule), and keep those
+   `TableDescriptor`s in sync on every subsequent schema change.
 
 Verify the Finance domain remains fully functional after adding any new domain
 (Principle II compliance check).
@@ -596,4 +713,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.13.1 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-06-03
+**Version**: 1.22.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-12

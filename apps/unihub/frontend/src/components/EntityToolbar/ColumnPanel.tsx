@@ -65,6 +65,10 @@ export function ColumnPanel({ hook, onApply, onClose, focusCancelOn }: ColumnPan
       style={{ width: 'max-content', minWidth: 260, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
       styles={{ body: { padding: 12 } }}
     >
+      {/* Constitution v1.20.0: the panel must never overflow the viewport —
+          the (potentially long) column list scrolls internally while the
+          Reset/Cancel/Apply footer stays visible. */}
+      <div data-panel-scroll style={{ maxHeight: '60vh', overflowY: 'auto' }}>
       <SortableList
         items={sortableItems}
         onReorder={handleReorder}
@@ -120,6 +124,7 @@ export function ColumnPanel({ hook, onApply, onClose, focusCancelOn }: ColumnPan
           );
         }}
       />
+      </div>
 
       <Divider style={{ margin: '8px 0' }} />
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>

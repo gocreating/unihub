@@ -233,3 +233,75 @@ describe('useColumnConfig', () => {
     expect(result.current.isDirty).toBe(false);
   });
 });
+
+// Iteration 16: pin-by-default seeding (Catalog Toggle column).
+describe('useColumnConfig defaultSticky seed', () => {
+  it('seeds stickyLeft in the initial state and keeps it across async merges', () => {
+    const initial = makeColumns();
+    const { result, rerender } = renderHook(
+      ({ cols }) => useColumnConfig(cols, { left: true }),
+      { initialProps: { cols: initial } },
+    );
+    expect(result.current.activeState.stickyLeft).toBe(true);
+    expect(result.current.firstColumnFixed).toBe('left');
+    // A seeded default is the default — not a user customisation.
+    expect(result.current.isCustomised).toBe(false);
+    // Async column merge (label patch) must not clobber the seeded pin.
+    rerender({ cols: makeColumns([{ label: 'Name2' }]) });
+    expect(result.current.activeState.stickyLeft).toBe(true);
+  });
+
+  it('user unpin wins over the seed; reset() restores the seeded default', () => {
+    const { result } = renderHook(() => useColumnConfig(makeColumns(), { left: true }));
+    act(() => {
+      result.current.setPendingState({ ...result.current.pendingState, stickyLeft: false });
+    });
+    act(() => {
+      result.current.apply();
+    });
+    expect(result.current.activeState.stickyLeft).toBe(false);
+    expect(result.current.isCustomised).toBe(true);
+    act(() => {
+      result.current.reset();
+    });
+    expect(result.current.activeState.stickyLeft).toBe(true);
+    expect(result.current.isCustomised).toBe(false);
+  });
+});
+
+// Iteration 14: async columns (attribute definitions) merge without disturbing config.
+describe('useColumnConfig async column merging', () => {
+  it('appends new keys and drops removed keys, preserving existing config', async () => {
+    const { renderHook, act } = await import('@testing-library/react');
+    const initial = [
+      { key: 'a', label: 'A', dataType: 'text' as const, visible: true, order: 0 },
+      { key: 'b', label: 'B', dataType: 'text' as const, visible: true, order: 1 },
+    ];
+    const { result, rerender } = renderHook(
+      ({ cols }) => useColumnConfig(cols),
+      { initialProps: { cols: initial } },
+    );
+    // User hides column b.
+    act(() =>
+      result.current.setPendingState({
+        ...result.current.pendingState,
+        columns: result.current.pendingState.columns.map((c) =>
+          c.key === 'b' ? { ...c, visible: false } : c,
+        ),
+      }),
+    );
+    act(() => result.current.apply());
+    // Async definitions arrive: b removed, attr:x appended (hidden).
+    rerender({
+      cols: [
+        { key: 'a', label: 'A2', dataType: 'text' as const, visible: true, order: 0 },
+        { key: 'attr:x', label: 'X', dataType: 'text' as const, visible: false, order: 2 },
+      ],
+    });
+    const keys = result.current.activeState.columns.map((c) => c.key);
+    expect(keys).toEqual(['a', 'attr:x']);
+    // Label patched; appended column stays hidden.
+    expect(result.current.activeState.columns[0]?.label).toBe('A2');
+    expect(result.current.activeState.columns[1]?.visible).toBe(false);
+  });
+});

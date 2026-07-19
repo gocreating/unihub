@@ -18,6 +18,11 @@ import { BalanceSheetEditPage } from '@/pages/finance/balance-sheets/edit';
 import { BalanceSheetNewPage } from '@/pages/finance/balance-sheets/new';
 import { CurrenciesPage } from '@/pages/finance/currencies/index';
 import { ExchangeRatesPage } from '@/pages/finance/exchange-rates/index';
+import { CatalogPage } from '@/pages/inventory/catalog/index';
+import { AcquisitionNewPage } from '@/pages/inventory/acquisitions/new';
+import { AcquisitionEditPage } from '@/pages/inventory/acquisitions/edit';
+import { ScenariosPage } from '@/pages/inventory/scenarios/index';
+import { ScenarioDetailPage } from '@/pages/inventory/scenarios/detail';
 import { LanguagePage } from '@/pages/language/LanguagePage';
 import { PeoplePage } from '@/pages/people/PeoplePage';
 import { MusicPage } from '@/pages/music/MusicPage';
@@ -75,6 +80,13 @@ function AppRoutes() {
                 <Route path="/finance/balance-sheets/:id/edit" element={<BalanceSheetEditPage />} />
                 <Route path="/finance/balance-sheets/:id" element={<BalanceSheetDetailPage />} />
                 <Route path="/finance/exchange-rates" element={<ExchangeRatesPage />} />
+                <Route path="/inventory/catalog" element={<CatalogPage />} />
+                <Route path="/inventory/items" element={<Navigate to="/inventory/catalog" replace />} />
+                <Route path="/inventory/acquisitions" element={<Navigate to="/inventory/catalog" replace />} />
+                <Route path="/inventory/acquisitions/new" element={<AcquisitionNewPage />} />
+                <Route path="/inventory/acquisitions/:id/edit" element={<AcquisitionEditPage />} />
+                <Route path="/inventory/scenarios" element={<ScenariosPage />} />
+                <Route path="/inventory/scenarios/:id" element={<ScenarioDetailPage />} />
                 <Route path="/language" element={<LanguagePage />} />
                 <Route path="/people" element={<PeoplePage />} />
                 <Route path="/music" element={<MusicPage />} />

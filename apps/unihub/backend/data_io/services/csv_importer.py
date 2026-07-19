@@ -40,9 +40,10 @@ def _get_user_attr_header_set(descriptor: TableDescriptor) -> set[str]:
         ct = ContentType.objects.get(app_label=app_label, model=model_name)
     except ContentType.DoesNotExist:
         return set()
+    system_names = {f.column_name for f in descriptor.system_fields}
     return {
         f"[{ad.name}]:{ad.data_type}"
-        for ad in AttributeDefinition.objects.filter(content_type=ct, is_system=False)
+        for ad in AttributeDefinition.objects.filter(content_type=ct).exclude(name__in=system_names)
     }
 
 

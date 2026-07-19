@@ -166,11 +166,10 @@ class TestAccountsOffsetPagination:
         )
 
         import urllib.parse
+
         encoded_filters = urllib.parse.quote(filters_payload)
 
-        resp = auth_client.get(
-            f"/api/v1/finance/accounts/?limit=1&filters={encoded_filters}"
-        )
+        resp = auth_client.get(f"/api/v1/finance/accounts/?limit=1&filters={encoded_filters}")
         assert resp.status_code == 200
         data = resp.json()
         # Two "Savings" accounts with limit=1 → there must be a next page

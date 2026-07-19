@@ -24,6 +24,18 @@ describe('EntityOffsetFooter', () => {
   });
 
   // O-02: zero total
+  // O-02b (constitution v1.22.0): singular counts never render a plural noun.
+  it('pluralizes correctly: "1 record", "2 records"', () => {
+    const { rerender } = render(
+      <EntityOffsetFooter total={1} pageSize={25} current={1} onChange={vi.fn()} />,
+      { wrapper },
+    );
+    expect(screen.getByText('1 record')).toBeInTheDocument();
+    expect(screen.queryByText('1 records')).toBeNull();
+    rerender(<EntityOffsetFooter total={2} pageSize={25} current={1} onChange={vi.fn()} />);
+    expect(screen.getByText('2 records')).toBeInTheDocument();
+  });
+
   it('displays 0 records when total is 0', () => {
     render(
       <EntityOffsetFooter total={0} pageSize={25} current={1} onChange={vi.fn()} />,
@@ -52,7 +64,33 @@ describe('EntityOffsetFooter', () => {
     expect(onChange).toHaveBeenCalledWith(2, 25);
   });
 
-  // O-05: page size selector combobox present on the left
+  // O-10 (constitution v1.19.0): information left, controls right — the count
+  // text leads; the per-page selector and pagination are grouped flush right,
+  // selector before pagination.
+  it('places the record count left and selector+pagination grouped right', () => {
+    const { container } = render(
+      <EntityOffsetFooter total={100} pageSize={25} current={1} onChange={vi.fn()} />,
+      { wrapper },
+    );
+    const root = container.firstElementChild!;
+    const children = Array.from(root.children);
+    const left = children[0]!;
+    const right = children[children.length - 1]!;
+    expect(left.textContent).toContain('100 records');
+    // No interactive control on the left side.
+    expect(left.querySelector('.ant-select')).toBeNull();
+    expect(left.querySelector('.ant-pagination')).toBeNull();
+    // Selector and pagination live together on the right, selector first.
+    const select = right.querySelector('.ant-select');
+    const pagination = right.querySelector('.ant-pagination');
+    expect(select).toBeTruthy();
+    expect(pagination).toBeTruthy();
+    expect(
+      select!.compareDocumentPosition(pagination!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  // O-05: page size selector combobox present
   it('renders a page size selector combobox', () => {
     render(
       <EntityOffsetFooter total={100} pageSize={25} current={1} onChange={vi.fn()} />,
@@ -103,5 +141,23 @@ describe('EntityOffsetFooter', () => {
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.change(screen.getByRole('combobox'), { target: { value: '75' } });
     expect(screen.getByText('75 / page')).toBeInTheDocument();
+  });
+});
+
+// Iteration 15: custom info-side text replaces "{total} records" when provided.
+describe('EntityOffsetFooter totalText slot', () => {
+  it('renders the custom total text instead of the default records line', () => {
+    render(
+      <EntityOffsetFooter
+        total={90}
+        pageSize={25}
+        current={1}
+        onChange={vi.fn()}
+        totalText="68 acquisitions, 90 items"
+      />,
+      { wrapper },
+    );
+    expect(screen.getByText('68 acquisitions, 90 items')).toBeInTheDocument();
+    expect(screen.queryByText('90 records')).toBeNull();
   });
 });

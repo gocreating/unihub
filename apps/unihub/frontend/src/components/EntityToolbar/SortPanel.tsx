@@ -90,6 +90,8 @@ export function SortPanel({ attrs, hook, onApply, onClose, focusCancelOn }: Sort
       style={{ width: 'max-content', minWidth: 360, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
       styles={{ body: { padding: 12 } }}
     >
+      {/* Constitution v1.20.0: panels never overflow the viewport. */}
+      <div data-panel-scroll style={{ maxHeight: '60vh', overflowY: 'auto' }}>
       <SortableList
         items={items}
         onReorder={handleReorder}
@@ -170,6 +172,7 @@ export function SortPanel({ attrs, hook, onApply, onClose, focusCancelOn }: Sort
       <button style={ghostBtnStyle} onClick={addRule}>
         {t({ id: 'common.entityOps.sort.addRule' })}
       </button>
+      </div>
 
       <Divider style={{ margin: '8px 0' }} />
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>

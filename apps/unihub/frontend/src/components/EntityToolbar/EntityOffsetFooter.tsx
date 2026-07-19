@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type React from 'react';
 import { Flex, Pagination, Select, Space, Typography } from 'antd';
 import { useIntl } from 'react-intl';
 import { ENTITY_PAGE_SIZE_OPTIONS } from './useEntityTable';
@@ -9,6 +10,10 @@ export interface EntityOffsetFooterProps {
   current: number;
   onChange: (page: number, size: number) => void;
   pageSizeOptions?: readonly number[];
+  /** Custom info-side text (e.g. "{x} acquisitions, {y} items") — replaces the
+   * default "{total} records" line; the footer layout (info left, controls
+   * right — constitution v1.19.0) is unchanged. */
+  totalText?: React.ReactNode;
 }
 
 export function EntityOffsetFooter({
@@ -17,6 +22,7 @@ export function EntityOffsetFooter({
   current,
   onChange,
   pageSizeOptions = ENTITY_PAGE_SIZE_OPTIONS,
+  totalText,
 }: EntityOffsetFooterProps) {
   const { formatMessage: t } = useIntl();
   const [searchValue, setSearchValue] = useState('');
@@ -40,8 +46,20 @@ export function EntityOffsetFooter({
     [pageSizeOptions, isValidCustom, customNum, t],
   );
 
+  // Constitution v1.19.0 footer layout: non-interactive information (record
+  // count) on the left; ALL interactive controls grouped on the right — the
+  // per-page selector first, then the pagination.
   return (
     <Flex justify="space-between" align="center">
+      {totalText !== undefined ? (
+        <Typography.Text type="secondary">{totalText}</Typography.Text>
+      ) : total !== undefined ? (
+        <Typography.Text type="secondary">
+          {t({ id: 'common.entityOps.pagination.total' }, { total })}
+        </Typography.Text>
+      ) : (
+        <span />
+      )}
       <Space>
         <Select
           value={pageSize}
@@ -54,19 +72,14 @@ export function EntityOffsetFooter({
           popupMatchSelectWidth={false}
           style={{ minWidth: 90 }}
         />
-        {total !== undefined && (
-          <Typography.Text type="secondary">
-            {t({ id: 'common.entityOps.pagination.total' }, { total })}
-          </Typography.Text>
-        )}
+        <Pagination
+          total={total}
+          pageSize={pageSize}
+          current={current}
+          showSizeChanger={false}
+          onChange={onChange}
+        />
       </Space>
-      <Pagination
-        total={total}
-        pageSize={pageSize}
-        current={current}
-        showSizeChanger={false}
-        onChange={onChange}
-      />
     </Flex>
   );
 }

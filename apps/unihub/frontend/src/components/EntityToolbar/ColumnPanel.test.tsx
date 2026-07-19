@@ -432,3 +432,15 @@ describe('ColumnPanel — sticky integration (real hook)', () => {
     expect(capturedHook.firstColumnFixed).toBeUndefined();
   });
 });
+
+// Constitution v1.20.0: the panel's list scrolls internally, never overflowing
+// the viewport (the Catalog's per-parameter columns made the list unbounded).
+describe('ColumnPanel viewport fit (constitution v1.20.0)', () => {
+  it('caps the column list height with internal scrolling', () => {
+    renderPanel();
+    const scroller = document.querySelector('[data-panel-scroll]') as HTMLElement;
+    expect(scroller).toBeTruthy();
+    expect(scroller.style.maxHeight).toBe('60vh');
+    expect(scroller.style.overflowY).toBe('auto');
+  });
+});

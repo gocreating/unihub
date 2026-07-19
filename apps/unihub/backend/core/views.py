@@ -2,6 +2,7 @@ from django.contrib.contenttypes.models import ContentType
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 
+from core.attributes import compute_value_fields
 from core.models import AttributeDefinition, AttributeValue
 from core.serializers import (
     AttributeDefinitionSerializer,
@@ -25,6 +26,19 @@ class AttributeDefinitionViewSet(viewsets.ModelViewSet):
             except (ValueError, ContentType.DoesNotExist):
                 return AttributeDefinition.objects.none()
         return qs
+
+    def partial_update(self, request, *args, **kwargs):
+        """Guard system definitions: only display_order/options may change (Principle I)."""
+        attr_def = self.get_object()
+        if attr_def.is_system:
+            locked = {"name", "data_type", "unit_family", "content_type"}
+            touched = locked.intersection(request.data.keys())
+            if touched:
+                return Response(
+                    {"detail": f"System attributes cannot change: {', '.join(sorted(touched))}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return super().partial_update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         attr_def = self.get_object()
@@ -88,13 +102,25 @@ class AttributeValueViewSet(viewsets.ViewSet):
         upsert_serializer = AttributeValueUpsertSerializer(data=attrs, many=True)
         upsert_serializer.is_valid(raise_exception=True)
 
+        definitions = AttributeDefinition.objects.in_bulk(
+            [item["attribute_definition_id"] for item in upsert_serializer.validated_data]
+        )
         results = []
         for item in upsert_serializer.validated_data:
+            definition = definitions[item["attribute_definition_id"]]
+            value, value_unit, value_number, value_number_max = compute_value_fields(
+                definition, item["value"], item.get("unit", "")
+            )
             obj, _ = AttributeValue.objects.update_or_create(
-                attribute_definition_id=item["attribute_definition_id"],
+                attribute_definition_id=definition.id,
                 content_type=ct,
                 object_id=object_id,
-                defaults={"value": item["value"]},
+                defaults={
+                    "value": value,
+                    "value_unit": value_unit,
+                    "value_number": value_number,
+                    "value_number_max": value_number_max,
+                },
             )
             results.append(obj)
 

@@ -4,16 +4,18 @@ import {
   CustomerServiceOutlined,
   DatabaseOutlined,
   DollarOutlined,
+  InboxOutlined,
   LogoutOutlined,
   ReadOutlined,
   SettingOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import { type ReactNode } from 'react';
 import { getMe, logout } from '@/services/unihub-backend/auth';
+import { useCurrencySymbols } from '@/hooks/useCurrencySymbols';
 import { SelectLang } from '@/components/SelectLang';
 
 interface AppShellProps {
@@ -29,6 +31,8 @@ export function AppShell({ children }: AppShellProps) {
     queryKey: ['auth', 'me'],
     queryFn: getMe,
   });
+  // Warm + seed the finance symbol registry app-wide (FR-033, iter 34).
+  useCurrencySymbols();
 
   const handleLogout = async () => {
     await logout();
@@ -47,6 +51,15 @@ export function AppShell({ children }: AppShellProps) {
           { path: '/finance/exchange-rates', name: t({ id: 'menu.finance.exchangeRates' }) },
           { path: '/finance/accounts', name: t({ id: 'menu.finance.accounts' }) },
           { path: '/finance/balance-sheets', name: t({ id: 'menu.finance.balanceSheets' }) },
+        ],
+      },
+      {
+        path: '/inventory',
+        name: t({ id: 'menu.inventory' }),
+        icon: <InboxOutlined />,
+        routes: [
+          { path: '/inventory/catalog', name: t({ id: 'menu.inventory.catalog' }) },
+          { path: '/inventory/scenarios', name: t({ id: 'menu.inventory.scenarios' }) },
         ],
       },
       { path: '/language', name: t({ id: 'menu.language' }), icon: <ReadOutlined /> },
@@ -86,14 +99,17 @@ export function AppShell({ children }: AppShellProps) {
           {title}
         </span>
       )}
-      menuItemRender={(item, dom) => (
-        <span
-          style={{ cursor: 'pointer', display: 'block', width: '100%' }}
-          onClick={() => item.path && navigate(item.path)}
-        >
-          {dom}
-        </span>
-      )}
+      // Real hyperlinks (FR-034): browser shortcuts (middle/Cmd/Ctrl-click)
+      // open a new tab; plain clicks stay SPA navigations via <Link>.
+      menuItemRender={(item, dom) =>
+        item.path ? (
+          <Link to={item.path} style={{ display: 'block', width: '100%' }}>
+            {dom}
+          </Link>
+        ) : (
+          dom
+        )
+      }
       actionsRender={() => [<SelectLang key="select-lang" />]}
       avatarProps={{
         title: user?.username ?? '',

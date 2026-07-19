@@ -1,20 +1,23 @@
-# Implementation Plan: Inventory App — Iteration 29 (Faithful drag preview)
+# Implementation Plan: Inventory App — Iteration 30 (Keyed 寬度/高度/直徑/耐溫 extraction + explicit range-mode input)
 
 **Branch**: `014-inventory-app` | **Date**: 2026-07-19 | **Spec**: [spec.md](spec.md)
 
-**Input**: spec.md — Session 2026-07-19 iteration 29; FR-011 amended. Constitution v1.22.0.
+**Input**: spec.md — Session 2026-07-19 iteration 30; FR-002b/FR-026/FR-029h amended. Constitution v1.22.0.
 
 ## Summary
 
-The scenario organize DragOverlay becomes a faithful preview: it renders the SAME row content as the grabbed row (HolderOutlined + `RowContent`/ItemDisplay — spec line and parameter pairs included) at the SOURCE ROW's measured width (captured from the active node's rect at drag start), styled as the existing floating card (white, shadow, radius). The iteration-26 pointer-based drop projection stays (it is independent of overlay size). e2e locks the invariant mid-drag: overlay width matches the source row within 2px and the overlay contains the row's spec text, not just the name.
+1. **New system definitions** — migration seeds `diameter` (dimension/length, 📏) and `temperature` (dimension/temperature, 🌡); localized labels + SYSTEM key maps (frontend) updated; importer's measure loop gains both keys.
+2. **Keyed extraction (FR-029h)** — parser patterns for 寬度/高度/直徑/耐溫 (range-capable via a SIGNED grammar: `-?a(~-?b | -b)`); 耐溫 units 度C/℃/°C → °C. The 食品级折叠水杯 gains 高度 1.8~8 cm, 直徑 5.5~9 cm, 溫度 -40~230 °C on re-import.
+3. **Range-mode input (FR-002b)** — shared `RangeValueInput`: mode picker (exact | range) + one or two InputNumbers (+ unit select for dimension rows); mode seeds from the stored value; emits canonical text; min ≤ max validated inline. Replaces the bare text input in ParameterRowsEditor for both dimension and number rows.
+4. **Data refresh** — ref-keyed upsert re-import; verify the cup's three new parameters (temperature canonical min −40 / max 230) and the 憨客 strap keeps 74~164.
 
 ## Technical Context
 
-Frontend-only: `scenarios/detail.tsx` (onDragStart captures the active node rect width into drag state; DragOverlay renders RowContent at that width, `data-testid="drag-overlay"`). Real-mouse e2e in `inventory-scenario.spec.ts` measuring mid-drag before mouse.up.
+Backend: core migration (seed only — model unchanged); parser regex + unit normalization. Frontend: RangeValueInput component (RTL-first), editor wiring, locale keys (mode labels + new parameter labels ×2). Existing e2e that types "5-10"/"10-5" into the old text input must be reworked to the new two-field flow.
 
 ## Constitution Check
 
-PASS — V (e2e lock first), VI (row content unchanged — same truncation/tooltip components).
+PASS — I (definitions seeded via migration, never hardcoded), V (TDD), VI (validated inputs, inline error), VIII (all new labels in both locales).
 
 ## Complexity Tracking
 

@@ -299,6 +299,14 @@ export function ScenarioDetailPage() {
       }),
     enabled: addOpen && search.trim().length > 0,
   });
+  // Empty search box → the 10 most recently acquired items (FR-011, iter 31):
+  // same ordering as the catalog default (obtained ↓ NULLS FIRST).
+  const recentQ = useQuery({
+    queryKey: ['inventory', 'scenario-recent'],
+    queryFn: () =>
+      listItems({ limit: 10, ordering: '-acquisition__obtained_at__nullsfirst' }),
+    enabled: addOpen && search.trim().length === 0,
+  });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['inventory', 'scenario', id] });
@@ -468,18 +476,24 @@ export function ScenarioDetailPage() {
 
   const dropIndicator = (
     <div
+      data-testid="drop-indicator"
       style={{
         height: 2,
         background: '#1677ff',
         marginLeft: (indicator?.depth ?? 0) * INDENT,
         borderRadius: 1,
+        // Paint ABOVE the drag overlay (zIndex 900) so the prospective drop
+        // position is never hidden by the preview (FR-011, iteration 31).
+        position: 'relative',
+        zIndex: 1000,
       }}
     />
   );
 
   const draggedLine = drag ? lineById.get(drag.lineId) : null;
 
-  const searchResults = searchQ.data?.results ?? [];
+  const searching = search.trim().length > 0;
+  const searchResults = (searching ? searchQ.data?.results : recentQ.data?.results) ?? [];
   const untitled = t({ id: 'pages.inventory.acquisitions.new.untitled' });
   // Acquisition context on results (iteration 19): source + date summary,
   // truncation-gated (constitution VI, iteration 20).
@@ -614,10 +628,11 @@ export function ScenarioDetailPage() {
               </PaneDroppable>
             </Splitter.Panel>
           </Splitter>
-          <DragOverlay>
+          <DragOverlay zIndex={900}>
             {draggedLine ? (
               // Faithful preview (FR-011, iteration 29): the SAME row content
               // (holder + ItemDisplay) at the grabbed row's measured width.
+              // Semi-transparent + below the drop indicator (iteration 31).
               <div
                 data-testid="drag-overlay"
                 style={{
@@ -630,6 +645,7 @@ export function ScenarioDetailPage() {
                   background: '#fff',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                   borderRadius: 6,
+                  opacity: 0.75,
                 }}
               >
                 <HolderOutlined style={{ marginTop: 4, color: 'rgba(0,0,0,0.45)', flex: 'none' }} />
@@ -674,7 +690,7 @@ export function ScenarioDetailPage() {
         <div data-testid="modal-results" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <List
           size="small"
-          loading={searchQ.isFetching}
+          loading={searching ? searchQ.isFetching : recentQ.isFetching}
           dataSource={searchResults}
           locale={{
             emptyText: search.trim()

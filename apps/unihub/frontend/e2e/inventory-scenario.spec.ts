@@ -530,3 +530,70 @@ test('iteration 29: drag overlay mirrors the grabbed row', async ({ page }) => {
   await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();
   await page.waitForTimeout(500);
 });
+
+// Iteration 31 (FR-011): the drop indicator stays visible ABOVE the
+// semi-transparent drag preview.
+test('iteration 31: drop indicator paints above the semi-transparent preview', async ({ page }) => {
+  const name = `E2E Indicator31 ${Date.now()}`;
+  await page.goto('/inventory/scenarios');
+  await page.waitForSelector('.ant-table-thead', { timeout: 10_000 });
+  await page.locator('button').filter({ hasText: /New/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.locator('.ant-modal input[id$="name"]').fill(name);
+  await page.locator('.ant-modal button', { hasText: /Save/ }).click();
+  await page.waitForTimeout(500);
+  await page.locator('.ant-table-tbody a', { hasText: name }).first().click();
+  await page.waitForSelector('.ant-card', { timeout: 10_000 });
+
+  // Add one item; the modal now lists recent items by default (no typing).
+  await page.locator('.ant-card', { hasText: 'Organize' }).first()
+    .locator('button').filter({ hasText: /^Add$/ }).first().click();
+  const modal = page.locator('.ant-modal', { hasText: 'Add items' }).first();
+  const addButtons = modal.locator('.ant-list-item button:not([disabled])').filter({ hasText: /Add/ });
+  await expect(addButtons.first()).toBeVisible({ timeout: 10_000 }); // default listing
+  await addButtons.first().click();
+  const flatPane = page.getByTestId('unorganized-pane');
+  await expect(async () => {
+    expect(await flatPane.locator('[data-testid^="flat-row-"]').count()).toBeGreaterThanOrEqual(1);
+  }).toPass({ timeout: 10_000 });
+  await modal.locator('.ant-modal-close').click();
+  await expect(modal).toBeHidden();
+
+  // Drag the flat row over the (empty) tree pane and hold.
+  const row = flatPane.locator('[data-testid^="flat-row-"]').first();
+  const rowBox = (await row.boundingBox())!;
+  const orgPane = page.getByTestId('organized-pane');
+  const orgBox = (await orgPane.boundingBox())!;
+  await page.mouse.move(rowBox.x + 12, rowBox.y + rowBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(orgBox.x + orgBox.width / 2, orgBox.y + 40, { steps: 12 });
+  await page.mouse.move(orgBox.x + orgBox.width / 2, orgBox.y + 41);
+
+  const overlay = page.getByTestId('drag-overlay');
+  await expect(overlay).toBeVisible({ timeout: 3_000 });
+  const indicator = page.getByTestId('drop-indicator');
+  await expect(indicator).toBeVisible({ timeout: 3_000 });
+  // The preview is semi-transparent and BELOW the indicator in paint order.
+  const overlayOpacity = await overlay.evaluate((el) => getComputedStyle(el).opacity);
+  expect(Number(overlayOpacity)).toBeLessThan(1);
+  const overlayZ = await overlay.evaluate((el) => getComputedStyle(el.parentElement!).zIndex);
+  const indicatorZ = await indicator.evaluate((el) => getComputedStyle(el).zIndex);
+  expect(Number(indicatorZ)).toBeGreaterThan(Number(overlayZ));
+  await page.mouse.up();
+  // Let the drop mutation settle (row lands in the tree), then spend
+  // dnd-kit's post-drag click suppression on a neutral spot.
+  await expect(orgPane.locator('[data-testid^="org-row-"]')).toHaveCount(1, { timeout: 10_000 });
+  await page.mouse.click(8, 400);
+  await page.waitForTimeout(300);
+
+  // Cleanup: kebab Delete → confirm (retry — the panel can re-render mid-click).
+  await expect(async () => {
+    await page.getByLabel('scenario-actions').click();
+    await expect(
+      page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }),
+    ).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
+  await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
+  await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();
+  await page.waitForTimeout(500);
+});

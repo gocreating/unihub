@@ -348,4 +348,21 @@ describe('ScenarioDetailPage (iteration 18 — actions, rich rows, dnd-kit panes
     const tooltip = await screen.findByRole('tooltip');
     expect(tooltip).toHaveTextContent('Camera');
   });
+
+  // SD31-01 (FR-011): an EMPTY search lists the 10 most recently acquired items.
+  it('lists recent items by default while the search box is empty', async () => {
+    renderPage();
+    await screen.findAllByText('Camping');
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    const modal = (await screen.findByText('Add items')).closest('.ant-modal') as HTMLElement;
+    // The default query fires WITHOUT typing: recent-first, limit 10.
+    await waitFor(() => expect(vi.mocked(inventoryService.listItems)).toHaveBeenCalled());
+    const call = vi.mocked(inventoryService.listItems).mock.calls.at(-1)![0]!;
+    expect(call.ordering).toBe('-acquisition__obtained_at__nullsfirst');
+    expect(call.limit).toBe(10);
+    // The mocked results render as normal rows (Add button present).
+    const lantern = await within(modal).findByText('Lantern');
+    expect(lantern).toBeInTheDocument();
+    expect(within(modal).getAllByRole('button', { name: /Add/ }).length).toBeGreaterThan(0);
+  });
 });

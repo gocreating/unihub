@@ -134,7 +134,7 @@ def parse_date(cell: str, default_year: int | None = None):
 # ── 備註 parsing ─────────────────────────────────────────────────────────
 RE_SIZE = re.compile(r"(?:尺寸|[Ss]ize)[:：]\s*(.+)")
 RE_SPEC = re.compile(r"規格[:：]\s*(.+)")
-RE_COLOR = re.compile(r"(?:顏色|款式)[:：]\s*(.+)")
+RE_COLOR = re.compile(r"(?:顏色|款式|[Cc]olor)[:：]\s*(.+)")
 # 單價 (the actual unit price) extracts as sku — colon form, or colonless with
 # the quantity expression. 原價 is the PRE-DISCOUNT list price and NEVER sets
 # the sku directly (iteration 39); with a ，N折 note it computes the sku for
@@ -174,6 +174,9 @@ RE_VARIANT = re.compile(r"x\s*\d+.*[，,].*x\s*\d+")  # e.g. 深藍x2，灰色x1
 # Simple shipping note (whole line) → a shipping cost factor on the acquisition.
 # Complex combos (運費60-國慶折抵70…) intentionally do NOT match → remark.
 RE_SHIPPING = re.compile(r"^運費[:：]?\s*([¥￥$]?)([\d.,]+)\s*(元|RMB|TWD|USD|NT)?$")
+# Segment delimiters (FR-029j): ，/、 and SPACED slashes — a bare slash stays
+# inside values ("43/46", "180ml/灰色登山扣款").
+RE_SEGMENT_SPLIT = re.compile(r"\s*[，、]\s*|\s+/\s+")
 
 
 def _size_fully_dimensional(size_match: re.Match, dims_match: re.Match) -> bool:
@@ -195,11 +198,158 @@ def _size_fully_dimensional(size_match: re.Match, dims_match: re.Match) -> bool:
     return not re.search(r"[一-鿿]|[A-Za-z]|\d", blanked)
 
 
+def _apply_unit(text: str, fields: dict, flags: list, residue: list) -> None:
+    """Run every key pattern over one text unit (a whole line or a segment);
+    unconsumed/leftover content appends to ``residue`` (FR-029d/FR-029j)."""
+    matched = False
+    spans: list[tuple[int, int]] = []
+
+    if m := RE_URL_KEY.search(text):
+        fields.setdefault("url", m.group(1).strip())
+        matched = True
+        spans.append(m.span())
+    elif m := RE_SHIPPING.match(text):
+        value = norm_num(m.group(2))
+        if value is not None:
+            sym, suffix = m.group(1), (m.group(3) or "")
+            currency = None
+            if suffix in ("TWD", "NT"):
+                currency = "TWD"
+            elif suffix in ("USD",):
+                currency = "USD"
+            elif suffix in ("RMB", "元") or sym in ("¥", "￥"):
+                currency = "RMB"
+            fields.setdefault("_shipping", []).append({"value": value, "currency": currency})
+            matched = True
+        spans.append(m.span())
+
+    size_m = RE_SIZE.search(text)
+    if size_m:
+        fields["size"] = size_m.group(1).strip()
+        matched = True
+        spans.append(size_m.span())
+    if m := RE_SPEC.search(text):
+        fields["spec"] = m.group(1).strip()
+        matched = True
+        spans.append(m.span())
+    if m := RE_COLOR.search(text):
+        fields.setdefault("color", m.group(1).strip())
+        matched = True
+        spans.append(m.span())
+    if m := RE_DISCOUNT.search(text):
+        fields["_list_price"] = norm_num(m.group(1))
+        digits = m.group(2)
+        base = float(digits)
+        # 9折 → ×0.9; 79折 → ×0.79; 8.5折 → ×0.85.
+        fields["_discount_factor"] = base / (100 if ("." not in digits and len(digits) == 2) else 10)
+        matched = True
+        spans.append(m.span())
+    if m := (RE_PRICE.search(text) or RE_PRICE_QTY.search(text)):
+        fields["sku_price"] = norm_num(m.group(1))
+        cur = parse_currency(text) or (m.group(2) or "").upper() or None
+        if cur:
+            fields["sku_price_currency"] = CURRENCY_TOKENS.get(cur, cur)
+        matched = True
+        spans.append(m.span())
+    if m := RE_WEIGHT.search(text):
+        fields["weight"] = {"value": m.group(1), "unit": m.group(2) or "g"}
+        matched = True
+        spans.append(m.span())
+    if m := RE_LENGTH.search(text):
+        fields["length"] = {"value": m.group(1), "unit": m.group(2) or "m"}
+        matched = True
+        spans.append(m.span())
+    if m := RE_WIDTH_KEY.search(text):
+        fields["width"] = {"value": m.group(1), "unit": m.group(2) or "cm"}
+        matched = True
+        spans.append(m.span())
+    if m := RE_HEIGHT_KEY.search(text):
+        fields["height"] = {"value": m.group(1), "unit": m.group(2) or "cm"}
+        matched = True
+        spans.append(m.span())
+    if m := RE_DIAMETER.search(text):
+        fields["diameter"] = {"value": m.group(1), "unit": m.group(2) or "cm"}
+        matched = True
+        spans.append(m.span())
+    if m := RE_TEMP.search(text):
+        # 度C/℃/度 all normalize to the family's canonical °C symbol.
+        fields["temperature"] = {"value": m.group(1), "unit": "°C"}
+        matched = True
+        spans.append(m.span())
+    if m := RE_VOLUME.search(text):
+        unit = {"ml": "mL", "毫升": "mL", "公升": "L"}.get(m.group(2), m.group(2))
+        fields["volume"] = {"value": m.group(1), "unit": unit}
+        matched = True
+        spans.append(m.span())
+    if m := RE_DIMS_U3.search(text):
+        fields["length"] = {"value": m.group(1), "unit": m.group(2)}
+        fields["width"] = {"value": m.group(3), "unit": m.group(4)}
+        fields["height"] = {"value": m.group(5), "unit": m.group(6)}
+        matched = True
+        spans.append(m.span())
+        if size_m and _size_fully_dimensional(size_m, m):
+            fields.pop("size", None)
+    elif m := RE_DIMS_U2.search(text):
+        fields["length"] = {"value": m.group(1), "unit": m.group(2)}
+        fields["width"] = {"value": m.group(3), "unit": m.group(4)}
+        matched = True
+        spans.append(m.span())
+        if size_m and _size_fully_dimensional(size_m, m):
+            fields.pop("size", None)
+    elif m := RE_DIMS.search(text):
+        unit = m.group(4) or "cm"
+        fields["length"] = {"value": m.group(1), "unit": unit}
+        fields["width"] = {"value": m.group(2), "unit": unit}
+        fields["height"] = {"value": m.group(3), "unit": unit}
+        matched = True
+        spans.append(m.span())
+        if size_m and _size_fully_dimensional(size_m, m):
+            fields.pop("size", None)
+    elif m := RE_DIMS2.search(text):
+        unit = m.group(3)
+        fields["length"] = {"value": m.group(1), "unit": unit}
+        fields["width"] = {"value": m.group(2), "unit": unit}
+        matched = True
+        spans.append(m.span())
+        if size_m and _size_fully_dimensional(size_m, m):
+            fields.pop("size", None)
+    if mv := RE_VARIANT.search(text):
+        flags.append(f"variant_qty:{text}")
+        fields.setdefault("quantity", 1)
+        matched = True
+        spans.append(mv.span())
+    elif m := RE_QTY.search(text):
+        fields["quantity"] = int(m.group(1))
+        matched = True
+        spans.append(m.span())
+    elif m := RE_QTY_EXPR.search(text):
+        fields["quantity"] = int(m.group(1))
+        matched = True
+        spans.append(m.span())
+
+    if not matched:
+        residue.append(text)
+    else:
+        # No-data-loss (FR-029d): if meaningful content remains OUTSIDE
+        # the matched key/value spans, keep the WHOLE text as remark —
+        # extraction must never drop surrounding prose.
+        blanked = list(text)
+        for start, end in spans:
+            for i in range(start, end):
+                blanked[i] = " "
+        leftover = "".join(blanked)
+        if re.search(r"[\u4e00-\u9fff]{2,}|[A-Za-z]{2,}|\d", leftover):
+            residue.append(text)
+
+
 def parse_remark(remark: str) -> tuple[dict, list[str]]:
     """Extract structured item fields; return (fields, flags). Residue → remark.
 
-    Acquisition-level extractions use reserved keys the builder lifts out:
-    ``_shipping`` → a shipping cost factor.
+    FR-029j: lines split into segments on ，/、/spaced-`/` with per-segment
+    matching (unconsumed segments → remark); forms whose patterns SPAN
+    delimiters (原價X，N折, variant counts, whole-line 運費) keep whole-line
+    processing. Acquisition-level extractions use reserved keys the builder
+    lifts out: ``_shipping`` → a shipping cost factor.
     """
     fields: dict = {}
     flags: list[str] = []
@@ -209,145 +359,15 @@ def parse_remark(remark: str) -> tuple[dict, list[str]]:
         line = raw.strip()
         if not line:
             continue
-        matched = False
-        spans: list[tuple[int, int]] = []
-
-        if m := RE_URL_KEY.search(line):
-            fields.setdefault("url", m.group(1).strip())
-            matched = True
-            spans.append(m.span())
-        elif m := RE_SHIPPING.match(line):
-            value = norm_num(m.group(2))
-            if value is not None:
-                sym, suffix = m.group(1), (m.group(3) or "")
-                currency = None
-                if suffix in ("TWD", "NT"):
-                    currency = "TWD"
-                elif suffix in ("USD",):
-                    currency = "USD"
-                elif suffix in ("RMB", "元") or sym in ("¥", "￥"):
-                    currency = "RMB"
-                fields.setdefault("_shipping", []).append({"value": value, "currency": currency})
-                matched = True
-            spans.append(m.span())
-
-        size_m = RE_SIZE.search(line)
-        if size_m:
-            fields["size"] = size_m.group(1).strip()
-            matched = True
-            spans.append(size_m.span())
-        if m := RE_SPEC.search(line):
-            fields["spec"] = m.group(1).strip()
-            matched = True
-            spans.append(m.span())
-        if m := RE_COLOR.search(line):
-            fields.setdefault("color", m.group(1).strip())
-            matched = True
-            spans.append(m.span())
-        if m := RE_DISCOUNT.search(line):
-            fields["_list_price"] = norm_num(m.group(1))
-            digits = m.group(2)
-            base = float(digits)
-            # 9折 → ×0.9; 79折 → ×0.79; 8.5折 → ×0.85.
-            fields["_discount_factor"] = base / (100 if ("." not in digits and len(digits) == 2) else 10)
-            matched = True
-            spans.append(m.span())
-        if m := (RE_PRICE.search(line) or RE_PRICE_QTY.search(line)):
-            fields["sku_price"] = norm_num(m.group(1))
-            cur = parse_currency(line) or (m.group(2) or "").upper() or None
-            if cur:
-                fields["sku_price_currency"] = CURRENCY_TOKENS.get(cur, cur)
-            matched = True
-            spans.append(m.span())
-        if m := RE_WEIGHT.search(line):
-            fields["weight"] = {"value": m.group(1), "unit": m.group(2) or "g"}
-            matched = True
-            spans.append(m.span())
-        if m := RE_LENGTH.search(line):
-            fields["length"] = {"value": m.group(1), "unit": m.group(2) or "m"}
-            matched = True
-            spans.append(m.span())
-        if m := RE_WIDTH_KEY.search(line):
-            fields["width"] = {"value": m.group(1), "unit": m.group(2) or "cm"}
-            matched = True
-            spans.append(m.span())
-        if m := RE_HEIGHT_KEY.search(line):
-            fields["height"] = {"value": m.group(1), "unit": m.group(2) or "cm"}
-            matched = True
-            spans.append(m.span())
-        if m := RE_DIAMETER.search(line):
-            fields["diameter"] = {"value": m.group(1), "unit": m.group(2) or "cm"}
-            matched = True
-            spans.append(m.span())
-        if m := RE_TEMP.search(line):
-            # 度C/℃/度 all normalize to the family's canonical °C symbol.
-            fields["temperature"] = {"value": m.group(1), "unit": "°C"}
-            matched = True
-            spans.append(m.span())
-        if m := RE_VOLUME.search(line):
-            unit = {"ml": "mL", "毫升": "mL", "公升": "L"}.get(m.group(2), m.group(2))
-            fields["volume"] = {"value": m.group(1), "unit": unit}
-            matched = True
-            spans.append(m.span())
-        if m := RE_DIMS_U3.search(line):
-            fields["length"] = {"value": m.group(1), "unit": m.group(2)}
-            fields["width"] = {"value": m.group(3), "unit": m.group(4)}
-            fields["height"] = {"value": m.group(5), "unit": m.group(6)}
-            matched = True
-            spans.append(m.span())
-            if size_m and _size_fully_dimensional(size_m, m):
-                fields.pop("size", None)
-        elif m := RE_DIMS_U2.search(line):
-            fields["length"] = {"value": m.group(1), "unit": m.group(2)}
-            fields["width"] = {"value": m.group(3), "unit": m.group(4)}
-            matched = True
-            spans.append(m.span())
-            if size_m and _size_fully_dimensional(size_m, m):
-                fields.pop("size", None)
-        elif m := RE_DIMS.search(line):
-            unit = m.group(4) or "cm"
-            fields["length"] = {"value": m.group(1), "unit": unit}
-            fields["width"] = {"value": m.group(2), "unit": unit}
-            fields["height"] = {"value": m.group(3), "unit": unit}
-            matched = True
-            spans.append(m.span())
-            if size_m and _size_fully_dimensional(size_m, m):
-                fields.pop("size", None)
-        elif m := RE_DIMS2.search(line):
-            unit = m.group(3)
-            fields["length"] = {"value": m.group(1), "unit": unit}
-            fields["width"] = {"value": m.group(2), "unit": unit}
-            matched = True
-            spans.append(m.span())
-            if size_m and _size_fully_dimensional(size_m, m):
-                fields.pop("size", None)
-        if mv := RE_VARIANT.search(line):
-            flags.append(f"variant_qty:{line}")
-            fields.setdefault("quantity", 1)
-            matched = True
-            spans.append(mv.span())
-        elif m := RE_QTY.search(line):
-            fields["quantity"] = int(m.group(1))
-            matched = True
-            spans.append(m.span())
-        elif m := RE_QTY_EXPR.search(line):
-            fields["quantity"] = int(m.group(1))
-            matched = True
-            spans.append(m.span())
-
-        if not matched:
-            residue.append(line)
+        if RE_DISCOUNT.search(line) or RE_VARIANT.search(line) or RE_SHIPPING.match(line):
+            _apply_unit(line, fields, flags, residue)
+            continue
+        segments = [seg.strip() for seg in RE_SEGMENT_SPLIT.split(line) if seg.strip()]
+        if len(segments) <= 1:
+            _apply_unit(line, fields, flags, residue)
         else:
-            # No-data-loss (FR-029d): if meaningful content remains OUTSIDE
-            # the matched key/value spans, keep the WHOLE line as remark —
-            # extraction must never drop surrounding prose.
-            blanked = list(line)
-            for start, end in spans:
-                for i in range(start, end):
-                    blanked[i] = " "
-            leftover = "".join(blanked)
-            if re.search(r"[\u4e00-\u9fff]{2,}|[A-Za-z]{2,}|\d", leftover):
-                residue.append(line)
+            for seg in segments:
+                _apply_unit(seg, fields, flags, residue)
 
     if residue:
         fields["remark"] = " / ".join(residue)

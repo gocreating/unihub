@@ -221,11 +221,11 @@ def test_variant_quantity_line_survives_in_remark(parser):
 
 def test_prose_around_matched_keys_survives(parser):
     # Colonless 原價/單價 inside prose is NOT a key-value pair (iteration 35) —
-    # nothing extracts and the full line survives in remark (FR-029d).
+    # nothing extracts; every prose segment survives in remark (FR-029d/029j).
     fields, _ = parser.parse_remark("大傘，可兩人撐，原價850，搭配活動折價125")
     assert "sku_price" not in fields
-    assert "大傘，可兩人撐" in fields.get("remark", "")
-    assert "搭配活動折價125" in fields.get("remark", "")
+    for piece in ("大傘", "可兩人撐", "原價850", "搭配活動折價125"):
+        assert piece in fields.get("remark", "")
     # A fully-consumed key:value line still leaves NO residue.
     clean, _ = parser.parse_remark("尺寸：L")
     assert "remark" not in clean
@@ -738,3 +738,41 @@ def test_two_digit_discount_factor(parser):
     assert fields.get("_discount_factor") == 0.79
     one, _ = parser.parse_remark("原價280，9折")
     assert one.get("_discount_factor") == 0.9
+
+
+# Iteration 40 (FR-029j): segmented 備註 key-value parsing.
+def test_slash_separated_pairs_both_extract(parser):
+    fields, _ = parser.parse_remark("size: L / 顏色: 00 WHITE")
+    assert fields.get("size") == "L"
+    assert fields.get("color") == "00 WHITE"
+    assert "remark" not in fields
+
+
+def test_comma_separated_size_with_prose_residue(parser):
+    fields, _ = parser.parse_remark("size: L，白色")
+    assert fields.get("size") == "L"
+    assert fields.get("remark") == "白色"
+
+
+def test_comma_separated_pairs_and_english_color_key(parser):
+    a, _ = parser.parse_remark("Size: XL，顏色:09 BLACK")
+    assert a.get("size") == "XL"
+    assert a.get("color") == "09 BLACK"
+    b, _ = parser.parse_remark("color: SKY BLUE，size: L")
+    assert b.get("color") == "SKY BLUE"
+    assert b.get("size") == "L"
+
+
+def test_bare_slashes_stay_inside_values(parser):
+    a, _ = parser.parse_remark("size: 43/46")
+    assert a.get("size") == "43/46"
+    b, _ = parser.parse_remark("規格：180ml/灰色登山扣款")
+    assert b.get("spec") == "180ml/灰色登山扣款"
+
+
+def test_segmented_mixed_line_keeps_unmatched_segments(parser):
+    fields, _ = parser.parse_remark("size: L，原價450，指定商品8折")
+    assert fields.get("size") == "L"
+    assert "sku_price" not in fields
+    assert "原價450" in fields.get("remark", "")
+    assert "指定商品8折" in fields.get("remark", "")

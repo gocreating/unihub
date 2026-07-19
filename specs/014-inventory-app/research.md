@@ -292,3 +292,9 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 ## Iteration 38 research (icon vertical centering, 2026-07-19)
 
 - **R38.1**: AntD icon spans wrap SVGs with no text baseline — flex `baseline` alignment resolves them against the SVG bottom, floating icons above/below the adjacent text line. `alignItems: 'center'` centers icons on the (single, ellipsised) name row.
+
+## Iteration 39 research (原價 semantics, 2026-07-19)
+
+- **R39.1 — MEASURED**: all four reported items shared two defects: 原價 extracted as sku (HEATTECH 590 vs real 760/2 = 380; 失落文明 got the whole rowspan 702 while 霍金 got 原價 500 — the 備註 discounts give 252/450, summing to the shared 702) and empty sku_price_currency (備註-derived skus never inherited the row currency). 原價 is the pre-discount list price — evidence: 折後760, ，9折, 舊換新打8折 annotations throughout the sheets.
+- **R39.2 — Discount factor**: `N折` = ×N/10 for one digit (9折→0.9, 8.5折→0.85), ×N/100 for two digits (79折→0.79). Computed sku applies ONLY when the item has no own paid (shared rowspan totals); rows with own paid keep paid÷qty (盜墓筆記: paid 179 beats 199×0.9 = 179.1).
+- **R39.3 — Collateral**: the 無印 "原價 199 * 3 件 − 折價券 30" fixture updates: qty 3 from the expression, sku 567/3 = 189 (the actual per-unit paid) — consistent with the user's definition of a correct sku.

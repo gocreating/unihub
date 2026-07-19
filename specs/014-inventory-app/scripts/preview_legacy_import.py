@@ -135,12 +135,29 @@ def parse_date(cell: str, default_year: int | None = None):
 RE_SIZE = re.compile(r"(?:尺寸|[Ss]ize)[:：]\s*(.+)")
 RE_SPEC = re.compile(r"規格[:：]\s*(.+)")
 RE_COLOR = re.compile(r"(?:顏色|款式|[Cc]olor)[:：]\s*(.+)")
-# 單價 (the actual unit price) extracts as sku — colon form, or colonless with
-# the quantity expression. 原價 is the PRE-DISCOUNT list price and NEVER sets
-# the sku directly (iteration 39); with a ，N折 note it computes the sku for
-# shared-total rows (RE_DISCOUNT → _finalize).
+# Composite `color & size:` key (iteration 44, FR-029l d): consumes the
+# segment BEFORE the plain size key can swallow the whole value; the value
+# splits on a trailing standard size token (rest → color). No token → the
+# segment stays verbatim only.
+RE_COLOR_SIZE = re.compile(r"(?:顏色|[Cc]olor)\s*&\s*(?:尺寸|[Ss]ize)[:：]\s*(.+)")
+_SIZE_TOKENS = {"XS", "S", "M", "L", "XL", "XXL", "XXXL", "2XL", "3XL", "4XL", "F", "FREE"}
+# Quantity-expression units observed sheet-wide (iteration 44 survey).
+_QTY_UNITS = "件組個顆條包盒雙"
+# 單價 (the actual unit price) extracts as sku — colon form, colonless with
+# the quantity expression, or the ANCHORED full-segment form. 原價 is the
+# PRE-DISCOUNT list price: prose mentions never set the sku (iteration 35),
+# but an ANCHORED own-remark segment supplies a list-price tier BELOW the
+# row's own paid (iteration 44, FR-029i); with a ，N折 note it computes the
+# sku for shared-total rows (RE_DISCOUNT → _finalize).
 RE_PRICE = re.compile(r"單價[:：]\s*([\d.,]+)\s*([A-Za-z]+|元|円|¥|￥)?")
-RE_PRICE_QTY = re.compile(r"單價[:：]?\s*([\d.,]+)()(?=\s*\*\s*\d+\s*件)")
+RE_PRICE_QTY = re.compile(rf"單價[:：]?\s*([\d.,]+)()(?=\s*\*\s*\d+\s*[{_QTY_UNITS}])")
+# The amount may carry a leading symbol (原價￥69) — symbols are currency-
+# AMBIGUOUS (¥ is JPY or RMB by shop) so only letter tokens/円 set the
+# currency; symbol-only amounts inherit the acquisition currency.
+RE_PRICE_ANCHORED = re.compile(
+    rf"(單價|原價)\s*[:：]?\s*[¥￥$]?\s*([\d.,]+)\s*([A-Za-z]+|元|円|¥|￥)?"
+    rf"(?:\s*\*\s*\d+\s*[{_QTY_UNITS}])?\s*"
+)
 RE_DISCOUNT = re.compile(r"原價\s*[:：]?\s*([\d.,]+)\s*[，,]\s*([\d.]+)\s*折")
 # Keyed numeric values may be min~max/min-max ranges (FR-029h, iterations
 # 28→30) — the whole range text is captured verbatim; the backend computes
@@ -155,9 +172,14 @@ RE_HEIGHT_KEY = re.compile(rf"高度[:：]\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
 RE_DIAMETER = re.compile(rf"直徑[:：]\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
 RE_WAIST = re.compile(rf"腰圍[:：]?\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
 # Acquisition-level per-item 原價 listing by NAME FRAGMENT (iteration 42):
-# "被套原價1390，抹布原價119，衣架原價99*2組" / arithmetic variants.
+# "被套原價1390，抹布原價119，衣架原價99*2組" / arithmetic variants. The
+# fragment may carry a paren ANNOTATION (iteration 44: 大箱子(黑色)原價 1380)
+# that joins the candidate-matching try-order.
+# NOTE: the fragment/annotation must sit ADJACENT to 原價 — allowing spaces
+# would turn prose ("NAS 原價 17888，促銷價…") into listings.
 RE_NAME_LIST_PRICE = re.compile(
-    r"([一-鿿A-Za-z0-9]{1,8}?)原價\s*([\d.,]+)(?:\s*\*\s*(\d+)\s*[組件個])?"
+    rf"([一-鿿A-Za-z0-9]{{1,8}}?)(?:[（(]([^（）()]{{1,12}})[)）])?"
+    rf"原價\s*([\d.,]+)(?:\s*\*\s*(\d+)\s*[{_QTY_UNITS}])?"
 )
 RE_VOLUME = re.compile(rf"容量[:：]\s*({_NUM_OR_RANGE})\s*(mL|ml|L|毫升|公升)")
 RE_TEMP = re.compile(rf"耐溫[:：]\s*({_SIGNED_NUM_OR_RANGE})\s*(度C|℃|°C|度)?")
@@ -177,7 +199,7 @@ _NUM_U = rf"({_DIM_N})\s*(mm|cm|m)"
 RE_DIMS_U3 = re.compile(rf"{_NUM_U}\s*[x×X*]\s*{_NUM_U}\s*[x×X*]\s*{_NUM_U}")
 RE_DIMS_U2 = re.compile(rf"{_NUM_U}\s*[x×X*]\s*{_NUM_U}")
 RE_QTY = re.compile(r"數量[:：]\s*(\d+)")
-RE_QTY_EXPR = re.compile(r"\*\s*(\d+)\s*件")
+RE_QTY_EXPR = re.compile(rf"\*\s*(\d+)\s*[{_QTY_UNITS}]")
 RE_VARIANT = re.compile(r"x\s*\d+.*[，,].*x\s*\d+")  # e.g. 深藍x2，灰色x1
 # Simple shipping note (whole line) → a shipping cost factor on the acquisition.
 # Complex combos (運費60-國慶折抵70…) intentionally do NOT match → remark.
@@ -231,7 +253,22 @@ def _apply_unit(text: str, fields: dict, flags: list, residue: list) -> None:
             matched = True
         spans.append(m.span())
 
-    size_m = RE_SIZE.search(text)
+    comp_m = RE_COLOR_SIZE.search(text)
+    if comp_m:
+        # Composite key consumes the segment (the inner "size:" must not
+        # swallow the whole value); extraction only on a clean trailing-token
+        # split — anything else stays verbatim (FR-029l d).
+        content = comp_m.group(1).strip()
+        run = re.search(r"([A-Za-z]+)$", content)
+        if run and run.group(1).upper() in _SIZE_TOKENS:
+            fields["size"] = run.group(1)
+            prefix = content[: run.start()].strip()
+            if prefix:
+                fields.setdefault("color", prefix)
+            matched = True
+            spans.append(comp_m.span())
+
+    size_m = None if comp_m else RE_SIZE.search(text)
     size_paren = False
     if size_m:
         content = size_m.group(1).strip()
@@ -274,6 +311,28 @@ def _apply_unit(text: str, fields: dict, flags: list, residue: list) -> None:
             fields["sku_price_currency"] = CURRENCY_TOKENS.get(cur, cur)
         matched = True
         spans.append(m.span())
+    elif m := RE_PRICE_ANCHORED.fullmatch(text.strip()):
+        # ANCHORED price segment (iteration 44, FR-029i): the segment is
+        # nothing but the price expression, so the colon requirement lifts.
+        # 單價 → sku directly; 原價 → the list-price tier resolved in
+        # _finalize (below the row's own paid — 雨傘王 stays protected).
+        value = norm_num(m.group(2))
+        tok = m.group(3) or ""
+        if tok in ("¥", "￥", "元"):
+            cur = None  # ambiguous symbol → inherit the acquisition currency
+        else:
+            cur = CURRENCY_TOKENS.get(tok) or CURRENCY_TOKENS.get(tok.upper()) or (tok.upper() or None)
+        if value is not None:
+            if m.group(1) == "單價":
+                fields["sku_price"] = value
+                if cur:
+                    fields["sku_price_currency"] = cur
+            else:
+                fields["_own_list_price"] = value
+                if cur:
+                    fields["_own_list_currency"] = cur
+            matched = True
+            spans.append(m.span())
     if m := RE_WEIGHT.search(text):
         fields["weight"] = {"value": m.group(1), "unit": m.group(2) or "g"}
         matched = True
@@ -351,6 +410,12 @@ def _apply_unit(text: str, fields: dict, flags: list, residue: list) -> None:
         spans.append(m.span())
     elif m := RE_QTY_EXPR.search(text):
         fields["quantity"] = int(m.group(1))
+        # A name-listing segment (`<fragment>原價N*M組`) may describe a
+        # SIBLING row — the quantity is tentative: _finalize clears it only
+        # when that listing entry assigns its qty to a DIFFERENT item
+        # (iteration 44: 組/個/… joined the unit class).
+        if RE_NAME_LIST_PRICE.search(text):
+            fields["_qty_from_listing"] = int(m.group(1))
         matched = True
         spans.append(m.span())
 
@@ -454,6 +519,11 @@ def build_from_rows(
     last_source = ""
     skipped_struck: list[str] = []
     own_prices: dict[int, list] = {}
+    # header item's own-price entry, killed when a later ITEM row proves the
+    # header paid cell is a multi-item block total (iteration 44, FR-029l a);
+    # killed entries stay accumulated-relevant via block_totals.
+    header_price_entries: dict[int, tuple] = {}
+    block_totals: dict[int, list] = {}
     global LAST_SKIPPED_STRUCK
 
     for row in rows:
@@ -509,7 +579,9 @@ def build_from_rows(
                 _add_item(acq, name, remark, url)
                 acq.items[-1].fields["_raw_remark"] = remark
                 if own_price and pv is not None:
-                    own_prices.setdefault(id(acq), []).append((acq.items[-1], pv, currency or None))
+                    entry = (acq.items[-1], pv, currency or None)
+                    own_prices.setdefault(id(acq), []).append(entry)
+                    header_price_entries[id(acq)] = entry
             elif own_price and pv is not None:
                 # A struck item's paid amount still belongs to the acquisition.
                 own_prices.setdefault(id(acq), []).append((None, pv, currency or None))
@@ -524,28 +596,33 @@ def build_from_rows(
 
         ftype = classify_cost_factor(name)
         if ftype:
-            val = extract_amount(price)  # adorned amounts parse too (iteration 35)
-            cur = currency or None
+            # A CARRIED price cell is the block's rowspan total — never this
+            # factor's value (iteration 44, FR-029l b: the 運費及折扣 row must
+            # not mint a bogus `discount <total>` factor).
+            val = extract_amount(price) if own_price else None
+            cur = (currency or None) if own_price else None
             remark_used_for_value = False
-            if val is None:  # value may live in the remark (e.g. −￥1,450)
-                val = extract_amount(remark)
-                cur = cur or parse_currency(remark)
-                remark_used_for_value = val is not None
-            acq.cost_factors.append(CostFactor(ftype, val, cur))
-            # No-data-loss (FR-029d): factor-row 備註 prose survives on the
-            # acquisition remark. A remark FULLY consumed as the factor's
-            # amount (number + currency adornments only) needs no copy.
-            if remark:
-                leftover = remark
-                if remark_used_for_value:
+            if val is None and remark:  # value may live in the remark (−￥1,450)
+                rv = extract_amount(remark)
+                if rv is not None:
                     cleaned = (remark.replace(",", "").replace("，", "")
                                .replace("−", "-").replace("¥", " ")
                                .replace("￥", " ").replace("$", " "))
                     cleaned = re.sub(r"-?\d+(?:\.\d+)?", " ", cleaned, count=1)
                     for token in CURRENCY_TOKENS:
                         cleaned = cleaned.replace(token, " ")
-                    leftover = cleaned
-                if re.search(r"[\u4e00-\u9fff]{2,}|[A-Za-z]{2,}|\d{2,}", leftover):
+                    # Only a FULLY-consumed remark (one adorned amount, nothing
+                    # else) supplies the value; arithmetic combos stay text.
+                    if not re.search(r"[一-鿿]{2,}|[A-Za-z]{2,}|\d{2,}", cleaned):
+                        val = rv
+                        cur = cur or parse_currency(remark)
+                        remark_used_for_value = True
+            acq.cost_factors.append(CostFactor(ftype, val, cur))
+            # No-data-loss (FR-029d): factor-row 備註 prose survives on the
+            # acquisition remark. A remark FULLY consumed as the factor's
+            # amount (number + currency adornments only) needs no copy.
+            if remark and not remark_used_for_value:
+                if re.search(r"[\u4e00-\u9fff]{2,}|[A-Za-z]{2,}|\d{2,}", remark):
                     acq.remark = f"{acq.remark}\n{remark}".strip() if acq.remark else remark
         else:
             _add_item(acq, name, remark, url)
@@ -553,13 +630,29 @@ def build_from_rows(
             pv = extract_amount(price)  # paid cells may be adorned ("¥4,200")
             if own_price and pv is not None:
                 own_prices.setdefault(id(acq), []).append((acq.items[-1], pv, currency or None))
+                # A row with its OWN price ends the header cell's rowspan
+                # above it — later carried prices belong to THIS row's span.
+                header_price_entries.pop(id(acq), None)
+            elif price and not own_price:
+                # This ITEM row sits under the HEADER's paid rowspan — that
+                # cell is the acquisition total, not the header item's own
+                # price. Kill the leaked entry; the total still counts toward
+                # the accumulated sum (FR-029l a).
+                entry = header_price_entries.pop(id(acq), None)
+                if entry is not None and entry in own_prices.get(id(acq), []):
+                    own_prices[id(acq)].remove(entry)
+                    block_totals.setdefault(id(acq), []).append(entry)
 
-    _finalize(acquisitions, own_prices)
+    _finalize(acquisitions, own_prices, block_totals)
     LAST_SKIPPED_STRUCK = skipped_struck
     return acquisitions
 
 
-def _finalize(acquisitions: list["Acquisition"], own_prices: dict[int, list]) -> None:
+def _finalize(
+    acquisitions: list["Acquisition"],
+    own_prices: dict[int, list],
+    block_totals: dict[int, list] | None = None,
+) -> None:
     """FR-029f: per-row prices → skus (+ summed override) and verbatim 備註.
 
     (a) Item rows with OWN price cells feed ``sku_price`` (÷ quantity when
@@ -572,9 +665,12 @@ def _finalize(acquisitions: list["Acquisition"], own_prices: dict[int, list]) ->
     """
     for acq in acquisitions:
         own = own_prices.get(id(acq), [])
-        if len(own) >= 2:
+        # Killed header block totals (FR-029l a) are no item's sku but still
+        # part of the acquisition's paid total.
+        totals = (block_totals or {}).get(id(acq), [])
+        if len(own) + len(totals) >= 2:
             sums: dict = {}
-            for _item, value, cur in own:
+            for _item, value, cur in (*own, *totals):
                 key = cur or "?"
                 sums[key] = sums.get(key, 0.0) + value
             acq.cost_factors = [cf for cf in acq.cost_factors if cf.type != "accumulated"]
@@ -590,6 +686,17 @@ def _finalize(acquisitions: list["Acquisition"], own_prices: dict[int, list]) ->
             if cur:
                 item.fields.setdefault("sku_price_currency", cur)
 
+        # (b') Anchored own-remark 原價 (iteration 44, FR-029i tier 3): the
+        # row's own list price fills the sku only when 單價/own-paid left it
+        # empty — 原價 is already PER-UNIT, so quantity does not divide it.
+        for item in acq.items:
+            lp = item.fields.get("_own_list_price")
+            if lp is not None and item.fields.get("sku_price") is None:
+                item.fields["sku_price"] = lp
+                cur = item.fields.get("_own_list_currency")
+                if cur:
+                    item.fields.setdefault("sku_price_currency", cur)
+
         # (c') Name-matched 原價 listings (iteration 42, FR-029k): when the
         # own-price rows do NOT cover every item, a shared 備註 listing
         # "<fragment>原價<amount>[*N 組/件/個]" assigns sku (+quantity) to the
@@ -600,47 +707,94 @@ def _finalize(acquisitions: list["Acquisition"], own_prices: dict[int, list]) ->
         own_item_count = sum(1 for t in own if t[0] is not None)
         assigned_by_name: set = set()
         if own_item_count < len(acq.items):
+            # Carried (rowspan-shared) 備註 cells repeat VERBATIM per row —
+            # dedupe identical parts so one listing can't assign twice.
             blob = "\n".join(
-                part
-                for part in (
-                    *(i.fields.get("_raw_remark", "") for i in acq.items),
-                    acq.remark or "",
+                dict.fromkeys(
+                    part
+                    for part in (
+                        *(i.fields.get("_raw_remark", "") for i in acq.items),
+                        acq.remark or "",
+                    )
+                    if part
                 )
-                if part
             )
             entries = [
-                (m.group(1), norm_num(m.group(2)), m.group(3))
+                (m.group(1), m.group(2), norm_num(m.group(3)), m.group(4))
                 for m in RE_NAME_LIST_PRICE.finditer(blob)
-                if norm_num(m.group(2)) is not None
+                if norm_num(m.group(3)) is not None
             ]
 
-            def candidates(fragment):
-                frag = fragment
+            def candidates(fragment, annotation):
+                # Try-order: full fragment → paren annotation tokens (iteration
+                # 44: 黑色 resolves 大箱子(黑色)) → progressive shortening.
+                # Items whose sku a higher tier already set are not candidates.
+                tries = [fragment]
+                if annotation:
+                    tries.append(annotation)
+                frag = fragment[1:]
                 while frag:
+                    tries.append(frag)
+                    frag = frag[1:]
+                for t in tries:
                     hits = [
-                        i for i in acq.items if frag in i.name and id(i) not in assigned_by_name
+                        i
+                        for i in acq.items
+                        if t in i.name
+                        and id(i) not in assigned_by_name
+                        and i.fields.get("sku_price") is None
                     ]
                     if hits:
                         return hits
-                    frag = frag[1:]
                 return []
 
             # Constraint propagation: resolve fragments with a UNIQUE unassigned
             # candidate first; repeat — "衣夾" claims PC衣夾, freeing "衣架".
             pending = list(entries)
             progress = True
+            assigned_qtys: list[tuple[int, int]] = []
+
+            def assign(entry, target):
+                target.fields["sku_price"] = entry[2]
+                if entry[3]:
+                    target.fields["quantity"] = int(entry[3])
+                    assigned_qtys.append((id(target), int(entry[3])))
+                assigned_by_name.add(id(target))
+                pending.remove(entry)
+
             while pending and progress:
                 progress = False
                 for entry in list(pending):
-                    hits = candidates(entry[0])
+                    hits = candidates(entry[0], entry[1])
                     if len(hits) == 1:
-                        target = hits[0]
-                        target.fields["sku_price"] = entry[1]
-                        if entry[2]:
-                            target.fields["quantity"] = int(entry[2])
-                        assigned_by_name.add(id(target))
-                        pending.remove(entry)
+                        assign(entry, hits[0])
                         progress = True
+            # Elimination (iteration 44): once the listing proved itself by
+            # resolving a sibling, a LAST entry whose descriptor matches no
+            # name (小箱子(白色) vs the 21L box) pairs with the LAST uncovered
+            # item.
+            if len(pending) == 1 and assigned_by_name:
+                rest = [
+                    i
+                    for i in acq.items
+                    if id(i) not in assigned_by_name and i.fields.get("sku_price") is None
+                ]
+                if len(rest) == 1:
+                    assign(pending[0], rest[0])
+
+            # A listing-derived quantity (RE_QTY_EXPR on a `<fragment>原價N*M`
+            # segment) was tentative: clear it wherever the listing assigned
+            # that qty to a DIFFERENT item (the shared 備註 named a sibling),
+            # restoring the row's own-paid sku to its undivided value.
+            for item in acq.items:
+                flag = item.fields.get("_qty_from_listing")
+                if flag is None or item.fields.get("quantity") != flag:
+                    continue  # absent, or overwritten by this item's own entry
+                if any(tid != id(item) and q == flag for tid, q in assigned_qtys):
+                    item.fields.pop("quantity", None)
+                    own_entry = next((e for e in own if e[0] is item), None)
+                    if own_entry is not None and id(item) not in assigned_by_name:
+                        item.fields["sku_price"] = own_entry[1]
 
         # (c) 原價X，N折 computes skus when the own-price rows do NOT cover
         # every item (a shared rowspan total): the "own" total row's ÷qty sku
@@ -655,6 +809,9 @@ def _finalize(acquisitions: list["Acquisition"], own_prices: dict[int, list]) ->
         for item in acq.items:
             item.fields.pop("_list_price", None)
             item.fields.pop("_discount_factor", None)
+            item.fields.pop("_own_list_price", None)
+            item.fields.pop("_own_list_currency", None)
+            item.fields.pop("_qty_from_listing", None)
             # Derived skus inherit the acquisition currency (iteration 39).
             if item.fields.get("sku_price") is not None and not item.fields.get("sku_price_currency"):
                 if acq_currency:

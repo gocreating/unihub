@@ -41,7 +41,7 @@ def _load_parser():
 
 
 # unihub's canonical currency codes — the legacy sheet uses colloquial aliases.
-CURRENCY_ALIASES = {"RMB": "CNY"}
+CURRENCY_ALIASES = {"RMB": "CNY", "RM": "MYR"}
 
 
 def _norm_currency(code: str | None) -> str:
@@ -99,6 +99,12 @@ def _item_payload(item) -> dict:
         payload["sku_price"] = str(f["sku_price"])
         if f.get("sku_price_currency"):
             payload["sku_price_currency"] = _norm_currency(str(f["sku_price_currency"]))
+    else:
+        # The parser is authoritative for legacy skus (FR-029l): an upsert
+        # must CLEAR a price it no longer derives (e.g. a removed block-total
+        # leak), not leave the stale value behind under partial update.
+        payload["sku_price"] = None
+        payload["sku_price_currency"] = ""
     for measure in ("weight", "length", "width", "height", "diameter", "waist", "temperature", "volume"):
         if measure in f and isinstance(f[measure], dict):
             parameters.append(

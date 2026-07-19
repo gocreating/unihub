@@ -220,11 +220,14 @@ def test_variant_quantity_line_survives_in_remark(parser):
 
 
 def test_prose_around_matched_keys_survives(parser):
-    # Colonless 原價/單價 inside prose is NOT a key-value pair (iteration 35) —
-    # nothing extracts; every prose segment survives in remark (FR-029d/029j).
+    # Colonless 原價/單價 inside prose NEVER sets the sku directly (iteration
+    # 35); an ANCHORED segment feeds the LOWER list-price tier instead
+    # (iteration 44) and the row's own paid still wins. Prose segments
+    # survive in remark (FR-029d/029j).
     fields, _ = parser.parse_remark("大傘，可兩人撐，原價850，搭配活動折價125")
     assert "sku_price" not in fields
-    for piece in ("大傘", "可兩人撐", "原價850", "搭配活動折價125"):
+    assert fields.get("_own_list_price") == 850.0
+    for piece in ("大傘", "可兩人撐", "搭配活動折價125"):
         assert piece in fields.get("remark", "")
     # A fully-consumed key:value line still leaves NO residue.
     clean, _ = parser.parse_remark("尺寸：L")
@@ -572,10 +575,13 @@ def test_colon_price_still_extracts(parser):
 
 
 def test_colonless_prose_price_does_not_extract(parser):
-    # 2025 雨傘王: "原價 650，舊換新打8折 = 520" — prose, not a pair.
+    # 2025 雨傘王: "原價 650，舊換新打8折 = 520" — 原價 never sets the sku
+    # directly; the anchored segment only feeds the list-price tier (own paid
+    # outranks it), and the prose tail survives.
     fields, _ = parser.parse_remark("原價 650，舊換新打8折 = 520")
     assert "sku_price" not in fields
-    assert "原價 650" in fields.get("remark", "")
+    assert fields.get("_own_list_price") == 650.0
+    assert "舊換新打8折 = 520" in fields.get("remark", "")
 
 
 def test_colonless_qty_expression_price_still_extracts(parser):
@@ -774,7 +780,7 @@ def test_segmented_mixed_line_keeps_unmatched_segments(parser):
     fields, _ = parser.parse_remark("size: L，原價450，指定商品8折")
     assert fields.get("size") == "L"
     assert "sku_price" not in fields
-    assert "原價450" in fields.get("remark", "")
+    assert fields.get("_own_list_price") == 450.0  # anchored → lower tier
     assert "指定商品8折" in fields.get("remark", "")
 
 
@@ -858,3 +864,232 @@ def test_name_matched_pair_with_discount_tail(parser, tmp_path):
     got = {i.name: (i.fields.get("sku_price"), i.fields.get("quantity") or 1) for i in acq.items}
     assert got["[MUJI 無印良品]鋁製衣架/3支組/寬41cm"] == (99.0, 7)
     assert got["PC衣夾.鋁角衣架用/8A 10個"] == (49.0, 1)
+
+
+# Iteration 44 (FR-029l): anchored per-row list prices, block-total leak,
+# composite color&size, annotation listings, broadened qty units, RM tokens.
+def test_composite_color_size_key_splits(parser):
+    # 2021: "color & size: 65 土黃L" — trailing size token splits off.
+    fields, _ = parser.parse_remark("color & size: 65 土黃L")
+    assert fields.get("color") == "65 土黃"
+    assert fields.get("size") == "L"
+
+
+def test_composite_color_size_without_token_stays_verbatim(parser):
+    fields, _ = parser.parse_remark("color & size: 個性灰")
+    assert "size" not in fields
+    assert "color" not in fields
+    assert fields.get("remark") == "color & size: 個性灰"
+
+
+def test_header_block_total_never_becomes_first_item_sku(parser, tmp_path):
+    # 2021:29 — paid 2284 spans BOTH item rows; neither row has price info.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>漁夫帽</td><td rowspan="2">2284</td><td rowspan="2">TWD</td>
+<td rowspan="2">niko and ... 忠孝旗艦店</td><td rowspan="2">2021/08/14</td><td></td></tr>
+<tr><td>2</td><td>男時尚幾何圖形短袖襯衫上衣</td><td>color & size: 65 土黃L</td></tr>
+</table>
+"""
+    path = tmp_path / "hat.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    got = {i.name: i.fields for i in acq.items}
+    assert got["漁夫帽"].get("sku_price") is None
+    assert got["男時尚幾何圖形短袖襯衫上衣"].get("sku_price") is None
+    assert got["男時尚幾何圖形短袖襯衫上衣"].get("color") == "65 土黃"
+    assert got["男時尚幾何圖形短袖襯衫上衣"].get("size") == "L"
+    assert [(cf.type, cf.value, cf.currency) for cf in acq.cost_factors] == [
+        ("accumulated", 2284.0, "TWD")
+    ]
+
+
+def test_anchored_list_prices_fill_shared_block_skus(parser, tmp_path):
+    # 2021:31 — Filter017 block: per-row anchored 原價 remarks under one total;
+    # the 運費及折扣 factor row must NOT consume the carried 3126 as its value.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>Filter017 Tissue Cover</td><td rowspan="5">3126</td>
+<td rowspan="5">TWD</td><td rowspan="5">蝦皮</td>
+<td rowspan="5">2021/09/18~2021/09/20</td><td>原價 680</td></tr>
+<tr><td>2</td><td>FILTER017 Travel Tray</td><td>原價 880</td></tr>
+<tr><td>3</td><td>Filter017 Storage 軍綠</td><td>原價 980，型號：20L 軍綠</td></tr>
+<tr><td>4</td><td>Filter017 Storage 卡其</td><td>原價 980，型號：20L 卡其</td></tr>
+<tr><td>5</td><td>運費及折扣</td><td>運費 60 - 蝦皮優惠券 268 - 賣場優惠券 176 - 蝦幣 10</td></tr>
+</table>
+"""
+    path = tmp_path / "filter017.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    got = {i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency")) for i in acq.items}
+    assert got["Filter017 Tissue Cover"] == (680.0, "TWD")
+    assert got["FILTER017 Travel Tray"] == (880.0, "TWD")
+    assert got["Filter017 Storage 軍綠"] == (980.0, "TWD")
+    assert got["Filter017 Storage 卡其"] == (980.0, "TWD")
+    accumulated = [cf for cf in acq.cost_factors if cf.type == "accumulated"]
+    assert [(cf.value, cf.currency) for cf in accumulated] == [(3126.0, "TWD")]
+    # The factor row keeps its TYPE but not the carried block total as value.
+    others = [cf for cf in acq.cost_factors if cf.type != "accumulated"]
+    assert all(cf.value is None for cf in others)
+    assert "蝦皮優惠券 268" in (acq.remark or "")
+
+
+def test_annotation_listing_resolves_by_color_then_elimination(parser, tmp_path):
+    # 2022:5 — Camping Flying pair: descriptive fragments with paren colors in
+    # a SHARED (rowspan-carried) remark; dedupe stops double-assignment.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>●Camping Flying●日本軍用風折疊側開收納箱 黑色 居家 露營 收納 摺疊 側開 收納 50L⚠️現貨⚠️</td>
+<td rowspan="2">2260</td><td rowspan="2">TWD</td><td>蝦皮</td>
+<td rowspan="2">2022/02/02~2022/02/08</td>
+<td rowspan="2">大箱子(黑色)原價 1380 + 小箱子(白色)原價 780 + 運費 100</td></tr>
+<tr><td>2</td><td>●Camping Flying●日本軍用風折疊收納箱 居家 露營 收納 摺疊 收納 21L⚠️現貨⚠️</td></tr>
+</table>
+"""
+    path = tmp_path / "camping.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    got = {
+        ("50L" if "50L" in i.name else "21L"): (i.fields.get("sku_price"), i.fields.get("sku_price_currency"))
+        for i in acq.items
+    }
+    assert got["50L"] == (1380.0, "TWD")
+    assert got["21L"] == (780.0, "TWD")
+
+
+def test_anchored_list_price_with_qty_unit(parser, tmp_path):
+    # 2023:8 — 充電器 原價 299; 電池 原價 74 * 2 顆 (顆 joins the qty units).
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>PHILIPS 飛利浦 3.4號電池充電器</td><td rowspan="2">437</td>
+<td rowspan="2">TWD</td><td rowspan="2">蝦皮</td>
+<td rowspan="2">2023/05/11~2023/05/15</td><td>原價 299</td></tr>
+<tr><td>2</td><td>高容量▶飛利浦 3號電池AA【單顆】</td><td>原價 74 * 2 顆</td></tr>
+</table>
+"""
+    path = tmp_path / "battery.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    got = {i.name: (i.fields.get("sku_price"), i.fields.get("quantity") or 1) for i in acq.items}
+    assert got["PHILIPS 飛利浦 3.4號電池充電器"] == (299.0, 1)
+    assert got["高容量▶飛利浦 3號電池AA【單顆】"] == (74.0, 2)
+
+
+def test_anchored_colonless_unit_price_quartet(parser, tmp_path):
+    # 2023:32 — 短褲 rows: colonless 單價 anchored segments under one total.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>舒適休閒短褲 卡其色</td><td rowspan="4">1848</td>
+<td rowspan="4">TWD</td><td rowspan="4">50% Fifty Percent 汐止遠雄店</td>
+<td rowspan="4">2023/09/24</td><td>單價 449，尺寸：34</td></tr>
+<tr><td>2</td><td>綁繩休閒短褲 深灰</td><td>單價 549，尺寸：32</td></tr>
+<tr><td>3</td><td>標準錐型褲 卡其色</td><td>單價 799，尺寸：34</td></tr>
+<tr><td>4</td><td>休閒褲 杏色</td><td>單價 599，尺寸：32</td></tr>
+</table>
+"""
+    path = tmp_path / "shorts.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    got = {i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency"), i.fields.get("size")) for i in acq.items}
+    assert got["舒適休閒短褲 卡其色"] == (449.0, "TWD", "34")
+    assert got["綁繩休閒短褲 深灰"] == (549.0, "TWD", "32")
+    assert got["標準錐型褲 卡其色"] == (799.0, "TWD", "34")
+    assert got["休閒褲 杏色"] == (599.0, "TWD", "32")
+    accumulated = [cf for cf in acq.cost_factors if cf.type == "accumulated"]
+    assert [(cf.value, cf.currency) for cf in accumulated] == [(1848.0, "TWD")]
+
+
+def test_anchored_list_price_with_rm_currency_token(parser, tmp_path):
+    # 2024:32 — 巴生 AEON block: 原價：N RM → sku with the RM token (the
+    # importer aliases RM → MYR, like RMB → CNY).
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>襯衫外套</td><td rowspan="3">1273</td><td rowspan="3">TWD</td>
+<td rowspan="3">巴生 AEON</td><td rowspan="3">2024/10/10</td><td>原價：59 RM</td></tr>
+<tr><td>2</td><td>白色紋路質感衣</td><td>原價：89 RM</td></tr>
+<tr><td>3</td><td>仙人掌 T-shirt</td><td>原價：19.9 RM</td></tr>
+</table>
+"""
+    path = tmp_path / "aeon.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    got = {i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency")) for i in acq.items}
+    assert got["襯衫外套"] == (59.0, "RM")
+    assert got["白色紋路質感衣"] == (89.0, "RM")
+    assert got["仙人掌 T-shirt"] == (19.9, "RM")
+
+
+def test_rm_alias_normalizes_to_myr():
+    from inventory.management.commands.import_legacy_csv import _norm_currency
+
+    assert _norm_currency("RM") == "MYR"
+    assert _norm_currency("RMB") == "CNY"
+    assert _norm_currency("TWD") == "TWD"
+
+
+def test_broadened_qty_units(parser):
+    # 2019 "單價499 * 3顆" and 2018 "原價79 * 2條，L型編織線" were 件-only misses.
+    fields, _ = parser.parse_remark("單價499 * 3顆")
+    assert fields.get("sku_price") == 499.0
+    assert fields.get("quantity") == 3
+    fields, _ = parser.parse_remark("原價79 * 2條，L型編織線")
+    assert fields.get("quantity") == 2
+    assert fields.get("sku_price") is None  # 原價 defers to the hierarchy
+
+
+def test_own_paid_still_beats_anchored_list_price(parser, tmp_path):
+    # Iteration-35 雨傘王 protection: the anchored 原價 segment stays a LOWER
+    # tier than the row's own paid amount.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>雨傘王雨傘</td><td>725</td><td>TWD</td><td>新竹光復路一段雨傘王專店</td>
+<td>2016/05/07</td><td>大傘，可兩人撐，原價850，搭配活動折價125</td></tr>
+</table>
+"""
+    path = tmp_path / "umbrella44.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    assert acq.items[0].fields.get("sku_price") == 725.0
+    assert "_own_list_price" not in acq.items[0].fields
+
+
+@pytest.mark.django_db
+def test_reimport_clears_stale_sku(tmp_path, auth_client):
+    # FR-029l: when a re-import no longer derives a price (e.g. a removed
+    # block-total leak), the upsert must CLEAR the stale sku, not keep it.
+    from django.core.management import call_command
+
+    from inventory.models import Item
+
+    with_price = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>ClearMe</td><td>500</td><td>TWD</td><td>ShopX</td>
+<td>2021/03/01</td><td></td></tr>
+</table>
+"""
+    without_price = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>ClearMe</td><td rowspan="2">500</td><td rowspan="2">TWD</td>
+<td rowspan="2">ShopX</td><td rowspan="2">2021/03/01</td><td></td></tr>
+<tr><td>2</td><td>Sibling</td><td></td></tr>
+</table>
+"""
+    path = tmp_path / "2021.html"
+    path.write_text(with_price, encoding="utf-8")
+    call_command("import_legacy_csv", str(path), "--commit")
+    assert Item.objects.get(name="ClearMe").sku_price == 500
+
+    path.write_text(without_price, encoding="utf-8")
+    call_command("import_legacy_csv", str(path), "--commit")
+    cleared = Item.objects.get(name="ClearMe")
+    assert cleared.sku_price is None
+    assert (cleared.sku_price_currency or "") == ""

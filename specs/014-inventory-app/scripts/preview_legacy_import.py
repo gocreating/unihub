@@ -136,9 +136,12 @@ RE_SIZE = re.compile(r"(?:尺寸|[Ss]ize)[:：]\s*(.+)")
 RE_SPEC = re.compile(r"規格[:：]\s*(.+)")
 RE_COLOR = re.compile(r"(?:顏色|款式)[:：]\s*(.+)")
 RE_PRICE = re.compile(r"(?:原價|單價)[:：]?\s*([\d.,]+)\s*([A-Za-z]+|元|円|¥|￥)?")
-RE_WEIGHT = re.compile(r"(?:重量|淨重)[:：]\s*([\d.]+)\s*(g|kg|克)?")
-RE_LENGTH = re.compile(r"長度[:：]\s*([\d.]+)\s*(mm|cm|m)?")
-RE_VOLUME = re.compile(r"容量[:：]\s*([\d.]+)\s*(mL|ml|L|毫升|公升)")
+# Keyed numeric values may be min~max/min-max ranges (FR-029h, iteration 28) —
+# the whole range text is captured verbatim; the backend computes min/max.
+_NUM_OR_RANGE = r"[\d.]+(?:\s*[~-]\s*[\d.]+)?"
+RE_WEIGHT = re.compile(rf"(?:重量|淨重)[:：]\s*({_NUM_OR_RANGE})\s*(g|kg|克)?")
+RE_LENGTH = re.compile(rf"長度[:：]\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
+RE_VOLUME = re.compile(rf"容量[:：]\s*({_NUM_OR_RANGE})\s*(mL|ml|L|毫升|公升)")
 RE_URL_KEY = re.compile(r"官網連結[:：]\s*(\S+)")
 RE_DIMS = re.compile(
     r"(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)?"

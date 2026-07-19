@@ -187,11 +187,10 @@ def compute_value_fields(
             units.family_to_canonical(family, high, unit),
         )
     if definition.data_type == "number":
-        try:
-            number = Decimal(text)
-        except (InvalidOperation, TypeError):
-            raise serializers.ValidationError({definition.name: "value must be a number."})
-        return text, "", number, None
+        # Number-typed values accept the same single-or-range grammar as
+        # dimension values (FR-002b, iteration 28) — no unit conversion.
+        low, high = _parse_dimension_number(text, definition.name)
+        return text, "", low, high
     if (
         definition.data_type == "single_select"
         and definition.options

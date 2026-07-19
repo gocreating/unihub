@@ -274,4 +274,20 @@ describe('ParameterRowsEditor (iteration 16 — form grid + definition delete)',
       ),
     );
   });
+
+  // PRE-11 (iteration 28, FR-002b): number-typed rows accept single-or-range
+  // values through the same validated text input as dimension rows.
+  it('accepts ranges on number-typed rows and flags invalid ones', async () => {
+    const onChange = vi.fn();
+    renderEditor([{ definition_id: 'd-capacity', value: '42' }], onChange);
+    const input = await screen.findByDisplayValue('42');
+    fireEvent.change(input, { target: { value: '74~164' } });
+    expect(onChange).toHaveBeenLastCalledWith([
+      { definition_id: 'd-capacity', value: '74~164' },
+    ]);
+    fireEvent.change(screen.getByDisplayValue('74~164'), { target: { value: '164-74' } });
+    expect(
+      await screen.findByText('Enter a number or a min-max range (e.g. 5-10)'),
+    ).toBeInTheDocument();
+  });
 });

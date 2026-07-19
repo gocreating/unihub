@@ -519,3 +519,24 @@ def test_size_with_extra_prose_keeps_verbatim_size(parser):
     fields, _ = parser.parse_remark("尺寸：14 x 15 x 5cm 附收納袋")
     assert fields.get("length") == {"value": "14", "unit": "cm"}
     assert fields.get("size") == "14 x 15 x 5cm 附收納袋"
+
+
+# Iteration 28 (FR-029h): keyed numeric 備註 patterns capture min~max ranges.
+def test_keyed_length_range_captured_verbatim(parser):
+    fields, _ = parser.parse_remark("長度：74~164cm")
+    assert fields.get("length") == {"value": "74~164", "unit": "cm"}
+    assert "remark" not in fields  # fully consumed — nothing left over
+
+
+def test_keyed_weight_and_volume_ranges(parser):
+    w, _ = parser.parse_remark("重量：30-45g")
+    assert w.get("weight") == {"value": "30-45", "unit": "g"}
+    v, _ = parser.parse_remark("容量：1~2L")
+    assert v.get("volume") == {"value": "1~2", "unit": "L"}
+
+
+def test_keyed_single_values_unchanged(parser):
+    fields, _ = parser.parse_remark("長度：74cm")
+    assert fields.get("length") == {"value": "74", "unit": "cm"}
+    w, _ = parser.parse_remark("重量：26.5g")
+    assert w.get("weight") == {"value": "26.5", "unit": "g"}

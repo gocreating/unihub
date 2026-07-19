@@ -118,7 +118,7 @@ test('a battery-family definition accepts range values with validation (FR-002b)
   // The card shows the key-value pair with both bounds and the unit (FR-031).
   const card = page.locator('.ant-card-small', { hasText: 'Range item' }).first();
   await expect(
-    card.locator('.ant-tag', { hasText: `${DEF_NAME}: 5 - 10 mAh` }),
+    card.locator('.ant-tag', { hasText: `${DEF_NAME}: 5 ~ 10 mAh` }),
   ).toBeVisible();
 
   // Cleanup: delete the e2e definition (no stored values — deletes directly).

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Col, Input, InputNumber, Modal, Row, Select, Space, Typography, message } from 'antd';
+import { Button, Card, Col, Input, Modal, Row, Select, Space, Typography, message } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useIntl } from 'react-intl';
 import type { IntlShape } from 'react-intl';
@@ -244,12 +244,22 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
       );
     }
     if (definition?.data_type === 'number') {
+      // Single value or min-max range (FR-002b, iteration 28) — same
+      // validated text input as dimension rows, without a unit select.
+      const valid = isDimensionValueValid(row.value);
       return (
-        <InputNumber
-          style={{ width: '100%' }}
-          value={row.value === '' ? null : Number(row.value)}
-          onChange={(v) => setRow(index, { ...row, value: v == null ? '' : String(v) })}
-        />
+        <>
+          <Input
+            status={valid ? undefined : 'error'}
+            value={row.value}
+            onChange={(e) => setRow(index, { ...row, value: e.target.value })}
+          />
+          {!valid && (
+            <Typography.Text type="danger" style={{ fontSize: 12 }}>
+              {t({ id: 'pages.inventory.params.rangeInvalid' })}
+            </Typography.Text>
+          )}
+        </>
       );
     }
     if (definition?.data_type === 'single_select') {

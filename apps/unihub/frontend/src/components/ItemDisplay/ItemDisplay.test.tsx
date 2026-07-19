@@ -76,7 +76,7 @@ describe('ItemDisplay (FR-031)', () => {
     wrap(<ItemDisplay item={base} parameters={PARAMS} showParameters />);
     expect(screen.getByText('Color: red')).toBeInTheDocument();
     // Range values display both canonical bounds with the entered unit.
-    expect(screen.getByText('Weight: 5 - 10 kg')).toBeInTheDocument();
+    expect(screen.getByText('Weight: 5 ~ 10 kg')).toBeInTheDocument();
     // User-created definitions keep their raw name; decimals lose zero-padding.
     expect(screen.getByText('capacity: 1500')).toBeInTheDocument();
   });
@@ -102,12 +102,20 @@ describe('parameterPairs', () => {
     expect(pairs).toEqual([{ emoji: '', label: 'Length: 14 cm' }]);
   });
 
+  it('formats number-typed ranges without a unit (FR-002b, iteration 28)', () => {
+    const pairs = parameterPairs(
+      [{ name: 'stretch', data_type: 'number', value: '74~164', unit: '' }],
+      (id) => id,
+    );
+    expect(pairs).toEqual([{ emoji: '', label: 'stretch: 74 ~ 164' }]);
+  });
+
   it('formats tilde ranges', () => {
     const pairs = parameterPairs(
       [{ name: 'temp', data_type: 'dimension', value: '-10~40', unit: '°C' }],
       (id) => id,
     );
-    expect(pairs).toEqual([{ emoji: '', label: 'temp: -10 - 40 °C' }]);
+    expect(pairs).toEqual([{ emoji: '', label: 'temp: -10 ~ 40 °C' }]);
   });
 });
 

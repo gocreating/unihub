@@ -290,3 +290,44 @@ class TestParameterEmoji:
         detail = auth_client.get(f"{ITEMS}{item['id']}/").json()
         row = next(p for p in detail["parameters"] if p["name"] == "glow")
         assert row["emoji"] == "✨"
+
+
+@pytest.mark.django_db
+class TestNumberTypeRanges:
+    """Iteration 28 (FR-002b): plain number-typed values accept ranges too."""
+
+    def test_number_range_stores_min_and_max(self, auth_client):
+        d = _make_def("stretch", "number")
+        item = create_item(auth_client, name="Strap")
+        resp = _upsert(auth_client, item["id"], d, "74~164")
+        assert resp.status_code == 200, resp.content
+        stored = AttributeValue.objects.get(attribute_definition=d, object_id=item["id"])
+        assert stored.value == "74~164"
+        assert stored.value_number == pytest.approx(74)
+        assert stored.value_number_max == pytest.approx(164)
+        # Dash variant.
+        assert _upsert(auth_client, item["id"], d, "74-164").status_code == 200
+
+    def test_number_single_value_leaves_max_null(self, auth_client):
+        d = _make_def("solo-num", "number")
+        item = create_item(auth_client, name="One")
+        assert _upsert(auth_client, item["id"], d, "42").status_code == 200
+        stored = AttributeValue.objects.get(attribute_definition=d, object_id=item["id"])
+        assert stored.value_number == pytest.approx(42)
+        assert stored.value_number_max is None
+
+    def test_number_invalid_ranges_rejected(self, auth_client):
+        d = _make_def("bad-num", "number")
+        item = create_item(auth_client, name="Bad")
+        assert _upsert(auth_client, item["id"], d, "164-74").status_code == 400
+        assert _upsert(auth_client, item["id"], d, "74-abc").status_code == 400
+
+    def test_number_ranges_sort_by_min(self, auth_client):
+        d = _make_def("span-num", "number")
+        a = create_item(auth_client, name="NumSpanA")
+        b = create_item(auth_client, name="NumSpanB")
+        _upsert(auth_client, a["id"], d, "5~90")
+        _upsert(auth_client, b["id"], d, "10")
+        resp = auth_client.get(f"{ITEMS}?ordering={quote(f'attr:{d.id}')}")
+        names = [i["name"] for i in resp.json()["results"] if i["name"].startswith("NumSpan")]
+        assert names == ["NumSpanA", "NumSpanB"]

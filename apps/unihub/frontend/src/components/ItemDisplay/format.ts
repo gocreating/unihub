@@ -42,16 +42,18 @@ const SYSTEM_KEY_IDS: Record<string, string> = {
 };
 
 function parameterValueText(p: ParameterDisplay): string {
-  if (p.data_type === 'dimension') {
+  // Ranges render with a tilde (FR-002b, iteration 28) for BOTH dimension and
+  // number types — the sheets' own notation ("74~164cm").
+  if (p.data_type === 'dimension' || p.data_type === 'number') {
+    const unit = p.data_type === 'dimension' ? p.unit ?? '' : '';
     const range = RANGE_RE.exec(p.value);
     if (range) {
       const low = formatDecimal(range[1]);
       const high = formatDecimal(range[2] ?? range[3]);
-      return `${low} - ${high} ${p.unit ?? ''}`.trim();
+      return `${low} ~ ${high} ${unit}`.trim();
     }
-    return `${formatDecimal(p.value)} ${p.unit ?? ''}`.trim();
+    return `${formatDecimal(p.value)} ${unit}`.trim();
   }
-  if (p.data_type === 'number') return formatDecimal(p.value);
   return p.value;
 }
 

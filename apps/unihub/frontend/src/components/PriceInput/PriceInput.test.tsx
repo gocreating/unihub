@@ -11,9 +11,9 @@ describe('PriceInput (FR-033)', () => {
     const number = document.querySelector('.ant-input-number')!;
     // The select precedes the number input (mockup order).
     expect(select.compareDocumentPosition(number) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // Selected label shows the SYMBOL, not the code.
-    expect(select.textContent).toContain('$');
-    expect(select.textContent).not.toContain('TWD');
+    // Selected label shows the FULL option label (iteration 32) — a bare
+    // symbol was ambiguous across $-sharing codes.
+    expect(select.textContent).toContain('TWD $');
   });
 
   it('offers "CODE symbol" option labels', () => {

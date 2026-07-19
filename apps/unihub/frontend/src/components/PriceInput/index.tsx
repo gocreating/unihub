@@ -41,9 +41,10 @@ export function CurrencySymbolSelect({
       placeholder={placeholder}
       options={codes.map((c) => ({
         value: c.value,
+        // The selected display shows this SAME full label (iteration 32) — a
+        // bare symbol was ambiguous across $-sharing codes.
         label: `${c.value} ${currencySymbol(c.value)}`.trim(),
       }))}
-      labelRender={(option) => currencySymbol(String(option.value)) || String(option.value)}
       filterOption={(input, option) =>
         String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())
       }

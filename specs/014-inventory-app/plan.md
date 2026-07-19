@@ -1,16 +1,16 @@
-# Implementation Plan: Inventory App — Iteration 39 (原價 never the sku, discount computation, currency inheritance)
+# Implementation Plan: Inventory App — Iteration 40 (Segmented 備註 key-value parsing)
 
 **Branch**: `014-inventory-app` | **Date**: 2026-07-19 | **Spec**: [spec.md](spec.md)
 
-**Input**: spec.md — Session 2026-07-19 iteration 39; FR-029i extended. Constitution v1.22.0.
+**Input**: spec.md — Session 2026-07-19 iteration 40; FR-029j new. Constitution v1.22.0.
 
 ## Summary
 
-Parser: 原價 drops out of sku extraction (單價 keeps both forms); the `原價X * N件` expression still yields the quantity; a new `原價X，N折` pattern records list price + discount, and `_finalize` computes sku = list × factor ONLY for items without an own paid amount; every derived sku inherits the row/acquisition currency when 備註 carries no token. Fixture-locked on the four reported items + the 盜墓筆記 paid-wins case; iteration-35's 原價-colon/無印 expectations revised to the hierarchy. Upsert re-import + verification.
+`parse_remark` refactor: the per-line pattern block extracts into a unit-processor; a router pre-checks the delimiter-spanning forms (discount/variant/whole-line shipping → whole-line unit), otherwise splits the line into segments (`，`/`、`/spaced-`/`) and processes each — consumed segments extract, unconsumed segments go to remark. `[Cc]olor` joins the 顏色/款式 keys. Fixture-locked on the two reported shapes + the real-data variants (`Size: XL，顏色:09 BLACK`, `size: 43/46` intact, `規格：180ml/灰色…` intact, 內褲/discount/variant regressions). Upsert re-import + verification.
 
 ## Constitution Check
 
-PASS — V (fixtures first; sweep re-verifies verbatim preservation).
+PASS — V (fixtures first; sweep re-verifies verbatim).
 
 ## Complexity Tracking
 

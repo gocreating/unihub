@@ -298,3 +298,8 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 - **R39.1 — MEASURED**: all four reported items shared two defects: 原價 extracted as sku (HEATTECH 590 vs real 760/2 = 380; 失落文明 got the whole rowspan 702 while 霍金 got 原價 500 — the 備註 discounts give 252/450, summing to the shared 702) and empty sku_price_currency (備註-derived skus never inherited the row currency). 原價 is the pre-discount list price — evidence: 折後760, ，9折, 舊換新打8折 annotations throughout the sheets.
 - **R39.2 — Discount factor**: `N折` = ×N/10 for one digit (9折→0.9, 8.5折→0.85), ×N/100 for two digits (79折→0.79). Computed sku applies ONLY when the item has no own paid (shared rowspan totals); rows with own paid keep paid÷qty (盜墓筆記: paid 179 beats 199×0.9 = 179.1).
 - **R39.3 — Collateral**: the 無印 "原價 199 * 3 件 − 折價券 30" fixture updates: qty 3 from the expression, sku 567/3 = 189 (the actual per-unit paid) — consistent with the user's definition of a correct sku.
+
+## Iteration 40 research (segmented 備註 parsing, 2026-07-19)
+
+- **R40.1 — Delimiter survey (MEASURED)**: all size-key lines across the sheets segment cleanly on `，`/`、`/SPACED `/`; bare slashes only appear INSIDE values (`43/46`, `180ml/灰色登山扣款`, `ERU 36/30`). Delimiter-spanning patterns that must see the whole line: `原價X，N折`, variant counts (`深藍x2，灰色x1`), whole-line 運費 — routed before segmentation. English `color:` exists (2021) and joins RE_COLOR.
+- **R40.2 — Residue granularity**: segment-level residue supersedes the whole-line rule for delimited lines (the user wants `size: L，白色` → remark 白色, not the whole line); FR-029f's verbatim copy already preserves full context, so no data loss.

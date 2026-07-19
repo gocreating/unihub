@@ -1,13 +1,13 @@
 ---
-description: "Task list for Inventory App — Iteration 39 (2026-07-19)"
+description: "Task list for Inventory App — Iteration 40 (2026-07-19)"
 ---
 
-# Tasks: Inventory App — Iteration 39 (原價 never the sku, discount computation, currency inheritance)
+# Tasks: Inventory App — Iteration 40 (Segmented 備註 key-value parsing)
 
-**Input**: [plan.md](plan.md), [spec.md](spec.md) — FR-029i extended. Constitution **v1.22.0**.
+**Input**: [plan.md](plan.md), [spec.md](spec.md) — FR-029j new. Constitution **v1.22.0**.
 
-**Baseline**: Iteration 38 shipped at `f22526c`. Decisions in R39.1–R39.3.
+**Baseline**: Iteration 39 shipped at `49b168f`. Decisions in R40.1–R40.2.
 
-- [x] T001 Failing fixtures: HEATTECH (qty 2, sku 380 TWD), Giordano (425 TWD), 內褲*2 (159 TWD), 霍金 rowspan pair (252/450 TWD, accumulated 702), 盜墓筆記 paid-wins (179), currency inheritance; revise iteration-35 原價 expectations (colon-原價 no longer sku; 無印 → 189). Implement (原價 out of sku patterns; RE_DISCOUNT; _finalize computed-discount path + currency fallback); suite + sweep green.
-- [x] T002 Upsert re-import; verify the four items + spot-checks; counts/PKs/scenarios stable.
-- [x] T003 Backend full loop; commit + push.
+- [ ] T001 Failing fixtures: `size: L / 顏色: 00 WHITE` → size L + color "00 WHITE" (no remark); `size: L，白色` → size L + remark 白色; `Size: XL，顏色:09 BLACK`; `color: SKY BLUE，size: L`; intact values `size: 43/46` and `規格：180ml/灰色登山扣款`; regressions (discount/variant/qty-expr/內褲) green. Implement the segment router + [Cc]olor key; suite + sweep green.
+- [ ] T002 Upsert re-import; verify the NET/Uniqlo rows carry clean size/color values; counts/PKs/scenarios stable.
+- [ ] T003 Backend full loop; commit + push (pytest exit code UNMASKED before committing).

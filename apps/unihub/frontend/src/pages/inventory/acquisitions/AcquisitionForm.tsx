@@ -60,6 +60,7 @@ import {
 } from '@/services/unihub-backend/inventory';
 import { listCurrencies } from '@/services/unihub-backend/finance';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
+import { useCurrencySymbols } from '@/hooks/useCurrencySymbols';
 import { ItemFormModal } from '../items/ItemFormModal';
 import { PanelHeaderActions } from '@/components/PanelHeaderActions';
 
@@ -139,6 +140,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
   const [form] = Form.useForm<AcquisitionFieldValues>();
   const isEdit = Boolean(initial);
   const { ref, isNarrow } = useContainerWidth(640);
+  useCurrencySymbols(); // reactive finance symbols for price tags/totals (FR-033)
   const half = isNarrow ? 24 : 12;
   const third = isNarrow ? 24 : 8;
 

@@ -48,6 +48,7 @@ import {
 } from '@/services/unihub-backend/inventory';
 import type { Item, ScenarioItem } from '@/services/unihub-backend/inventory';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
+import { useCurrencySymbols } from '@/hooks/useCurrencySymbols';
 import { ItemDisplay } from '@/components/ItemDisplay';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
 import { PanelHeaderActions } from '@/components/PanelHeaderActions';
@@ -226,6 +227,7 @@ export function ScenarioDetailPage() {
   const { formatMessage: t } = useIntl();
   // Splitter orientation follows the CONTENT width (Principle VI).
   const { ref, isNarrow } = useContainerWidth(720);
+  useCurrencySymbols(); // reactive finance symbols for net-cost context lines (FR-033)
 
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);

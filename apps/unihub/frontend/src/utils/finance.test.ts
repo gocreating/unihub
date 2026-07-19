@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { setCurrencySymbols } from '@/utils/currency';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   buildAggTree,
   buildTreeWithRoot,
@@ -43,6 +44,11 @@ describe('formatAmount', () => {
 // ── getCurrencySymbol ─────────────────────────────────────────────────────────
 
 describe('getCurrencySymbol', () => {
+  beforeEach(() => {
+    // Registry-backed since iteration 34 — seeded from the finance domain.
+    setCurrencySymbols({ TWD: 'NT$', USD: '$', EUR: '€', JPY: '¥', CNY: '¥', KRW: '₩' });
+  });
+
   it('returns NT$ for TWD', () => expect(getCurrencySymbol('TWD')).toBe('NT$'));
   it('returns $ for USD', () => expect(getCurrencySymbol('USD')).toBe('$'));
   it('returns € for EUR', () => expect(getCurrencySymbol('EUR')).toBe('€'));

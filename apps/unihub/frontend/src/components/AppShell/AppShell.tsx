@@ -13,10 +13,9 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import { useEffect, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { getMe, logout } from '@/services/unihub-backend/auth';
-import { listCurrencies } from '@/services/unihub-backend/finance';
-import { setCurrencySymbols } from '@/utils/currency';
+import { useCurrencySymbols } from '@/hooks/useCurrencySymbols';
 import { SelectLang } from '@/components/SelectLang';
 
 interface AppShellProps {
@@ -32,20 +31,8 @@ export function AppShell({ children }: AppShellProps) {
     queryKey: ['auth', 'me'],
     queryFn: getMe,
   });
-  // Seed the price-symbol registry from the FINANCE domain (FR-033, iter 33):
-  // Currency.symbol is the single authority for display symbols.
-  const { data: currenciesData } = useQuery({
-    queryKey: ['finance', 'currencies'],
-    queryFn: () => listCurrencies(),
-  });
-  useEffect(() => {
-    const results = currenciesData?.results ?? [];
-    if (results.length > 0) {
-      setCurrencySymbols(
-        Object.fromEntries(results.map((c) => [c.code.toUpperCase(), c.symbol ?? ''])),
-      );
-    }
-  }, [currenciesData]);
+  // Warm + seed the finance symbol registry app-wide (FR-033, iter 34).
+  useCurrencySymbols();
 
   const handleLogout = async () => {
     await logout();

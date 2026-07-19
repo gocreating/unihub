@@ -8,12 +8,14 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import enUS from '@/locales/en-US';
 import { CatalogPage } from './index';
 import { setCurrencySymbols } from '@/utils/currency';
+import * as financeService from '@/services/unihub-backend/finance';
 import * as inventoryService from '@/services/unihub-backend/inventory';
 import * as coreService from '@/services/unihub-backend/core';
 import type { AttributeDefinition } from '@/services/unihub-backend/core';
 
 vi.mock('@/services/unihub-backend/inventory');
 vi.mock('@/services/unihub-backend/core');
+vi.mock('@/services/unihub-backend/finance');
 
 dayjs.extend(relativeTime);
 
@@ -710,5 +712,55 @@ describe('CatalogPage (iteration 21 — flat-mode acquisition Edit link)', () =>
     const backpack = await screen.findByText('Backpack');
     const childRow = backpack.closest('tr')!;
     expect(within(childRow).queryByText('Edit')).toBeNull();
+  });
+});
+
+describe('CatalogPage (iteration 34 — reactive currency symbols, FR-033)', () => {
+  beforeEach(() => {
+    // The registry starts UNSEEDED — symbols must arrive reactively.
+    setCurrencySymbols({});
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
+      count: 1,
+      acquisition_count: 1,
+      item_count: 2,
+      next: null,
+      previous: null,
+      results: [ACQ],
+    } as never);
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 0,
+      next: null,
+      previous: null,
+      results: [],
+    } as never);
+    // Currencies resolve AFTER the list data (the warm-cache race).
+    vi.mocked(financeService.listCurrencies).mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                count: 1,
+                next: null,
+                previous: null,
+                results: [
+                  { code: 'USD', name: 'US Dollar', symbol: '$', is_base_currency: false },
+                ],
+              } as never),
+            50,
+          ),
+        ),
+    );
+  });
+
+  it('renders finance symbols even when currencies resolve after the list data', async () => {
+    renderPage();
+    // The list lands first (code-only would be the buggy steady state)…
+    await screen.findAllByText(/Shop/);
+    // …then the currencies response must reactively re-render the price cells.
+    await waitFor(() => expect(screen.getAllByText(/USD \$ 10/).length).toBeGreaterThan(0), {
+      timeout: 4_000,
+    });
   });
 });

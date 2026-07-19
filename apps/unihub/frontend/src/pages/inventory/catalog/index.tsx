@@ -46,6 +46,7 @@ import type {
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 import { ItemDisplay, KeyEmoji, formatDecimal, pairText, parameterPairs } from '@/components/ItemDisplay';
 import { formatPrice } from '@/utils/currency';
+import { useCurrencySymbols } from '@/hooks/useCurrencySymbols';
 
 const EMPTY = <EmptyValue />;
 
@@ -107,6 +108,8 @@ export function CatalogPage() {
   const navigate = useNavigate();
   const intl = useIntl();
   const { formatMessage: t } = intl;
+  // Reactive finance symbols (FR-033, iter 34): re-renders + re-measures on load.
+  const currencySymbolsMap = useCurrencySymbols();
   const [deprecateTarget, setDeprecateTarget] = useState<Item | null>(null);
   const [deprecateDate, setDeprecateDate] = useState<dayjs.Dayjs | null>(null);
   // Ids whose default expansion state was flipped by the user. Defaults:
@@ -395,7 +398,7 @@ export function CatalogPage() {
     }
     return w;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [measuredRows, columnDefs, t, flatMode]);
+  }, [measuredRows, columnDefs, t, flatMode, currencySymbolsMap]);
 
   const actionsColWidth = useActionsColWidth(rows);
 
@@ -733,7 +736,7 @@ export function CatalogPage() {
       return map;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, flatMode, definitions, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns, navigate],
+    [t, dataWidths, actionsColWidth, flatMode, definitions, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns, navigate, currencySymbolsMap],
   );
 
   const caretColumn = useMemo<ProColumns<CatalogRow>>(

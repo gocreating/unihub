@@ -273,3 +273,8 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 
 - **R34.1 — Race (MEASURED)**: a cold-load Playwright probe showed correct "CNY ¥ 129" cells (list query slower than currencies), but the registry is a non-reactive module variable — with a warm query cache the catalog renders pre-seed and stays code-only forever; widths measure pre-seed text either way. The hook pattern (subscribe + seed-during-render + map in memo deps) removes the ordering dependency entirely.
 - **R34.2 — Second map**: `utils/finance.ts` predated inventory and carried its own symbol table (incl. codes absent from the user's finance data). It becomes registry-backed with a code fallback (its original unmapped behavior), making `finance.Currency.symbol` the only source anywhere.
+
+## Iteration 35 research (key-value-only prices, adorned paid cells, 2026-07-19)
+
+- **R35.1 — Prose price (MEASURED)**: iteration 20's colon-optional RE_PRICE was aimed at "單價 179 * 2 件" but over-matched prose ("原價850，搭配活動折價125" → sku 850 vs paid 725). The user's rule: no key-value pair → no extraction. Colon required for plain prices; a lookahead pattern keeps ONLY the quantity-expression colonless (both 2025 sheet styles verified: 無印 "原價 199 * 3 件 − 折價券 30" extracts; 雨傘王 "原價 650，舊換新打8折 = 520" stays prose → sku from paid 520).
+- **R35.2 — Adorned paid cells (MEASURED)**: 2016 東京迪士尼 rows carry "¥4,200"/"¥10,800"/"¥2,500" in 實際支付價錢 with JPY in 貨幣; `norm_num` rejected them (no paid recorded). `extract_amount` (already used for factor remarks) handles them; blank-≠-0 semantics preserved (no digits → None).

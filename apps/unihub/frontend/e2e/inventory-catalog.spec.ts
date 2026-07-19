@@ -298,8 +298,10 @@ test('Actions column is pinned sticky-right by default (iter 27)', async ({ page
   await expect(firstBodyRow.locator('td').last()).toHaveClass(/ant-table-cell-fix-right/);
 });
 
-// Iteration 27 (FR-033): SKU prices render "{CODE} {symbol} {value}".
-test('price cells render code + symbol + value (iter 27)', async ({ page }) => {
+// Iterations 27→33 (FR-033): SKU prices render "{CODE} {symbol} {value}" with
+// the symbol from the FINANCE domain (TWD → NT$; codes without a finance
+// entry render code-only).
+test('price cells render code + finance symbol + value (iter 33)', async ({ page }) => {
   const cells = await page.locator('.ant-table-tbody td').allInnerTexts();
-  expect(cells.some((c) => /^[A-Z]{3} [$¥€£₩] [\d,.]+$/.test(c.trim()))).toBe(true);
+  expect(cells.some((c) => /^[A-Z]{3} (NT\$|[$¥€£₩]) [\d,.]+$/.test(c.trim()))).toBe(true);
 });

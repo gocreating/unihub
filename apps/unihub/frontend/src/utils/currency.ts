@@ -1,26 +1,24 @@
-/** Currency → display symbol (FR-033). One shared map backs displays AND inputs. */
-export const CURRENCY_SYMBOLS: Record<string, string> = {
-  TWD: '$',
-  USD: '$',
-  HKD: '$',
-  RMB: '¥',
-  CNY: '¥',
-  JPY: '¥',
-  EUR: '€',
-  GBP: '£',
-  KRW: '₩',
-};
+/** Currency symbols (FR-033, iteration 33): sourced from the FINANCE domain's
+ * `Currency.symbol` — never an invented table. The registry is seeded once at
+ * the shell level from the finance currencies API; codes without a finance
+ * entry render code-only. */
+let SYMBOLS: Record<string, string> = {};
+
+/** Seed/replace the registry (AppShell effect; tests seed explicitly). */
+export function setCurrencySymbols(map: Record<string, string>): void {
+  SYMBOLS = { ...map };
+}
 
 export function currencySymbol(code: string | undefined): string {
   if (!code) return '';
-  return CURRENCY_SYMBOLS[code.toUpperCase()] ?? '';
+  return SYMBOLS[code.toUpperCase()] ?? '';
 }
 
 /**
- * Canonical price text: `{CODE} {symbol} {value}` (e.g. "TWD $ 129") with
+ * Canonical price text: `{CODE} {symbol} {value}` (e.g. "TWD NT$ 129") with
  * trailing zeros dropped and thousands grouped. A zero/empty/invalid amount
  * returns '' — callers render the standard "-" placeholder (FR-033: no code,
- * no symbol without an amount). Unmapped codes fall back to code-only.
+ * no symbol without an amount). Codes without a finance symbol render code-only.
  */
 export function formatPrice(
   code: string | undefined,

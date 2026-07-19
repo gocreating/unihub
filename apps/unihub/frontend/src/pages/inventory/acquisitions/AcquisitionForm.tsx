@@ -73,6 +73,8 @@ interface AcquisitionFieldValues {
 interface Card {
   id?: string;
   data: ItemWrite;
+  /** Existing item whose data changed locally — updated on Save (FR-006, iter 33). */
+  dirty?: boolean;
 }
 
 // A cost-factor row in the editor. Accumulated rows are system-managed (one per
@@ -178,6 +180,8 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
           kind: 'accumulated',
         })),
   );
+  // Staged removals of EXISTING items — applied only on Save (FR-006, iter 33).
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [sourceOptions, setSourceOptions] = useState<{ value: string }[]>([]);
@@ -303,7 +307,12 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
   });
 
   const editSaveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      // Apply the STAGED item mutations first (FR-006, iteration 33).
+      await Promise.all([
+        ...removedIds.map((id) => deleteItem(id)),
+        ...cards.filter((c) => c.id && c.dirty).map((c) => updateItem(c.id!, c.data)),
+      ]);
       const newItems = cards.filter((c) => !c.id).map((c) => c.data);
       return updateAcquisition(initial!.id, {
         ...scalarPayload(),
@@ -338,19 +347,15 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     setModalOpen(true);
   };
 
-  const handleCardOk = async (data: ItemWrite) => {
+  // STAGED (FR-006, iteration 33): card edits never call the API — the page
+  // Save applies them. An existing card is marked dirty instead.
+  const handleCardOk = (data: ItemWrite) => {
     if (editingIndex === null) {
       setCards((prev) => [...prev, { data }]);
     } else {
-      const card = cards[editingIndex];
-      if (isEdit && card?.id) {
-        const updated = await updateItem(card.id, data).catch(() => {
-          message.error(t({ id: 'pages.inventory.items.saveError' }));
-          return null;
-        });
-        if (updated) invalidate();
-      }
-      setCards((prev) => prev.map((c, i) => (i === editingIndex ? { ...c, data } : c)));
+      setCards((prev) =>
+        prev.map((c, i) => (i === editingIndex ? { ...c, data, dirty: c.dirty || Boolean(c.id) } : c)),
+      );
     }
     setModalOpen(false);
     setEditingIndex(null);
@@ -363,12 +368,11 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     setCards((prev) => [...prev, { data: structuredClone(card.data) }]);
   };
 
-  const removeCard = async (idx: number) => {
+  // STAGED (FR-006, iteration 33): removal never calls the API — the id is
+  // remembered and deleted only by the page Save; leaving discards it.
+  const removeCard = (idx: number) => {
     const card = cards[idx];
-    if (isEdit && card?.id) {
-      await deleteItem(card.id).catch(() => message.error(t({ id: 'pages.inventory.items.saveError' })));
-      invalidate();
-    }
+    if (card?.id) setRemovedIds((prev) => [...prev, card.id!]);
     setCards((prev) => prev.filter((_, i) => i !== idx));
   };
 

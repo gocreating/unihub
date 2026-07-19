@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import enUS from '@/locales/en-US';
 import { CatalogPage } from './index';
+import { setCurrencySymbols } from '@/utils/currency';
 import * as inventoryService from '@/services/unihub-backend/inventory';
 import * as coreService from '@/services/unihub-backend/core';
 import type { AttributeDefinition } from '@/services/unihub-backend/core';
@@ -176,6 +177,7 @@ const cellOf = (el: HTMLElement) => {
 
 describe('CatalogPage (iteration 13 — derived columns & density)', () => {
   beforeEach(() => {
+    setCurrencySymbols({ TWD: 'NT$', CNY: '¥', JPY: '¥', KRW: '₩', USD: '$' });
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 3,

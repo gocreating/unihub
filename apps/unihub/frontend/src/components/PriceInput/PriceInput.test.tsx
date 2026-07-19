@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { PriceInput } from './index';
+import { setCurrencySymbols } from '@/utils/currency';
 
-const CODES = [{ value: 'TWD' }, { value: 'RMB' }, { value: 'USD' }];
+beforeEach(() => {
+  setCurrencySymbols({ TWD: 'NT$', CNY: '¥', JPY: '¥', KRW: '₩', USD: '$' });
+});
+
+const CODES = [{ value: 'TWD' }, { value: 'CNY' }, { value: 'USD' }];
 
 describe('PriceInput (FR-033)', () => {
   it('lays out [currency-symbol select][numeric value] with the symbol shown', () => {
@@ -13,14 +18,14 @@ describe('PriceInput (FR-033)', () => {
     expect(select.compareDocumentPosition(number) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Selected label shows the FULL option label (iteration 32) — a bare
     // symbol was ambiguous across $-sharing codes.
-    expect(select.textContent).toContain('TWD $');
+    expect(select.textContent).toContain('TWD NT$'); // finance symbol (iter 33)
   });
 
   it('offers "CODE symbol" option labels', () => {
     render(<PriceInput amount={129} currency="TWD" codes={CODES} onAmount={vi.fn()} onCurrency={vi.fn()} />);
     fireEvent.mouseDown(screen.getByRole('combobox'));
     const dropdown = document.querySelector('.ant-select-dropdown')!;
-    expect(dropdown.textContent).toContain('RMB ¥');
+    expect(dropdown.textContent).toContain('CNY ¥');
     expect(dropdown.textContent).toContain('USD $');
   });
 

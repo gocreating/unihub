@@ -1,23 +1,21 @@
-# Implementation Plan: Inventory App — Iteration 30 (Keyed 寬度/高度/直徑/耐溫 extraction + explicit range-mode input)
+# Implementation Plan: Inventory App — Iteration 31 (Visible drop indicator + recent items in Add modal)
 
 **Branch**: `014-inventory-app` | **Date**: 2026-07-19 | **Spec**: [spec.md](spec.md)
 
-**Input**: spec.md — Session 2026-07-19 iteration 30; FR-002b/FR-026/FR-029h amended. Constitution v1.22.0.
+**Input**: spec.md — Session 2026-07-19 iteration 31; FR-011 amended twice. Constitution v1.22.0.
 
 ## Summary
 
-1. **New system definitions** — migration seeds `diameter` (dimension/length, 📏) and `temperature` (dimension/temperature, 🌡); localized labels + SYSTEM key maps (frontend) updated; importer's measure loop gains both keys.
-2. **Keyed extraction (FR-029h)** — parser patterns for 寬度/高度/直徑/耐溫 (range-capable via a SIGNED grammar: `-?a(~-?b | -b)`); 耐溫 units 度C/℃/°C → °C. The 食品级折叠水杯 gains 高度 1.8~8 cm, 直徑 5.5~9 cm, 溫度 -40~230 °C on re-import.
-3. **Range-mode input (FR-002b)** — shared `RangeValueInput`: mode picker (exact | range) + one or two InputNumbers (+ unit select for dimension rows); mode seeds from the stored value; emits canonical text; min ≤ max validated inline. Replaces the bare text input in ParameterRowsEditor for both dimension and number rows.
-4. **Data refresh** — ref-keyed upsert re-import; verify the cup's three new parameters (temperature canonical min −40 / max 230) and the 憨客 strap keeps 74~164.
+1. **Indicator over preview** — DragOverlay gets `zIndex: 900` + child opacity 0.75; the drop-indicator bar gets `position: relative; zIndex: 1000` (+ a `data-testid`) so it paints above the overlay. e2e locks the style invariants mid-drag (overlay opacity < 1; indicator z-index > overlay z-index; indicator visible while the pointer hovers the tree).
+2. **Recent items by default** — a second query (`enabled: addOpen && !search.trim()`) lists items ordered `-acquisition__obtained_at__nullsfirst`, limit 10; the modal renders it while the search box is empty (identical rows). RTL covers the switch between default and search results.
 
 ## Technical Context
 
-Backend: core migration (seed only — model unchanged); parser regex + unit normalization. Frontend: RangeValueInput component (RTL-first), editor wiring, locale keys (mode labels + new parameter labels ×2). Existing e2e that types "5-10"/"10-5" into the old text input must be reworked to the new two-field flow.
+Frontend-only: `scenarios/detail.tsx`. TDD: RTL for the default listing; e2e for the overlay/indicator z-order.
 
 ## Constitution Check
 
-PASS — I (definitions seeded via migration, never hardcoded), V (TDD), VI (validated inputs, inline error), VIII (all new labels in both locales).
+PASS — V (tests first), VI (row behavior unchanged).
 
 ## Complexity Tracking
 

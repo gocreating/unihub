@@ -156,6 +156,9 @@ describe('remark icon + deprecated warning (iteration 36)', () => {
     // the icon hugs the text end, never the row's far edge.
     const nameWrap = icon.parentElement!.querySelector('div')!;
     expect(nameWrap.style.flex).toBe('0 1 auto');
+    // Vertically centered on the name's row (iteration 38) — baseline floats
+    // SVG icons off the text line.
+    expect((icon.parentElement as HTMLElement).style.alignItems).toBe('center');
     fireEvent.mouseEnter(icon);
     const tooltip = await screen.findByRole('tooltip');
     expect(tooltip).toHaveTextContent('gifted by A');

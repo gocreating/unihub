@@ -90,7 +90,8 @@ export function ItemDisplay({
     : t('pages.inventory.items.deprecatedTooltip');
   return (
     <div style={{ minWidth: 0, ...style }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
+      {/* Center-aligned (iteration 38): SVG icons have no text baseline. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
         {/* Shrink-to-fit (iteration 37): icons SUFFIX the name text — they hug
             its end instead of parking at the row's far edge; long names still
             truncate with the icons visible. */}

@@ -649,13 +649,13 @@ def test_per_unit_triplet_keeps_mixed_units(parser):
     assert fields.get("height") == {"value": "4", "unit": "mm"}
 
 
-def test_size_label_with_parenthesised_dims_keeps_size(parser):
-    # 尺寸：S (40cm x 80cm) — the dims extract AND the verbatim size "S (…)"
-    # survives (the single letter S is meaningful — tightened residue rule).
+def test_size_label_with_parenthesised_dims_keeps_label(parser):
+    # 尺寸：S (40cm x 80cm) — the dims extract and the size keeps ONLY the
+    # label (iteration 42 supersedes the verbatim-keep rule).
     fields, _ = parser.parse_remark("尺寸：S (40cm x 80cm)")
     assert fields.get("length") == {"value": "40", "unit": "cm"}
     assert fields.get("width") == {"value": "80", "unit": "cm"}
-    assert fields.get("size") == "S (40cm x 80cm)"
+    assert fields.get("size") == "S"
 
 
 # Iteration 39 (FR-029i): 原價 is never the sku; discounts compute; currency inherits.
@@ -776,3 +776,85 @@ def test_segmented_mixed_line_keeps_unmatched_segments(parser):
     assert "sku_price" not in fields
     assert "原價450" in fields.get("remark", "")
     assert "指定商品8折" in fields.get("remark", "")
+
+
+# Iteration 42 (FR-029k): paren size annotations, range dims parts, 腰圍,
+# name-matched 原價 listings.
+def test_size_label_with_range_triplet_in_fullwidth_parens(parser):
+    fields, _ = parser.parse_remark("尺寸：Q（160x200x18~28cm）")
+    assert fields.get("size") == "Q"
+    assert fields.get("length") == {"value": "160", "unit": "cm"}
+    assert fields.get("width") == {"value": "200", "unit": "cm"}
+    assert fields.get("height") == {"value": "18~28", "unit": "cm"}
+
+
+def test_size_label_with_waist_annotation(parser):
+    fields, _ = parser.parse_remark("size: L(腰圍 84~92cm)，偏緊")
+    assert fields.get("size") == "L"
+    assert fields.get("waist") == {"value": "84~92", "unit": "cm"}
+    assert fields.get("remark") == "偏緊"
+
+
+def test_name_matched_list_prices_assign_by_fragment(parser, tmp_path):
+    # 2020:46 — ONE rowspan total; the shared 備註 lists per-item 原價 by name.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>棉法蘭絨被套窗格紋混墨灰色/Ｓ</td><td rowspan="3">1536</td>
+<td rowspan="3">TWD</td><td rowspan="3">MUJI無印良品 統一時代百貨台北門市</td>
+<td rowspan="3">2020/11/15</td><td rowspan="3">被套原價1390，抹布原價119，衣架原價99*2組，統一時代會員限時9折優惠</td></tr>
+<tr><td>2</td><td>超細纖維抹布/2片組</td></tr>
+<tr><td>3</td><td>鋁製衣架/3支組/寬41cm</td></tr>
+</table>
+"""
+    path = tmp_path / "muji46.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    got = {
+        i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency"), i.fields.get("quantity") or 1)
+        for i in acq.items
+    }
+    assert got["棉法蘭絨被套窗格紋混墨灰色/Ｓ"] == (1390.0, "TWD", 1)
+    assert got["超細纖維抹布/2片組"] == (119.0, "TWD", 1)
+    assert got["鋁製衣架/3支組/寬41cm"] == (99.0, "TWD", 2)
+    assert any(cf.type == "accumulated" and cf.value == 1536.0 for cf in acq.cost_factors)
+
+
+def test_name_matched_arithmetic_listing_with_fragment_fallback(parser, tmp_path):
+    # 2020:51 — arithmetic listing; 牛仔褲 matches 丹寧窄版褲 via the 褲 fallback.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>[MUJI 無印良品]鋁製衣架/3支組/寬41cm</td><td rowspan="3">2167</td>
+<td rowspan="3">TWD</td><td rowspan="3">MUJI無印良品 統一時代百貨台北門市</td>
+<td rowspan="3">2020/11/29</td><td rowspan="3">(衣架原價99*3組 + 枕頭原價1390 + (牛仔褲原價1390 - 周末優惠391)) * 統一時代會員限時9折優惠</td></tr>
+<tr><td>2</td><td>頭部支撐舒適枕頭</td></tr>
+<tr><td>3</td><td>男有機棉混縱橫彈性丹寧窄版褲 暗藍36吋</td></tr>
+</table>
+"""
+    path = tmp_path / "muji51.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    got = {i.name: (i.fields.get("sku_price"), i.fields.get("quantity") or 1) for i in acq.items}
+    assert got["[MUJI 無印良品]鋁製衣架/3支組/寬41cm"] == (99.0, 3)
+    assert got["頭部支撐舒適枕頭"] == (1390.0, 1)
+    assert got["男有機棉混縱橫彈性丹寧窄版褲 暗藍36吋"] == (1390.0, 1)
+
+
+def test_name_matched_pair_with_discount_tail(parser, tmp_path):
+    # 2020:49-style two-item block; unmatched prose stays in remark.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>[MUJI 無印良品]鋁製衣架/3支組/寬41cm</td><td rowspan="2">667</td>
+<td rowspan="2">TWD</td><td rowspan="2">MUJI無印良品 微風廣場門市</td>
+<td rowspan="2">2020/11/21</td><td rowspan="2">衣架原價99*7組，衣夾原價49，統一時代會員限時9折優惠</td></tr>
+<tr><td>2</td><td>PC衣夾.鋁角衣架用/8A 10個</td></tr>
+</table>
+"""
+    path = tmp_path / "muji49.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    got = {i.name: (i.fields.get("sku_price"), i.fields.get("quantity") or 1) for i in acq.items}
+    assert got["[MUJI 無印良品]鋁製衣架/3支組/寬41cm"] == (99.0, 7)
+    assert got["PC衣夾.鋁角衣架用/8A 10個"] == (49.0, 1)

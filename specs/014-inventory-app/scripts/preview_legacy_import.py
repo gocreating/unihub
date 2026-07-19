@@ -153,19 +153,27 @@ RE_LENGTH = re.compile(rf"長度[:：]\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
 RE_WIDTH_KEY = re.compile(rf"寬度[:：]\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
 RE_HEIGHT_KEY = re.compile(rf"高度[:：]\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
 RE_DIAMETER = re.compile(rf"直徑[:：]\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
+RE_WAIST = re.compile(rf"腰圍[:：]?\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
+# Acquisition-level per-item 原價 listing by NAME FRAGMENT (iteration 42):
+# "被套原價1390，抹布原價119，衣架原價99*2組" / arithmetic variants.
+RE_NAME_LIST_PRICE = re.compile(
+    r"([一-鿿A-Za-z0-9]{1,8}?)原價\s*([\d.,]+)(?:\s*\*\s*(\d+)\s*[組件個])?"
+)
 RE_VOLUME = re.compile(rf"容量[:：]\s*({_NUM_OR_RANGE})\s*(mL|ml|L|毫升|公升)")
 RE_TEMP = re.compile(rf"耐溫[:：]\s*({_SIGNED_NUM_OR_RANGE})\s*(度C|℃|°C|度)?")
 RE_URL_KEY = re.compile(r"官網連結[:：]\s*(\S+)")
+# A dims part may itself be a range ("18~28") — iteration 42.
+_DIM_N = r"\d+(?:\.\d+)?(?:~\d+(?:\.\d+)?)?"
 RE_DIMS = re.compile(
-    r"(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)?"
+    rf"({_DIM_N})\s*[x×X*]\s*({_DIM_N})\s*[x×X*]\s*({_DIM_N})\s*(mm|cm|m)?"
 )
 # Two-part 長×寬 (e.g. 37*19.8cm) — the unit is REQUIRED so bare "a x b" text
 # (variant counts, quantities) never turns dimensional.
-RE_DIMS2 = re.compile(r"(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)\b")
+RE_DIMS2 = re.compile(rf"({_DIM_N})\s*[x×X*]\s*({_DIM_N})\s*(mm|cm|m)\b")
 # Per-unit dims (iteration 36): the unit rides EACH number — "50cm * 75cm",
 # "172cm x 58 cm x 4 mm" (mixed units kept per part), "183cmx 61cm" (no \b:
 # 'cmx' chains must split; mm|cm|m longest-first).
-_NUM_U = r"(\d+(?:\.\d+)?)\s*(mm|cm|m)"
+_NUM_U = rf"({_DIM_N})\s*(mm|cm|m)"
 RE_DIMS_U3 = re.compile(rf"{_NUM_U}\s*[x×X*]\s*{_NUM_U}\s*[x×X*]\s*{_NUM_U}")
 RE_DIMS_U2 = re.compile(rf"{_NUM_U}\s*[x×X*]\s*{_NUM_U}")
 RE_QTY = re.compile(r"數量[:：]\s*(\d+)")
@@ -224,8 +232,23 @@ def _apply_unit(text: str, fields: dict, flags: list, residue: list) -> None:
         spans.append(m.span())
 
     size_m = RE_SIZE.search(text)
+    size_paren = False
     if size_m:
-        fields["size"] = size_m.group(1).strip()
+        content = size_m.group(1).strip()
+        pm = re.match(r"^(.{0,10}?)\s*[（(](.+)[)）]$", content)
+        if pm:
+            # LABEL（annotation） (iteration 42): the annotation processes as
+            # its own unit (dims/keyed measures extract; leftovers → remark)
+            # and the size keeps ONLY the label.
+            label, inner = pm.group(1).strip(), pm.group(2).strip()
+            _apply_unit(inner, fields, flags, residue)
+            if label:
+                fields["size"] = label
+            else:
+                fields.pop("size", None)
+            size_paren = True
+        else:
+            fields["size"] = content
         matched = True
         spans.append(size_m.span())
     if m := RE_SPEC.search(text):
@@ -271,6 +294,10 @@ def _apply_unit(text: str, fields: dict, flags: list, residue: list) -> None:
         fields["diameter"] = {"value": m.group(1), "unit": m.group(2) or "cm"}
         matched = True
         spans.append(m.span())
+    if m := RE_WAIST.search(text):
+        fields["waist"] = {"value": m.group(1), "unit": m.group(2) or "cm"}
+        matched = True
+        spans.append(m.span())
     if m := RE_TEMP.search(text):
         # 度C/℃/度 all normalize to the family's canonical °C symbol.
         fields["temperature"] = {"value": m.group(1), "unit": "°C"}
@@ -287,14 +314,14 @@ def _apply_unit(text: str, fields: dict, flags: list, residue: list) -> None:
         fields["height"] = {"value": m.group(5), "unit": m.group(6)}
         matched = True
         spans.append(m.span())
-        if size_m and _size_fully_dimensional(size_m, m):
+        if size_m and not size_paren and _size_fully_dimensional(size_m, m):
             fields.pop("size", None)
     elif m := RE_DIMS_U2.search(text):
         fields["length"] = {"value": m.group(1), "unit": m.group(2)}
         fields["width"] = {"value": m.group(3), "unit": m.group(4)}
         matched = True
         spans.append(m.span())
-        if size_m and _size_fully_dimensional(size_m, m):
+        if size_m and not size_paren and _size_fully_dimensional(size_m, m):
             fields.pop("size", None)
     elif m := RE_DIMS.search(text):
         unit = m.group(4) or "cm"
@@ -303,7 +330,7 @@ def _apply_unit(text: str, fields: dict, flags: list, residue: list) -> None:
         fields["height"] = {"value": m.group(3), "unit": unit}
         matched = True
         spans.append(m.span())
-        if size_m and _size_fully_dimensional(size_m, m):
+        if size_m and not size_paren and _size_fully_dimensional(size_m, m):
             fields.pop("size", None)
     elif m := RE_DIMS2.search(text):
         unit = m.group(3)
@@ -311,7 +338,7 @@ def _apply_unit(text: str, fields: dict, flags: list, residue: list) -> None:
         fields["width"] = {"value": m.group(2), "unit": unit}
         matched = True
         spans.append(m.span())
-        if size_m and _size_fully_dimensional(size_m, m):
+        if size_m and not size_paren and _size_fully_dimensional(size_m, m):
             fields.pop("size", None)
     if mv := RE_VARIANT.search(text):
         flags.append(f"variant_qty:{text}")
@@ -563,15 +590,66 @@ def _finalize(acquisitions: list["Acquisition"], own_prices: dict[int, list]) ->
             if cur:
                 item.fields.setdefault("sku_price_currency", cur)
 
+        # (c') Name-matched 原價 listings (iteration 42, FR-029k): when the
+        # own-price rows do NOT cover every item, a shared 備註 listing
+        # "<fragment>原價<amount>[*N 組/件/個]" assigns sku (+quantity) to the
+        # item whose name contains the fragment (progressively shortened from
+        # the left until a UNIQUE match; ambiguous/unmatched fragments skip).
+        # These assignments override a shared-rowspan total that leaked onto
+        # the header item.
+        own_item_count = sum(1 for t in own if t[0] is not None)
+        assigned_by_name: set = set()
+        if own_item_count < len(acq.items):
+            blob = "\n".join(
+                part
+                for part in (
+                    *(i.fields.get("_raw_remark", "") for i in acq.items),
+                    acq.remark or "",
+                )
+                if part
+            )
+            entries = [
+                (m.group(1), norm_num(m.group(2)), m.group(3))
+                for m in RE_NAME_LIST_PRICE.finditer(blob)
+                if norm_num(m.group(2)) is not None
+            ]
+
+            def candidates(fragment):
+                frag = fragment
+                while frag:
+                    hits = [
+                        i for i in acq.items if frag in i.name and id(i) not in assigned_by_name
+                    ]
+                    if hits:
+                        return hits
+                    frag = frag[1:]
+                return []
+
+            # Constraint propagation: resolve fragments with a UNIQUE unassigned
+            # candidate first; repeat — "衣夾" claims PC衣夾, freeing "衣架".
+            pending = list(entries)
+            progress = True
+            while pending and progress:
+                progress = False
+                for entry in list(pending):
+                    hits = candidates(entry[0])
+                    if len(hits) == 1:
+                        target = hits[0]
+                        target.fields["sku_price"] = entry[1]
+                        if entry[2]:
+                            target.fields["quantity"] = int(entry[2])
+                        assigned_by_name.add(id(target))
+                        pending.remove(entry)
+                        progress = True
+
         # (c) 原價X，N折 computes skus when the own-price rows do NOT cover
         # every item (a shared rowspan total): the "own" total row's ÷qty sku
         # is overridden by its computed value too (iteration 39, FR-029i).
-        own_item_count = sum(1 for t in own if t[0] is not None)
         if own_item_count < len(acq.items):
             for item in acq.items:
                 lp = item.fields.get("_list_price")
                 fac = item.fields.get("_discount_factor")
-                if lp is not None and fac is not None:
+                if lp is not None and fac is not None and id(item) not in assigned_by_name:
                     item.fields["sku_price"] = round(lp * fac, 4)
         acq_currency = next((cf.currency for cf in acq.cost_factors if cf.currency), None)
         for item in acq.items:

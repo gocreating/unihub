@@ -348,6 +348,9 @@ class TestIteration30Seeds:
         assert defs["temperature"].data_type == "dimension"
         assert defs["temperature"].unit_family == "temperature"
         assert defs["temperature"].emoji == "🌡"
+        # Iteration 42: waist joins the seeded system definitions.
+        assert defs["waist"].unit_family == "length"
+        assert defs["waist"].emoji == "📏"
 
     def test_negative_min_temperature_range(self, auth_client):
         d = AttributeDefinition.objects.get(

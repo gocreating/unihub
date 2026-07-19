@@ -99,7 +99,7 @@ def _item_payload(item) -> dict:
         payload["sku_price"] = str(f["sku_price"])
         if f.get("sku_price_currency"):
             payload["sku_price_currency"] = _norm_currency(str(f["sku_price_currency"]))
-    for measure in ("weight", "length", "width", "height", "diameter", "temperature", "volume"):
+    for measure in ("weight", "length", "width", "height", "diameter", "waist", "temperature", "volume"):
         if measure in f and isinstance(f[measure], dict):
             parameters.append(
                 {
@@ -225,34 +225,44 @@ class Command(BaseCommand):
             seen: set[str] = set()
             for ref, a in refs:
                 seen.add(ref)
-                items = [_item_payload(it) for it in a.items]
-                acc, manual = _factor_payloads(a)
-                scalars = {
-                    "source": (a.source or "")[:200],
-                    "request_time": _iso(a.request_time),
-                    "obtained_at": _iso(a.obtained_at),
-                    "remark": getattr(a, "remark", "") or "",
-                }
-                instance = existing.get(ref)
-                if instance is None:
-                    create_ser = AcquisitionSerializer(data={**scalars, "items": items})
-                    create_ser.is_valid(raise_exception=True)
-                    instance = create_ser.save()
-                    if acc or manual:
-                        update_ser = AcquisitionSerializer(
-                            instance, data={"cost_factors": acc + manual}, partial=True
-                        )
-                        update_ser.is_valid(raise_exception=True)
-                        update_ser.save()
-                    instance.legacy_ref = ref
-                    instance.save(update_fields=["legacy_ref"])
-                    for j, item in enumerate(instance.items.order_by("created_at", "pk")):
-                        item.legacy_ref = f"{ref}:{j}"
-                        item.save(update_fields=["legacy_ref"])
-                    created += 1
-                else:
-                    self._upsert_existing(instance, ref, scalars, items, acc, manual)
-                    updated += 1
+                # Hard-error imports (FR-029k, iteration 42): any invalid value
+                # aborts the WHOLE year (this loop runs inside one transaction)
+                # with the offending acquisition named — never a partial import.
+                try:
+                    items = [_item_payload(it) for it in a.items]
+                    acc, manual = _factor_payloads(a)
+                    scalars = {
+                        "source": (a.source or "")[:200],
+                        "request_time": _iso(a.request_time),
+                        "obtained_at": _iso(a.obtained_at),
+                        "remark": getattr(a, "remark", "") or "",
+                    }
+                    instance = existing.get(ref)
+                    if instance is None:
+                        create_ser = AcquisitionSerializer(data={**scalars, "items": items})
+                        create_ser.is_valid(raise_exception=True)
+                        instance = create_ser.save()
+                        if acc or manual:
+                            update_ser = AcquisitionSerializer(
+                                instance, data={"cost_factors": acc + manual}, partial=True
+                            )
+                            update_ser.is_valid(raise_exception=True)
+                            update_ser.save()
+                        instance.legacy_ref = ref
+                        instance.save(update_fields=["legacy_ref"])
+                        for j, item in enumerate(instance.items.order_by("created_at", "pk")):
+                            item.legacy_ref = f"{ref}:{j}"
+                            item.save(update_fields=["legacy_ref"])
+                        created += 1
+                    else:
+                        self._upsert_existing(instance, ref, scalars, items, acc, manual)
+                        updated += 1
+                except Exception as exc:
+                    first = a.items[0].name[:40] if a.items else "(no items)"
+                    raise CommandError(
+                        f"Invalid value while importing {ref} "
+                        f"({a.source} — {first}): {exc}"
+                    ) from exc
             # Refs present in the DB but gone from the sheet (e.g. newly
             # struck rows) are deleted; ref-less manual records are untouched.
             for ref, instance in existing.items():

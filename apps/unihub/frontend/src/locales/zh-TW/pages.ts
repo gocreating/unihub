@@ -454,6 +454,7 @@ export default {
   'pages.inventory.items.col.skuPrice': '單價',
   'pages.inventory.items.col.volume': '容量',
   'pages.inventory.items.col.diameter': '直徑',
+  'pages.inventory.items.col.waist': '腰圍',
   'pages.inventory.items.deprecatedTooltip': '已淘汰',
   'pages.inventory.items.deprecate.unknown': '淘汰時間未知',
   'pages.inventory.items.deprecatedAt': '已淘汰 {date}',

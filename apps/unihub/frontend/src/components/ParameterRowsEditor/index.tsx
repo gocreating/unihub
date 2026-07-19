@@ -57,6 +57,7 @@ const SYSTEM_LABEL_KEYS: Record<string, string> = {
   width: 'pages.inventory.items.col.width',
   height: 'pages.inventory.items.col.height',
   diameter: 'pages.inventory.items.col.diameter',
+  waist: 'pages.inventory.items.col.waist',
   volume: 'pages.inventory.items.col.volume',
   temperature: 'pages.inventory.items.col.temperature',
 };

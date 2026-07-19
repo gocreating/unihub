@@ -454,6 +454,7 @@ export default {
   'pages.inventory.items.col.skuPrice': 'SKU Price',
   'pages.inventory.items.col.volume': 'Volume',
   'pages.inventory.items.col.diameter': 'Diameter',
+  'pages.inventory.items.col.waist': 'Waist',
   'pages.inventory.items.deprecatedTooltip': 'Deprecated',
   'pages.inventory.items.deprecate.unknown': 'Deprecate time unknown',
   'pages.inventory.items.deprecatedAt': 'Deprecated {date}',

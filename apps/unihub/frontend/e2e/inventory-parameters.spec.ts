@@ -80,10 +80,13 @@ test('a battery-family definition accepts range values with validation (FR-002b)
   // Create a new dimension definition with the battery family.
   await page.locator('.ant-modal').getByRole('button', { name: /Add parameter/ }).click();
   await page.locator('.ant-modal .ant-select-selector').last().click();
-  await page
-    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
-    .getByText('+ New parameter…')
-    .click();
+  // The key list is virtualized and now exceeds one viewport (waist joined in
+  // iteration 42) — scroll to the bottom so "+ New parameter…" renders.
+  const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)');
+  await dropdown
+    .locator('.rc-virtual-list-holder')
+    .evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await dropdown.getByText('+ New parameter…').click();
   const draftCard = page.locator('.ant-modal .ant-card').last();
   await draftCard.locator('input[placeholder="Parameter name"]').fill(DEF_NAME);
   await draftCard.locator('.ant-select').first().click();

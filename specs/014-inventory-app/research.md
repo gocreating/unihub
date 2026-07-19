@@ -262,3 +262,9 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 ## Iteration 32 research (full currency label, 2026-07-19)
 
 - **R32.1**: the iteration-27 `labelRender` collapsed the selected display to the bare symbol; with code sharing ($ → TWD/USD/HKD, ¥ → RMB/CNY/JPY) the selection became ambiguous — exactly the user's report. Removing `labelRender` lets AntD display the option's own `{CODE} {symbol}` label; widths already accommodate it (35–40% of compact groups).
+
+## Iteration 33 research (finance symbols, staged deletion, 2026-07-19)
+
+- **R33.1 — Recovery**: deleted item identified by re-running the ref-keyed upsert (missing sheet refs are recreated): `2026:3:1` restored with parameters; scenario membership (if any) is unrecoverable (cascade on the original delete). Legacy items are always recoverable this way; user-created items would not be — one more reason deletion must be staged.
+- **R33.2 — Staged mutations**: Card gains `dirty`; new state `removedIds: string[]`. Save order: `Promise.all(removedIds.map(deleteItem) + dirtyCards.map(updateItem))` → `updateAcquisition(scalars, factors, newItems)` → invalidate + navigate. Failures keep the page open with the error message. Create mode unchanged (nothing persisted before submit).
+- **R33.3 — Symbol registry**: `formatPrice` is used in pure/non-component code (catalog `displayText`), so a module registry beats prop threading: `setCurrencySymbols(map)` called from an AppShell effect over the shared `['finance','currencies']` query; `currencySymbol()` reads it, code-only until seeded. The invented table is deleted outright — the finance domain is the single authority (user's data: TWD NT$, CNY ¥, JPY ¥, KRW ₩, USD $).

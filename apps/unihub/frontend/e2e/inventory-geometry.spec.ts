@@ -25,11 +25,18 @@ test.beforeEach(async ({ page }) => {
   await login(page);
 });
 
-/** Ink-level analysis: emoji ink center vs the tag box middle, in CSS px. */
-async function emojiInkDelta(page: Page, tag: Locator): Promise<number | null> {
-  const shot = await tag.screenshot();
+/**
+ * Total emoji ink offset vs the row middle, in CSS px:
+ *   (ink center within the emoji span)  ← mask/glyph centering
+ * + (span box center − row box center)  ← layout centering
+ * Measured from actual pixels + boxes — no segmentation heuristics, safe for
+ * rows wider than the viewport.
+ */
+async function emojiInkDelta(page: Page, span: Locator, row: Locator): Promise<number | null> {
+  await span.scrollIntoViewIfNeeded();
+  const shot = await span.screenshot();
   const b64 = shot.toString('base64');
-  return page.evaluate(async ({ b64 }) => {
+  const inkMid = await page.evaluate(async ({ b64 }) => {
     const img = new Image();
     img.src = `data:image/png;base64,${b64}`;
     await img.decode();
@@ -41,37 +48,13 @@ async function emojiInkDelta(page: Page, tag: Locator): Promise<number | null> {
     const d = ctx.getImageData(0, 0, c.width, c.height).data;
     const W = c.width;
     const H = c.height;
-    const dark = (x: number, y: number) => {
-      const k = (y * W + x) * 4;
-      return d[k]! < 160 && d[k + 1]! < 160 && d[k + 2]! < 160;
-    };
-    const colHas: boolean[] = new Array(W).fill(false);
-    for (let x = 0; x < W; x++) {
-      for (let y = 0; y < H; y++) {
-        if (dark(x, y)) {
-          colHas[x] = true;
-          break;
-        }
-      }
-    }
-    // First ink cluster = the emoji glyph (the label follows after a gap).
-    const start = colHas.indexOf(true);
-    if (start < 0) return null;
-    let end = start;
-    let gap = 0;
-    for (let x = start; x < W; x++) {
-      if (colHas[x]) {
-        end = x;
-        gap = 0;
-      } else if (++gap > W / 40) {
-        break;
-      }
-    }
     let top = H;
     let bot = -1;
     for (let y = 0; y < H; y++) {
-      for (let x = start; x <= end; x++) {
-        if (dark(x, y)) {
+      for (let x = 0; x < W; x++) {
+        const k = (y * W + x) * 4;
+        // ink = notably darker than the light tag background
+        if (d[k]! < 160 && d[k + 1]! < 160 && d[k + 2]! < 160) {
           if (y < top) top = y;
           if (y > bot) bot = y;
           break;
@@ -82,20 +65,99 @@ async function emojiInkDelta(page: Page, tag: Locator): Promise<number | null> {
     const scale = 4; // deviceScaleFactor
     return ((top + bot) / 2 - H / 2) / scale;
   }, { b64 });
+  if (inkMid === null) return null;
+  const sb = (await span.boundingBox())!;
+  const rb = (await row.boundingBox())!;
+  return inkMid + (sb.y + sb.height / 2) - (rb.y + rb.height / 2);
 }
 
-test('parameter emoji ink centers on the tag row middle (FR-032)', async ({ page }) => {
+test('parameter emoji ink centers on the tag row middle — EVERY glyph (FR-032)', async ({ page }) => {
   await page.goto('/inventory/catalog');
   await page.waitForSelector('tr.ant-table-row', { timeout: 15_000 });
-  const tags = page.locator('.ant-tag:has([data-testid="key-emoji"])');
-  const count = await tags.count();
+  const spans = page.locator('.ant-tag [data-testid="key-emoji"]');
+  const count = await spans.count();
   expect(count).toBeGreaterThan(3);
-  // Give the layout-effect compensation a beat, then measure several glyphs.
   await page.waitForTimeout(300);
-  for (let i = 0; i < Math.min(count, 5); i++) {
-    const delta = await emojiInkDelta(page, tags.nth(i));
-    expect(delta, `tag[${i}] emoji ink offset`).not.toBeNull();
-    expect(Math.abs(delta!), `tag[${i}] emoji ink offset ${delta}px`).toBeLessThanOrEqual(1.5);
+
+  // The ink-mask architecture must be ACTIVE (not the text fallback): every
+  // emoji span paints a currentColor box through a data-URL mask.
+  const first = spans.first();
+  const maskImage = await first.evaluate(
+    (el) => getComputedStyle(el).webkitMaskImage || getComputedStyle(el).maskImage,
+  );
+  expect(maskImage).toContain('data:image/png');
+
+  // Environment sanity (anti-tofu): two DIFFERENT glyphs must paint DIFFERENT
+  // masks — a font-less environment renders identical tofu boxes and would
+  // make every centering assertion vacuous (the iteration-45 failure mode).
+  const byEmoji = new Map<string, number>();
+  for (let i = 0; i < count; i++) {
+    const e = (await spans.nth(i).getAttribute('data-emoji')) ?? '';
+    if (e && !byEmoji.has(e)) byEmoji.set(e, i);
+  }
+  expect(byEmoji.size, 'distinct glyphs on the page').toBeGreaterThanOrEqual(2);
+  const masks = new Set<string>();
+  for (const i of byEmoji.values()) {
+    masks.add(
+      await spans.nth(i).evaluate(
+        (el) => getComputedStyle(el).webkitMaskImage || getComputedStyle(el).maskImage,
+      ),
+    );
+  }
+  expect(masks.size, 'distinct glyphs render distinct ink masks').toBeGreaterThanOrEqual(2);
+
+  // EVERY distinct glyph's ink centers on its tag row (±1.5px) — measured
+  // from actual pixels, one tag per glyph.
+  for (const [emoji, i] of byEmoji) {
+    const span = spans.nth(i);
+    const tag = span.locator('xpath=ancestor::*[contains(@class,"ant-tag")][1]');
+    const delta = await emojiInkDelta(page, span, tag);
+    expect(delta, `glyph ${emoji} ink offset`).not.toBeNull();
+    expect(Math.abs(delta!), `glyph ${emoji} ink offset ${delta}px`).toBeLessThanOrEqual(1.5);
+  }
+});
+
+test('emoji ink centers on organize-pane and Add-modal tags too (FR-032)', async ({ page }) => {
+  // The same KeyEmoji renders on every surface — verify beyond the catalog.
+  await page.goto('/inventory/scenarios');
+  await page.waitForSelector('tr.ant-table-row a', { timeout: 15_000 });
+  const links = page.locator('tr.ant-table-row a');
+  const n = await links.count();
+  let measured = 0;
+  for (let s = 0; s < n && measured === 0; s++) {
+    await page.goto('/inventory/scenarios');
+    await page.waitForSelector('tr.ant-table-row a', { timeout: 15_000 });
+    await links.nth(s).click();
+    await page.waitForSelector('.ant-card', { timeout: 15_000 });
+    await page.waitForTimeout(500);
+    const paneTags = page.locator(
+      '[data-testid="organized-pane"] .ant-tag:has([data-testid="key-emoji"]), [data-testid="unorganized-pane"] .ant-tag:has([data-testid="key-emoji"])',
+    );
+    const c = Math.min(await paneTags.count(), 3);
+    for (let i = 0; i < c; i++) {
+      const tag = paneTags.nth(i);
+      const delta = await emojiInkDelta(page, tag.locator('[data-testid="key-emoji"]').first(), tag);
+      expect(delta, `pane tag[${i}] ink`).not.toBeNull();
+      expect(Math.abs(delta!), `pane tag[${i}] ink offset ${delta}px`).toBeLessThanOrEqual(1.5);
+      measured++;
+    }
+  }
+  expect(measured, 'pane tags measured across scenarios').toBeGreaterThan(0);
+
+  // Add-modal results (recently-acquired items carry parameters).
+  await page.locator('.ant-card', { hasText: 'Organize' }).first()
+    .locator('button').filter({ hasText: /^Add$/ }).first().click();
+  const modal = page.locator('.ant-modal', { hasText: 'Add items' }).first();
+  await expect(modal).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(500);
+  const modalTags = modal.locator('.ant-tag:has([data-testid="key-emoji"])');
+  const mc = Math.min(await modalTags.count(), 3);
+  expect(mc, 'modal result tags with emoji').toBeGreaterThan(0);
+  for (let i = 0; i < mc; i++) {
+    const tag = modalTags.nth(i);
+    const delta = await emojiInkDelta(page, tag.locator('[data-testid="key-emoji"]').first(), tag);
+    expect(delta, `modal tag[${i}] ink`).not.toBeNull();
+    expect(Math.abs(delta!), `modal tag[${i}] ink offset ${delta}px`).toBeLessThanOrEqual(1.5);
   }
 });
 

@@ -60,11 +60,15 @@ test('catalog Parameters column renders localized key-value pairs', async ({ pag
   // Every parameter tag is a `key: value` pair; system keys are localized.
   const paired = tags.filter((t) => /: /.test(t));
   expect(paired.length).toBeGreaterThan(0);
-  // System keys carry their seeded emoji prefix (FR-032, iteration 27).
+  // System keys carry their seeded emoji prefix (FR-032). Since iteration 46
+  // the glyph renders as a centered INK MASK span (no longer text), so the
+  // text starts at the localized key; the mask span carries data-emoji.
   expect(
-    // The emoji-key gap is a CSS margin (iteration 41), not a text space.
-    paired.some((t) => /^(🎨|👕|⚖|📏|🧴) ?(Length|Width|Height|Weight|Color|Size|Volume): /.test(t)),
+    paired.some((t) => /^(Length|Width|Height|Weight|Color|Size|Volume): /.test(t.trim())),
   ).toBe(true);
+  const emojiSpans = page.locator('tr.ant-table-row-level-1 .ant-tag [data-testid="key-emoji"]');
+  expect(await emojiSpans.count()).toBeGreaterThan(0);
+  await expect(emojiSpans.first()).toHaveAttribute('data-emoji', /.+/);
 });
 
 test('a battery-family definition accepts range values with validation (FR-002b)', async ({

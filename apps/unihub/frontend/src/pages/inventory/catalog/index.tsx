@@ -44,7 +44,7 @@ import type {
   OffsetPaginatedResponse,
 } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
-import { ItemDisplay, KeyEmoji, formatDecimal, pairText, parameterPairs } from '@/components/ItemDisplay';
+import { ItemDisplay, ParameterTag, formatDecimal, pairText, parameterPairs } from '@/components/ItemDisplay';
 import { formatPrice } from '@/utils/currency';
 import { useCurrencySymbols } from '@/hooks/useCurrencySymbols';
 
@@ -512,12 +512,7 @@ export function CatalogPage() {
             return (
               <Space size={[4, 4]} wrap style={{ maxWidth: '100%' }}>
                 {pairs.map((pair, i) => (
-                  <Tag key={i} style={{ marginInlineEnd: 0, maxWidth: '100%' }}>
-                    <OverflowTooltip title={pairText(pair)}>
-                      <KeyEmoji emoji={pair.emoji} />
-                      {pair.label}
-                    </OverflowTooltip>
-                  </Tag>
+                  <ParameterTag key={i} pair={pair} />
                 ))}
               </Space>
             );

@@ -181,7 +181,7 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
     const definition = option.data.definition;
     return (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', minWidth: 0 }}>
           {definition?.emoji ? <KeyEmoji emoji={definition.emoji} /> : null}
           {option.label}
         </span>

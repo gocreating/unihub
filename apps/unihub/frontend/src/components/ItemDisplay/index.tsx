@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useMemo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Space, Tag, Tooltip, Typography } from 'antd';
 import { CommentOutlined, WarningOutlined } from '@ant-design/icons';
@@ -7,6 +7,7 @@ import { useIntl } from 'react-intl';
 import { HighlightText } from '@/components/HighlightText';
 import { ItemName } from '@/components/ItemName';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
+import { emojiMask } from './emojiInk';
 import { pairText, parameterPairs } from './format';
 import type { ParameterDisplay, ParameterPair } from './format';
 
@@ -14,66 +15,49 @@ import type { ParameterDisplay, ParameterPair } from './format';
 export { formatDecimal, pairText, parameterPairs } from './format';
 export type { ParameterDisplay, ParameterPair } from './format';
 
-// Per-glyph INK compensation (FR-032, iteration 45): emoji fonts place their
-// ink inside the glyph box per their OWN metrics, so a perfectly centered CSS
-// box can still LOOK offset (⚖/🧴 hang low, 👕 sinks ~2px) — and the offset
-// differs per glyph AND per platform font. The residual is measurable:
-// canvas TextMetrics gives the actual ink box vs the font box, both relative
-// to the shared baseline; flex centering aligns the FONT box, so
-// (inkMid − fontMid) is exactly the translateY that centers the visible ink.
-let measureCtx: CanvasRenderingContext2D | null | undefined;
-const inkShiftCache = new Map<string, number>();
-
-function emojiInkShift(emoji: string, font: string): number {
-  const key = `${emoji}|${font}`;
-  const cached = inkShiftCache.get(key);
-  if (cached !== undefined) return cached;
-  if (measureCtx === undefined) {
-    measureCtx =
-      typeof document !== 'undefined'
-        ? document.createElement('canvas').getContext('2d')
-        : null;
-  }
-  let shift = 0;
-  if (measureCtx && font) {
-    measureCtx.font = font;
-    const m = measureCtx.measureText(emoji);
-    const inkMid = (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
-    const fontMid = (m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2;
-    if (Number.isFinite(inkMid) && Number.isFinite(fontMid)) {
-      shift = inkMid - fontMid;
-    }
-  }
-  inkShiftCache.set(key, shift);
-  return shift;
-}
-
 /**
- * Monochrome emoji (FR-032): the transparent-fill + currentColor-shadow
- * silhouette renders the glyph in the inherited text color — color emoji
- * fonts otherwise ignore CSS `color`. The glyph's visible INK is centered on
- * the row middle via the measured per-glyph shift (iteration 45).
+ * Monochrome emoji key prefix (FR-032). Real browsers paint the glyph's
+ * measured-ink mask centered in a 1em box (iteration 46 — see emojiMask);
+ * environments without canvas 2D (JSDOM/SSR) fall back to the silhouette
+ * text rendering (transparent fill + currentColor shadow).
  */
 export function KeyEmoji({ emoji }: { emoji: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || !emoji) return;
-    const cs = window.getComputedStyle(el);
-    const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    const shift = emojiInkShift(emoji, font);
-    el.style.transform = shift ? `translateY(${shift.toFixed(2)}px)` : '';
-  }, [emoji]);
+  const mask = useMemo(() => (emoji ? emojiMask(emoji) : null), [emoji]);
   if (!emoji) return null;
+  if (mask) {
+    return (
+      <span
+        aria-hidden
+        data-testid="key-emoji"
+        data-emoji={emoji}
+        style={{
+          display: 'inline-block',
+          width: '1em',
+          height: '1em',
+          flex: 'none',
+          verticalAlign: 'middle',
+          backgroundColor: 'currentcolor',
+          WebkitMaskImage: `url(${mask})`,
+          maskImage: `url(${mask})`,
+          WebkitMaskRepeat: 'no-repeat',
+          maskRepeat: 'no-repeat',
+          WebkitMaskPosition: 'center',
+          maskPosition: 'center',
+          WebkitMaskSize: 'contain',
+          maskSize: 'contain',
+          marginRight: 4,
+        }}
+      />
+    );
+  }
   return (
     <span
-      ref={ref}
       aria-hidden
       data-testid="key-emoji"
+      data-emoji={emoji}
       style={{
         WebkitTextFillColor: 'transparent',
         textShadow: '0 0 0 currentcolor',
-        // Box centering (iteration 41) + ink compensation (iteration 45).
         display: 'inline-flex',
         alignItems: 'center',
         verticalAlign: 'middle',
@@ -83,6 +67,32 @@ export function KeyEmoji({ emoji }: { emoji: string }) {
     >
       {emoji}
     </span>
+  );
+}
+
+/**
+ * THE parameter pair badge (FR-032, iteration 46) — every surface renders
+ * pairs through this one component. Flex row: the emoji mask box centers
+ * against the label line by LAYOUT (vertical-align tricks are banned — they
+ * anchor to x-height, not the row middle).
+ */
+export function ParameterTag({ pair, fontSize }: { pair: ParameterPair; fontSize?: number }) {
+  return (
+    <Tag style={{ marginInlineEnd: 0, maxWidth: '100%', ...(fontSize ? { fontSize } : null) }}>
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          maxWidth: '100%',
+          verticalAlign: 'top',
+        }}
+      >
+        <KeyEmoji emoji={pair.emoji} />
+        <OverflowTooltip title={pairText(pair)} style={{ minWidth: 0 }}>
+          {pair.label}
+        </OverflowTooltip>
+      </span>
+    </Tag>
   );
 }
 
@@ -194,12 +204,7 @@ export function ItemDisplay({
       {tags.length > 0 ? (
         <Space size={[4, 4]} wrap style={{ maxWidth: '100%', marginTop: 2 }}>
           {tags.map((tag, i) => (
-            <Tag key={i} style={{ marginInlineEnd: 0, maxWidth: '100%', fontSize: 11 }}>
-              <OverflowTooltip title={pairText(tag)}>
-                <KeyEmoji emoji={tag.emoji} />
-                {tag.label}
-              </OverflowTooltip>
-            </Tag>
+            <ParameterTag key={i} pair={tag} fontSize={11} />
           ))}
         </Space>
       ) : null}

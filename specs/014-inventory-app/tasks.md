@@ -1,13 +1,12 @@
 ---
-description: "Task list for Inventory App — Iteration 31 (2026-07-19)"
+description: "Task list for Inventory App — Iteration 32 (2026-07-19)"
 ---
 
-# Tasks: Inventory App — Iteration 31 (Visible drop indicator + recent items in Add modal)
+# Tasks: Inventory App — Iteration 32 (Full currency label on price selects)
 
-**Input**: [plan.md](plan.md), [spec.md](spec.md) — FR-011 amended. Constitution **v1.22.0**.
+**Input**: [plan.md](plan.md), [spec.md](spec.md) — FR-033 amended. Constitution **v1.22.0**.
 
-**Baseline**: Iteration 30 shipped at `2b80454`. Decisions in R31.1–R31.2.
+**Baseline**: Iteration 31 shipped at `d5df918`. Decision in R32.1.
 
-- [x] T001 Failing RTL: with the Add modal open and an EMPTY search, the 10 most recent items list (mock `listItems` — assert ordering param `-acquisition__obtained_at__nullsfirst`, limit 10); typing switches to search results. Implement the default query + render switch.
-- [x] T002 Failing e2e: mid-drag over the tree, the drop indicator (`data-testid="drop-indicator"`) is visible, its computed z-index exceeds the overlay's, and the overlay's opacity < 1. Implement overlay zIndex 900 + opacity 0.75 + indicator positioning.
-- [x] T003 Full loops; docker rebuild; ALL inventory e2e; commit + push.
+- [ ] T001 Failing RTL: PriceInput's selected currency displays the full "TWD $" label (not the bare symbol); placeholder while empty/0 unchanged. Implement (drop labelRender in CurrencySymbolSelect).
+- [ ] T002 Full loops; docker rebuild; ALL inventory e2e; commit + push.

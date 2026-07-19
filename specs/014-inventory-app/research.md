@@ -258,3 +258,7 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 
 - **R31.1 — Paint order**: the faithful preview (iteration 29) tracks the pointer and covers the 2px indicator in the tree. dnd-kit's DragOverlay accepts zIndex (default 999); the indicator sits in normal flow inside the pane. Lowering the overlay to 900, raising the indicator (`position: relative; zIndex: 1000` — no ancestor stacking context traps it), and dropping the preview to opacity 0.75 keeps the full-size preview AND a permanently visible target line. Locked by computed-style e2e assertions mid-drag.
 - **R31.2 — Recent defaults**: reuse `listItems` with the catalog's default ordering (`-acquisition__obtained_at__nullsfirst`, ItemViewSet already supports it), limit 10, enabled only while the box is empty; `HighlightText` with an empty query renders plain text, so rows need no special-casing.
+
+## Iteration 32 research (full currency label, 2026-07-19)
+
+- **R32.1**: the iteration-27 `labelRender` collapsed the selected display to the bare symbol; with code sharing ($ → TWD/USD/HKD, ¥ → RMB/CNY/JPY) the selection became ambiguous — exactly the user's report. Removing `labelRender` lets AntD display the option's own `{CODE} {symbol}` label; widths already accommodate it (35–40% of compact groups).

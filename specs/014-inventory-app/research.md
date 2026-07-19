@@ -288,3 +288,7 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 ## Iteration 37 research (icon suffix position, 2026-07-19)
 
 - **R37.1**: `flex: 1 1 auto` on the name wrapper stretched it across the row, parking the icons at the far edge (disconnected from short names). `flex: 0 1 auto` + `minWidth: 0` keeps shrink-based truncation for long names while letting short names hug their icons — the "suffix" semantics.
+
+## Iteration 38 research (icon vertical centering, 2026-07-19)
+
+- **R38.1**: AntD icon spans wrap SVGs with no text baseline — flex `baseline` alignment resolves them against the SVG bottom, floating icons above/below the adjacent text line. `alignItems: 'center'` centers icons on the (single, ellipsised) name row.

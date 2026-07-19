@@ -474,3 +474,59 @@ test('iteration 27: Add-items modal is wide and viewport-anchored', async ({ pag
   await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();
   await page.waitForTimeout(500);
 });
+
+// Iteration 29 (FR-011): the drag preview is visually identical to the grabbed
+// row — same content (spec and parameter pairs included), same width.
+test('iteration 29: drag overlay mirrors the grabbed row', async ({ page }) => {
+  const name = `E2E Overlay29 ${Date.now()}`;
+  await page.goto('/inventory/scenarios');
+  await page.waitForSelector('.ant-table-thead', { timeout: 10_000 });
+  await page.locator('button').filter({ hasText: /New/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.locator('.ant-modal input[id$="name"]').fill(name);
+  await page.locator('.ant-modal button', { hasText: /Save/ }).click();
+  await page.waitForTimeout(500);
+  await page.locator('.ant-table-tbody a', { hasText: name }).first().click();
+  await page.waitForSelector('.ant-card', { timeout: 10_000 });
+
+  // Add one item so the flat pane has a draggable row.
+  await page.locator('.ant-card', { hasText: 'Organize' }).first()
+    .locator('button').filter({ hasText: /^Add$/ }).first().click();
+  const modal = page.locator('.ant-modal', { hasText: 'Add items' }).first();
+  await modal.locator('input').first().fill('a');
+  const addButtons = modal.locator('.ant-list-item button:not([disabled])').filter({ hasText: /Add/ });
+  await expect(addButtons.first()).toBeVisible({ timeout: 10_000 });
+  await addButtons.first().click();
+  const flatPane = page.getByTestId('unorganized-pane');
+  await expect(async () => {
+    expect(await flatPane.locator('[data-testid^="flat-row-"]').count()).toBeGreaterThanOrEqual(1);
+  }).toPass({ timeout: 10_000 });
+  await modal.locator('.ant-modal-close').click();
+  await expect(modal).toBeHidden();
+
+  // Mid-drag: hold after activation and compare the overlay with the row.
+  const row = flatPane.locator('[data-testid^="flat-row-"]').first();
+  const rowBox = (await row.boundingBox())!;
+  const rowText = (await row.innerText()).trim();
+  await page.mouse.move(rowBox.x + 12, rowBox.y + rowBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(rowBox.x + 40, rowBox.y + rowBox.height / 2 + 10, { steps: 5 });
+  const overlay = page.getByTestId('drag-overlay');
+  await expect(overlay).toBeVisible({ timeout: 3_000 });
+  const overlayBox = (await overlay.boundingBox())!;
+  // Same width as the grabbed row (±2px) — never a compact chip.
+  expect(Math.abs(overlayBox.width - rowBox.width)).toBeLessThanOrEqual(2);
+  // Same content — spec/parameter context included, not just the name.
+  const overlayText = (await overlay.innerText()).trim();
+  expect(overlayText).toBe(rowText);
+  await page.mouse.up();
+  // dnd-kit suppresses the first click after a drag — spend it on a neutral spot.
+  await page.mouse.click(8, 400);
+  await page.waitForTimeout(200);
+
+  // Cleanup: kebab Delete → confirm (established scenario-actions pattern).
+  await page.getByLabel('scenario-actions').click();
+  await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
+  await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();
+  await page.waitForTimeout(500);
+});

@@ -66,10 +66,12 @@ import { ScenarioFormModal } from './ScenarioFormModal';
 
 const INDENT = 24;
 
-/** Ongoing drag: which line, and which pane it started from. */
+/** Ongoing drag: which line, which pane it started from, source row width. */
 interface DragState {
   lineId: string;
   from: 'flat' | 'tree';
+  /** Measured width of the grabbed row — the overlay mirrors it (FR-011, iter 29). */
+  width?: number;
 }
 
 const lineIdOf = (dndId: string | number): string =>
@@ -353,7 +355,13 @@ export function ScenarioDetailPage() {
 
   const onDragStart = ({ active }: DragStartEvent) => {
     const raw = String(active.id);
-    setDrag({ lineId: lineIdOf(raw), from: raw.startsWith('tree-') ? 'tree' : 'flat' });
+    const lineId = lineIdOf(raw);
+    const from = raw.startsWith('tree-') ? 'tree' : 'flat';
+    // The overlay renders at the grabbed row's exact width (FR-011, iter 29).
+    const node = document.querySelector(
+      from === 'tree' ? `[data-testid="org-row-${lineId}"]` : `[data-testid="flat-row-${lineId}"]`,
+    );
+    setDrag({ lineId, from, width: node?.getBoundingClientRect().width });
     setIndicator(null);
     setOverFlat(false);
     projRef.current = null;
@@ -608,16 +616,24 @@ export function ScenarioDetailPage() {
           </Splitter>
           <DragOverlay>
             {draggedLine ? (
+              // Faithful preview (FR-011, iteration 29): the SAME row content
+              // (holder + ItemDisplay) at the grabbed row's measured width.
               <div
+                data-testid="drag-overlay"
                 style={{
-                  padding: '6px 8px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                  padding: '6px 4px',
+                  boxSizing: 'border-box',
+                  width: drag?.width,
                   background: '#fff',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                   borderRadius: 6,
-                  maxWidth: 320,
                 }}
               >
-                {draggedLine.item.alias_name || draggedLine.item.name}
+                <HolderOutlined style={{ marginTop: 4, color: 'rgba(0,0,0,0.45)', flex: 'none' }} />
+                <RowContent line={draggedLine} />
               </div>
             ) : null}
           </DragOverlay>

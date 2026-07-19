@@ -307,3 +307,9 @@ Consolidates the five clarify sessions recorded after commit `a7a0ea2`. Prior de
 ## Iteration 41 research (emoji vertical alignment, 2026-07-19)
 
 - **R41.1**: emoji glyphs have a taller ascent/different baseline box than the 11px tag text, so the baseline-flow KeyEmoji span sat visibly high (AntD's anticons solve the same problem with a vertical-align nudge). `display: inline-flex; align-items: center; vertical-align: middle; line-height: 1` centers the glyph box on the text line; the trailing space becomes a margin so centering isn't skewed.
+
+## Iteration 42 research (paren sizes, name-matched 原價, 2026-07-19)
+
+- **R42.1 — MEASURED**: three acquisitions carry name-fragment 原價 listings (被套/抹布/衣架, 衣架/衣夾, 衣架/枕頭/牛仔褲 with arithmetic + 9折 suffix; plus 噴霧/拖鞋 with a 運費 tail). The wrong DB skus (header items holding whole rowspan totals; neighbors shifted) came from the shared-total own-price path with no per-item source. Fragment matching needs progressive prefix shortening (牛仔褲 ∉ 丹寧窄版褲, but 褲 matches uniquely); regex `finditer` over the full 備註 avoids any segmentation/arithmetic-separator dependency.
+- **R42.2 — Paren sizes**: `尺寸：Q（160x200x18~28cm）` and `size: L(腰圍 84~92cm)` share the `LABEL（annotation）` shape; recursing the annotation through `_apply_unit` reuses every extraction rule (dims-with-range-parts, keyed measures) and the residue path. 腰圍 is user-promoted to a seeded system parameter (colon-optional key — the paren form is space-separated).
+- **R42.3 — Hard errors**: the importer already `raise_exception=True`s everywhere, but a mid-run failure could leave earlier acquisitions committed; one `transaction.atomic()` per year + ref/name context makes any invalid value an atomic, loud abort.

@@ -91,7 +91,10 @@ export function ItemDisplay({
   return (
     <div style={{ minWidth: 0, ...style }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
-        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+        {/* Shrink-to-fit (iteration 37): icons SUFFIX the name text — they hug
+            its end instead of parking at the row's far edge; long names still
+            truncate with the icons visible. */}
+        <div style={{ flex: '0 1 auto', minWidth: 0 }}>
           <ItemName item={item} linkify truncate={truncate} highlight={highlight} />
         </div>
         {item.remark ? (

@@ -152,6 +152,10 @@ describe('remark icon + deprecated warning (iteration 36)', () => {
     wrap(<ItemDisplay item={{ ...base, remark: 'gifted by A\nsecond line' }} />);
     const icon = document.querySelector('[data-testid="remark-icon"]')!;
     expect(icon).toBeTruthy();
+    // Suffixed to the NAME (iteration 37): the name wrapper shrinks-to-fit so
+    // the icon hugs the text end, never the row's far edge.
+    const nameWrap = icon.parentElement!.querySelector('div')!;
+    expect(nameWrap.style.flex).toBe('0 1 auto');
     fireEvent.mouseEnter(icon);
     const tooltip = await screen.findByRole('tooltip');
     expect(tooltip).toHaveTextContent('gifted by A');

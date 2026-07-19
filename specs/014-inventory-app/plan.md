@@ -1,22 +1,20 @@
-# Implementation Plan: Inventory App — Iteration 28 (Numeric ranges everywhere + keyed range parsing)
+# Implementation Plan: Inventory App — Iteration 29 (Faithful drag preview)
 
 **Branch**: `014-inventory-app` | **Date**: 2026-07-19 | **Spec**: [spec.md](spec.md)
 
-**Input**: spec.md — Session 2026-07-19 iteration 28; FR-002b extended (number-type ranges, tilde display), FR-029h new. Constitution v1.22.0.
+**Input**: spec.md — Session 2026-07-19 iteration 29; FR-011 amended. Constitution v1.22.0.
 
 ## Summary
 
-1. **Number-type ranges (FR-002b)** — `compute_value_fields` extends the range grammar to the `number` data type (`value_number` = min, `value_number_max` = max, single → max null); the editor's number-typed value input becomes the same validated single-or-range text input dimension rows use.
-2. **Tilde display (FR-002b/FR-031)** — range values render `min ~ max unit` (unitless for number type) everywhere pairs render; supersedes the iteration-26 dash (e2e expectations updated).
-3. **Keyed range parsing (FR-029h)** — RE_LENGTH/RE_WEIGHT/RE_VOLUME capture `min~max`/`min-max` ranges verbatim as the parameter value (`長度：74~164cm` → length `74~164` cm); importer passes them through to the range-aware backend; ref-keyed upsert re-import repairs affected items.
+The scenario organize DragOverlay becomes a faithful preview: it renders the SAME row content as the grabbed row (HolderOutlined + `RowContent`/ItemDisplay — spec line and parameter pairs included) at the SOURCE ROW's measured width (captured from the active node's rect at drag start), styled as the existing floating card (white, shadow, radius). The iteration-26 pointer-based drop projection stays (it is independent of overlay size). e2e locks the invariant mid-drag: overlay width matches the source row within 2px and the overlay contains the row's spec text, not just the name.
 
 ## Technical Context
 
-Backend: `core/attributes.py` number branch only (no migration — `value_number_max` exists); parser regex widening. Frontend: `ParameterRowsEditor` number input swap; `format.ts` separator. Data: upsert re-import (PKs/scenarios preserved). TDD at each step; e2e range-display expectations updated ("5 - 10 mAh" → "5 ~ 10 mAh").
+Frontend-only: `scenarios/detail.tsx` (onDragStart captures the active node rect width into drag state; DragOverlay renders RowContent at that width, `data-testid="drag-overlay"`). Real-mouse e2e in `inventory-scenario.spec.ts` measuring mid-drag before mouse.up.
 
 ## Constitution Check
 
-PASS — I (shared core attribute infra), V (TDD), VI (validated inputs, single placeholder unaffected), VIII (range validation message reused, locales unchanged).
+PASS — V (e2e lock first), VI (row content unchanged — same truncation/tooltip components).
 
 ## Complexity Tracking
 

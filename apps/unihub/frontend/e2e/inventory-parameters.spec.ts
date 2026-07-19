@@ -102,13 +102,21 @@ test('a battery-family definition accepts range values with validation (FR-002b)
   const paramRow = page.locator('.ant-modal .ant-row', { hasText: DEF_NAME }).last();
   await expect(paramRow.getByText('mAh')).toBeVisible({ timeout: 5_000 });
 
-  // Invalid range (min > max) flags inline; a valid range clears the flag.
-  const valueInput = paramRow.locator('input.ant-input').first();
-  await valueInput.fill('10-5');
+  // Switch the value input to RANGE mode (iteration 30 explicit toggle).
+  await paramRow.locator('.ant-select', { hasText: 'Exact' }).first().click();
+  await page
+    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+    .getByText('Range', { exact: true })
+    .click();
+  const bounds = paramRow.locator('.ant-input-number input');
+  // Invalid range (min > max) flags inline; fixing it clears the flag.
+  await bounds.nth(0).fill('10');
+  await bounds.nth(1).fill('5');
   await expect(
     page.locator('.ant-modal').getByText('Enter a number or a min-max range (e.g. 5-10)'),
   ).toBeVisible();
-  await valueInput.fill('5-10');
+  await bounds.nth(1).fill('10');
+  await bounds.nth(0).fill('5');
   await expect(
     page.locator('.ant-modal').getByText('Enter a number or a min-max range (e.g. 5-10)'),
   ).toBeHidden();

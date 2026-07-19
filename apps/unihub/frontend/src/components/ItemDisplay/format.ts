@@ -38,7 +38,9 @@ const SYSTEM_KEY_IDS: Record<string, string> = {
   length: 'pages.inventory.items.col.length',
   width: 'pages.inventory.items.col.width',
   height: 'pages.inventory.items.col.height',
+  diameter: 'pages.inventory.items.col.diameter',
   volume: 'pages.inventory.items.col.volume',
+  temperature: 'pages.inventory.items.col.temperature',
 };
 
 function parameterValueText(p: ParameterDisplay): string {

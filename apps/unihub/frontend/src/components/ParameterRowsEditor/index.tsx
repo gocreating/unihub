@@ -14,6 +14,7 @@ import type { ItemParameterWrite, UnitFamily } from '@/services/unihub-backend/i
 import { UNIT_FAMILY_OPTIONS } from '@/services/unihub-backend/inventory';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { KeyEmoji } from '@/components/ItemDisplay';
+import { RangeValueInput } from '@/components/RangeValueInput';
 
 const NEW_KEY = '__new__';
 
@@ -55,7 +56,9 @@ const SYSTEM_LABEL_KEYS: Record<string, string> = {
   length: 'pages.inventory.items.col.length',
   width: 'pages.inventory.items.col.width',
   height: 'pages.inventory.items.col.height',
+  diameter: 'pages.inventory.items.col.diameter',
   volume: 'pages.inventory.items.col.volume',
+  temperature: 'pages.inventory.items.col.temperature',
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -217,24 +220,24 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
     const definition = byId.get(row.definition_id);
     if (definition?.data_type === 'dimension' && definition.unit_family) {
       const units = UNIT_FAMILY_OPTIONS[definition.unit_family as UnitFamily];
-      // Single value or min-max range (FR-002b) — validated text input.
+      // Exact or min~max range via the explicit mode toggle (FR-002b, iter 30).
       const valid = isDimensionValueValid(row.value);
       return (
         <>
-          <Space.Compact block>
-            <Input
-              style={{ width: '65%' }}
+          <div style={{ display: 'flex', gap: 4 }}>
+            <RangeValueInput
+              style={{ flex: 1 }}
               status={valid ? undefined : 'error'}
               value={row.value}
-              onChange={(e) => setRow(index, { ...row, value: e.target.value })}
+              onChange={(value) => setRow(index, { ...row, value })}
             />
             <Select
-              style={{ width: '35%' }}
+              style={{ width: 88, flex: 'none' }}
               value={row.unit || units[0]}
               options={units.map((u) => ({ value: u, label: u }))}
               onChange={(unit) => setRow(index, { ...row, unit })}
             />
-          </Space.Compact>
+          </div>
           {!valid && (
             <Typography.Text type="danger" style={{ fontSize: 12 }}>
               {t({ id: 'pages.inventory.params.rangeInvalid' })}
@@ -244,15 +247,14 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
       );
     }
     if (definition?.data_type === 'number') {
-      // Single value or min-max range (FR-002b, iteration 28) — same
-      // validated text input as dimension rows, without a unit select.
+      // Exact or min~max range via the explicit mode toggle (FR-002b, iter 30).
       const valid = isDimensionValueValid(row.value);
       return (
         <>
-          <Input
+          <RangeValueInput
             status={valid ? undefined : 'error'}
             value={row.value}
-            onChange={(e) => setRow(index, { ...row, value: e.target.value })}
+            onChange={(value) => setRow(index, { ...row, value })}
           />
           {!valid && (
             <Typography.Text type="danger" style={{ fontSize: 12 }}>

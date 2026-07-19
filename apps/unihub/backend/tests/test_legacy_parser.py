@@ -540,3 +540,22 @@ def test_keyed_single_values_unchanged(parser):
     assert fields.get("length") == {"value": "74", "unit": "cm"}
     w, _ = parser.parse_remark("重量：26.5g")
     assert w.get("weight") == {"value": "26.5", "unit": "g"}
+
+
+# Iteration 30 (FR-029h): 寬度/高度/直徑/耐溫 keyed extraction, signed ranges.
+def test_keyed_width_height_diameter(parser):
+    w, _ = parser.parse_remark("寬度：3.3cm")
+    assert w.get("width") == {"value": "3.3", "unit": "cm"}
+    h, _ = parser.parse_remark("高度：1.8~8cm")
+    assert h.get("height") == {"value": "1.8~8", "unit": "cm"}
+    d, _ = parser.parse_remark("直徑：5.5~9cm")
+    assert d.get("diameter") == {"value": "5.5~9", "unit": "cm"}
+    assert "remark" not in d  # fully consumed
+
+
+def test_keyed_temperature_with_signed_range_and_unit_normalization(parser):
+    t, _ = parser.parse_remark("耐溫：-40~230度C")
+    assert t.get("temperature") == {"value": "-40~230", "unit": "°C"}
+    assert "remark" not in t
+    t2, _ = parser.parse_remark("耐溫：120℃")
+    assert t2.get("temperature") == {"value": "120", "unit": "°C"}

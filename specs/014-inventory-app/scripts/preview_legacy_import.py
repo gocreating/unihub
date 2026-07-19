@@ -136,12 +136,19 @@ RE_SIZE = re.compile(r"(?:尺寸|[Ss]ize)[:：]\s*(.+)")
 RE_SPEC = re.compile(r"規格[:：]\s*(.+)")
 RE_COLOR = re.compile(r"(?:顏色|款式)[:：]\s*(.+)")
 RE_PRICE = re.compile(r"(?:原價|單價)[:：]?\s*([\d.,]+)\s*([A-Za-z]+|元|円|¥|￥)?")
-# Keyed numeric values may be min~max/min-max ranges (FR-029h, iteration 28) —
-# the whole range text is captured verbatim; the backend computes min/max.
+# Keyed numeric values may be min~max/min-max ranges (FR-029h, iterations
+# 28→30) — the whole range text is captured verbatim; the backend computes
+# min/max. The SIGNED grammar (temperature) allows negative bounds with `~`
+# (dash separators keep a non-negative max, mirroring core.attributes).
 _NUM_OR_RANGE = r"[\d.]+(?:\s*[~-]\s*[\d.]+)?"
+_SIGNED_NUM_OR_RANGE = r"-?[\d.]+(?:\s*~\s*-?[\d.]+|\s*-\s*[\d.]+)?"
 RE_WEIGHT = re.compile(rf"(?:重量|淨重)[:：]\s*({_NUM_OR_RANGE})\s*(g|kg|克)?")
 RE_LENGTH = re.compile(rf"長度[:：]\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
+RE_WIDTH_KEY = re.compile(rf"寬度[:：]\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
+RE_HEIGHT_KEY = re.compile(rf"高度[:：]\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
+RE_DIAMETER = re.compile(rf"直徑[:：]\s*({_NUM_OR_RANGE})\s*(mm|cm|m)?")
 RE_VOLUME = re.compile(rf"容量[:：]\s*({_NUM_OR_RANGE})\s*(mL|ml|L|毫升|公升)")
+RE_TEMP = re.compile(rf"耐溫[:：]\s*({_SIGNED_NUM_OR_RANGE})\s*(度C|℃|°C|度)?")
 RE_URL_KEY = re.compile(r"官網連結[:：]\s*(\S+)")
 RE_DIMS = re.compile(
     r"(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*(mm|cm|m)?"
@@ -237,6 +244,23 @@ def parse_remark(remark: str) -> tuple[dict, list[str]]:
             spans.append(m.span())
         if m := RE_LENGTH.search(line):
             fields["length"] = {"value": m.group(1), "unit": m.group(2) or "m"}
+            matched = True
+            spans.append(m.span())
+        if m := RE_WIDTH_KEY.search(line):
+            fields["width"] = {"value": m.group(1), "unit": m.group(2) or "cm"}
+            matched = True
+            spans.append(m.span())
+        if m := RE_HEIGHT_KEY.search(line):
+            fields["height"] = {"value": m.group(1), "unit": m.group(2) or "cm"}
+            matched = True
+            spans.append(m.span())
+        if m := RE_DIAMETER.search(line):
+            fields["diameter"] = {"value": m.group(1), "unit": m.group(2) or "cm"}
+            matched = True
+            spans.append(m.span())
+        if m := RE_TEMP.search(line):
+            # 度C/℃/度 all normalize to the family's canonical °C symbol.
+            fields["temperature"] = {"value": m.group(1), "unit": "°C"}
             matched = True
             spans.append(m.span())
         if m := RE_VOLUME.search(line):

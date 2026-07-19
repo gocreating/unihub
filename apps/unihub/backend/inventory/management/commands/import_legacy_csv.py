@@ -99,7 +99,7 @@ def _item_payload(item) -> dict:
         payload["sku_price"] = str(f["sku_price"])
         if f.get("sku_price_currency"):
             payload["sku_price_currency"] = _norm_currency(str(f["sku_price_currency"]))
-    for measure in ("weight", "length", "width", "height", "volume"):
+    for measure in ("weight", "length", "width", "height", "diameter", "temperature", "volume"):
         if measure in f and isinstance(f[measure], dict):
             parameters.append(
                 {

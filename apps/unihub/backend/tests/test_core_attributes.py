@@ -331,3 +331,31 @@ class TestNumberTypeRanges:
         resp = auth_client.get(f"{ITEMS}?ordering={quote(f'attr:{d.id}')}")
         names = [i["name"] for i in resp.json()["results"] if i["name"].startswith("NumSpan")]
         assert names == ["NumSpanA", "NumSpanB"]
+
+
+@pytest.mark.django_db
+class TestIteration30Seeds:
+    """Iteration 30 (FR-026): diameter + temperature system definitions."""
+
+    def test_diameter_and_temperature_seeded(self, auth_client):
+        defs = {
+            d.name: d
+            for d in AttributeDefinition.objects.filter(content_type=_item_ct(), is_system=True)
+        }
+        assert defs["diameter"].data_type == "dimension"
+        assert defs["diameter"].unit_family == "length"
+        assert defs["diameter"].emoji == "📏"
+        assert defs["temperature"].data_type == "dimension"
+        assert defs["temperature"].unit_family == "temperature"
+        assert defs["temperature"].emoji == "🌡"
+
+    def test_negative_min_temperature_range(self, auth_client):
+        d = AttributeDefinition.objects.get(
+            content_type=_item_ct(), is_system=True, name="temperature"
+        )
+        item = create_item(auth_client, name="Cup")
+        resp = _upsert(auth_client, item["id"], d, "-40~230", unit="°C")
+        assert resp.status_code == 200, resp.content
+        stored = AttributeValue.objects.get(attribute_definition=d, object_id=item["id"])
+        assert stored.value_number == pytest.approx(-40)
+        assert stored.value_number_max == pytest.approx(230)

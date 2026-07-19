@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
@@ -39,6 +39,15 @@ function renderShell() {
     </QueryClientProvider>,
   );
 }
+
+// ProLayout's BaseMenu schedules a 400ms collapse setTimeout on mount; let it
+// fire INSIDE the test environment or it explodes post-teardown on slow
+// runners ("window is not defined" — the CI-only unhandled error).
+afterEach(async () => {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 450));
+  });
+});
 
 describe('AppShell', () => {
   beforeEach(() => {

@@ -135,11 +135,13 @@ def parse_date(cell: str, default_year: int | None = None):
 RE_SIZE = re.compile(r"(?:尺寸|[Ss]ize)[:：]\s*(.+)")
 RE_SPEC = re.compile(r"規格[:：]\s*(.+)")
 RE_COLOR = re.compile(r"(?:顏色|款式)[:：]\s*(.+)")
-# Colon REQUIRED for plain prices (iteration 35): "原價850" inside prose is
-# NOT a key-value pair and must not extract. The colonless form survives ONLY
-# for the quantity expression ("單價 179 * 2 件") via RE_PRICE_QTY.
-RE_PRICE = re.compile(r"(?:原價|單價)[:：]\s*([\d.,]+)\s*([A-Za-z]+|元|円|¥|￥)?")
-RE_PRICE_QTY = re.compile(r"(?:原價|單價)[:：]?\s*([\d.,]+)()(?=\s*\*\s*\d+\s*件)")
+# 單價 (the actual unit price) extracts as sku — colon form, or colonless with
+# the quantity expression. 原價 is the PRE-DISCOUNT list price and NEVER sets
+# the sku directly (iteration 39); with a ，N折 note it computes the sku for
+# shared-total rows (RE_DISCOUNT → _finalize).
+RE_PRICE = re.compile(r"單價[:：]\s*([\d.,]+)\s*([A-Za-z]+|元|円|¥|￥)?")
+RE_PRICE_QTY = re.compile(r"單價[:：]?\s*([\d.,]+)()(?=\s*\*\s*\d+\s*件)")
+RE_DISCOUNT = re.compile(r"原價\s*[:：]?\s*([\d.,]+)\s*[，,]\s*([\d.]+)\s*折")
 # Keyed numeric values may be min~max/min-max ranges (FR-029h, iterations
 # 28→30) — the whole range text is captured verbatim; the backend computes
 # min/max. The SIGNED grammar (temperature) allows negative bounds with `~`
@@ -240,6 +242,14 @@ def parse_remark(remark: str) -> tuple[dict, list[str]]:
             spans.append(m.span())
         if m := RE_COLOR.search(line):
             fields.setdefault("color", m.group(1).strip())
+            matched = True
+            spans.append(m.span())
+        if m := RE_DISCOUNT.search(line):
+            fields["_list_price"] = norm_num(m.group(1))
+            digits = m.group(2)
+            base = float(digits)
+            # 9折 → ×0.9; 79折 → ×0.79; 8.5折 → ×0.85.
+            fields["_discount_factor"] = base / (100 if ("." not in digits and len(digits) == 2) else 10)
             matched = True
             spans.append(m.span())
         if m := (RE_PRICE.search(line) or RE_PRICE_QTY.search(line)):
@@ -532,6 +542,25 @@ def _finalize(acquisitions: list["Acquisition"], own_prices: dict[int, list]) ->
             item.fields["sku_price"] = round(value / qty, 4) if qty > 1 else value
             if cur:
                 item.fields.setdefault("sku_price_currency", cur)
+
+        # (c) 原價X，N折 computes skus when the own-price rows do NOT cover
+        # every item (a shared rowspan total): the "own" total row's ÷qty sku
+        # is overridden by its computed value too (iteration 39, FR-029i).
+        own_item_count = sum(1 for t in own if t[0] is not None)
+        if own_item_count < len(acq.items):
+            for item in acq.items:
+                lp = item.fields.get("_list_price")
+                fac = item.fields.get("_discount_factor")
+                if lp is not None and fac is not None:
+                    item.fields["sku_price"] = round(lp * fac, 4)
+        acq_currency = next((cf.currency for cf in acq.cost_factors if cf.currency), None)
+        for item in acq.items:
+            item.fields.pop("_list_price", None)
+            item.fields.pop("_discount_factor", None)
+            # Derived skus inherit the acquisition currency (iteration 39).
+            if item.fields.get("sku_price") is not None and not item.fields.get("sku_price_currency"):
+                if acq_currency:
+                    item.fields["sku_price_currency"] = acq_currency
 
         multi = len(acq.items) > 1
         for item in acq.items:

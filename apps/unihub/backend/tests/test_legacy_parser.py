@@ -563,10 +563,12 @@ def test_keyed_temperature_with_signed_range_and_unit_normalization(parser):
 
 # Iteration 35 (FR-029f): price extraction requires a key-value form.
 def test_colon_price_still_extracts(parser):
-    fields, _ = parser.parse_remark("原價：850")
-    assert fields.get("sku_price") == 850.0
+    # 單價 (the actual unit price) extracts; 原價 (pre-discount list price)
+    # NEVER sets the sku directly (iteration 39).
     unit, _ = parser.parse_remark("單價：7.74 RMB")
     assert unit.get("sku_price") == 7.74
+    listp, _ = parser.parse_remark("原價：850")
+    assert "sku_price" not in listp
 
 
 def test_colonless_prose_price_does_not_extract(parser):
@@ -577,12 +579,13 @@ def test_colonless_prose_price_does_not_extract(parser):
 
 
 def test_colonless_qty_expression_price_still_extracts(parser):
-    # The quantity-expression form stays colonless ("單價 179 * 2 件").
+    # The quantity-expression form stays colonless for 單價 ("單價 179 * 2 件");
+    # 原價 in the same shape contributes ONLY the quantity (iteration 39).
     fields, _ = parser.parse_remark("單價 179 * 2 件")
     assert fields.get("sku_price") == 179.0
     assert fields.get("quantity") == 2
     muji, _ = parser.parse_remark("原價 199 * 3 件 - 折價券 30")
-    assert muji.get("sku_price") == 199.0
+    assert "sku_price" not in muji
     assert muji.get("quantity") == 3
 
 
@@ -653,3 +656,85 @@ def test_size_label_with_parenthesised_dims_keeps_size(parser):
     assert fields.get("length") == {"value": "40", "unit": "cm"}
     assert fields.get("width") == {"value": "80", "unit": "cm"}
     assert fields.get("size") == "S (40cm x 80cm)"
+
+
+# Iteration 39 (FR-029i): 原價 is never the sku; discounts compute; currency inherits.
+def test_own_paid_divided_by_qty_beats_list_price(parser, tmp_path):
+    # HEATTECH: paid 760 for 2 pieces; 原價590 is the pre-discount list price.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>(一灰一白)HEATTECH9分袖發熱衣</td><td>760</td><td>TWD</td>
+<td>Uniqlo感謝祭</td><td>2016/12/16</td><td>發熱衣原價590 * 2件，尺寸XL，折後760</td></tr>
+</table>
+"""
+    path = tmp_path / "ht.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    f = acq.items[0].fields
+    assert f.get("quantity") == 2
+    assert f.get("sku_price") == 380.0  # 760 / 2 — never 原價 590
+    assert f.get("sku_price_currency") == "TWD"
+
+
+def test_underwear_own_paid_divides(parser, tmp_path):
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>內褲*2</td><td>318</td><td>TWD</td><td>NET</td>
+<td>2018/06/02</td><td>原價159 * 2件，size: L</td></tr>
+</table>
+"""
+    path = tmp_path / "uw.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    f = acq.items[0].fields
+    assert f.get("quantity") == 2
+    assert f.get("sku_price") == 159.0
+    assert f.get("sku_price_currency") == "TWD"
+
+
+def test_shared_total_with_discount_notes_computes_skus(parser, tmp_path):
+    # 失落文明 + 霍金: ONE rowspan paid (702) covers both books; each 備註
+    # carries 原價X，9折 → skus 252 / 450 (they sum to the shared total).
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>《失落文明大百科》</td><td rowspan="2">702</td>
+<td rowspan="2">TWD</td><td rowspan="2">嘉義鴻圖書局</td><td rowspan="2">2019/04/03</td>
+<td>原價280，9折</td></tr>
+<tr><td>2</td><td>《霍金大見解》</td><td>原價500，9折</td></tr>
+</table>
+"""
+    path = tmp_path / "bk.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    skus = {i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency")) for i in acq.items}
+    assert skus["《失落文明大百科》"] == (252.0, "TWD")
+    assert skus["《霍金大見解》"] == (450.0, "TWD")
+    assert any(cf.type == "accumulated" and cf.value == 702.0 for cf in acq.cost_factors)
+
+
+def test_single_row_paid_beats_discount_computation(parser, tmp_path):
+    # 盜墓筆記: own paid 179; 原價199，9折 would compute 179.1 — paid wins.
+    fixture = f"""
+<table>
+{HEADER}
+<tr><td>1</td><td>《盜墓筆記之1》</td><td>179</td><td>TWD</td><td>嘉義鴻圖書局</td>
+<td>2019/02/09</td><td>原價199，9折</td></tr>
+</table>
+"""
+    path = tmp_path / "dm.html"
+    path.write_text(fixture, encoding="utf-8")
+    (acq,) = parser.build_html(str(path))
+    f = acq.items[0].fields
+    assert f.get("sku_price") == 179.0
+    assert f.get("sku_price_currency") == "TWD"
+
+
+def test_two_digit_discount_factor(parser):
+    fields, _ = parser.parse_remark("原價399，79折")
+    assert fields.get("_list_price") == 399.0
+    assert fields.get("_discount_factor") == 0.79
+    one, _ = parser.parse_remark("原價280，9折")
+    assert one.get("_discount_factor") == 0.9

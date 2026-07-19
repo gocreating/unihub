@@ -812,6 +812,7 @@ export interface components {
             name: string;
             data_type: components["schemas"]["DataTypeEnum"];
             unit_family?: components["schemas"]["UnitFamilyEnum"] | components["schemas"]["BlankEnum"];
+            emoji?: string;
             readonly is_system: boolean;
             display_order?: number;
             options?: unknown;
@@ -1060,6 +1061,7 @@ export interface components {
             name?: string;
             data_type?: components["schemas"]["DataTypeEnum"];
             unit_family?: components["schemas"]["UnitFamilyEnum"] | components["schemas"]["BlankEnum"];
+            emoji?: string;
             readonly is_system?: boolean;
             display_order?: number;
             options?: unknown;

@@ -12,10 +12,10 @@ import type { ItemParameterWrite } from '@/services/unihub-backend/inventory';
 vi.mock('@/services/unihub-backend/core');
 
 const DEFS = [
-  { id: 'd-color', content_type: 7, content_type_label: 'inventory.item', name: 'color', data_type: 'text', unit_family: '', is_system: true, display_order: 0, options: [] },
-  { id: 'd-weight', content_type: 7, content_type_label: 'inventory.item', name: 'weight', data_type: 'dimension', unit_family: 'weight', is_system: true, display_order: 2, options: [] },
-  { id: 'd-capacity', content_type: 7, content_type_label: 'inventory.item', name: 'capacity', data_type: 'number', unit_family: '', is_system: false, display_order: 10, options: [] },
-  { id: 'd-batt', content_type: 7, content_type_label: 'inventory.item', name: 'batt', data_type: 'dimension', unit_family: 'battery', is_system: false, display_order: 11, options: [] },
+  { id: 'd-color', content_type: 7, content_type_label: 'inventory.item', name: 'color', data_type: 'text', unit_family: '', is_system: true, display_order: 0, options: [], emoji: '🎨' },
+  { id: 'd-weight', content_type: 7, content_type_label: 'inventory.item', name: 'weight', data_type: 'dimension', unit_family: 'weight', is_system: true, display_order: 2, options: [], emoji: '' },
+  { id: 'd-capacity', content_type: 7, content_type_label: 'inventory.item', name: 'capacity', data_type: 'number', unit_family: '', is_system: false, display_order: 10, options: [], emoji: '' },
+  { id: 'd-batt', content_type: 7, content_type_label: 'inventory.item', name: 'batt', data_type: 'dimension', unit_family: 'battery', is_system: false, display_order: 11, options: [], emoji: '' },
 ] as AttributeDefinition[];
 
 function Harness({
@@ -103,7 +103,7 @@ describe('ParameterRowsEditor', () => {
   it('creates a new definition inline', async () => {
     const created = {
       id: 'd-new', content_type: 7, content_type_label: 'inventory.item', name: 'depth',
-      data_type: 'dimension', unit_family: 'length', is_system: false, display_order: 11, options: [],
+      data_type: 'dimension', unit_family: 'length', is_system: false, display_order: 11, options: [], emoji: '',
     } as AttributeDefinition;
     vi.mocked(coreService.createAttributeDefinition).mockResolvedValue(created);
     const onChange = vi.fn();
@@ -247,5 +247,31 @@ describe('ParameterRowsEditor (iteration 16 — form grid + definition delete)',
     expect(
       await screen.findByText('Enter a number or a min-max range (e.g. 5-10)'),
     ).toBeInTheDocument();
+  });
+
+  // PRE-10 (iteration 27, FR-032): key picker shows a monochrome emoji prefix;
+  // the creation form offers an optional emoji sent to the API.
+  it('shows emoji prefixes in the key picker and collects an emoji on create', async () => {
+    const created = {
+      id: 'd-fire', content_type: 7, content_type_label: 'inventory.item', name: 'heat',
+      data_type: 'text', unit_family: '', is_system: false, display_order: 12, options: [], emoji: '🔥',
+    } as AttributeDefinition;
+    vi.mocked(coreService.createAttributeDefinition).mockResolvedValue(created);
+    renderEditor([]);
+    fireEvent.click(await screen.findByRole('button', { name: /Add parameter/ }));
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[0]!);
+    // The color option carries its emoji as a monochrome prefix.
+    const colorOption = within(lastDropdown()).getByText('🎨');
+    expect(colorOption.style.webkitTextFillColor).toBe('transparent');
+    fireEvent.click(within(lastDropdown()).getByText(/New parameter/));
+    fireEvent.change(screen.getByPlaceholderText('Parameter name'), { target: { value: 'heat' } });
+    fireEvent.change(screen.getByPlaceholderText('Emoji (optional)'), { target: { value: '🔥' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Create$/ }));
+    await waitFor(() =>
+      expect(vi.mocked(coreService.createAttributeDefinition)).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'heat', emoji: '🔥' }),
+        expect.anything(),
+      ),
+    );
   });
 });

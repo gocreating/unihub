@@ -624,11 +624,24 @@ export function ScenarioDetailPage() {
         </DndContext>
       </Card>
 
-      {/* Add-items search modal (FR-011): members stay listed but disabled. */}
+      {/* Add-items search modal (FR-011): members stay listed but disabled.
+          Viewport-anchored (iteration 27): the modal spans a fixed top offset
+          down to a fixed bottom offset; ONLY the results list scrolls, so the
+          search box never leaves the viewport. */}
       <Modal
         title={t({ id: 'pages.inventory.scenarios.organize.addTitle' })}
         open={addOpen}
         footer={null}
+        width={760}
+        style={{ top: 64 }}
+        styles={{
+          body: {
+            // 100vh − top offset (64) − header+padding (~72) − bottom gap (24).
+            height: 'calc(100vh - 160px)',
+            display: 'flex',
+            flexDirection: 'column',
+          },
+        }}
         onCancel={() => {
           setAddOpen(false);
           setSearch('');
@@ -642,6 +655,7 @@ export function ScenarioDetailPage() {
           onChange={(e) => setSearch(e.target.value)}
           style={{ marginBottom: 12 }}
         />
+        <div data-testid="modal-results" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <List
           size="small"
           loading={searchQ.isFetching}
@@ -710,6 +724,7 @@ export function ScenarioDetailPage() {
             );
           }}
         />
+        </div>
       </Modal>
 
       <ScenarioFormModal

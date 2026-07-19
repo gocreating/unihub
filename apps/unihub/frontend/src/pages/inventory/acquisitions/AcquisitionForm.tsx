@@ -9,10 +9,8 @@ import {
   Divider,
   Form,
   Input,
-  InputNumber,
   Modal,
   Row,
-  Select,
   Space,
   Typography,
   message,
@@ -46,7 +44,9 @@ import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import type { Acquisition, CostFactorWrite, Item, ItemWrite } from '@/services/unihub-backend/inventory';
 import { draftParameters } from '../itemBadges';
-import { ItemDisplay, formatDecimal } from '@/components/ItemDisplay';
+import { ItemDisplay } from '@/components/ItemDisplay';
+import { PriceInput } from '@/components/PriceInput';
+import { formatPrice } from '@/utils/currency';
 import { EmptyValue } from '@/components/EmptyValue';
 import { listAttributeDefinitions } from '@/services/unihub-backend/core';
 import {
@@ -410,23 +410,14 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
   const manualRows = factors.filter((f) => f.kind === 'manual');
 
   const valueCurrency = (f: FactorRow, currencyDisabled: boolean) => (
-    <Space.Compact style={{ width: '100%' }}>
-      <InputNumber
-        style={{ width: '55%', textAlign: 'right' }}
-        value={f.value === '' || f.value == null ? null : Number(f.value)}
-        onChange={(v) => updateFactor(f.key, { value: v == null ? '0' : String(v) })}
-      />
-      <Select
-        style={{ width: '45%' }}
-        showSearch
-        allowClear
-        disabled={currencyDisabled}
-        value={f.currency || undefined}
-        onChange={(v) => updateFactor(f.key, { currency: v ?? '' })}
-        options={currencyOptions}
-        placeholder={t({ id: 'pages.inventory.acquisitions.costFactors.currency' })}
-      />
-    </Space.Compact>
+    <PriceInput
+      amount={f.value === '' || f.value == null ? null : Number(f.value)}
+      currency={f.currency}
+      codes={currencyOptions}
+      currencyDisabled={currencyDisabled}
+      onAmount={(v) => updateFactor(f.key, { value: v == null ? '0' : String(v) })}
+      onCurrency={(v) => updateFactor(f.key, { currency: v ?? '' })}
+    />
   );
 
   return (
@@ -492,9 +483,13 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
       >
         <Row gutter={[12, 12]}>
           {cards.map((card, idx) => (
-            <Col span={third} key={card.id ?? `new-${idx}`}>
+            // Equal-height cards per visual row (FR-006, iteration 27): the
+            // Col stretches and the Card fills it, actions pinned at the bottom.
+            <Col span={third} key={card.id ?? `new-${idx}`} style={{ display: 'flex' }}>
               <Card
                 size="small"
+                style={{ width: '100%', display: 'flex', flexDirection: 'column' }}
+                styles={{ body: { flex: 1 } }}
                 actions={[
                   <EditOutlined key="edit" onClick={() => openEditCard(idx)} />,
                   <CopyOutlined key="dup" onClick={() => duplicateCard(idx)} />,
@@ -512,11 +507,9 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
                   }}
                   parameters={draftParameters(card.data.parameters, parameterDefs)}
                   showParameters
-                  extraTags={
-                    card.data.sku_price
-                      ? [`${formatDecimal(card.data.sku_price)} ${card.data.sku_price_currency ?? ''}`.trim()]
-                      : []
-                  }
+                  extraTags={[
+                    formatPrice(card.data.sku_price_currency, card.data.sku_price),
+                  ].filter(Boolean)}
                 />
               </Card>
             </Col>
@@ -594,7 +587,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
                 <Space direction="vertical" size={0}>
                   {totals.map(([cur, total]) => (
                     <Typography.Text strong key={cur}>
-                      {total.toLocaleString()} {cur}
+                      {formatPrice(cur, total) || <EmptyValue />}
                     </Typography.Text>
                   ))}
                 </Space>
@@ -677,6 +670,7 @@ function writeToItemLike(data?: ItemWrite): Item | null {
       name: '',
       data_type: '',
       unit_family: '' as const,
+      emoji: '',
       value: p.value,
       unit: p.unit ?? '',
       value_number: null,

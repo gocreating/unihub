@@ -15,6 +15,7 @@ class AttributeDefinitionSerializer(serializers.ModelSerializer):
             "name",
             "data_type",
             "unit_family",
+            "emoji",
             "is_system",
             "display_order",
             "options",

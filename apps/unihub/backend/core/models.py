@@ -37,6 +37,9 @@ class AttributeDefinition(models.Model):
     is_system = models.BooleanField(default=False)
     display_order = models.PositiveIntegerField(default=0)
     options = models.JSONField(default=list, blank=True)
+    # Optional display emoji, rendered as a monochrome prefix before the
+    # localized key wherever the parameter key appears (FR-032).
+    emoji = models.CharField(max_length=8, blank=True, default="")
 
     class Meta:
         unique_together = [("content_type", "name")]

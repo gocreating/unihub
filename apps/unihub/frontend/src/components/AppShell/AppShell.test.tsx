@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
@@ -67,5 +67,15 @@ describe('AppShell', () => {
       const avatarDropdown = capturedDropdownProps.find((p) => p.placement !== undefined);
       expect(avatarDropdown?.placement).toBe('bottomRight');
     });
+  });
+});
+
+describe('Nav hyperlinks — iteration 27 (FR-034)', () => {
+  it('renders leaf menu entries as real anchors with hrefs', async () => {
+    renderShell();
+    // Wait for the menu to mount, then every pathed entry is an <a href>.
+    const links = await screen.findAllByRole('link');
+    const hrefs = links.map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual(expect.arrayContaining(['/language', '/people', '/music']));
   });
 });

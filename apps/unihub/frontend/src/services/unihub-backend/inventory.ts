@@ -54,6 +54,7 @@ export interface ItemParameter {
   name: string;
   data_type: string; // text | long_text | number | single_select | dimension | …
   unit_family: UnitFamily | '';
+  emoji: string;
   value: string;
   unit: string;
   value_number: string | null;

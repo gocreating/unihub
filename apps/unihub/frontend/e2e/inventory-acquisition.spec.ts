@@ -109,9 +109,11 @@ test('item cards render parameter rows as Tag badges (iteration 14)', async ({ p
   // Add a "Color" parameter row via the on-demand editor (FR-026).
   await page.locator('.ant-modal').getByRole('button', { name: /Add parameter/ }).click();
   await page.locator('.ant-modal .ant-select-selector').last().click();
+  // The option text carries the seeded 🎨 emoji prefix (FR-032, iteration 27).
   await page
     .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
-    .getByText('Color', { exact: true })
+    .getByText(/Color/)
+    .first()
     .click();
   // The value input shares the grid row with the key select showing "Color".
   await page

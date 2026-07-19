@@ -99,7 +99,7 @@ describe('parameterPairs', () => {
       [{ name: 'length', data_type: 'dimension', value: '14', unit: 'cm' }],
       (id) => ({ 'pages.inventory.items.col.length': 'Length' })[id] ?? id,
     );
-    expect(pairs).toEqual(['Length: 14 cm']);
+    expect(pairs).toEqual([{ emoji: '', label: 'Length: 14 cm' }]);
   });
 
   it('formats tilde ranges', () => {
@@ -107,6 +107,34 @@ describe('parameterPairs', () => {
       [{ name: 'temp', data_type: 'dimension', value: '-10~40', unit: '°C' }],
       (id) => id,
     );
-    expect(pairs).toEqual(['temp: -10 - 40 °C']);
+    expect(pairs).toEqual([{ emoji: '', label: 'temp: -10 - 40 °C' }]);
+  });
+});
+
+describe('parameter emoji (FR-032)', () => {
+  const EMOJI_PARAMS: ParameterDisplay[] = [
+    { name: 'color', data_type: 'text', value: 'red', unit: '', emoji: '🎨' },
+    { name: 'capacity', data_type: 'number', value: '1500', unit: '', emoji: '' },
+  ];
+
+  it('parameterPairs returns emoji alongside the localized label', () => {
+    const pairs = parameterPairs(EMOJI_PARAMS, (id) =>
+      ({ 'pages.inventory.items.col.color': 'Color' })[id] ?? id,
+    );
+    expect(pairs).toEqual([
+      { emoji: '🎨', label: 'Color: red' },
+      { emoji: '', label: 'capacity: 1500' },
+    ]);
+  });
+
+  it('renders a monochrome emoji prefix before the key', () => {
+    wrap(<ItemDisplay item={base} parameters={EMOJI_PARAMS} showParameters />);
+    const emoji = screen.getByText('🎨');
+    // Silhouette technique: transparent fill + currentColor shadow inherits text color.
+    expect(emoji.style.webkitTextFillColor).toBe('transparent');
+    expect(emoji.style.textShadow).toContain('currentcolor');
+    expect(screen.getByText(/Color: red/)).toBeInTheDocument();
+    // No emoji span for definitions without one.
+    expect(screen.getByText('capacity: 1500').textContent).toBe('capacity: 1500');
   });
 });

@@ -60,8 +60,9 @@ test('catalog Parameters column renders localized key-value pairs', async ({ pag
   // Every parameter tag is a `key: value` pair; system keys are localized.
   const paired = tags.filter((t) => /: /.test(t));
   expect(paired.length).toBeGreaterThan(0);
+  // System keys carry their seeded emoji prefix (FR-032, iteration 27).
   expect(
-    paired.some((t) => /^(Length|Width|Height|Weight|Color|Size|Volume): /.test(t)),
+    paired.some((t) => /^(🎨|👕|⚖|📏|🧴) (Length|Width|Height|Weight|Color|Size|Volume): /.test(t)),
   ).toBe(true);
 });
 

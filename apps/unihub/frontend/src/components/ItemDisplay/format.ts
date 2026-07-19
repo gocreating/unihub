@@ -11,8 +11,20 @@ export interface ParameterDisplay {
   data_type: string;
   value: string;
   unit?: string;
+  emoji?: string;
   value_number?: string | null;
   value_number_max?: string | null;
+}
+
+/** One renderable `key: value` pair — emoji renders monochrome via KeyEmoji. */
+export interface ParameterPair {
+  emoji: string;
+  label: string;
+}
+
+/** Plain-text form of a pair (width measurement, tooltips). */
+export function pairText(pair: ParameterPair): string {
+  return pair.emoji ? `${pair.emoji} ${pair.label}` : pair.label;
 }
 
 // Mirrors the backend range grammar (core.attributes): "5-10" or "-10~40".
@@ -43,14 +55,14 @@ function parameterValueText(p: ParameterDisplay): string {
   return p.value;
 }
 
-/** One localized `key: value` string per parameter row (FR-031). */
+/** One localized `key: value` pair per parameter row (FR-031/FR-032). */
 export function parameterPairs(
   params: ParameterDisplay[] | undefined,
   translate: (id: string) => string,
-): string[] {
+): ParameterPair[] {
   return (params ?? []).map((p) => {
     const keyId = SYSTEM_KEY_IDS[p.name];
     const key = keyId ? translate(keyId) : p.name;
-    return `${key}: ${parameterValueText(p)}`;
+    return { emoji: p.emoji ?? '', label: `${key}: ${parameterValueText(p)}` };
   });
 }

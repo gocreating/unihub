@@ -20,6 +20,7 @@ export function draftParameters(
       data_type: definition.data_type,
       value: row.value,
       unit: row.unit ?? '',
+      emoji: definition.emoji ?? '',
     });
   }
   return resolved;

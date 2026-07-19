@@ -246,3 +246,47 @@ class TestNewFamiliesAndRanges:
         resp = auth_client.get(f"{ITEMS}?ordering={quote(f'attr:{d.id}')}")
         names = [i["name"] for i in resp.json()["results"] if i["name"].startswith("Span")]
         assert names == ["SpanA", "SpanB"]  # 50mm min < 100mm
+
+
+@pytest.mark.django_db
+class TestParameterEmoji:
+    """Iteration 27 (FR-032): optional emoji on parameter definitions."""
+
+    def test_emoji_persists_via_definition_api(self, auth_client):
+        body = {
+            "content_type": _item_ct().id,
+            "name": "mood",
+            "data_type": "text",
+            "emoji": "🔥",
+        }
+        resp = auth_client.post(DEFS, json.dumps(body), content_type="application/json")
+        assert resp.status_code == 201, resp.content
+        assert resp.json()["emoji"] == "🔥"
+        listed = auth_client.get(f"{DEFS}?content_type=inventory.item").json()
+        assert any(d["name"] == "mood" and d["emoji"] == "🔥" for d in listed)
+
+    def test_system_definitions_seeded_with_default_emojis(self, auth_client):
+        expected = {
+            "color": "🎨",
+            "size": "👕",
+            "weight": "⚖",
+            "length": "📏",
+            "width": "📏",
+            "height": "📏",
+            "volume": "🧴",
+        }
+        seeded = {
+            d.name: d.emoji
+            for d in AttributeDefinition.objects.filter(content_type=_item_ct(), is_system=True)
+            if d.name in expected
+        }
+        assert seeded == expected
+
+    def test_item_parameters_payload_carries_emoji(self, auth_client):
+        d = _make_def("glow", "text")
+        AttributeDefinition.objects.filter(pk=d.pk).update(emoji="✨")
+        item = create_item(auth_client, name="Lamp")
+        assert _upsert(auth_client, item["id"], d, "warm").status_code == 200
+        detail = auth_client.get(f"{ITEMS}{item['id']}/").json()
+        row = next(p for p in detail["parameters"] if p["name"] == "glow")
+        assert row["emoji"] == "✨"

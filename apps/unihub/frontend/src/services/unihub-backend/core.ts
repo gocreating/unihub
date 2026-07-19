@@ -7,6 +7,7 @@ export interface AttributeDefinition {
   name: string;
   data_type: 'text' | 'long_text' | 'number' | 'date' | 'boolean' | 'single_select' | 'dimension';
   unit_family: 'length' | 'weight' | 'volume' | 'temperature' | 'time' | 'battery' | '';
+  emoji: string;
   is_system: boolean;
   display_order: number;
   options: string[];
@@ -51,6 +52,7 @@ export function createAttributeDefinition(
   data: Pick<AttributeDefinition, 'content_type' | 'name' | 'data_type'> & {
     options?: string[];
     unit_family?: AttributeDefinition['unit_family'];
+    emoji?: string;
   },
 ): Promise<AttributeDefinition> {
   return fetchJson<AttributeDefinition>('/api/v1/core/attribute-definitions/', {

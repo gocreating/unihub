@@ -66,6 +66,7 @@ const COLOR_PARAM: ItemParameter = {
   name: 'color',
   data_type: 'text',
   unit_family: '',
+  emoji: '',
   value: 'red',
   unit: '',
   value_number: null,

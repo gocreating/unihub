@@ -3,12 +3,29 @@ import { Space, Tag, Typography } from 'antd';
 import { useIntl } from 'react-intl';
 import { ItemName } from '@/components/ItemName';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
-import { parameterPairs } from './format';
-import type { ParameterDisplay } from './format';
+import { pairText, parameterPairs } from './format';
+import type { ParameterDisplay, ParameterPair } from './format';
 
 // eslint-disable-next-line react-refresh/only-export-components
-export { formatDecimal, parameterPairs } from './format';
-export type { ParameterDisplay } from './format';
+export { formatDecimal, pairText, parameterPairs } from './format';
+export type { ParameterDisplay, ParameterPair } from './format';
+
+/**
+ * Monochrome emoji (FR-032): the transparent-fill + currentColor-shadow
+ * silhouette renders the glyph in the inherited text color — color emoji
+ * fonts otherwise ignore CSS `color`.
+ */
+export function KeyEmoji({ emoji }: { emoji: string }) {
+  if (!emoji) return null;
+  return (
+    <span
+      aria-hidden
+      style={{ WebkitTextFillColor: 'transparent', textShadow: '0 0 0 currentcolor' }}
+    >
+      {emoji}{' '}
+    </span>
+  );
+}
 
 export interface ItemDisplayItem {
   name: string;
@@ -53,7 +70,10 @@ export function ItemDisplay({
   const intl = useIntl();
   const t = (id: string) => intl.formatMessage({ id });
   const pairs = showParameters ? parameterPairs(parameters, t) : [];
-  const tags = [...(extraTags ?? []), ...pairs];
+  const tags: ParameterPair[] = [
+    ...(extraTags ?? []).map((label) => ({ emoji: '', label })),
+    ...pairs,
+  ];
   return (
     <div style={{ minWidth: 0, ...style }}>
       <ItemName item={item} linkify truncate={truncate} highlight={highlight} />
@@ -78,7 +98,10 @@ export function ItemDisplay({
         <Space size={[4, 4]} wrap style={{ maxWidth: '100%', marginTop: 2 }}>
           {tags.map((tag, i) => (
             <Tag key={i} style={{ marginInlineEnd: 0, maxWidth: '100%', fontSize: 11 }}>
-              <OverflowTooltip title={tag}>{tag}</OverflowTooltip>
+              <OverflowTooltip title={pairText(tag)}>
+                <KeyEmoji emoji={tag.emoji} />
+                {tag.label}
+              </OverflowTooltip>
             </Tag>
           ))}
         </Space>

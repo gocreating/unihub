@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Col, Form, Input, InputNumber, Modal, Row, Select, Space } from 'antd';
+import { Button, Col, Form, Input, InputNumber, Modal, Row, Space } from 'antd';
 import { useIntl } from 'react-intl';
 import type { Item, ItemParameterWrite, ItemWrite } from '@/services/unihub-backend/inventory';
 import { ParameterRowsEditor } from '@/components/ParameterRowsEditor';
+import { CurrencySymbolSelect } from '@/components/PriceInput';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 
 interface ItemFormValues {
@@ -147,19 +148,18 @@ export function ItemFormModal({
             </Col>
             <Col span={third}>
               <Form.Item label={t({ id: 'pages.inventory.items.col.skuPrice' })}>
+                {/* FR-033 mockup order: [currency symbol][numeric value]. */}
                 <Space.Compact block>
+                  <Form.Item name="sku_price_currency" noStyle>
+                    <CurrencySymbolSelect
+                      style={{ width: '40%' }}
+                      codes={currencyOptions}
+                      hideSymbol={currencyDisabled}
+                      disabled={currencyDisabled}
+                    />
+                  </Form.Item>
                   <Form.Item name="sku_price" noStyle>
                     <InputNumber min={0} style={{ width: '60%' }} />
-                  </Form.Item>
-                  <Form.Item name="sku_price_currency" noStyle>
-                    <Select
-                      style={{ width: '40%' }}
-                      showSearch
-                      allowClear
-                      disabled={currencyDisabled}
-                      placeholder={currencyDisabled ? '-' : 'CUR'}
-                      options={currencyOptions}
-                    />
                   </Form.Item>
                 </Space.Compact>
               </Form.Item>

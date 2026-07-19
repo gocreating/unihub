@@ -1,12 +1,15 @@
 import dayjs from 'dayjs';
 import type { AcquisitionSummary, NetCostEntry } from '@/services/unihub-backend/inventory';
+import { formatPrice } from '@/utils/currency';
 
-/** Per-currency net cost text; a zero net cost is hidden entirely (iter 15). */
+/** Per-currency net cost text; a zero net cost is hidden entirely (iter 15).
+ * Entries render "{CODE} {symbol} {value}" (FR-033). */
 export function formatNetCost(net: NetCostEntry[] | undefined): string {
   // Most zeros mean "not recorded", so neither "0"/"0 CNY" nor "Free" shows.
-  const entries = (net ?? []).filter((n) => Number(n.total) !== 0);
-  if (entries.length === 0) return '';
-  return entries.map((n) => `${Number(n.total).toLocaleString()} ${n.currency}`.trim()).join(', ');
+  return (net ?? [])
+    .map((n) => formatPrice(n.currency, n.total))
+    .filter(Boolean)
+    .join(', ');
 }
 
 /**

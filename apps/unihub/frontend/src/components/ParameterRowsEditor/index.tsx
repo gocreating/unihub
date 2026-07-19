@@ -13,6 +13,7 @@ import type { AttributeDefinition } from '@/services/unihub-backend/core';
 import type { ItemParameterWrite, UnitFamily } from '@/services/unihub-backend/inventory';
 import { UNIT_FAMILY_OPTIONS } from '@/services/unihub-backend/inventory';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
+import { KeyEmoji } from '@/components/ItemDisplay';
 
 const NEW_KEY = '__new__';
 
@@ -69,6 +70,7 @@ interface NewDefinitionDraft {
   data_type: (typeof TYPE_CHOICES)[number]['value'];
   unit_family?: UnitFamily;
   options: string;
+  emoji: string;
 }
 
 export interface ParameterRowsEditorProps {
@@ -175,7 +177,10 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
     const definition = option.data.definition;
     return (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>{option.label}</span>
+        <span>
+          {definition?.emoji ? <KeyEmoji emoji={definition.emoji} /> : null}
+          {option.label}
+        </span>
         {definition && !definition.is_system && (
           <DeleteOutlined
             aria-label="delete-definition"
@@ -195,7 +200,7 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
 
   const onKeyChange = (index: number, definitionId: string) => {
     if (definitionId === NEW_KEY) {
-      setDraft({ rowIndex: index, name: '', data_type: 'text', options: '' });
+      setDraft({ rowIndex: index, name: '', data_type: 'text', options: '', emoji: '' });
       return;
     }
     const definition = byId.get(definitionId);
@@ -297,6 +302,12 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             />
+            <Input
+              placeholder={t({ id: 'pages.inventory.params.emoji' })}
+              maxLength={8}
+              value={draft.emoji}
+              onChange={(e) => setDraft({ ...draft, emoji: e.target.value })}
+            />
             <Select
               style={{ width: '100%' }}
               placeholder={t({ id: 'pages.inventory.params.typeLabel' })}
@@ -335,6 +346,7 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
                     content_type: contentTypeId!,
                     name: draft.name.trim(),
                     data_type: draft.data_type,
+                    emoji: draft.emoji.trim() || undefined,
                     unit_family: draft.data_type === 'dimension' ? draft.unit_family : undefined,
                     options:
                       draft.data_type === 'single_select'

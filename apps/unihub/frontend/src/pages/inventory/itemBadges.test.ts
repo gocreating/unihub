@@ -17,8 +17,8 @@ describe('draftParameters (pending ItemWrite rows → displayable parameters)', 
       { definition_id: 'missing', value: 'x' },
     ];
     expect(draftParameters(rows, defs)).toEqual([
-      { name: 'weight', data_type: 'dimension', value: '1.5', unit: 'kg' },
-      { name: 'capacity', data_type: 'number', value: '42', unit: '' },
+      { name: 'weight', data_type: 'dimension', value: '1.5', unit: 'kg', emoji: '' },
+      { name: 'capacity', data_type: 'number', value: '42', unit: '', emoji: '' },
     ]);
   });
 

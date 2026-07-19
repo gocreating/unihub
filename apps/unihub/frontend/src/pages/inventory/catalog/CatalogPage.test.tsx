@@ -34,6 +34,7 @@ const DEFS = ['color', 'size', 'weight', 'length', 'width', 'height', 'volume'].
       is_system: true,
       display_order: i,
       options: [],
+      emoji: '',
     }) as AttributeDefinition,
 );
 
@@ -52,10 +53,10 @@ const ITEM = {
   status: 'active' as const,
   deprecate_time: null,
   parameters: [
-    { definition_id: 'ad-color', name: 'color', data_type: 'text', unit_family: '' as const, value: 'red', unit: '', value_number: null, value_number_max: null },
-    { definition_id: 'ad-weight', name: 'weight', data_type: 'dimension', unit_family: 'weight' as const, value: '0.5000', unit: 'kg', value_number: '500.0000', value_number_max: null },
-    { definition_id: 'ad-volume', name: 'volume', data_type: 'dimension', unit_family: 'volume' as const, value: '1.2', unit: 'L', value_number: '1200.0000', value_number_max: null },
-    { definition_id: 'ad-size', name: 'size', data_type: 'text', unit_family: '' as const, value: 'M', unit: '', value_number: null, value_number_max: null },
+    { definition_id: 'ad-color', name: 'color', data_type: 'text', unit_family: '' as const, emoji: '', value: 'red', unit: '', value_number: null, value_number_max: null },
+    { definition_id: 'ad-weight', name: 'weight', data_type: 'dimension', unit_family: 'weight' as const, emoji: '', value: '0.5000', unit: 'kg', value_number: '500.0000', value_number_max: null },
+    { definition_id: 'ad-volume', name: 'volume', data_type: 'dimension', unit_family: 'volume' as const, emoji: '', value: '1.2', unit: 'L', value_number: '1200.0000', value_number_max: null },
+    { definition_id: 'ad-size', name: 'size', data_type: 'text', unit_family: '' as const, emoji: '', value: 'M', unit: '', value_number: null, value_number_max: null },
   ],
   acquisition: {
     id: 'acq-1',
@@ -243,7 +244,7 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
   // CAT13-04 (d): derived Acquisition cell on the tree parent row.
   it('renders the Acquisition cell as "{source} {net cost}" with a date-range secondary row', async () => {
     renderPage();
-    const primary = await screen.findByText('Shop 10 USD');
+    const primary = await screen.findByText('Shop USD $ 10');
     const range = `${dayjs(REQUESTED).format('YYYY-MM-DD')} ~ ${dayjs(OBTAINED).format('YYYY-MM-DD')}`;
     expect(within(cellOf(primary)!).getByText(range)).toBeInTheDocument();
   });
@@ -258,7 +259,7 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     )!;
     fireEvent.click(skuHeader);
     // Every flat item row carries its acquisition's summary.
-    const summaries = await screen.findAllByText('Shop 10 USD');
+    const summaries = await screen.findAllByText('Shop USD $ 10');
     expect(summaries.length).toBeGreaterThanOrEqual(2);
     expect(vi.mocked(inventoryService.listItems)).toHaveBeenCalled();
   });
@@ -284,7 +285,7 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     const itemRow = name.closest('tr')!;
     expect(within(itemRow).getByRole('button', { name: /Deprecate/ })).toBeInTheDocument();
     expect(within(itemRow).queryByRole('button', { name: /Delete/ })).toBeNull();
-    const acqRow = screen.getByText('Shop 10 USD').closest('tr')!;
+    const acqRow = screen.getByText('Shop USD $ 10').closest('tr')!;
     // Iteration 19: Edit is a real hyperlink (new-tab capable); Delete is
     // gone from the catalog (it lives on the edit page's panel kebab).
     const edit = within(acqRow).getByText('Edit').closest('a')!;
@@ -411,9 +412,9 @@ describe('CatalogPage (iteration 15 — merged rows, layers, footer)', () => {
     renderPage();
     await screen.findByText('Lantern');
     expect(screen.getByText('Solo')).toBeInTheDocument();
-    expect(screen.queryByText('Solo 0 USD')).toBeNull();
+    expect(screen.queryByText('Solo USD $ 0')).toBeNull();
     // Non-zero still shown.
-    expect(screen.getByText('Waiting 5 USD')).toBeInTheDocument();
+    expect(screen.getByText('Waiting USD $ 5')).toBeInTheDocument();
   });
 
   // CAT15-07: footer shows "{x} acquisitions, {y} items".
@@ -491,7 +492,7 @@ describe('CatalogPage (iteration 16 — Toggle column)', () => {
       th.textContent?.includes('SKU Price'),
     )!;
     fireEvent.click(skuHeader);
-    await screen.findAllByText('Shop 10 USD');
+    await screen.findAllByText('Shop USD $ 10');
     expect(
       container.querySelector(
         '.ant-table-tbody tr.ant-table-row td .anticon-caret-down, .ant-table-tbody tr.ant-table-row td .anticon-caret-right',
@@ -693,7 +694,7 @@ describe('CatalogPage (iteration 21 — flat-mode acquisition Edit link)', () =>
       th.textContent?.includes('SKU Price'),
     )!;
     fireEvent.click(skuHeader);
-    await screen.findAllByText('Shop 10 USD');
+    await screen.findAllByText('Shop USD $ 10');
     const backpackRow = screen.getByText('Backpack').closest('tr')!;
     const edit = within(backpackRow).getByText('Edit').closest('a')!;
     expect(edit).toHaveAttribute('href', '/inventory/acquisitions/acq-1/edit');

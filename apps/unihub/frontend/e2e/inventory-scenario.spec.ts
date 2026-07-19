@@ -424,3 +424,53 @@ test('iteration 22: modal rows are geometrically flush (pixel lock)', async ({ p
   await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();
   await page.waitForURL(/\/inventory\/scenarios$/, { timeout: 10_000 });
 });
+
+// Iteration 27 (FR-011): the Add-items modal anchors to the viewport bottom —
+// the search box never scrolls away; only the results list scrolls inside.
+test('iteration 27: Add-items modal is wide and viewport-anchored', async ({ page }) => {
+  const name = `E2E Anchor27 ${Date.now()}`;
+  await page.goto('/inventory/scenarios');
+  await page.waitForSelector('.ant-table-thead', { timeout: 10_000 });
+  await page.locator('button').filter({ hasText: /New/ }).first().click();
+  await page.waitForSelector('.ant-modal', { timeout: 5_000 });
+  await page.locator('.ant-modal input[id$="name"]').fill(name);
+  await page.locator('.ant-modal button', { hasText: /Save/ }).click();
+  await page.waitForTimeout(500);
+  await page.locator('.ant-table-tbody a', { hasText: name }).first().click();
+  await page.waitForSelector('.ant-card', { timeout: 10_000 });
+
+  await page.locator('.ant-card', { hasText: 'Organize' }).first()
+    .locator('button').filter({ hasText: /^Add$/ }).first().click();
+  const modal = page.locator('.ant-modal', { hasText: 'Add items' }).first();
+  await modal.locator('input').first().waitFor({ timeout: 5_000 });
+  await page.waitForTimeout(500); // settle the zoom animation before measuring
+
+  // Wider than the AntD default 520.
+  const emptyBox = (await modal.boundingBox())!;
+  expect(emptyBox.width).toBeGreaterThanOrEqual(700);
+  const viewport = page.viewportSize()!;
+  // Anchored: bottom edge sits near the viewport bottom even with NO results…
+  const emptyGap = viewport.height - (emptyBox.y + emptyBox.height);
+  expect(emptyGap).toBeGreaterThanOrEqual(0);
+  expect(emptyGap).toBeLessThanOrEqual(80);
+
+  // …and stays put with a long result list ('a' matches broadly).
+  await modal.locator('input').first().fill('a');
+  await page.waitForTimeout(800);
+  const fullBox = (await modal.boundingBox())!;
+  expect(Math.abs(fullBox.y + fullBox.height - (emptyBox.y + emptyBox.height))).toBeLessThanOrEqual(2);
+
+  // The results container scrolls internally; the search box stays visible.
+  const results = page.getByTestId('modal-results');
+  await results.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await expect(modal.locator('input').first()).toBeInViewport();
+
+  // Cleanup: delete the scenario via the panel kebab.
+  await modal.locator('.ant-modal-close').click();
+  await page.locator('[data-testid="scenario-actions"], .ant-card .anticon-ellipsis').first().click();
+  await page.waitForTimeout(300);
+  await page.locator('.ant-dropdown-menu-item', { hasText: /Delete/ }).first().click();
+  await page.waitForTimeout(300);
+  await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();
+  await page.waitForTimeout(500);
+});

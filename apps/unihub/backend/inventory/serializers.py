@@ -168,6 +168,7 @@ class ItemSerializer(serializers.ModelSerializer):
                 "name": v.attribute_definition.name,
                 "data_type": v.attribute_definition.data_type,
                 "unit_family": v.attribute_definition.unit_family,
+                "emoji": v.attribute_definition.emoji,
                 "value": v.value,
                 "unit": v.value_unit,
                 "value_number": str(v.value_number) if v.value_number is not None else None,

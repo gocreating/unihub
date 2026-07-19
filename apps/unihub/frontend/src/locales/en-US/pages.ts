@@ -503,6 +503,7 @@ export default {
   'pages.inventory.params.deleteTitle': 'Delete parameter "{name}"?',
   'pages.inventory.params.deleteBody': '{count, plural, one {# item carries} other {# items carry}} a value for this parameter. Deleting it also removes those values.',
   'pages.inventory.params.name': 'Parameter name',
+  'pages.inventory.params.emoji': 'Emoji (optional)',
   'pages.inventory.params.typeLabel': 'Type',
   'pages.inventory.params.type.string': 'Text',
   'pages.inventory.params.type.numeric': 'Number',

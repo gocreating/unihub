@@ -44,7 +44,8 @@ import type {
   OffsetPaginatedResponse,
 } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
-import { ItemDisplay, formatDecimal, parameterPairs } from '@/components/ItemDisplay';
+import { ItemDisplay, KeyEmoji, formatDecimal, pairText, parameterPairs } from '@/components/ItemDisplay';
+import { formatPrice } from '@/utils/currency';
 
 const EMPTY = <EmptyValue />;
 
@@ -66,7 +67,7 @@ const ITEM_KEYS = new Set(['name', 'url', 'spec', 'remark', 'quantity', 'sku_pri
 const isItemLevelField = (field: string) => ITEM_KEYS.has(field) || field.startsWith('attr:');
 
 function skuText(it: Item): string {
-  return it.sku_price != null ? `${formatDecimal(it.sku_price)} ${it.sku_price_currency}`.trim() : '';
+  return formatPrice(it.sku_price_currency, it.sku_price);
 }
 
 // The displayed text of one parameter value in its own dynamic column.
@@ -184,15 +185,16 @@ export function CatalogPage() {
   );
 
   const table = useEntityTable({
-    // v6: iteration-18 defaults (alias column added) — bump so previously-
-    // saved state doesn't shadow the new defaults.
-    key: 'inventory-catalog-v6',
+    // v7: iteration-27 defaults (Actions pinned sticky-right) — bump so
+    // previously-saved state doesn't shadow the new defaults.
+    key: 'inventory-catalog-v7',
     filterableAttrs,
     columnDefs,
     // Default sort (spec): Obtained descending, NULLS FIRST (pending on top).
     defaultSortRules: [{ field: 'acquisition__obtained_at', direction: 'desc', nulls: 'first' }],
-    // The Toggle (caret) column is pinned by default (FR-003, iteration 16).
-    defaultSticky: { left: true },
+    // The Toggle (caret) column is pinned left and the Actions column pinned
+    // right by default (FR-003, iterations 16 + 27).
+    defaultSticky: { left: true, right: true },
     // Default view (iterations 17→24): YTD acquisitions + pending (no
     // obtained date yet) — ONE or-group with plain conditions, lit in the
     // Filter toolbar, freely editable/clearable.
@@ -348,11 +350,13 @@ export function CatalogPage() {
     }
     switch (key) {
       case 'item_summary':
-        return widest([r.alias_name || r.name, r.spec ?? '', r.quantity > 1 ? `×${r.quantity}` : '']);
+        // Iteration 27 (FR-003a): the column is sized by the PRIMARY name line
+        // only — the spec secondary truncates at the column width instead.
+        return widest([r.alias_name || r.name, r.quantity > 1 ? `×${r.quantity}` : '']);
       case 'parameters':
-        return parameterPairs(r.parameters, (id) => t({ id })).join('   ');
+        return parameterPairs(r.parameters, (id) => t({ id })).map(pairText).join('   ');
       case 'remark':
-        return r.remark ?? '';
+        return (r.remark ?? '').replace(/\n+/g, ' / ');
       case 'acquisition__source':
         return flatMode ? (r.acquisition?.source ?? '') : '';
       case 'name':
@@ -463,6 +467,15 @@ export function CatalogPage() {
           title: t({ id: 'pages.inventory.catalog.col.item' }),
           ...wId('item_summary', 'pages.inventory.catalog.col.item'),
           fixed: getFixed('item_summary'),
+          onCell: () => ({
+            // Truncate secondaries at the column width (FR-003a, iteration 27):
+            // in auto table layout an unconstrained nowrap spec would otherwise
+            // shrink-wrap against its own row's primary width.
+            style: {
+              maxWidth: wId('item_summary', 'pages.inventory.catalog.col.item').width,
+              overflow: 'hidden',
+            },
+          }),
           render: (_, r) => {
             const it = itemFor(r);
             if (!it) {
@@ -494,7 +507,10 @@ export function CatalogPage() {
               <Space size={[4, 4]} wrap style={{ maxWidth: '100%' }}>
                 {pairs.map((pair, i) => (
                   <Tag key={i} style={{ marginInlineEnd: 0, maxWidth: '100%' }}>
-                    <OverflowTooltip title={pair}>{pair}</OverflowTooltip>
+                    <OverflowTooltip title={pairText(pair)}>
+                      <KeyEmoji emoji={pair.emoji} />
+                      {pair.label}
+                    </OverflowTooltip>
                   </Tag>
                 ))}
               </Space>
@@ -560,7 +576,29 @@ export function CatalogPage() {
             ),
         },
         spec: { ...itemText('spec', 'pages.inventory.items.col.spec', (it) => it.spec), ellipsis: true },
-        remark: { ...itemText('remark', 'pages.inventory.items.col.remark', (it) => it.remark), ellipsis: true },
+        // Remark renders ONE ellipsised line with a gated tooltip (FR-031,
+        // iteration 27); render + measurement cap to 320px (measure-what-you-render).
+        remark: {
+          key: 'remark',
+          title: t({ id: 'pages.inventory.items.col.remark' }),
+          ...widthForHeader(
+            t({ id: 'pages.inventory.items.col.remark' }),
+            Math.min(dataWidths['remark'] ?? 0, 320),
+          ),
+          fixed: getFixed('remark'),
+          ...makeSortProps('remark', t({ id: 'pages.inventory.items.col.remark' }), sort),
+          render: (_, r) => {
+            const it = itemFor(r);
+            if (!it?.remark) return EMPTY;
+            return (
+              <div style={{ maxWidth: 320, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                <OverflowTooltip title={it.remark} style={{ maxWidth: '100%' }}>
+                  {it.remark.replace(/\n+/g, ' / ')}
+                </OverflowTooltip>
+              </div>
+            );
+          },
+        },
         quantity: {
           key: 'quantity',
           title: t({ id: 'pages.inventory.items.col.quantity' }),

@@ -503,6 +503,7 @@ export default {
   'pages.inventory.params.deleteTitle': '刪除參數「{name}」？',
   'pages.inventory.params.deleteBody': '有 {count} 個物品帶有此參數的值，刪除後這些值將一併移除。',
   'pages.inventory.params.name': '參數名稱',
+  'pages.inventory.params.emoji': '表情符號（選填）',
   'pages.inventory.params.typeLabel': '類型',
   'pages.inventory.params.type.string': '文字',
   'pages.inventory.params.type.numeric': '數值',

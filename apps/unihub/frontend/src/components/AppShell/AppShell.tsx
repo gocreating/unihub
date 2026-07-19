@@ -11,7 +11,7 @@ import {
   TeamOutlined,
 } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import { type ReactNode } from 'react';
 import { getMe, logout } from '@/services/unihub-backend/auth';
@@ -96,14 +96,17 @@ export function AppShell({ children }: AppShellProps) {
           {title}
         </span>
       )}
-      menuItemRender={(item, dom) => (
-        <span
-          style={{ cursor: 'pointer', display: 'block', width: '100%' }}
-          onClick={() => item.path && navigate(item.path)}
-        >
-          {dom}
-        </span>
-      )}
+      // Real hyperlinks (FR-034): browser shortcuts (middle/Cmd/Ctrl-click)
+      // open a new tab; plain clicks stay SPA navigations via <Link>.
+      menuItemRender={(item, dom) =>
+        item.path ? (
+          <Link to={item.path} style={{ display: 'block', width: '100%' }}>
+            {dom}
+          </Link>
+        ) : (
+          dom
+        )
+      }
       actionsRender={() => [<SelectLang key="select-lang" />]}
       avatarProps={{
         title: user?.username ?? '',

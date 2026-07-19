@@ -22,9 +22,19 @@ export function KeyEmoji({ emoji }: { emoji: string }) {
   return (
     <span
       aria-hidden
-      style={{ WebkitTextFillColor: 'transparent', textShadow: '0 0 0 currentcolor' }}
+      style={{
+        WebkitTextFillColor: 'transparent',
+        textShadow: '0 0 0 currentcolor',
+        // Centered on the key's text line (iteration 41): emoji glyphs carry
+        // a taller ascent than the small tag text and sat visibly high.
+        display: 'inline-flex',
+        alignItems: 'center',
+        verticalAlign: 'middle',
+        lineHeight: 1,
+        marginRight: 4,
+      }}
     >
-      {emoji}{' '}
+      {emoji}
     </span>
   );
 }

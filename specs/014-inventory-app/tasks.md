@@ -8,5 +8,5 @@ description: "Task list for Inventory App — Iteration 41 (2026-07-19)"
 
 **Baseline**: Iteration 40 shipped at `d7cdc31`. Decision in R41.1.
 
-- [ ] T001 Failing RTL: KeyEmoji renders as a centered inline-flex span (vertical-align middle, line-height 1, margin — no trailing space). Implement; suites green.
-- [ ] T002 Frontend loop; docker rebuild; screenshot verification; inventory e2e; commit + push (exit codes unmasked).
+- [x] T001 Failing RTL: KeyEmoji renders as a centered inline-flex span (vertical-align middle, line-height 1, margin — no trailing space). Implement; suites green.
+- [x] T002 Frontend loop; docker rebuild; screenshot verification; inventory e2e; commit + push (exit codes unmasked).

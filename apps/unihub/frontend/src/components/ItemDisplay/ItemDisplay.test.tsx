@@ -141,6 +141,10 @@ describe('parameter emoji (FR-032)', () => {
     // Silhouette technique: transparent fill + currentColor shadow inherits text color.
     expect(emoji.style.webkitTextFillColor).toBe('transparent');
     expect(emoji.style.textShadow).toContain('currentcolor');
+    // Vertically centered on the key's text line (iteration 41).
+    expect(emoji.style.display).toBe('inline-flex');
+    expect(emoji.style.alignItems).toBe('center');
+    expect(emoji.style.verticalAlign).toBe('middle');
     expect(screen.getByText(/Color: red/)).toBeInTheDocument();
     // No emoji span for definitions without one.
     expect(screen.getByText('capacity: 1500').textContent).toBe('capacity: 1500');

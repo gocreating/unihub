@@ -62,7 +62,8 @@ test('catalog Parameters column renders localized key-value pairs', async ({ pag
   expect(paired.length).toBeGreaterThan(0);
   // System keys carry their seeded emoji prefix (FR-032, iteration 27).
   expect(
-    paired.some((t) => /^(🎨|👕|⚖|📏|🧴) (Length|Width|Height|Weight|Color|Size|Volume): /.test(t)),
+    // The emoji-key gap is a CSS margin (iteration 41), not a text space.
+    paired.some((t) => /^(🎨|👕|⚖|📏|🧴) ?(Length|Width|Height|Weight|Color|Size|Volume): /.test(t)),
   ).toBe(true);
 });
 

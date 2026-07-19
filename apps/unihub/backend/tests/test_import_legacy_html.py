@@ -84,7 +84,9 @@ class TestHtmlLegacyParser:
     def test_remark_keys_resolve_to_fields(self, acquisitions):
         f = acquisitions[0].items[0].fields
         assert f["spec"] == "44 歐碼"
-        assert f["sku_price"] == 299.0 and f["sku_price_currency"] == "RMB"
+        # Iteration 39: 原價 is the pre-discount list price and never sets the
+        # sku — the row's own paid amount (199.9) derives it instead.
+        assert f["sku_price"] == 199.9 and f["sku_price_currency"] == "RMB"
         assert f["length"] == {"value": "10", "unit": "cm"}
         assert f["width"] == {"value": "20", "unit": "cm"}
         assert f["height"] == {"value": "30", "unit": "cm"}

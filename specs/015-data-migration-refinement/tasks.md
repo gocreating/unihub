@@ -142,10 +142,10 @@
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T035 Full verification sweep: backend `uv run ruff format . && uv run ruff check . && uv run pytest`; frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; confirm regenerated src/generated/api-types.ts is committed and in sync with the backend schema
-- [ ] T036 [P] Manual quickstart.md validation against a scratch `file://` remote covering spec SC-001..SC-006 (incl. force-push banner and incompatible-node gating)
-- [ ] T037 [P] i18n audit — every new string present in both src/locales/en-US/ and src/locales/zh-TW/, counts via ICU plurals; no hardcoded UI strings in new components
-- [ ] T038 Update the CLAUDE.md SPECKIT block (iteration summary) and spec.md status per house convention
+- [x] T035 Full verification sweep: backend `uv run ruff format . && uv run ruff check . && uv run pytest` (448 passed); frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (547 passed) — note: src/generated/api-types.ts unchanged by design; sync endpoints are hand-typed per the 004-era precedent (plain APIViews outside the spectacular schema), and schema generation still succeeds
+- [ ] T036 [P] Manual quickstart.md validation against a scratch `file://` remote covering spec SC-001..SC-006 (incl. force-push banner and incompatible-node gating) — NOT run in the implementation environment (no live app/DB); every SC scenario is covered by the automated pytest/RTL suites, but the in-app walk-through remains for a human session
+- [x] T037 [P] i18n audit — every new string present in both src/locales/en-US/ and src/locales/zh-TW/, counts via ICU plurals; no hardcoded UI strings in new components
+- [x] T038 Update the CLAUDE.md SPECKIT block (iteration summary) and spec.md status per house convention
 
 ---
 

@@ -171,7 +171,7 @@ When connecting a new dimension to the hub:
 
 **Branch**: `013-finance-portfolio-management` | **Plan**: [specs/013-finance-portfolio-management/plan.md](specs/013-finance-portfolio-management/plan.md)
 
-Finance portfolio management from GitHub issue #14: add Asset, Portfolio, Transaction, and Transfer entities with full CRUD. Portfolios have per-portfolio base currency (immutable), lifecycle state (active/closed), and auto-derived first/last transaction timestamps. Transfers are inline expandable rows in the Transactions table; each transfer records a signed asset change amount plus an optional Value Change in the portfolio's base currency. See plan for constitution check, data model, and API contracts.
+Finance portfolio management from GitHub issue #14: add Asset, Portfolio, Transaction, and Transfer entities with full CRUD. Portfolios have per-portfolio base currency (immutable), lifecycle state (active/closed), and auto-derived first/last transaction timestamps. Transfers are inline expandable rows in the Transactions table; each transfer records a signed asset change amount plus an optional Value Change in the portfolio's base currency. **Iteration 2 (2026-07-20)** in progress — frontend-only, per constitution v1.24.0: Portfolios list Name + View become real hyperlinks and row Edit/Delete are removed; portfolio detail page gains a constitution breadcrumb (Portfolios → name) and a "Portfolio" panel (Card + shared `PanelHeaderActions`: Edit visible, Delete in kebab; delete confirms then navigates back to the list). See plan for the UI contract and pattern references.
 <!-- SPECKIT END -->
 
 ## Active Technologies

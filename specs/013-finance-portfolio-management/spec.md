@@ -27,6 +27,13 @@
 - Q: Should transfer type be a field, and must the base-currency value change be required for PnL transfers? → A: Remove transfer type entirely. The Value Change field is optional on every transfer — users fill it for cost/expense/income events, leave it blank for pure position changes. *(Supersedes Session 2026-06-04 decisions on transfer type and base-currency amount requirements.)*
 - Q: What should the Value Change field be labelled in the UI? → A: "Value Change (XXX)" where XXX is the portfolio's base currency symbol (e.g., "Value Change (USD)").
 
+### Session 2026-07-20
+
+- Q: How should users navigate from the Portfolios list to a portfolio's detail page? → A: The Name cell and the row's View action are real hyperlinks (router `<Link>` / `href`) to the detail page, per constitution v1.24.0 "Hyperlinked row identifiers & actions" — no onClick-only navigation.
+- Q: Where do the portfolio Edit and Delete actions live? → A: Not in the Portfolios list rows. They move to the portfolio detail page, on the "Portfolio" panel header — Edit as a visible header button, Delete folded into the kebab (⋯) menu per the constitution's panel-header actions rule.
+- Q: How does the portfolio detail page handle top-of-page navigation? → A: Via a constitution-compliant breadcrumb (Portfolios → current portfolio name); no page-level Back/Cancel control.
+- Q: How is the portfolio's own information presented on the detail page? → A: Inside a panel (Card) titled "Portfolio" holding the portfolio's fields (name, base currency, state, first/last transaction time). Deleting from this panel (after the standard confirmation, and only when not blocked by FR-010) returns the user to the Portfolios list.
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Manage Assets (Priority: P1)
@@ -59,13 +66,16 @@ As a user, I want to create and manage portfolios so that I can group related as
 
 1. **Given** the user navigates to the Portfolios page, **When** they view the page, **Then** they see all their portfolios in a paginated table with a toolbar, sorted by most recently active first
 2. **Given** the Portfolios page is open, **When** the user creates a portfolio and selects a base currency, **Then** the portfolio appears in the list with an active state
-3. **Given** a portfolio exists, **When** the user edits its name, **Then** the change is saved and reflected in the list
+3. **Given** a portfolio exists, **When** the user opens its detail page and edits its name via the "Portfolio" panel's Edit action, **Then** the change is saved and reflected on the panel and in the list
 4. **Given** a portfolio exists, **When** the user attempts to edit the base currency field, **Then** the field is read-only and the system prevents any change
 5. **Given** an active portfolio exists, **When** the user marks it as closed, **Then** its state changes to closed and this is reflected in the list
 6. **Given** a closed portfolio exists, **When** the user reopens it, **Then** its state returns to active
-7. **Given** a portfolio has no associated transactions, **When** the user deletes it, **Then** it is removed from the list
+7. **Given** a portfolio has no associated transactions, **When** the user deletes it from the detail page's "Portfolio" panel (kebab → Delete, then confirms), **Then** it is removed and the user is returned to the Portfolios list
 8. **Given** a portfolio has associated transactions, **When** the user attempts to delete it, **Then** they receive an error explaining the dependency
 9. **Given** a transaction is created or edited within a portfolio, **When** the save is confirmed, **Then** the portfolio's first_transaction_time and last_transaction_time automatically reflect the earliest and most recent transaction timestamps respectively
+10. **Given** the Portfolios list, **When** the user clicks a portfolio's Name or its View action — including middle-click / Ctrl+Click — **Then** the portfolio detail page opens (in a new tab for the modifier clicks), because both are real hyperlinks; the list rows expose no Edit or Delete actions
+11. **Given** the portfolio detail page, **When** the user views the top of the page, **Then** a breadcrumb reads Portfolios → current portfolio name, and clicking "Portfolios" returns to the list; no page-level Back/Cancel button exists
+12. **Given** the portfolio detail page, **When** the user views the "Portfolio" panel, **Then** it shows the portfolio's fields (name, base currency, state, first/last transaction time) with Edit visible in the panel header and Delete inside the header kebab (⋯) menu
 
 ---
 
@@ -135,6 +145,9 @@ As a user, I want my existing finance data migrated into the new portfolio struc
 - **FR-010**: Deleting a portfolio that has associated transactions MUST be prevented and the user MUST receive an explanatory message
 - **FR-011**: All entity list views MUST include a toolbar, column filtering, sorting, and pagination consistent with existing finance app patterns
 - **FR-012**: *(Deferred)* The system MUST provide a one-time automated migration of existing finance data into the new entity structure — scheduled for a follow-up after initial implementation acceptance
+- **FR-013**: In the Portfolios list, the Name cell and the row's View action MUST be real hyperlinks to the portfolio detail page (constitution v1.24.0 "Hyperlinked row identifiers & actions"); the list rows MUST NOT contain Edit or Delete actions
+- **FR-014**: The portfolio detail page MUST navigate via a breadcrumb (Portfolios → current portfolio name) with no page-level Back/Cancel control, and MUST present the portfolio's fields inside a panel titled "Portfolio" whose header carries the entity actions per the constitution's panel-header rule: Edit as a visible button (opening the existing portfolio form modal), Delete folded into the kebab (⋯) menu
+- **FR-015**: Deleting a portfolio from the detail page MUST use the standard delete confirmation, remain subject to FR-010 (blocked while transactions exist), and on success MUST return the user to the Portfolios list
 
 ### Key Entities
 

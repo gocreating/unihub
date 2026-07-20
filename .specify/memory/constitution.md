@@ -1,25 +1,27 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.22.0 → 1.23.0 (minor — Principle XII's column-pinning
-  guidance updated for feature 017-multiple-sticky-columns, 2026-07-20:
-  pinning is now PER-COLUMN (`ColumnDef.pin: 'left' | 'right'`, any number of
-  columns per side, edge-grouped display order) instead of the two view-wide
-  "pin first/last visible column" booleans. The remount-key rule now references
-  the pin fingerprint and the label-patch rule lists `pin` among never-touched
-  fields. Material change to existing guidance = MINOR.)
+Version change: 1.23.0 → 1.24.0 (minor — Principle VI gains one NEW mandatory
+  rule from user feedback, 2026-07-20: "Hyperlinked row identifiers & actions"
+  — when an entity has a detail or edit page, the table row's primary
+  identifier and every page-navigating row action MUST be real hyperlinks
+  (<a href> / router <Link>), never onClick-only navigation, so users can
+  open them in another tab. Codifies the Edit→href pattern established in
+  the inventory iterations 19/21. Note: originally drafted as 1.23.0; renumbered
+  to 1.24.0 because feature 017's per-column pinning amendment claimed 1.23.0
+  on main first.)
 Modified principles:
-  - XII. Entity Toolbar & Sort Controls — "ProTable Remount Key" bullet now
-    requires the pin fingerprint (visible pinned columns + sides, display
-    order) in the key; "Async Label Patching" bullet's preserved fields are
-    now `visible`, `order`, `pin` (stickyLeft/stickyRight removed).
+  - VI. UI/UX Reference: ov-fleet — added "Hyperlinked row identifiers &
+    actions (open-in-new-tab)" mandatory rule.
 Added sections: none
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed (generic gate)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: none.
+Follow-up TODOs: none — existing pages that navigate via onClick-only
+  handlers (if any remain) fall under the "applies immediately" clause and
+  are picked up by the next feature touching each page.
 -->
 
 # UniHub Constitution
@@ -251,6 +253,19 @@ reference implementation to follow.
   default `<Tag>` appearance; the goal is to make relational references
   scannable at a glance. Example: currency columns in the Finance Exchange Rates
   page MUST render `<Tag>{currency}</Tag>` rather than a plain string.
+- **Hyperlinked row identifiers & actions (open-in-new-tab)**: When an entity
+  has a detail page or an edit page, the entity table row's **primary
+  identifier cell** (usually the name or ID column) MUST render as a real
+  hyperlink (`<a href>` — in practice a React Router `<Link to>`) pointing at
+  that page, and every row **action that navigates to a page** (e.g. an Edit
+  button leading to an edit page) MUST likewise be a real hyperlink styled as
+  needed. Real anchors preserve the browser's native affordances — middle-click
+  / Ctrl+Click / Cmd+Click to open in another tab, right-click → copy link —
+  which JS-only navigation destroys. `onClick`-only navigation
+  (`navigate('...')` on a div/button/Typography) for these elements is a
+  constitution violation. Row actions that do NOT navigate (e.g. Delete, which
+  opens a confirmation modal) remain buttons. Applies immediately to all
+  existing entity tables, not only new ones.
 - **Standalone-page navigation (no Cancel button)**: Full-page create, edit, and
   detail views (e.g. an entity create/edit page, a record detail page) MUST use a
   breadcrumb for navigation (parent → current) and MUST NOT render a Cancel button.
@@ -301,7 +316,11 @@ field widths between forms — and right-aligned number inputs make numeric colu
 readable and comparable at a glance. Right-aligned panel-header actions with a
 default-folded kebab keep destructive controls out of accidental reach, keep
 panel headers scannable, and give narrow layouts a graceful degradation path
-instead of wrapped or clipped button rows.
+instead of wrapped or clipped button rows. Rendering row identifiers and
+page-navigating actions as real hyperlinks restores the browser behaviours
+users rely on for multi-record workflows — opening several records in tabs,
+copying a link to a record — at zero implementation cost over an onClick
+handler.
 
 ### VII. PageTable Layout — NON-NEGOTIABLE
 
@@ -717,4 +736,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.23.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-20
+**Version**: 1.24.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-20

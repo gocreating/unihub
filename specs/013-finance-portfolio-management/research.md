@@ -98,3 +98,55 @@
 **Alternatives considered**:
 - 4 decimal places: Insufficient for crypto assets.
 - Float: Loses precision in JSON serialisation; rejected.
+
+---
+
+# Iteration 2 (2026-07-20): Portfolio Navigation & Detail Panel
+
+## Decision I2-1: Row hyperlink implementation
+
+**Decision**: Follow the inventory catalog iteration-19 pattern exactly — AntD `Button`
+(View action) and the Name anchor carry a real `href` to `/finance/portfolios/:id` plus a
+guarded `onClick`: `if (e.metaKey || e.ctrlKey) return; e.preventDefault(); navigate(...)`.
+
+**Rationale**: Real `href` restores middle-click / Ctrl+Click / copy-link (constitution
+v1.24.0); the guard keeps plain clicks as SPA navigation. Proven in
+`pages/inventory/catalog/index.tsx` (~line 675).
+
+**Alternatives considered**: React Router `<Link>` styled as button — equivalent semantics
+but diverges from the established repo pattern for AntD buttons; rejected for consistency.
+
+## Decision I2-2: Panel header actions
+
+**Decision**: Reuse the shared `PanelHeaderActions` component
+(`components/PanelHeaderActions/`) in the new "Portfolio" Card's `extra`, with
+`visible=[Edit]`, `advanced=[Delete]`, `narrow` from `useContainerWidth(720)` — mirroring
+`pages/inventory/scenarios/detail.tsx` (~line 574).
+
+**Rationale**: The component already implements the constitution's panel-header kebab rule
+(destructive always folded; visible actions fold when narrow; leftward-opening dropdown).
+
+**Alternatives considered**: Ad-hoc `Space` of buttons in `Card extra` — re-implements the
+kebab rule; violates the shared-component intent.
+
+## Decision I2-3: Breadcrumb
+
+**Decision**: Follow `pages/finance/balance-sheets/detail.tsx` (~line 462): AntD
+`Breadcrumb` with items `[{ title: Portfolios, href, onClick: preventDefault + navigate },
+{ title: portfolio name }]`, replacing the `ArrowLeftOutlined` ad-hoc back-link.
+
+**Rationale**: Established finance-domain breadcrumb pattern; satisfies the constitution's
+standalone-page navigation rule (breadcrumb, no Back/Cancel control).
+
+**Alternatives considered**: none — pattern is prescribed by constitution + precedent.
+
+## Decision I2-4: Delete flow from detail page
+
+**Decision**: Kebab → `Modal.confirm` (`okType: 'danger'`, locale keys) → existing delete
+mutation → `message.success` → `navigate('/finance/portfolios')`. FR-010 block (portfolio
+has transactions) surfaces the backend error via the standard `message.error` path and does
+NOT navigate.
+
+**Rationale**: Moves the existing list-row delete behavior without weakening the
+delete-confirmation constraint; navigation-on-success is required because the deleted
+entity's page can no longer render.

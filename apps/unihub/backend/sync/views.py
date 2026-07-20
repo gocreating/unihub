@@ -74,6 +74,64 @@ class SyncStatusView(APIView):
         return Response(serializer.data)
 
 
+class SyncHistoryView(APIView):
+    """GET /api/v1/sync/history/ — the data repository's commit graph payload."""
+
+    def get(self, request: Request) -> Response:
+        config = SyncConfig.objects.first()
+        if config is None:
+            return Response({"error": "not_configured"}, status=status.HTTP_400_BAD_REQUEST)
+
+        svc = _get_git_service(config)
+        try:
+            remote_head = svc.reset_to_remote()
+        except GitError as exc:
+            return Response(
+                {"error": "git_error", "message": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        history_rewritten = False
+        commits: list[dict] = []
+        has_more = False
+
+        if remote_head is not None:
+            stored = config.last_known_remote_commit
+            if stored and stored != remote_head:
+                # A previously-seen remote head that is no longer an ancestor
+                # of the new head means the remote history was rewritten.
+                history_rewritten = not svc.is_ancestor(stored, remote_head)
+
+            try:
+                limit = min(max(int(request.query_params.get("limit", 50)), 1), 200)
+            except ValueError:
+                limit = 50
+            before = request.query_params.get("before")
+            commits, has_more = svc.history(limit=limit, before=before)
+
+            from sync.services.compatibility import classify_commit
+
+            for commit in commits:
+                compat = classify_commit(svc.clone_dir, commit["sha"])
+                commit["compatible"] = compat.compatible
+                commit["incompatible_reason"] = compat.reason
+                commit["is_remote_head"] = commit["sha"] == remote_head
+                commit["is_local_state"] = commit["sha"] == config.local_state_commit
+
+            SyncConfig.objects.filter(pk=config.pk).update(last_known_remote_commit=remote_head)
+
+        return Response(
+            {
+                "commits": commits,
+                "has_more": has_more,
+                "remote_head": remote_head,
+                "local_commit": config.local_state_commit,
+                "has_local_changes": svc.local_changes_exist(),
+                "history_rewritten": history_rewritten,
+            }
+        )
+
+
 class SyncPublishView(APIView):
     """POST /api/v1/sync/publish/ — export tables to CSV, commit, and push."""
 

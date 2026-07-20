@@ -27,6 +27,7 @@ import type {
   SyncPublishPreviewResult,
 } from '@/services/unihub-backend/sync';
 import { ChangePreviewTable } from '@/components/ImportExport/ChangePreviewTable';
+import { CommitGraph } from './CommitGraph';
 import {
   confirmApply,
   forcePublishSync,
@@ -447,6 +448,7 @@ export function SyncTab() {
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       {configured ? (
         <>
+          <CommitGraph />
           <ActionsCard configured={configured} />
           <ConfigSection configured={configured} />
         </>

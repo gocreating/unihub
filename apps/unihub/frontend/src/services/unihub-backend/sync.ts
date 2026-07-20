@@ -75,6 +75,26 @@ export interface SyncApplyConfirmResult {
   results: Array<{ table: string; display_name: string; applied: number }>;
 }
 
+export interface SyncHistoryCommit {
+  sha: string;
+  parents: string[];
+  author_date: string;
+  message: string;
+  is_remote_head: boolean;
+  is_local_state: boolean;
+  compatible: boolean;
+  incompatible_reason: string | null;
+}
+
+export interface SyncHistoryResult {
+  commits: SyncHistoryCommit[];
+  has_more: boolean;
+  remote_head: string | null;
+  local_commit: string | null;
+  has_local_changes: boolean;
+  history_rewritten: boolean;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function getCsrfToken(): string {
@@ -99,6 +119,20 @@ export async function saveSyncConfig(data: SyncConfigWrite): Promise<SyncConfigR
   });
   if (!res.ok) throw new Error('Failed to save sync config');
   return res.json() as Promise<SyncConfigRead>;
+}
+
+export async function getSyncHistory(
+  params: { limit?: number; before?: string } = {},
+): Promise<SyncHistoryResult> {
+  const qs = new URLSearchParams();
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.before !== undefined) qs.set('before', params.before);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/v1/sync/history/${suffix}`, {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to fetch sync history');
+  return res.json() as Promise<SyncHistoryResult>;
 }
 
 export async function getSyncStatus(): Promise<SyncStatus> {

@@ -107,10 +107,13 @@ class GitSyncService:
 
             shutil.rmtree(self.clone_dir)
         self.clone_dir.mkdir(parents=True, exist_ok=True)
-        self._run(
+        clone = self._run(
             ["git", "clone", self._authenticated_url(), str(self.clone_dir)],
             cwd=self.clone_dir.parent,
+            check=False,
         )
+        if clone.returncode != 0:
+            raise GitError(self._sanitise(clone.stderr.strip()))
 
     def reset_to_remote(self) -> str | None:
         """Fetch the remote head and hard-reset the clone to it.
@@ -223,6 +226,58 @@ class GitSyncService:
                 remote_commit=None,
                 error_message=self._sanitise(str(exc)),
             )
+
+    # ── History ───────────────────────────────────────────────────────────────
+
+    def history(self, limit: int = 50, before: str | None = None) -> tuple[list[dict], bool]:
+        """Return newest-first commits from the clone's HEAD (call after reset).
+
+        Args:
+            limit: Maximum commits to return.
+            before: Return only commits strictly older than this sha.
+
+        Returns:
+            (commits, has_more) — each commit is a dict with sha, parents,
+            author_date (ISO), and message.
+        """
+        start = "HEAD" if before is None else f"{before}~1"
+        log = self._run(
+            [
+                "git",
+                "log",
+                "--format=%H%x1f%P%x1f%aI%x1f%s",
+                f"--max-count={limit + 1}",
+                start,
+            ],
+            check=False,
+        )
+        if log.returncode != 0:
+            return [], False  # `before` was the root commit (or unknown sha)
+
+        commits: list[dict] = []
+        for line in log.stdout.splitlines():
+            sha, parents, author_date, message = line.split("\x1f", 3)
+            commits.append(
+                {
+                    "sha": sha,
+                    "parents": parents.split() if parents else [],
+                    "author_date": author_date,
+                    "message": message,
+                }
+            )
+        has_more = len(commits) > limit
+        return commits[:limit], has_more
+
+    def is_ancestor(self, ancestor: str, descendant: str) -> bool:
+        """True when ``ancestor`` is reachable from ``descendant`` (or equal)."""
+        res = self._run(["git", "merge-base", "--is-ancestor", ancestor, descendant], check=False)
+        return res.returncode == 0
+
+    def local_changes_exist(self) -> bool:
+        """True when the DB differs from the clone's current HEAD snapshot."""
+        from sync.services.publish_helper import preview_publish_against_head
+
+        return bool(preview_publish_against_head(self.clone_dir))
 
     def _changed_tables(self, all_tables: list[str]) -> list[str]:
         """Return only the tables whose CSV files are staged as changed."""

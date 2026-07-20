@@ -83,6 +83,77 @@ def _validate_fk_value(
     return None
 
 
+def _column_mapping(descriptor: TableDescriptor) -> dict[str, str]:
+    """Map bare column names to the registry's canonical headers.
+
+    Lets us accept CSVs exported before a data type was renamed
+    (e.g. "symbol:text" → "symbol:string") without error.
+    """
+    mapping: dict[str, str] = {}
+    for fd in descriptor.system_fields:
+        mapping[fd.csv_header.split(":")[0]] = fd.csv_header
+    for ua_header in _get_user_attr_header_set(descriptor):
+        mapping[ua_header.split(":")[0]] = ua_header
+    return mapping
+
+
+def validate_headers(headers: list[str], descriptor: TableDescriptor) -> list[ValidationIssue]:
+    """Validate a CSV header row against a registered table's schema.
+
+    Shared by the importer and the sync commit-compatibility classifier so a
+    snapshot is "compatible" exactly when the importer would accept its headers:
+    missing OPTIONAL columns are tolerated (filled with defaults on import);
+    malformed headers, missing REQUIRED columns, and unknown columns are not.
+
+    Args:
+        headers: The header cells of the CSV's first row.
+        descriptor: The registered TableDescriptor to validate against.
+
+    Returns:
+        Row-0 ValidationIssues; empty when the header row is acceptable.
+    """
+    errors: list[ValidationIssue] = []
+
+    for header in headers:
+        if not _HEADER_RE.match(header):
+            errors.append(
+                ValidationIssue(
+                    row=0,
+                    column=header,
+                    message=f"Invalid header format '{header}'. Expected 'name:type' or '[name]:type'.",
+                )
+            )
+    if errors:
+        return errors
+
+    col_name_to_reg_header = _column_mapping(descriptor)
+
+    # Presence is checked by column name only (type suffix may differ in old CSVs).
+    csv_col_names = {h.split(":")[0] for h in headers}
+    for fd in descriptor.system_fields:
+        bare = fd.csv_header.split(":")[0]
+        if not fd.optional and bare not in csv_col_names:
+            errors.append(
+                ValidationIssue(
+                    row=0, column=None, message=f"Missing required column: {fd.csv_header}."
+                )
+            )
+    if errors:
+        return errors
+
+    for header in headers:
+        bare = header.split(":")[0]
+        if bare not in col_name_to_reg_header:
+            errors.append(
+                ValidationIssue(
+                    row=0,
+                    column=header,
+                    message=f"Unknown column '{header}' not found in table schema.",
+                )
+            )
+    return errors
+
+
 def parse_csv(
     csv_text: str,
     descriptor: TableDescriptor,
@@ -97,65 +168,11 @@ def parse_csv(
     reader = csv.DictReader(io.StringIO(csv_text))
     headers: list[str] = list(reader.fieldnames or [])
 
-    # ── Validate header format ─────────────────────────────────────────────────
-    for header in headers:
-        if not _HEADER_RE.match(header):
-            errors.append(
-                ValidationIssue(
-                    row=0,
-                    column=header,
-                    message=f"Invalid header format '{header}'. Expected 'name:type' or '[name]:type'.",
-                )
-            )
-
+    errors = validate_headers(headers, descriptor)
     if errors:
         return [], errors
 
-    # ── Build column-name → canonical registry header mapping ─────────────────
-    # Maps the bare column name (e.g. "symbol") to the registry's full header
-    # (e.g. "symbol:string").  This lets us accept CSVs exported before a data
-    # type was renamed (e.g. "symbol:text" → "symbol:string") without error.
-    col_name_to_reg_header: dict[str, str] = {}
-    for fd in descriptor.system_fields:
-        bare = fd.csv_header.split(":")[0]
-        col_name_to_reg_header[bare] = fd.csv_header
-    for ua_header in _get_user_attr_header_set(descriptor):
-        bare = ua_header.split(":")[0]
-        col_name_to_reg_header[bare] = ua_header
-
-    # ── Check all *required* system columns are present ────────────────────────
-    # Optional fields (optional=True on FieldDescriptor) may be absent in older
-    # exported CSVs produced before those fields were added to the data model.
-    # Missing optional columns are silently filled with default_value on import.
-    # Presence is checked by column name only (type suffix may differ in old CSVs).
-    csv_col_names = {h.split(":")[0] for h in headers}
-
-    for fd in descriptor.system_fields:
-        bare = fd.csv_header.split(":")[0]
-        if not fd.optional and bare not in csv_col_names:
-            errors.append(
-                ValidationIssue(
-                    row=0, column=None, message=f"Missing required column: {fd.csv_header}."
-                )
-            )
-
-    if errors:
-        return [], errors
-
-    # ── Check for unknown columns (not in system fields or user attrs) ─────────
-    for header in headers:
-        bare = header.split(":")[0]
-        if bare not in col_name_to_reg_header:
-            errors.append(
-                ValidationIssue(
-                    row=0,
-                    column=header,
-                    message=f"Unknown column '{header}' not found in table schema.",
-                )
-            )
-
-    if errors:
-        return [], errors
+    col_name_to_reg_header = _column_mapping(descriptor)
 
     # ── Find PK field ──────────────────────────────────────────────────────────
     pk_field = next((f for f in descriptor.system_fields if f.is_pk), None)

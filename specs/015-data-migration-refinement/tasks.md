@@ -81,17 +81,17 @@
 
 ### Tests for User Story 3 (write first, must fail)
 
-- [ ] T016 [P] [US3] Write failing tests in tests/sync/test_views_history.py: happy path payload (newest-first, `is_remote_head`, `is_local_state`, `has_more` paging with `limit`/`before`, `has_local_changes`), empty remote, not-configured 400, git error 500, `last_known_remote_commit` recorded on fetch, `history_rewritten` true when the stored sha is no longer an ancestor of the new head
-- [ ] T017 [P] [US3] Write failing tests in tests/sync/test_compatibility.py for `classify_commit(clone_dir, sha)`: all-valid headers → compatible; missing required column → incompatible with column named in reason; unknown/missing-optional columns tolerated; absent table file tolerated; unreadable file → incompatible
+- [x] T016 [P] [US3] Write failing tests in tests/sync/test_views_history.py: happy path payload (newest-first, `is_remote_head`, `is_local_state`, `has_more` paging with `limit`/`before`, `has_local_changes`), empty remote, not-configured 400, git error 500, `last_known_remote_commit` recorded on fetch, `history_rewritten` true when the stored sha is no longer an ancestor of the new head
+- [x] T017 [P] [US3] Write failing tests in tests/sync/test_compatibility.py for `classify_commit(clone_dir, sha)`: all-valid headers → compatible; missing required column → incompatible with column named in reason; unknown/missing-optional columns tolerated; absent table file tolerated; unreadable file → incompatible
 
 ### Implementation for User Story 3
 
-- [ ] T018 [US3] Implement history primitives in sync/services/git_service.py: `history(limit, before)` via `git log --format=%H%x1f%P%x1f%aI%x1f%s`, ancestor check via `git merge-base --is-ancestor`, and `last_known_remote_commit` read/update hooks in `status()` + `reset_to_remote()` call sites
-- [ ] T019 [US3] Implement `classify_commit()` in sync/services/compatibility.py — header-line-only `git show <sha>:<file>` reads validated with the header rules from data_io/services/csv_importer.py (extract a reusable `validate_headers()` there if needed); make T017 pass
-- [ ] T020 [US3] Add `SyncHistoryView` (GET /api/v1/sync/history/) in sync/views.py + serializers in sync/serializers.py + route in sync/urls.py per contracts/sync-api.md; make T016 pass; run backend quality loop
-- [ ] T021 [US3] Regenerate OpenAPI + `pnpm generate-types`; add `getSyncHistory` to src/services/unihub-backend/sync.ts
-- [ ] T022 [P] [US3] Write failing RTL tests in src/pages/io/SyncTab/CommitGraph.test.tsx: loading state, error + retry, node rendering (sha7, relative time, message), local/remote badges, pending-local-changes pseudo-node when `has_local_changes`, rewritten-history banner, disabled incompatible node with gated tooltip reason, load-more
-- [ ] T023 [US3] Implement `CommitGraph` in src/pages/io/SyncTab/CommitGraph.tsx (custom vertical commit rail per research R3; React Query `['sync','history']`; i18n en-US + zh-TW) and mount it in src/pages/io/SyncTab/index.tsx above the existing actions; make T022 pass; run frontend loop + `pnpm build`
+- [x] T018 [US3] Implement history primitives in sync/services/git_service.py: `history(limit, before)` via `git log --format=%H%x1f%P%x1f%aI%x1f%s`, ancestor check via `git merge-base --is-ancestor`, and `last_known_remote_commit` read/update hooks in `status()` + `reset_to_remote()` call sites
+- [x] T019 [US3] Implement `classify_commit()` in sync/services/compatibility.py — header-line-only `git show <sha>:<file>` reads validated with the header rules from data_io/services/csv_importer.py (extract a reusable `validate_headers()` there if needed); make T017 pass
+- [x] T020 [US3] Add `SyncHistoryView` (GET /api/v1/sync/history/) in sync/views.py + serializers in sync/serializers.py + route in sync/urls.py per contracts/sync-api.md; make T016 pass; run backend quality loop
+- [x] T021 [US3] Regenerate OpenAPI + `pnpm generate-types`; add `getSyncHistory` to src/services/unihub-backend/sync.ts
+- [x] T022 [P] [US3] Write failing RTL tests in src/pages/io/SyncTab/CommitGraph.test.tsx: loading state, error + retry, node rendering (sha7, relative time, message), local/remote badges, pending-local-changes pseudo-node when `has_local_changes`, rewritten-history banner, disabled incompatible node with gated tooltip reason, load-more
+- [x] T023 [US3] Implement `CommitGraph` in src/pages/io/SyncTab/CommitGraph.tsx (custom vertical commit rail per research R3; React Query `['sync','history']`; i18n en-US + zh-TW) and mount it in src/pages/io/SyncTab/index.tsx above the existing actions; make T022 pass; run frontend loop + `pnpm build`
 
 **Checkpoint**: Graph visible and truthful; legacy buttons still present (removed in US5).
 

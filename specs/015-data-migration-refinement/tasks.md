@@ -62,12 +62,12 @@
 
 ### Tests for User Story 2 (write first, must fail)
 
-- [ ] T013 [P] [US2] Write failing RTL tests in src/components/ImportExport/ClientPaginationFooter.test.tsx (record count left, size Select before Pagination in DOM, right-aligned controls group, page-size change + page change callbacks, ICU plural "record/records") and extend src/components/ImportExport/ChangePreviewTable.test.tsx (each tab >1 page renders the shared footer; antd built-in pagination absent)
+- [x] T013 [P] [US2] Write failing RTL tests in src/components/ImportExport/ClientPaginationFooter.test.tsx (record count left, size Select before Pagination in DOM, right-aligned controls group, page-size change + page change callbacks, ICU plural "record/records") and extend src/components/ImportExport/ChangePreviewTable.test.tsx (each tab >1 page renders the shared footer; antd built-in pagination absent)
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Create `ClientPaginationFooter` in src/components/ImportExport/ClientPaginationFooter.tsx (client-side page/pageSize state contract mirroring the constitution footer layout) with i18n keys added to src/locales/en-US/ and src/locales/zh-TW/ (io section, ICU plurals)
-- [ ] T015 [US2] Wire it into all three tabs of src/components/ImportExport/ChangePreviewTable.tsx (`pagination={false}` + sliced data + footer); make T013 pass; run frontend quality loop + `pnpm build`
+- [x] T014 [US2] ~~Create `ClientPaginationFooter`~~ REUSED the shared `EntityOffsetFooter` (it is purely prop-driven — no server coupling), wrapped in a client-paged `PagedPreviewTable` inside src/components/ImportExport/ChangePreviewTable.tsx; existing `common.entityOps.pagination.*` ICU keys cover both locales, no new keys needed
+- [x] T015 [US2] Wire it into all three tabs of src/components/ImportExport/ChangePreviewTable.tsx (`pagination={false}` + sliced data + footer); make T013 pass; run frontend quality loop + `pnpm build`
 
 **Checkpoint**: US1+US2 independently shippable.
 

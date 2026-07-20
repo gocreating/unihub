@@ -293,6 +293,7 @@ export default {
   'pages.io.sync.publish.success': '已發佈 {sha}，匯出 {count} 個資料表。',
   'pages.io.sync.publish.upToDate': '已是最新狀態，無需發佈。',
   'pages.io.sync.publish.error': '發佈失敗。',
+  'pages.io.sync.publish.stale': '資料在預覽後已變更，正在重新整理預覽。',
   'pages.io.sync.diverged.title': '推送被拒絕 — 歷史已分歧',
   'pages.io.sync.diverged.description': '遠端有你本地副本中不存在的提交。請選擇處理方式：',
   'pages.io.sync.diverged.forcePublish': '強制推送（覆蓋遠端）',

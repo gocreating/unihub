@@ -131,11 +131,13 @@ def test_publish_returns_none_when_no_changes(svc: GitSyncService, bare_repo: di
     assert result is None
 
 
-def test_publish_raises_diverged_on_rejected_push(
+def test_publish_absorbs_remote_commits_via_reset(
     svc: GitSyncService, bare_repo: dict, tmp_path: Path
 ) -> None:
+    """Publish always commits on the true remote head (015-R1): a remote that
+    moved ahead is absorbed by reset_to_remote, so the push fast-forwards
+    instead of raising DivergedException."""
     from unittest.mock import patch
-    from sync.services.git_service import DivergedException
 
     svc.ensure_clone()
 
@@ -162,10 +164,19 @@ def test_publish_raises_diverged_on_rejected_push(
         cwd=str(other),
     )
 
-    # svc publish should create a local commit and fail to push (non-fast-forward)
+    # svc publish resets to the remote head first, so the push fast-forwards
+    # and the foreign commit remains an ancestor of the published commit.
     with patch("sync.services.publish_helper.write_csvs_to_clone", side_effect=_write_dummy_csv):
-        with pytest.raises(DivergedException):
-            svc.publish()
+        result = svc.publish()
+
+    assert result is not None
+    merge_base = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", "HEAD~1", "HEAD"],
+        cwd=str(svc.clone_dir),
+        capture_output=True,
+    )
+    assert merge_base.returncode == 0
+    assert (svc.clone_dir / "other.txt").exists()
 
 
 def test_force_publish_pushes_with_force(

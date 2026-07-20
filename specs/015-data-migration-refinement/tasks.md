@@ -12,7 +12,7 @@
 
 **Purpose**: Confirm a green baseline so every later failure is attributable to this feature.
 
-- [ ] T001 Run both quality loops untouched and record the baseline (backend: `uv run ruff check . && uv run pytest` from apps/unihub/backend/; frontend: `pnpm lint && pnpm typecheck && pnpm test` from apps/unihub/frontend/)
+- [x] T001 Run both quality loops untouched and record the baseline (backend: `uv run ruff check . && uv run pytest` from apps/unihub/backend/; frontend: `pnpm lint && pnpm typecheck && pnpm test` from apps/unihub/frontend/)
 
 ---
 
@@ -22,10 +22,10 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 Write failing tests for a new `GitSyncService.reset_to_remote()` primitive in tests/sync/test_git_service.py — fetch + hard-reset the clone to the remote head, returning the remote head sha; cases: normal, empty remote (returns None), unreachable remote (GitError), clone with stray local-only commits gets discarded
-- [ ] T003 Implement `reset_to_remote()` in sync/services/git_service.py (fetch via `_authenticated_url()`, `git reset --hard FETCH_HEAD`, empty-remote detection reusing the existing stderr checks) and make T002 pass
-- [ ] T004 [P] Add `local_state_commit` and `last_known_remote_commit` (both Char(40), null) to `SyncConfig` in sync/models.py + new migration sync/migrations/000X_sync_state_markers.py; expose `local_state_commit` in `SyncConfigReadSerializer` (sync/serializers.py)
-- [ ] T005 [P] Write failing tests then implement `diff_digest()` (sha256 over canonical JSON of a per-table changes list) in sync/services/digest.py with tests in tests/sync/test_digest.py — stable under dict-key order, sensitive to any row/field change
+- [x] T002 Write failing tests for a new `GitSyncService.reset_to_remote()` primitive in tests/sync/test_git_service.py — fetch + hard-reset the clone to the remote head, returning the remote head sha; cases: normal, empty remote (returns None), unreachable remote (GitError), clone with stray local-only commits gets discarded
+- [x] T003 Implement `reset_to_remote()` in sync/services/git_service.py (fetch via `_authenticated_url()`, `git reset --hard FETCH_HEAD`, empty-remote detection reusing the existing stderr checks) and make T002 pass
+- [x] T004 [P] Add `local_state_commit` and `last_known_remote_commit` (both Char(40), null) to `SyncConfig` in sync/models.py + new migration sync/migrations/000X_sync_state_markers.py; expose `local_state_commit` in `SyncConfigReadSerializer` (sync/serializers.py)
+- [x] T005 [P] Write failing tests then implement `diff_digest()` (sha256 over canonical JSON of a per-table changes list) in sync/services/digest.py with tests in tests/sync/test_digest.py — stable under dict-key order, sensitive to any row/field change
 
 **Checkpoint**: Foundation ready — user stories can begin.
 
@@ -39,16 +39,16 @@
 
 ### Tests for User Story 1 (write first, must fail)
 
-- [ ] T006 [P] [US1] Write failing reproduction/regression tests in tests/sync/test_publish_preview_regression.py: (a) multi-year inventory dataset (records far outside the catalog default filter) + publish → preview `up_to_date`, zero deletes; (b) FR-004 scenario — same dataset, then preview reports no deletion for any record still in the DB; (c) stale-clone scenario — reset the server clone to an older commit, remote head is newer → preview diffs against the REMOTE head, not the stale clone HEAD; (d) pull-direction preview covers all registered tables' full datasets
-- [ ] T007 [P] [US1] Write failing pinning tests in tests/sync/test_preview_pinning.py: preview response carries `base_commit` + `diff_digest`; publish confirm with matching digest succeeds and pushes a fast-forward commit; confirm after a local DB change → `409 preview_stale`; confirm after the remote moved → `409 preview_stale`; publish updates `local_state_commit`
+- [x] T006 [P] [US1] Write failing reproduction/regression tests in tests/sync/test_publish_preview_regression.py: (a) multi-year inventory dataset (records far outside the catalog default filter) + publish → preview `up_to_date`, zero deletes; (b) FR-004 scenario — same dataset, then preview reports no deletion for any record still in the DB; (c) stale-clone scenario — reset the server clone to an older commit, remote head is newer → preview diffs against the REMOTE head, not the stale clone HEAD; (d) pull-direction preview covers all registered tables' full datasets
+- [x] T007 [P] [US1] Write failing pinning tests in tests/sync/test_preview_pinning.py: preview response carries `base_commit` + `diff_digest`; publish confirm with matching digest succeeds and pushes a fast-forward commit; confirm after a local DB change → `409 preview_stale`; confirm after the remote moved → `409 preview_stale`; publish updates `local_state_commit`
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Rework sync/services/publish_helper.py: `preview_publish_against_head` → `preview_publish_against_remote(clone_dir)` computing the diff against the freshly reset remote head (via T003), returning `(base_commit, changes)`; add digest via T005
-- [ ] T009 [US1] Update `GitSyncService.publish_preview()/publish()/force_publish()` in sync/services/git_service.py: call `reset_to_remote()` first; `publish()` accepts `base_commit`+`diff_digest`, recomputes + verifies before committing (mismatch → new `PreviewStaleException`); pushes remain fast-forward from the remote-head base; both publishes set `local_state_commit`
-- [ ] T010 [US1] Update sync/views.py + sync/serializers.py: publish-preview response gains `base_commit`/`diff_digest`; `SyncPublishView`/`SyncForcePublishView` accept the pinning body and map `PreviewStaleException` → `409 {"error": "preview_stale"}`; apply-preview path also goes through `reset_to_remote()`; make T006+T007 pass
-- [ ] T011 [US1] Regenerate the OpenAPI schema and frontend types (backend running: `pnpm generate-types` from apps/unihub/frontend/ → src/generated/api-types.ts); update src/services/unihub-backend/sync.ts types + `publishSync`/`forcePublishSync` to send `{base_commit, diff_digest}`; thread the previewed values through src/pages/io/SyncTab/index.tsx state, and on `409 preview_stale` show a message and auto-refresh the preview
-- [ ] T012 [US1] Run both quality loops + `pnpm build`; verify checkpoint scenarios manually per quickstart.md against a `file://` scratch remote
+- [x] T008 [US1] Rework sync/services/publish_helper.py: `preview_publish_against_head` → `preview_publish_against_remote(clone_dir)` computing the diff against the freshly reset remote head (via T003), returning `(base_commit, changes)`; add digest via T005
+- [x] T009 [US1] Update `GitSyncService.publish_preview()/publish()/force_publish()` in sync/services/git_service.py: call `reset_to_remote()` first; `publish()` accepts `base_commit`+`diff_digest`, recomputes + verifies before committing (mismatch → new `PreviewStaleException`); pushes remain fast-forward from the remote-head base; both publishes set `local_state_commit`
+- [x] T010 [US1] Update sync/views.py + sync/serializers.py: publish-preview response gains `base_commit`/`diff_digest`; `SyncPublishView`/`SyncForcePublishView` accept the pinning body and map `PreviewStaleException` → `409 {"error": "preview_stale"}`; apply-preview path also goes through `reset_to_remote()`; make T006+T007 pass
+- [x] T011 [US1] Regenerate the OpenAPI schema and frontend types (backend running: `pnpm generate-types` from apps/unihub/frontend/ → src/generated/api-types.ts); update src/services/unihub-backend/sync.ts types + `publishSync`/`forcePublishSync` to send `{base_commit, diff_digest}`; thread the previewed values through src/pages/io/SyncTab/index.tsx state, and on `409 preview_stale` show a message and auto-refresh the preview
+- [x] T012 [US1] Run both quality loops + `pnpm build`; verify checkpoint scenarios manually per quickstart.md against a `file://` scratch remote
 
 **Checkpoint**: Previews are trustworthy — MVP shippable.
 

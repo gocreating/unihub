@@ -12,7 +12,12 @@ from sync.serializers import (
     SyncStatusSerializer,
 )
 from sync.services.crypto import decrypt_pat
-from sync.services.git_service import DivergedException, GitError, GitSyncService
+from sync.services.git_service import (
+    DivergedException,
+    GitError,
+    GitSyncService,
+    PreviewStaleException,
+)
 
 
 def _get_git_service(config: SyncConfig) -> GitSyncService:
@@ -78,7 +83,12 @@ class SyncPublishView(APIView):
             return Response({"error": "not_configured"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            result = _get_git_service(config).publish()
+            result = _get_git_service(config).publish(
+                base_commit=request.data.get("base_commit"),
+                diff_digest=request.data.get("diff_digest"),
+            )
+        except PreviewStaleException:
+            return Response({"error": "preview_stale"}, status=status.HTTP_409_CONFLICT)
         except DivergedException:
             return Response({"error": "diverged"}, status=status.HTTP_409_CONFLICT)
 
@@ -90,6 +100,7 @@ class SyncPublishView(APIView):
         SyncConfig.objects.filter(pk=config.pk).update(
             last_published_at=datetime.now(timezone.utc),
             last_published_commit=result.commit_sha,
+            local_state_commit=result.commit_sha,
         )
         return Response(
             {
@@ -108,7 +119,13 @@ class SyncForcePublishView(APIView):
         if config is None:
             return Response({"error": "not_configured"}, status=status.HTTP_400_BAD_REQUEST)
 
-        result = _get_git_service(config).force_publish()
+        try:
+            result = _get_git_service(config).force_publish(
+                base_commit=request.data.get("base_commit"),
+                diff_digest=request.data.get("diff_digest"),
+            )
+        except PreviewStaleException:
+            return Response({"error": "preview_stale"}, status=status.HTTP_409_CONFLICT)
 
         if result is None:
             return Response({"status": "up_to_date"})
@@ -118,6 +135,7 @@ class SyncForcePublishView(APIView):
         SyncConfig.objects.filter(pk=config.pk).update(
             last_published_at=datetime.now(timezone.utc),
             last_published_commit=result.commit_sha,
+            local_state_commit=result.commit_sha,
         )
         return Response(
             {
@@ -137,16 +155,23 @@ class SyncPublishPreviewView(APIView):
             return Response({"error": "not_configured"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            changes = _get_git_service(config).publish_preview()
+            preview = _get_git_service(config).publish_preview()
         except GitError as exc:
             return Response(
                 {"error": "git_error", "message": str(exc)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        if changes is None:
+        if preview is None:
             return Response({"status": "up_to_date"})
-        return Response({"status": "has_changes", "changes": changes})
+        return Response(
+            {
+                "status": "has_changes",
+                "base_commit": preview.base_commit,
+                "diff_digest": preview.diff_digest,
+                "changes": preview.changes,
+            }
+        )
 
 
 class SyncApplyPreviewView(APIView):

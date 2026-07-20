@@ -293,6 +293,7 @@ export default {
   'pages.io.sync.publish.success': 'Published {sha} — {count, plural, one {# table} other {# tables}} exported.',
   'pages.io.sync.publish.upToDate': 'Already up to date — nothing to publish.',
   'pages.io.sync.publish.error': 'Publish failed.',
+  'pages.io.sync.publish.stale': 'The data changed since this preview — refreshing the preview.',
   'pages.io.sync.diverged.title': 'Push Rejected — Histories Diverged',
   'pages.io.sync.diverged.description': 'The remote has commits that are not in your local copy. Choose how to proceed:',
   'pages.io.sync.diverged.forcePublish': 'Force Push (overwrite remote)',

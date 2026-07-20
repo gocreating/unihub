@@ -58,7 +58,16 @@ export interface SyncPublishPreviewChange {
 
 export interface SyncPublishPreviewResult {
   status: 'up_to_date' | 'has_changes' | 'no_prior_publish';
+  /** Remote head sha the diff was computed against (null for an empty remote). */
+  base_commit?: string | null;
+  /** sha256 over the previewed changes — echoed back on confirm (FR-002). */
+  diff_digest?: string;
   changes?: SyncPublishPreviewChange[];
+}
+
+export interface SyncPublishPin {
+  base_commit: string | null;
+  diff_digest: string;
 }
 
 export interface SyncApplyConfirmResult {
@@ -98,16 +107,16 @@ export async function getSyncStatus(): Promise<SyncStatus> {
   return res.json() as Promise<SyncStatus>;
 }
 
-export async function publishSync(): Promise<SyncPublishResult> {
+export async function publishSync(pin: SyncPublishPin): Promise<SyncPublishResult> {
   const res = await fetch(`${API_BASE_URL}/api/v1/sync/publish/`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-    body: '{}',
+    body: JSON.stringify(pin),
   });
   if (res.status === 409) {
     const body = (await res.json()) as { error: string };
-    throw Object.assign(new Error('diverged'), { code: body.error });
+    throw Object.assign(new Error(body.error), { code: body.error });
   }
   if (!res.ok) throw new Error('Publish failed');
   return res.json() as Promise<SyncPublishResult>;

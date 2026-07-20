@@ -24,6 +24,7 @@ import type {
   SyncApplyChange,
   SyncConfigWrite,
   SyncPublishPreviewChange,
+  SyncPublishPreviewResult,
 } from '@/services/unihub-backend/sync';
 import { ChangePreviewTable } from '@/components/ImportExport/ChangePreviewTable';
 import {
@@ -229,7 +230,7 @@ function ActionsCard({ configured }: { configured: boolean }) {
   const [diverged, setDiverged] = useState(false);
   const [pullPreview, setPullPreview] = useState<SyncApplyChange[] | null>(null);
   const [pullPreviewing, setPullPreviewing] = useState(false);
-  const [pushPreview, setPushPreview] = useState<SyncPublishPreviewChange[] | null>(null);
+  const [pushPreview, setPushPreview] = useState<SyncPublishPreviewResult | null>(null);
   const [pushPreviewing, setPushPreviewing] = useState(false);
 
   const publish = useMutation({
@@ -251,6 +252,11 @@ function ActionsCard({ configured }: { configured: boolean }) {
     onError: (err: Error & { code?: string }) => {
       if (err.code === 'diverged') {
         setDiverged(true);
+      } else if (err.code === 'preview_stale') {
+        // The data or the remote changed since this preview was computed —
+        // never publish anything other than what was previewed (FR-002).
+        void message.warning(t({ id: 'pages.io.sync.publish.stale' }));
+        void handlePushPreview();
       } else {
         void message.error(t({ id: 'pages.io.sync.publish.error' }));
       }
@@ -288,9 +294,10 @@ function ActionsCard({ configured }: { configured: boolean }) {
     try {
       const result = await getPublishPreview();
       if (result.status === 'up_to_date') {
+        setPushPreview(null);
         void message.info(t({ id: 'pages.io.sync.publishPreview.upToDate' }));
       } else {
-        setPushPreview(result.changes ?? []);
+        setPushPreview(result);
       }
     } catch {
       void message.error(t({ id: 'pages.io.sync.publishPreview.error' }));
@@ -344,13 +351,18 @@ function ActionsCard({ configured }: { configured: boolean }) {
         {/* Push preview */}
         {pushPreview !== null && (
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            {renderPreviewCollapse(pushPreview, t)}
+            {renderPreviewCollapse(pushPreview.changes ?? [], t)}
             <Space>
               <Button
                 type="primary"
                 icon={<CheckCircleOutlined />}
                 loading={publish.isPending}
-                onClick={() => publish.mutate()}
+                onClick={() =>
+                  publish.mutate({
+                    base_commit: pushPreview.base_commit ?? null,
+                    diff_digest: pushPreview.diff_digest ?? '',
+                  })
+                }
               >
                 {t({ id: 'pages.io.sync.publishPreview.confirmButton' })}
               </Button>

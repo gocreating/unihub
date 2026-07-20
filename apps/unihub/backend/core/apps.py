@@ -69,3 +69,12 @@ class CoreConfig(AppConfig):
                 import_order=2,
             )
         )
+
+        # data_io registration for core.EntityView is EXPLICITLY DEFERRED
+        # (constitution Principle I: never silently omitted). The registry's
+        # use_natural_key path is contenttypes-specific — it cannot represent
+        # the owner FK to auth.User (export writes app_label.model, import
+        # special-cases contenttypes.contenttype only). Registering the table
+        # without the owner column would break import (NOT NULL). Revisit when
+        # the registry learns user natural keys; saved views are per-user UI
+        # preferences, not primary domain data, so backups omit them for now.

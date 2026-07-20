@@ -15,8 +15,10 @@ import PageTable, {
 import type { Scenario } from '@/services/unihub-backend/inventory';
 import { createScenario, listScenarios } from '@/services/unihub-backend/inventory';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
-import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute, ViewConfig } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
+import { ViewTabs } from '@/components/EntityViews/ViewTabs';
+import { useEntityViews } from '@/components/EntityViews/useEntityViews';
 import { ScenarioFormModal } from './ScenarioFormModal';
 
 export function ScenariosPage() {
@@ -41,8 +43,26 @@ export function ScenariosPage() {
     [t],
   );
 
-  const table = useEntityTable({ key: 'inventory-scenarios-v3', filterableAttrs, columnDefs });
+  const table = useEntityTable({ key: 'inventory-scenarios', filterableAttrs, columnDefs });
   const { filter, sort, cols } = table;
+
+  // The "Tabular" baseline the view tabs diff against (016 views).
+  const defaultViewConfig = useMemo<ViewConfig>(
+    () => ({
+      filters: [],
+      sort: [],
+      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order })),
+      stickyLeft: false,
+      stickyRight: false,
+      pageSize: 25,
+    }),
+    [columnDefs],
+  );
+  const views = useEntityViews({
+    tableKey: table.tableKey,
+    table,
+    defaultConfig: defaultViewConfig,
+  });
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['inventory', 'scenarios', table.queryParams],
@@ -109,7 +129,7 @@ export function ScenariosPage() {
   return (
     <>
       <PageTable<Scenario>
-        key={cols.pinFingerprint}
+        key={`${cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.inventory.scenarios.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
@@ -123,6 +143,7 @@ export function ScenariosPage() {
             columnProps={{ hook: cols }}
           />
         }
+        viewBar={<ViewTabs views={views} />}
         rowKey="id"
         columns={columns}
         dataSource={scenarios}

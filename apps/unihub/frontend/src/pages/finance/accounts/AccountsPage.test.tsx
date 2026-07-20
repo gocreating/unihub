@@ -6,8 +6,10 @@ import { MemoryRouter } from 'react-router-dom';
 import enUS from '@/locales/en-US';
 import { AccountsPage } from './index';
 import * as financeService from '@/services/unihub-backend/finance';
+import * as coreService from '@/services/unihub-backend/core';
 
 vi.mock('@/services/unihub-backend/finance');
+vi.mock('@/services/unihub-backend/core');
 
 const ACCOUNT_WITH_DATETIME = {
   id: 'acc-dt',
@@ -34,14 +36,17 @@ function renderPage() {
   );
 }
 
-describe('AccountsPage — datetime tooltip suppression (US6)', () => {
-  beforeEach(() => {
-    vi.mocked(financeService.listAccounts).mockResolvedValue({
-      count: 1, next: null, previous: null, results: [ACCOUNT_WITH_DATETIME],
-    });
-    vi.mocked(financeService.listCurrencies).mockResolvedValue(EMPTY_PAGE as never);
-    vi.mocked(financeService.listExchangeRates).mockResolvedValue(EMPTY_PAGE as never);
+beforeEach(() => {
+  window.sessionStorage.clear();
+  vi.mocked(financeService.listAccounts).mockResolvedValue({
+    count: 1, next: null, previous: null, results: [ACCOUNT_WITH_DATETIME],
   });
+  vi.mocked(financeService.listCurrencies).mockResolvedValue(EMPTY_PAGE as never);
+  vi.mocked(financeService.listExchangeRates).mockResolvedValue(EMPTY_PAGE as never);
+  vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
+});
+
+describe('AccountsPage — datetime tooltip suppression (US6)', () => {
 
   it('open_datetime cell shows the formatted date without a Tooltip wrapper', async () => {
     const { container } = renderPage();
@@ -62,5 +67,14 @@ describe('AccountsPage — datetime tooltip suppression (US6)', () => {
     // None of the title attributes should contain a seconds-level datetime
     const hasRedundantTooltip = titleValues.some((t) => /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(t));
     expect(hasRedundantTooltip).toBe(false);
+  });
+});
+
+describe('AccountsPage — entity views (016)', () => {
+  it('renders the view row with the Tabular tab active', async () => {
+    renderPage();
+    await screen.findByText('Savings');
+    const tabularTab = screen.getByRole('tab', { name: /tabular/i });
+    expect(tabularTab).toHaveAttribute('aria-selected', 'true');
   });
 });

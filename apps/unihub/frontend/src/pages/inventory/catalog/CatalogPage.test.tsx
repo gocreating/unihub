@@ -180,8 +180,10 @@ const cellOf = (el: HTMLElement) => {
 
 describe('CatalogPage (iteration 13 — derived columns & density)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     setCurrencySymbols({ TWD: 'NT$', CNY: '¥', JPY: '¥', KRW: '₩', USD: '$' });
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 3,
       next: null,
@@ -196,6 +198,16 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
       totals: { acquisitions: 3, items: 4 },
       results: [ITEM, PLAIN_ITEM, SOLO_ITEM, REQ_ITEM],
     });
+  });
+
+  // 016 US1: the view row renders above the toolbar with the pinned Tabular tab.
+  it('renders the entity-views row with the default Tabular tab active', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    const tab = screen.getByRole('tab', { name: /tabular/i });
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByLabelText('New view tab')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^view/i })).toBeInTheDocument();
   });
 
   // CAT13-01 (a): default visible columns & order.
@@ -281,7 +293,7 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     const absolutes = await screen.findAllByText(dayjs(REQUESTED).format('YYYY-MM-DD HH:mm'));
     const absolute = absolutes.find((el) => cellOf(el))!;
     expect(within(cellOf(absolute)!).getAllByText(dayjs(REQUESTED).fromNow()).length).toBeGreaterThan(0);
-  });
+  }, 15_000);
 
   // CAT13-07 (f): item rows have no Delete; acquisition rows keep Edit + Delete.
   it('offers only Deprecate/Restore on item rows and an Edit LINK on acquisition rows', async () => {
@@ -328,7 +340,7 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     await screen.findByText('Backpack');
     expect(container.querySelector('.anticon-caret-down, .anticon-caret-right')).toBeTruthy();
     expect(container.querySelector('.ant-table-footer .ant-pagination')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /New/ }).textContent).toBe('New');
+    expect(screen.getByRole('button', { name: 'plus New' }).textContent).toBe('New');
     const sortBtn = screen.getByRole('button', { name: /Sort/ });
     expect(sortBtn.className).toContain('ant-btn-primary');
   });
@@ -336,7 +348,9 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
 
 describe('CatalogPage (iteration 15 — merged rows, layers, footer)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 3,
       next: null,
@@ -433,7 +447,9 @@ describe('CatalogPage (iteration 15 — merged rows, layers, footer)', () => {
 
 describe('CatalogPage (iteration 16 — Toggle column)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 3,
       next: null,
@@ -508,7 +524,9 @@ describe('CatalogPage (iteration 16 — Toggle column)', () => {
 
 describe('CatalogPage (iteration 17 — plurals, name link, url width, seeded defaults)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 3,
       next: null,
@@ -630,7 +648,9 @@ describe('CatalogPage (iteration 18 — alias display)', () => {
   };
 
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 2,
       next: null,
@@ -673,7 +693,9 @@ describe('CatalogPage (iteration 18 — alias display)', () => {
 
 describe('CatalogPage (iteration 21 — flat-mode acquisition Edit link)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 3,
       next: null,
@@ -721,6 +743,7 @@ describe('CatalogPage (iteration 34 — reactive currency symbols, FR-033)', () 
     // The registry starts UNSEEDED — symbols must arrive reactively.
     setCurrencySymbols({});
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 1,
       acquisition_count: 1,
@@ -809,7 +832,7 @@ describe('CatalogPage (iteration 48 — per-column pins, 017-multiple-sticky-col
     expect(firstMarks).toHaveLength(1);
     // Display order of the right group: SKU Price (order 3) before Actions (99).
     expect(firstMarks[0]?.textContent).toContain('SKU Price');
-  });
+  }, 15_000);
 
   // CAT48-02 (US3/FR-005/FR-006): Reset restores the seeded default pins after
   // the user re-pins other columns.

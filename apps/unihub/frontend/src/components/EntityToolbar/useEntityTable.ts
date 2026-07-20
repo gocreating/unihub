@@ -5,7 +5,7 @@
  * into a single standardized interface so every entity list page uses the same
  * pattern and behavior without repeating boilerplate.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SorterResult } from 'antd/es/table/interface';
 import { useEntityFilter } from './hooks/useEntityFilter';
 import type { UseEntityFilterReturn } from './hooks/useEntityFilter';
@@ -13,7 +13,14 @@ import { useEntitySort } from './hooks/useEntitySort';
 import type { UseEntitySortReturn } from './hooks/useEntitySort';
 import { useColumnConfig } from './hooks/useColumnConfig';
 import type { UseColumnConfigReturn } from './hooks/useColumnConfig';
-import type { ColumnDef, EntityListParams, FilterableAttribute, FilterPayload, SortRule } from './types';
+import type {
+  ColumnDef,
+  EntityListParams,
+  FilterableAttribute,
+  FilterPayload,
+  SortRule,
+  ViewConfig,
+} from './types';
 
 export const ENTITY_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 export type EntityPageSize = (typeof ENTITY_PAGE_SIZE_OPTIONS)[number];
@@ -51,6 +58,14 @@ export interface UseEntityTableReturn {
   handleTableSorterChange: (sorter: SorterResult<unknown> | SorterResult<unknown>[]) => void;
   /** Build AntD pagination props from the API response total count. */
   paginationProps: (total: number | undefined) => EntityPaginationProps;
+  /** The table's view namespace (the `key` option) — used by entity views (016). */
+  tableKey: string;
+  /** Capture the current active state as a serializable ViewConfig (016 views). */
+  snapshotConfig: () => ViewConfig;
+  /** Apply a whole ViewConfig: filter/sort/columns land clean (active+pending),
+   *  page size applies, and the page resets to 0 unless an explicit offset is
+   *  given (URL page transport). */
+  loadConfig: (config: ViewConfig, options?: { offset?: number }) => void;
 }
 
 export function useEntityTable({
@@ -69,8 +84,16 @@ export function useEntityTable({
   const [limit, setLimit] = useState<number>(defaultPageSize);
   const [offset, setOffset] = useState(0);
 
+  // loadConfig() may carry an explicit offset (URL page transport) that must
+  // survive the filter/sort-change page reset below.
+  const skipNextOffsetResetRef = useRef(false);
+
   // Reset to first page whenever the user applies a new filter or sort.
   useEffect(() => {
+    if (skipNextOffsetResetRef.current) {
+      skipNextOffsetResetRef.current = false;
+      return;
+    }
     setOffset(0);
   }, [filter.activeGroups, sort.activeRules]);
 
@@ -136,6 +159,40 @@ export function useEntityTable({
     [limit, offset],
   );
 
+  const { toApiParam, loadGroups } = filter;
+  const { activeRules, loadRules } = sort;
+  const { activeState, loadState } = cols;
+
+  const snapshotConfig = useCallback(
+    (): ViewConfig => ({
+      filters: toApiParam()?.groups ?? [],
+      sort: activeRules,
+      columns: activeState.columns.map((c) => ({
+        key: c.key,
+        visible: c.visible,
+        order: c.order,
+      })),
+      // Boolean projection of the per-column pin model (017) onto the view
+      // contract's pin pair (016): an edge is sticky when any visible column
+      // is pinned to it. loadState performs the inverse projection.
+      stickyLeft: activeState.columns.some((c) => c.visible && c.pin === 'left'),
+      stickyRight: activeState.columns.some((c) => c.visible && c.pin === 'right'),
+      pageSize: limit,
+    }),
+    [toApiParam, activeRules, activeState, limit],
+  );
+  const loadConfig = useCallback(
+    (config: ViewConfig, options?: { offset?: number }) => {
+      loadGroups(config.filters);
+      loadRules(config.sort);
+      loadState(config.columns, { left: config.stickyLeft, right: config.stickyRight });
+      setLimit(config.pageSize);
+      skipNextOffsetResetRef.current = true;
+      setOffset(options?.offset ?? 0);
+    },
+    [loadGroups, loadRules, loadState],
+  );
+
   return {
     filter,
     sort,
@@ -147,5 +204,8 @@ export function useEntityTable({
     queryParams,
     handleTableSorterChange,
     paginationProps,
+    tableKey: key,
+    snapshotConfig,
+    loadConfig,
   };
 }

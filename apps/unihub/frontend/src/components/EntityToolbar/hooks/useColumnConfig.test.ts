@@ -422,3 +422,53 @@ describe('useColumnConfig async column merging', () => {
     expect(result.current.activeState).toBe(before);
   });
 });
+
+describe('useColumnConfig loadState (016 entity views)', () => {
+  it('hydrates active+pending from ViewColumns, reconciling drift against runtime columns', () => {
+    const cols = makeColumns();
+    const { result } = renderHook(() => useColumnConfig(cols));
+
+    act(() => {
+      result.current.loadState(
+        [
+          { key: 'amount', visible: true, order: 0 },
+          { key: 'attr:deleted99', visible: true, order: 1 }, // stale — dropped (FR-021)
+          { key: 'name', visible: false, order: 2 },
+        ],
+        { left: true, right: false },
+      );
+    });
+
+    const state = result.current.activeState;
+    // stale key dropped; missing runtime column (notes) appended with its default visibility
+    expect(state.columns.map((c) => c.key)).toEqual(['amount', 'name', 'notes']);
+    expect(state.columns.map((c) => c.visible)).toEqual([true, false, false]);
+    expect(state.columns.map((c) => c.order)).toEqual([0, 1, 2]);
+    // labels/dataTypes come from runtime definitions, never from the stored config
+    expect(state.columns[0]!.label).toBe('Amount');
+    expect(state.columns[0]!.dataType).toBe('number');
+    expect(result.current.visibleColumns.map((c) => c.key)).toEqual(['amount']);
+    // sticky {left:true} projects onto the per-column model: no default left
+    // pin exists, so the first visible column gains it; no right pin appears.
+    expect(result.current.fixedForKey('amount')).toBe('left');
+    expect(result.current.pinFingerprint).toBe('amount:left');
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  it('appended missing runtime columns keep their default visibility', () => {
+    const cols = makeColumns(); // notes is hidden by default, amount visible
+    const { result } = renderHook(() => useColumnConfig(cols));
+
+    act(() => {
+      result.current.loadState([{ key: 'name', visible: true, order: 0 }], {
+        left: false,
+        right: false,
+      });
+    });
+
+    const keys = result.current.activeState.columns.map((c) => c.key);
+    expect(keys).toEqual(['name', 'amount', 'notes']);
+    const visible = result.current.activeState.columns.map((c) => c.visible);
+    expect(visible).toEqual([true, true, false]);
+  });
+});

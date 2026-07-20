@@ -394,6 +394,39 @@ export default {
   'common.entityOps.pagination.previous': 'Previous',
   'common.entityOps.pagination.next': 'Next',
 
+  // Entity views (016)
+  'common.entityViews.tabular': 'Tabular',
+  'common.entityViews.view': 'View',
+  'common.entityViews.newTab': 'New view tab',
+  'common.entityViews.newViewName': 'New view',
+  'common.entityViews.unsaved': 'Unsaved changes',
+  'common.entityViews.save': 'Save',
+  'common.entityViews.saveViewTitle': 'Save view',
+  'common.entityViews.viewName': 'View name',
+  'common.entityViews.viewNameRequired': 'Please enter a view name',
+  'common.entityViews.duplicateName': 'A view with this name already exists',
+  'common.entityViews.duplicate': 'Duplicate',
+  'common.entityViews.edit': 'Edit…',
+  'common.entityViews.manageTitle': 'Manage views',
+  'common.entityViews.savedList': 'Saved views',
+  'common.entityViews.noSaved': 'No saved views yet',
+  'common.entityViews.pin': 'Pin',
+  'common.entityViews.unpin': 'Unpin',
+  'common.entityViews.delete': 'Delete',
+  'common.entityViews.deleteConfirmTitle':
+    '{n, plural, one {Delete # view?} other {Delete # views?}}',
+  'common.entityViews.deleteConfirmBody':
+    '{n, plural, one {This will permanently delete # saved view.} other {This will permanently delete # saved views.}}',
+  'common.entityViews.close': 'Close tab',
+  'common.entityViews.saved': 'View saved',
+  'common.entityViews.saveError': 'Failed to save view',
+  'common.entityViews.loadError': 'Failed to load views',
+  'common.entityViews.manageSaveError': 'Failed to update views',
+  'common.entityViews.unresolvedView':
+    'The view referenced by this link no longer exists — showing the default view',
+  'common.entityViews.invalidView':
+    'This link contains an invalid view — showing the default view',
+
   // System > Profile
   'pages.system.profile.title': 'System Profile',
   'pages.system.profile.version': 'Version',

@@ -38,4 +38,6 @@ export type {
   EntityListParams,
   OffsetPaginatedResponse,
   CursorPaginatedResponse,
+  ViewColumn,
+  ViewConfig,
 } from './types';

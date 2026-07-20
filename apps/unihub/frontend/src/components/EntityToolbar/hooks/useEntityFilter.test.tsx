@@ -326,3 +326,35 @@ describe('useEntityFilter defaultGroups seed', () => {
     expect(result.current.toApiParam()).toBeUndefined();
   });
 });
+
+describe('useEntityFilter loadGroups (016 entity views)', () => {
+  it('sets active AND pending — hook lands clean (not dirty) and active', () => {
+    const { result } = renderHook(() => useEntityFilter('t'));
+
+    act(() => {
+      result.current.loadGroups([
+        { logic: 'and', conditions: [{ attr: 'name', op: 'contains', val: 'x' }] },
+      ]);
+    });
+
+    expect(result.current.toApiParam()).toEqual({
+      groups: [{ logic: 'and', conditions: [{ attr: 'name', op: 'contains', val: 'x' }] }],
+    });
+    expect(result.current.isActive).toBe(true);
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  it('loading empty groups clears the filter and stays clean', () => {
+    const { result } = renderHook(() =>
+      useEntityFilter('t', [{ logic: 'and', conditions: [{ attr: 'a', op: 'eq', val: '1' }] }]),
+    );
+
+    act(() => {
+      result.current.loadGroups([]);
+    });
+
+    expect(result.current.toApiParam()).toBeUndefined();
+    expect(result.current.isActive).toBe(false);
+    expect(result.current.isDirty).toBe(false);
+  });
+});

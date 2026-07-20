@@ -14,7 +14,9 @@ import {
   updateCurrency,
 } from '@/services/unihub-backend/finance';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
-import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute, ViewConfig } from '@/components/EntityToolbar';
+import { ViewTabs } from '@/components/EntityViews/ViewTabs';
+import { useEntityViews } from '@/components/EntityViews/useEntityViews';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 interface CurrencyFormValues {
@@ -46,7 +48,25 @@ export function CurrenciesPage() {
     { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 4 },
   ], [t]);
 
-  const table = useEntityTable({ key: 'currencies', filterableAttrs, columnDefs });
+  const table = useEntityTable({ key: 'finance-currencies', filterableAttrs, columnDefs });
+
+  // The "Tabular" baseline the view tabs diff against (016 views).
+  const defaultViewConfig = useMemo<ViewConfig>(
+    () => ({
+      filters: [],
+      sort: [],
+      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order })),
+      stickyLeft: false,
+      stickyRight: false,
+      pageSize: 25,
+    }),
+    [columnDefs],
+  );
+  const views = useEntityViews({
+    tableKey: table.tableKey,
+    table,
+    defaultConfig: defaultViewConfig,
+  });
 
   const { data: currenciesData, isLoading } = useQuery({
     queryKey: ['finance', 'currencies', table.queryParams],
@@ -196,13 +216,14 @@ export function CurrenciesPage() {
   return (
     <>
       <PageTable<Currency>
-        key={table.cols.pinFingerprint}
+        key={`${table.cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.finance.currencies.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             {t({ id: 'pages.finance.currencies.new' })}
           </Button>
         }
+        viewBar={<ViewTabs views={views} />}
         headerTitle={
           <EntityToolbar
             filterProps={{ attrs: filterableAttrs, hook: table.filter }}

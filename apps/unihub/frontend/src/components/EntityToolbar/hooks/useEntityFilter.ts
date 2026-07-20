@@ -111,6 +111,10 @@ export interface UseEntityFilterReturn {
   isDirty: boolean;
   reset: () => void;
   toApiParam: () => FilterPayload | undefined;
+  /** Load a whole filter state (016 views): sets active AND pending, so the
+   *  hook lands clean. A view-level operation, like reset() — not a panel
+   *  apply-gate bypass. */
+  loadGroups: (groups: FilterPayload['groups']) => void;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -163,6 +167,13 @@ export function useEntityFilter(
     setPendingRootState(emptyRoot());
   }, []);
 
+  const loadGroups = useCallback((groups: FilterPayload['groups']) => {
+    const filterGroups = groups.length > 0 ? payloadToGroups({ groups }) : [];
+    setActiveGroups(filterGroups);
+    setPendingGroupsState(filterGroups.length > 0 ? filterGroups : [emptyGroup()]);
+    setPendingRootState(filterGroups.length > 0 ? groupsToTree(filterGroups) : emptyRoot());
+  }, []);
+
   const toApiParam = useCallback((): FilterPayload | undefined => {
     return groupsToPayload(activeGroups);
   }, [activeGroups]);
@@ -187,6 +198,7 @@ export function useEntityFilter(
     isDirty,
     reset,
     toApiParam,
+    loadGroups,
   };
 }
 

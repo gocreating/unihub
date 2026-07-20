@@ -16,8 +16,10 @@ import {
   updateExchangeRate,
 } from '@/services/unihub-backend/finance';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
-import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute, ViewConfig } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
+import { ViewTabs } from '@/components/EntityViews/ViewTabs';
+import { useEntityViews } from '@/components/EntityViews/useEntityViews';
 
 export function ExchangeRatesPage() {
   const queryClient = useQueryClient();
@@ -41,7 +43,25 @@ export function ExchangeRatesPage() {
     { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 4 },
   ], [t]);
 
-  const table = useEntityTable({ key: 'exchange-rates', filterableAttrs, columnDefs });
+  const table = useEntityTable({ key: 'finance-exchange-rates', filterableAttrs, columnDefs });
+
+  // The "Tabular" baseline the view tabs diff against (016 views).
+  const defaultViewConfig = useMemo<ViewConfig>(
+    () => ({
+      filters: [],
+      sort: [],
+      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order })),
+      stickyLeft: false,
+      stickyRight: false,
+      pageSize: 25,
+    }),
+    [columnDefs],
+  );
+  const views = useEntityViews({
+    tableKey: table.tableKey,
+    table,
+    defaultConfig: defaultViewConfig,
+  });
 
   const { data: ratesData, isLoading } = useQuery({
     queryKey: ['finance', 'exchange-rates', table.queryParams],
@@ -211,7 +231,7 @@ export function ExchangeRatesPage() {
   return (
     <>
       <PageTable<ExchangeRate>
-        key={table.cols.pinFingerprint}
+        key={`${table.cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.finance.exchangeRates.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
@@ -225,6 +245,7 @@ export function ExchangeRatesPage() {
             columnProps={{ hook: table.cols }}
           />
         }
+        viewBar={<ViewTabs views={views} />}
         rowKey="id"
         columns={columns}
         dataSource={rates}

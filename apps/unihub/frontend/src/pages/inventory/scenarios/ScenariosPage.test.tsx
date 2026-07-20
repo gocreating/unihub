@@ -6,8 +6,10 @@ import { MemoryRouter } from 'react-router-dom';
 import enUS from '@/locales/en-US';
 import { ScenariosPage } from './index';
 import * as inventoryService from '@/services/unihub-backend/inventory';
+import * as coreService from '@/services/unihub-backend/core';
 
 vi.mock('@/services/unihub-backend/inventory');
+vi.mock('@/services/unihub-backend/core');
 
 const SCENARIOS = [
   {
@@ -43,6 +45,8 @@ function renderPage() {
 
 describe('ScenariosPage (iteration 18 — 2 columns, actions in detail)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listScenarios).mockResolvedValue({
       count: 2,
       next: null,
@@ -75,10 +79,20 @@ describe('ScenariosPage (iteration 18 — 2 columns, actions in detail)', () => 
     const row = screen.getByText('Studio shoot').closest('tr')!;
     expect(row.textContent).toContain('-');
   });
+
+  // SP-05 (016 US1): the view row renders with the pinned Tabular tab active.
+  it('renders the entity-views row with the default Tabular tab active', async () => {
+    renderPage();
+    await screen.findByText('Camping');
+    const tab = screen.getByRole('tab', { name: /tabular/i });
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+  });
 });
 
 describe('ScenariosPage (iteration 45 — real links + tab title)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listScenarios).mockResolvedValue({
       count: 2,
       next: null,

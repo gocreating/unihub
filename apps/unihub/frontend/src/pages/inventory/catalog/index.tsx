@@ -37,11 +37,16 @@ import {
   updateItem,
 } from '@/services/unihub-backend/inventory';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
+import { ViewTabs } from '@/components/EntityViews/ViewTabs';
+import { useEntityViews } from '@/components/EntityViews/useEntityViews';
 import type {
   ColumnDef,
   EntityListParams,
   FilterableAttribute,
+  FilterPayload,
   OffsetPaginatedResponse,
+  SortRule,
+  ViewConfig,
 } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 import { ItemDisplay, ParameterTag, formatDecimal, pairText, parameterPairs } from '@/components/ItemDisplay';
@@ -190,18 +195,16 @@ export function CatalogPage() {
     [t, definitions],
   );
 
-  const table = useEntityTable({
-    // v8: feature-018 defaults (Acquisition pinned sticky-left) — bump so
-    // previously-saved state doesn't shadow the new defaults.
-    key: 'inventory-catalog-v8',
-    filterableAttrs,
-    columnDefs,
-    // Default sort (spec): Obtained descending, NULLS FIRST (pending on top).
-    defaultSortRules: [{ field: 'acquisition__obtained_at', direction: 'desc', nulls: 'first' }],
-    // Default view (iterations 17→24): YTD acquisitions + pending (no
-    // obtained date yet) — ONE or-group with plain conditions, lit in the
-    // Filter toolbar, freely editable/clearable.
-    defaultFilterGroups: [
+  // Default sort (spec): Obtained descending, NULLS FIRST (pending on top).
+  const defaultSortRules = useMemo<SortRule[]>(
+    () => [{ field: 'acquisition__obtained_at', direction: 'desc', nulls: 'first' }],
+    [],
+  );
+  // Default view (iterations 17→24): YTD acquisitions + pending (no
+  // obtained date yet) — ONE or-group with plain conditions, lit in the
+  // Filter toolbar, freely editable/clearable.
+  const defaultFilterGroups = useMemo<FilterPayload['groups']>(
+    () => [
       {
         logic: 'or',
         conditions: [
@@ -214,9 +217,36 @@ export function CatalogPage() {
         ],
       },
     ],
+    [],
+  );
+
+  const table = useEntityTable({
+    key: 'inventory-catalog',
+    filterableAttrs,
+    columnDefs,
+    defaultSortRules,
+    defaultFilterGroups,
     defaultPageSize: 50,
   });
   const { filter, sort, cols } = table;
+
+  // The "Tabular" baseline the view tabs diff against (016 views).
+  const defaultViewConfig = useMemo<ViewConfig>(
+    () => ({
+      filters: defaultFilterGroups,
+      sort: defaultSortRules,
+      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order })),
+      stickyLeft: true,
+      stickyRight: true,
+      pageSize: 50,
+    }),
+    [defaultFilterGroups, defaultSortRules, columnDefs],
+  );
+  const views = useEntityViews({
+    tableKey: table.tableKey,
+    table,
+    defaultConfig: defaultViewConfig,
+  });
 
   // Flat mode when any active filter/sort targets an item-level column.
   const flatMode = useMemo(() => {
@@ -764,13 +794,14 @@ export function CatalogPage() {
   return (
     <>
       <PageTable<CatalogRow>
-        key={`${flatMode}-${cols.pinFingerprint}`}
+        key={`${flatMode}-${cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.inventory.catalog.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/inventory/acquisitions/new')}>
             {t({ id: 'common.new' })}
           </Button>
         }
+        viewBar={<ViewTabs views={views} />}
         headerTitle={
           <EntityToolbar
             filterProps={{ attrs: filterableAttrs, hook: filter }}

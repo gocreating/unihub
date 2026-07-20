@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ColumnDef, ColumnState, PinSide } from '../types';
+import type { ColumnDef, ColumnState, PinSide, ViewColumn } from '../types';
 
 export interface UseColumnConfigReturn {
   /** Column state being edited in the panel (not yet applied). */
@@ -27,6 +27,10 @@ export interface UseColumnConfigReturn {
   isCustomised: boolean;
   /** True when pendingState differs from activeState (panel has unsaved changes). */
   isDirty: boolean;
+  /** Load a whole column state from a ViewConfig (016 views): sets active AND
+   *  pending. Reconciles drift — stale keys dropped, missing runtime columns
+   *  appended with their default visibility; labels/dataTypes stay runtime. */
+  loadState: (columns: ViewColumn[], sticky: { left: boolean; right: boolean }) => void;
 }
 
 function pinRank(pin: PinSide | undefined): number {
@@ -112,6 +116,43 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
     setPendingState(defaultState);
   }, [initialColumns]);
 
+  const loadState = useCallback(
+    (viewColumns: ViewColumn[], sticky: { left: boolean; right: boolean }) => {
+      const byKey = new Map(initialColumns.map((c) => [c.key, c]));
+      const listed = [...viewColumns]
+        .sort((a, b) => a.order - b.order)
+        .filter((vc) => byKey.has(vc.key));
+      const listedKeys = new Set(listed.map((vc) => vc.key));
+      const appended = initialColumns.filter((c) => !listedKeys.has(c.key));
+      // Default pins ride along from initialColumns; the view's boolean pin
+      // pair (016 URL contract) then projects onto the per-column model (017):
+      // false strips that edge's pins, true with no default pin on that edge
+      // pins the first/last listed visible column.
+      let columns: ColumnDef[] = [
+        ...listed.map((vc, i) => ({ ...byKey.get(vc.key)!, visible: vc.visible, order: i })),
+        ...appended.map((c, i) => ({ ...c, order: listed.length + i })),
+      ];
+      columns = columns.map((c) =>
+        (c.pin === 'left' && !sticky.left) || (c.pin === 'right' && !sticky.right)
+          ? { ...c, pin: undefined }
+          : c,
+      );
+      const visibleOrdered = columns.filter((c) => c.visible).sort(compareDisplayOrder);
+      if (sticky.left && !visibleOrdered.some((c) => c.pin === 'left')) {
+        const first = visibleOrdered[0];
+        if (first) columns = columns.map((c) => (c.key === first.key ? { ...c, pin: 'left' as PinSide } : c));
+      }
+      if (sticky.right && !visibleOrdered.some((c) => c.pin === 'right')) {
+        const last = visibleOrdered[visibleOrdered.length - 1];
+        if (last) columns = columns.map((c) => (c.key === last.key ? { ...c, pin: 'right' as PinSide } : c));
+      }
+      const next: ColumnState = { columns };
+      setActiveState(next);
+      setPendingState(next);
+    },
+    [initialColumns],
+  );
+
   const visible = useMemo(() => sortedVisible(activeState), [activeState]);
 
   const fixedForKey = useCallback(
@@ -141,5 +182,6 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
     pinFingerprint,
     isCustomised: !statesEqual(activeState, initial),
     isDirty: !statesEqual(pendingState, activeState),
+    loadState,
   };
 }

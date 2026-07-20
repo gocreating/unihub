@@ -23,6 +23,9 @@ export interface UseEntitySortReturn {
    *  Used to: disable the Reset button (nothing to reset to), and decide whether
    *  to highlight the Sort toolbar button (primary when NOT at default). */
   isDefault: boolean;
+  /** Load a whole sort state (016 views): sets active AND pending clean and
+   *  bumps panelApplyCount so the ProTable remount-key pattern fires. */
+  loadRules: (rules: SortRule[]) => void;
 }
 
 function rulesToOrdering(rules: SortState): string | undefined {
@@ -88,6 +91,13 @@ export function useEntitySort(_key: string, initialActiveRules: SortRule[] = [])
     setPanelApplyCount((c) => c + 1);
   }, []);
 
+  const loadRules = useCallback((rules: SortRule[]) => {
+    const filled = rules.filter((r) => r.field);
+    setActiveRules(filled);
+    setPendingRules(filled.length > 0 ? filled : [EMPTY_RULE]);
+    setPanelApplyCount((c) => c + 1);
+  }, []);
+
   const handleHeaderClick = useCallback((field: string) => {
     setActiveRules((prev) => {
       const existing = prev.find((r) => r.field === field);
@@ -135,6 +145,7 @@ export function useEntitySort(_key: string, initialActiveRules: SortRule[] = [])
     isDirty,
     panelApplyCount,
     isDefault,
+    loadRules,
   };
 }
 

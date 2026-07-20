@@ -127,6 +127,27 @@ export interface ColumnState {
   columns: ColumnDef[];
 }
 
+// ── Entity views (016) ───────────────────────────────────────────────────────
+
+/** One column entry inside a ViewConfig — key/visibility/position only;
+ *  labels and dataTypes are runtime concerns (localized, async-patched). */
+export interface ViewColumn {
+  key: string;
+  visible: boolean;
+  order: number;
+}
+
+/** The serializable payload of an entity view: everything a table tab restores.
+ *  Stored verbatim as EntityView.config and transported via view[<tableKey>]. */
+export interface ViewConfig {
+  filters: FilterPayload['groups'];
+  sort: SortRule[];
+  columns: ViewColumn[];
+  stickyLeft: boolean;
+  stickyRight: boolean;
+  pageSize: number;
+}
+
 // ── Pagination ────────────────────────────────────────────────────────────────
 
 export interface OffsetPaginatedResponse<T> {

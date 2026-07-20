@@ -1,13 +1,18 @@
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import Max, QuerySet
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.serializers import BaseSerializer
 
 from core.attributes import compute_value_fields
-from core.models import AttributeDefinition, AttributeValue
+from core.models import AttributeDefinition, AttributeValue, EntityView
 from core.serializers import (
     AttributeDefinitionSerializer,
     AttributeValueSerializer,
     AttributeValueUpsertSerializer,
+    EntityViewSerializer,
 )
 
 
@@ -58,6 +63,73 @@ class AttributeDefinitionViewSet(viewsets.ModelViewSet):
             )
         attr_def.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class EntityViewViewSet(viewsets.ModelViewSet):
+    """Owner-scoped CRUD + bulk reorder for saved entity views (016).
+
+    Collections are small by design (tens of views per table), so list
+    responses are plain arrays — no pagination envelope.
+    """
+
+    serializer_class = EntityViewSerializer
+    pagination_class = None
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[EntityView]:
+        """Return the caller's views, optionally filtered by ``?table_key=``."""
+        qs = EntityView.objects.filter(owner=self.request.user)
+        table_key = self.request.query_params.get("table_key")
+        if table_key:
+            qs = qs.filter(table_key=table_key)
+        return qs
+
+    def perform_create(self, serializer: BaseSerializer) -> None:
+        """Stamp the owner; append position after the table's max when omitted."""
+        owner = self.request.user
+        if "position" in serializer.validated_data:
+            serializer.save(owner=owner)
+            return
+        max_position = EntityView.objects.filter(
+            owner=owner, table_key=serializer.validated_data["table_key"]
+        ).aggregate(m=Max("position"))["m"]
+        serializer.save(owner=owner, position=0 if max_position is None else max_position + 1)
+
+    @action(detail=False, methods=["post"])
+    def reorder(self, request: Request) -> Response:
+        """Rewrite ``position`` for one table's views to match the given id order.
+
+        Body: ``{"table_key": str, "ids": [str, ...]}``. Every id must exist,
+        belong to the caller, and carry the given table_key; duplicates are
+        rejected. Returns the table's views in their new order.
+        """
+        table_key = request.data.get("table_key")
+        ids = request.data.get("ids")
+        if not table_key or not isinstance(ids, list) or not ids:
+            return Response(
+                {"detail": "table_key and a non-empty ids list are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(set(ids)) != len(ids):
+            return Response(
+                {"detail": "ids must not contain duplicates."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        views = EntityView.objects.filter(owner=request.user, table_key=table_key, id__in=ids)
+        by_id = {v.id: v for v in views}
+        if len(by_id) != len(ids):
+            return Response(
+                {"detail": "ids must all reference your views of the given table."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ordered = []
+        for index, view_id in enumerate(ids):
+            view = by_id[view_id]
+            view.position = index
+            ordered.append(view)
+        EntityView.objects.bulk_update(ordered, ["position"])
+        table_views = EntityView.objects.filter(owner=request.user, table_key=table_key)
+        return Response(EntityViewSerializer(table_views, many=True).data)
 
 
 class AttributeValueViewSet(viewsets.ViewSet):

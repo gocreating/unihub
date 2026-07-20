@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from core.models import AttributeDefinition, AttributeValue
+from core.models import AttributeDefinition, AttributeValue, EntityView
 
 
 class AttributeDefinitionSerializer(serializers.ModelSerializer):
@@ -54,6 +54,63 @@ class AttributeValueSerializer(serializers.ModelSerializer):
             "value_number_max",
         ]
         read_only_fields = ["id"]
+
+
+class EntityViewSerializer(serializers.ModelSerializer):
+    """Saved entity view. ``owner`` is never serialized — it is stamped from the
+    request user by the viewset and every queryset is owner-scoped."""
+
+    class Meta:
+        model = EntityView
+        fields = [
+            "id",
+            "table_key",
+            "name",
+            "config",
+            "pinned",
+            "position",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_name(self, value: str) -> str:
+        """Strip surrounding whitespace and reject blank names."""
+        stripped = value.strip()
+        if not stripped:
+            raise serializers.ValidationError("This field may not be blank.")
+        return stripped
+
+    def validate_table_key(self, value: str) -> str:
+        """Reject blank table keys and any change on an existing view."""
+        stripped = value.strip()
+        if not stripped:
+            raise serializers.ValidationError("This field may not be blank.")
+        if self.instance is not None and stripped != self.instance.table_key:
+            raise serializers.ValidationError("table_key is immutable.")
+        return stripped
+
+    def validate_config(self, value: object) -> dict:
+        """Require a JSON object; the deep shape is owned by the frontend."""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("config must be a JSON object.")
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        """Enforce the per-owner unique (table_key, name) constraint as a 400."""
+        request = self.context.get("request")
+        owner = getattr(request, "user", None)
+        if owner is None or not owner.is_authenticated:
+            return attrs
+        table_key = attrs.get("table_key", getattr(self.instance, "table_key", None))
+        name = attrs.get("name", getattr(self.instance, "name", None))
+        if table_key and name:
+            qs = EntityView.objects.filter(owner=owner, table_key=table_key, name=name)
+            if self.instance is not None:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError({"name": "A view with this name already exists."})
+        return attrs
 
 
 class AttributeValueUpsertSerializer(serializers.Serializer):

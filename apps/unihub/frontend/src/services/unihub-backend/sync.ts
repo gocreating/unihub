@@ -68,6 +68,8 @@ export interface SyncPublishPreviewResult {
 export interface SyncPublishPin {
   base_commit: string | null;
   diff_digest: string;
+  /** Unstaged rows to leave out of the publish (015 US4); omitted/empty = all staged. */
+  excluded?: Array<{ table: string; pk: string }>;
 }
 
 export interface SyncApplyConfirmResult {

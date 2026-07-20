@@ -16,6 +16,7 @@ from sync.services.git_service import (
     DivergedException,
     GitError,
     GitSyncService,
+    NothingStagedException,
     PreviewStaleException,
 )
 
@@ -144,9 +145,12 @@ class SyncPublishView(APIView):
             result = _get_git_service(config).publish(
                 base_commit=request.data.get("base_commit"),
                 diff_digest=request.data.get("diff_digest"),
+                excluded=request.data.get("excluded"),
             )
         except PreviewStaleException:
             return Response({"error": "preview_stale"}, status=status.HTTP_409_CONFLICT)
+        except NothingStagedException:
+            return Response({"error": "nothing_staged"}, status=status.HTTP_400_BAD_REQUEST)
         except DivergedException:
             return Response({"error": "diverged"}, status=status.HTTP_409_CONFLICT)
 
@@ -181,9 +185,12 @@ class SyncForcePublishView(APIView):
             result = _get_git_service(config).force_publish(
                 base_commit=request.data.get("base_commit"),
                 diff_digest=request.data.get("diff_digest"),
+                excluded=request.data.get("excluded"),
             )
         except PreviewStaleException:
             return Response({"error": "preview_stale"}, status=status.HTTP_409_CONFLICT)
+        except NothingStagedException:
+            return Response({"error": "nothing_staged"}, status=status.HTTP_400_BAD_REQUEST)
 
         if result is None:
             return Response({"status": "up_to_date"})

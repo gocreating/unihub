@@ -77,6 +77,7 @@ describe('SyncTab publish pinning (015 US1)', () => {
     expect(vi.mocked(syncService.publishSync).mock.calls[0]?.[0]).toEqual({
       base_commit: BASE,
       diff_digest: DIGEST,
+      excluded: [],
     });
   });
 

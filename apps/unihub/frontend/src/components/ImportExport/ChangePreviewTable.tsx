@@ -18,11 +18,19 @@ const { Text } = Typography;
 
 const PREVIEW_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
+/** Row-level staging contract (015 US4): pks NOT staged + a toggle callback. */
+export interface PreviewSelection {
+  excludedPks: ReadonlySet<string>;
+  onToggle: (pks: string[], staged: boolean) => void;
+}
+
 interface ChangePreviewTableProps {
   creates: ChangeRecord[];
   updates: ChangeRecord[];
   deletes: ChangeRecord[];
   errors: ValidationError[];
+  /** When present, every tab renders staging checkboxes (all staged unless excluded). */
+  selection?: PreviewSelection;
 }
 
 function columnsFromRecord(records: ChangeRecord[]): string[] {
@@ -39,10 +47,12 @@ function PagedPreviewTable({
   records,
   columns,
   scrollX,
+  selection,
 }: {
   records: ChangeRecord[];
   columns: ColumnsType<ChangeRecord>;
   scrollX?: boolean;
+  selection?: PreviewSelection;
 }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(10);
@@ -59,6 +69,21 @@ function PagedPreviewTable({
         columns={columns}
         dataSource={paged}
         pagination={false}
+        rowSelection={
+          selection
+            ? {
+                selectedRowKeys: paged
+                  .filter((r) => !selection.excludedPks.has(r.pk))
+                  .map((r) => r.pk),
+                onSelect: (record, staged) => selection.onToggle([record.pk], staged),
+                onSelectAll: (staged, _rows, changeRows) =>
+                  selection.onToggle(
+                    changeRows.map((r) => r.pk),
+                    staged,
+                  ),
+              }
+            : undefined
+        }
         {...(scrollX ? { scroll: { x: true as const } } : {})}
       />
       <EntityOffsetFooter
@@ -75,7 +100,13 @@ function PagedPreviewTable({
   );
 }
 
-function CreateTable({ records }: { records: ChangeRecord[] }) {
+function CreateTable({
+  records,
+  selection,
+}: {
+  records: ChangeRecord[];
+  selection?: PreviewSelection;
+}) {
   const { formatMessage: t } = useIntl();
   if (records.length === 0) return <Text type="secondary">{t({ id: 'pages.io.preview.create.empty' })}</Text>;
   const cols = columnsFromRecord(records);
@@ -85,10 +116,16 @@ function CreateTable({ records }: { records: ChangeRecord[] }) {
     key: col,
     ellipsis: true,
   }));
-  return <PagedPreviewTable records={records} columns={columns} scrollX />;
+  return <PagedPreviewTable records={records} columns={columns} scrollX selection={selection} />;
 }
 
-function UpdateTable({ records }: { records: ChangeRecord[] }) {
+function UpdateTable({
+  records,
+  selection,
+}: {
+  records: ChangeRecord[];
+  selection?: PreviewSelection;
+}) {
   const { formatMessage: t } = useIntl();
   if (records.length === 0) return <Text type="secondary">{t({ id: 'pages.io.preview.update.empty' })}</Text>;
   const columns: ColumnsType<ChangeRecord> = [
@@ -113,10 +150,16 @@ function UpdateTable({ records }: { records: ChangeRecord[] }) {
         )),
     },
   ];
-  return <PagedPreviewTable records={records} columns={columns} />;
+  return <PagedPreviewTable records={records} columns={columns} selection={selection} />;
 }
 
-function DeleteTable({ records }: { records: ChangeRecord[] }) {
+function DeleteTable({
+  records,
+  selection,
+}: {
+  records: ChangeRecord[];
+  selection?: PreviewSelection;
+}) {
   const { formatMessage: t } = useIntl();
   if (records.length === 0) return <Text type="secondary">{t({ id: 'pages.io.preview.delete.empty' })}</Text>;
   const cols = columnsFromRecord(records);
@@ -127,7 +170,7 @@ function DeleteTable({ records }: { records: ChangeRecord[] }) {
     ellipsis: true,
     render: (val: string) => <Text type="danger">{val}</Text>,
   }));
-  return <PagedPreviewTable records={records} columns={columns} scrollX />;
+  return <PagedPreviewTable records={records} columns={columns} scrollX selection={selection} />;
 }
 
 function ErrorList({ errors }: { errors: ValidationError[] }) {
@@ -148,7 +191,13 @@ function ErrorList({ errors }: { errors: ValidationError[] }) {
   );
 }
 
-export function ChangePreviewTable({ creates, updates, deletes, errors }: ChangePreviewTableProps) {
+export function ChangePreviewTable({
+  creates,
+  updates,
+  deletes,
+  errors,
+  selection,
+}: ChangePreviewTableProps) {
   const { formatMessage: t } = useIntl();
 
   const items = [
@@ -160,7 +209,7 @@ export function ChangePreviewTable({ creates, updates, deletes, errors }: Change
           {t({ id: 'pages.io.preview.tab.create' })}
         </span>
       ),
-      children: <CreateTable records={creates} />,
+      children: <CreateTable records={creates} selection={selection} />,
     },
     {
       key: 'updates',
@@ -170,7 +219,7 @@ export function ChangePreviewTable({ creates, updates, deletes, errors }: Change
           {t({ id: 'pages.io.preview.tab.update' })}
         </span>
       ),
-      children: <UpdateTable records={updates} />,
+      children: <UpdateTable records={updates} selection={selection} />,
     },
     {
       key: 'deletes',
@@ -180,7 +229,7 @@ export function ChangePreviewTable({ creates, updates, deletes, errors }: Change
           {t({ id: 'pages.io.preview.tab.delete' })}
         </span>
       ),
-      children: <DeleteTable records={deletes} />,
+      children: <DeleteTable records={deletes} selection={selection} />,
     },
     ...(errors.length > 0
       ? [

@@ -97,7 +97,7 @@ def test_status_ahead(svc: GitSyncService, bare_repo: dict) -> None:
 # ── publish ───────────────────────────────────────────────────────────────────
 
 
-def _write_dummy_csv(clone_dir: Path) -> list[str]:
+def _write_dummy_csv(clone_dir: Path, excluded=None) -> list[str]:
     """Side-effect helper: writes a dummy CSV so git has staged changes."""
     (clone_dir / "finance_account.csv").write_text("id,name\n1,test\n")
     return ["finance_account"]

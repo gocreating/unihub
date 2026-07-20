@@ -305,6 +305,11 @@ export default {
   'pages.io.sync.graph.incompatible': 'Incompatible with this app version: {reason}',
   'pages.io.sync.graph.loadMore': 'Load more',
   'pages.io.sync.graph.empty': 'No commits yet.',
+  'pages.io.sync.staging.masterLabel': 'Stage all changes',
+  'pages.io.sync.staging.tableLabel': 'Stage all: {name}',
+  'pages.io.sync.staging.count':
+    '{selected} of {total, plural, one {# change} other {# changes}} staged',
+  'pages.io.sync.staging.nothing': 'Nothing staged — check at least one row to apply.',
   'pages.io.sync.diverged.title': 'Push Rejected — Histories Diverged',
   'pages.io.sync.diverged.description': 'The remote has commits that are not in your local copy. Choose how to proceed:',
   'pages.io.sync.diverged.forcePublish': 'Force Push (overwrite remote)',

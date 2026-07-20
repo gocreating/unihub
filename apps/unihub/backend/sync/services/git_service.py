@@ -297,17 +297,22 @@ class GitSyncService:
 
     # ── Publish ───────────────────────────────────────────────────────────────
 
-    def _verify_pinning(self, base_commit: str | None, diff_digest: str | None) -> None:
+    def _verify_pinning(
+        self, base_commit: str | None, diff_digest: str | None
+    ) -> list | None:
         """Verify a pinned confirm still matches its preview.
 
         Assumes the clone has just been reset to the remote head.
+
+        Returns:
+            The recomputed changes when pinned, None for an unpinned call.
 
         Raises:
             PreviewStaleException: when the remote moved or the local dataset
                 changed since the preview was computed.
         """
         if diff_digest is None:
-            return
+            return None
         from sync.services.digest import diff_digest as compute_digest
         from sync.services.publish_helper import preview_publish_against_head
 
@@ -318,33 +323,58 @@ class GitSyncService:
         changes = preview_publish_against_head(self.clone_dir)
         if compute_digest(changes) != diff_digest:
             raise PreviewStaleException("The dataset changed since the preview was computed.")
+        return changes
+
+    @staticmethod
+    def _staged_exclusions(
+        changes: list | None, excluded: list[dict] | None
+    ) -> set[tuple[str, str]]:
+        """Normalize exclusions and guard against an empty staged set.
+
+        Raises:
+            NothingStagedException: every previewed change was excluded.
+        """
+        excluded_refs = {(ref["table"], ref["pk"]) for ref in excluded or []}
+        if excluded_refs and changes is not None:
+            all_refs = {
+                (change["table"], row["pk"])
+                for change in changes
+                for row in change["rows"]
+            }
+            if all_refs and not (all_refs - excluded_refs):
+                raise NothingStagedException("Every previewed change was excluded.")
+        return excluded_refs
 
     def publish(
         self,
         base_commit: str | None = None,
         diff_digest: str | None = None,
+        excluded: list[dict] | None = None,
     ) -> SyncPublishData | None:
         """Export all tables to CSV on the remote-head base, commit, push.
 
         The clone is reset to the remote head first, so the commit is always a
         fast-forward of the true remote state. When ``diff_digest`` is given,
         the publish is pinned: the diff is recomputed and must match the
-        previewed one exactly.
+        previewed one exactly. ``excluded`` rows (unstaged) are reverted to
+        their base-commit state in the written CSVs.
 
         Returns:
             None if up-to-date, else the publish result.
 
         Raises:
             PreviewStaleException: pinned publish no longer matches its preview.
+            NothingStagedException: every previewed change was excluded.
             DivergedException: the push was rejected (a race with another push).
         """
         from sync.services.publish_helper import write_csvs_to_clone
 
         self.reset_to_remote()
         self._configure_identity()
-        self._verify_pinning(base_commit, diff_digest)
+        changes = self._verify_pinning(base_commit, diff_digest)
+        excluded_refs = self._staged_exclusions(changes, excluded)
 
-        tables_exported = write_csvs_to_clone(self.clone_dir)
+        tables_exported = write_csvs_to_clone(self.clone_dir, excluded=excluded_refs)
 
         self._run(["git", "add", "-A"])
 
@@ -368,15 +398,17 @@ class GitSyncService:
         self,
         base_commit: str | None = None,
         diff_digest: str | None = None,
+        excluded: list[dict] | None = None,
     ) -> SyncPublishData | None:
         """Like publish() but force-pushes, overwriting the remote."""
         from sync.services.publish_helper import write_csvs_to_clone
 
         self.reset_to_remote()
         self._configure_identity()
-        self._verify_pinning(base_commit, diff_digest)
+        changes = self._verify_pinning(base_commit, diff_digest)
+        excluded_refs = self._staged_exclusions(changes, excluded)
 
-        tables_exported = write_csvs_to_clone(self.clone_dir)
+        tables_exported = write_csvs_to_clone(self.clone_dir, excluded=excluded_refs)
         self._run(["git", "add", "-A"])
 
         diff = self._run(["git", "diff", "--cached", "--quiet"], check=False)
@@ -446,6 +478,10 @@ class DivergedException(Exception):
 
 class PreviewStaleException(Exception):
     """Raised when a pinned confirm no longer matches its preview."""
+
+
+class NothingStagedException(Exception):
+    """Raised when every previewed change was excluded from the confirm."""
 
 
 class GitError(Exception):

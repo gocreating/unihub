@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { Button, Card, Checkbox, Divider, Space, message } from 'antd';
+import { Button, Card, Checkbox, Divider, Space, Tooltip, message } from 'antd';
 import { HolderOutlined, PushpinFilled, PushpinOutlined } from '@ant-design/icons';
 import { useIntl } from 'react-intl';
 import type { UseColumnConfigReturn } from './hooks/useColumnConfig';
+import { compareDisplayOrder } from './hooks/useColumnConfig';
+import type { PinSide } from './types';
 import { SortableList } from './SortableList';
 
 export interface ColumnPanelProps {
@@ -27,14 +29,12 @@ export function ColumnPanel({ hook, onApply, onClose, focusCancelOn }: ColumnPan
     return () => clearTimeout(t);
   }, [focusCancelOn]);
 
-  const { columns, stickyLeft, stickyRight } = pendingState;
+  const { columns } = pendingState;
   const visibleCount = columns.filter((c) => c.visible).length;
 
-  // Sorted by current order — this is what's rendered in the panel
-  const sorted = useMemo(() => [...columns].sort((a, b) => a.order - b.order), [columns]);
-
-  const firstVisibleKey = sorted.find((c) => c.visible)?.key;
-  const lastVisibleKey = [...sorted].reverse().find((c) => c.visible)?.key;
+  // Rows render in DISPLAY order — pinned groups at the edges, `order` within
+  // each group — so the panel is WYSIWYG with the table (017: per-column pins).
+  const sorted = useMemo(() => [...columns].sort(compareDisplayOrder), [columns]);
 
   const toggleVisible = (key: string) => {
     const col = columns.find((c) => c.key === key);
@@ -49,6 +49,17 @@ export function ColumnPanel({ hook, onApply, onClose, focusCancelOn }: ColumnPan
     });
   };
 
+  // Clicking the active side unpins; clicking the other side swaps (a column
+  // pins to at most one side). Pins never mutate `order`.
+  const togglePin = (key: string, side: PinSide) => {
+    setPendingState({
+      ...pendingState,
+      columns: columns.map((c) =>
+        c.key === key ? { ...c, pin: c.pin === side ? undefined : side } : c,
+      ),
+    });
+  };
+
   // SortableList requires items with `id` field; ColumnDef uses `key`
   const sortableItems = sorted.map((col) => ({ ...col, id: col.key }));
 
@@ -57,6 +68,31 @@ export function ColumnPanel({ hook, onApply, onClose, focusCancelOn }: ColumnPan
       ...pendingState,
       columns: columns.map((c) => ({ ...c, order: reordered.findIndex((r) => r.key === c.key) })),
     });
+  };
+
+  const pinButton = (col: { key: string; pin?: PinSide }, side: PinSide) => {
+    const active = col.pin === side;
+    const label = t({ id: side === 'left' ? 'common.entityOps.columns.pinLeft' : 'common.entityOps.columns.pinRight' });
+    return (
+      <Tooltip title={label}>
+        <button
+          data-sticky-pin={side}
+          aria-label={label}
+          onClick={() => togglePin(col.key, side)}
+          style={{
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            color: active ? '#1677ff' : '#bfbfbf', padding: '0 2px',
+            lineHeight: 1, flexShrink: 0, fontSize: 14,
+          }}
+        >
+          {/* The right-side pushpin mirrors horizontally so the two sides are
+              distinguishable at a glance. */}
+          <span style={side === 'right' ? { display: 'inline-flex', transform: 'scaleX(-1)' } : { display: 'inline-flex' }}>
+            {active ? <PushpinFilled /> : <PushpinOutlined />}
+          </span>
+        </button>
+      </Tooltip>
+    );
   };
 
   return (
@@ -72,57 +108,29 @@ export function ColumnPanel({ hook, onApply, onClose, focusCancelOn }: ColumnPan
       <SortableList
         items={sortableItems}
         onReorder={handleReorder}
-        renderItem={(col, handleProps) => {
-          const isFirst = col.key === firstVisibleKey;
-          const isLast  = col.key === lastVisibleKey && firstVisibleKey !== lastVisibleKey;
-          return (
-            <div
-              data-column-row={col.key}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                marginBottom: 4, padding: '2px 0',
-              }}
+        renderItem={(col, handleProps) => (
+          <div
+            data-column-row={col.key}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              marginBottom: 4, padding: '2px 0',
+            }}
+          >
+            <span {...handleProps} style={{ color: '#bfbfbf', flexShrink: 0, cursor: 'grab', lineHeight: 1 }}>
+              <HolderOutlined />
+            </span>
+            <Checkbox
+              checked={col.visible}
+              onChange={() => toggleVisible(col.key)}
+              disabled={col.visible && visibleCount <= 1}
+              style={{ flex: 1 }}
             >
-              <span {...handleProps} style={{ color: '#bfbfbf', flexShrink: 0, cursor: 'grab', lineHeight: 1 }}>
-                <HolderOutlined />
-              </span>
-              <Checkbox
-                checked={col.visible}
-                onChange={() => toggleVisible(col.key)}
-                disabled={col.visible && visibleCount <= 1}
-                style={{ flex: 1 }}
-              >
-                {col.label}
-              </Checkbox>
-              {isFirst && (
-                <button
-                  data-sticky-pin="left"
-                  onClick={() => setPendingState({ ...pendingState, stickyLeft: !stickyLeft })}
-                  style={{
-                    border: 'none', background: 'transparent', cursor: 'pointer',
-                    color: stickyLeft ? '#1677ff' : '#bfbfbf', padding: '0 2px',
-                    lineHeight: 1, flexShrink: 0, fontSize: 14,
-                  }}
-                >
-                  {stickyLeft ? <PushpinFilled /> : <PushpinOutlined />}
-                </button>
-              )}
-              {isLast && (
-                <button
-                  data-sticky-pin="right"
-                  onClick={() => setPendingState({ ...pendingState, stickyRight: !stickyRight })}
-                  style={{
-                    border: 'none', background: 'transparent', cursor: 'pointer',
-                    color: stickyRight ? '#1677ff' : '#bfbfbf', padding: '0 2px',
-                    lineHeight: 1, flexShrink: 0, fontSize: 14,
-                  }}
-                >
-                  {stickyRight ? <PushpinFilled /> : <PushpinOutlined />}
-                </button>
-              )}
-            </div>
-          );
-        }}
+              {col.label}
+            </Checkbox>
+            {pinButton(col, 'left')}
+            {pinButton(col, 'right')}
+          </div>
+        )}
       />
       </div>
 

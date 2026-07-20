@@ -125,10 +125,7 @@ export function CurrenciesPage() {
 
   const colDefMap = useMemo<Record<string, ProColumns<Currency>>>(
     () => {
-      const getFixed = (key: string) =>
-        table.cols.visibleColumns[0]?.key === key ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === key ? table.cols.lastColumnFixed
-          : undefined;
+      const getFixed = table.cols.fixedForKey;
       return {
       code: {
         dataIndex: 'code',
@@ -188,7 +185,7 @@ export function CurrenciesPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.firstColumnFixed, table.cols.lastColumnFixed, table.cols.visibleColumns],
+    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<Currency>[]>(
@@ -199,7 +196,7 @@ export function CurrenciesPage() {
   return (
     <>
       <PageTable<Currency>
-        key={`${table.cols.visibleColumns[0]?.key ?? ''}-${table.cols.visibleColumns.at(-1)?.key ?? ''}-${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
+        key={table.cols.pinFingerprint}
         pageTitle={t({ id: 'pages.finance.currencies.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

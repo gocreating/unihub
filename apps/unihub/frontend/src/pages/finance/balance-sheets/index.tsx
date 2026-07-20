@@ -431,10 +431,7 @@ export function BalanceSheetsPage() {
 
   const colDefMap = useMemo<Record<string, ProColumns<BalanceSheet> | undefined>>(
     () => {
-      const getFixed = (key: string) =>
-        cols.visibleColumns[0]?.key === key ? cols.firstColumnFixed
-          : cols.visibleColumns.at(-1)?.key === key ? cols.lastColumnFixed
-          : undefined;
+      const getFixed = cols.fixedForKey;
       return {
         date: {
           dataIndex: 'date',
@@ -507,7 +504,7 @@ export function BalanceSheetsPage() {
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, navigate, dataWidths, actionsColWidth, baseCurrency, sheetNetWorths, allBalancesLoading,
-     sort.sortOrderForField, sort.activeRules, cols.visibleColumns, cols.firstColumnFixed, cols.lastColumnFixed],
+     sort.sortOrderForField, sort.activeRules, cols.visibleColumns, cols.fixedForKey],
   );
 
   const columns = useMemo<ProColumns<BalanceSheet>[]>(
@@ -726,7 +723,7 @@ export function BalanceSheetsPage() {
             {t({ id: 'pages.finance.balanceSheets.new' })}
           </Button>
         }
-        key={`${cols.visibleColumns[0]?.key ?? ''}-${cols.visibleColumns.at(-1)?.key ?? ''}-${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
+        key={cols.pinFingerprint}
         headerTitle={
           <EntityToolbar
             filterProps={{ attrs: filterableAttrs, hook: filter }}

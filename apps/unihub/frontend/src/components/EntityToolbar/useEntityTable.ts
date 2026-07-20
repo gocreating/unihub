@@ -26,8 +26,6 @@ export interface UseEntityTableOptions {
   defaultPageSize?: EntityPageSize;
   /** Initial sort rules applied before any user interaction (e.g. a page's default sort). */
   defaultSortRules?: SortRule[];
-  /** Seed the default column pin flags (e.g. a pinned-by-default Toggle column). */
-  defaultSticky?: { left?: boolean; right?: boolean };
   /** Seed a default filter applied before any user interaction (lit + clearable). */
   defaultFilterGroups?: FilterPayload['groups'];
 }
@@ -62,12 +60,11 @@ export function useEntityTable({
   columnDefs,
   defaultPageSize = 25,
   defaultSortRules,
-  defaultSticky,
   defaultFilterGroups,
 }: UseEntityTableOptions): UseEntityTableReturn {
   const filter = useEntityFilter(key, defaultFilterGroups);
   const sort = useEntitySort(key, defaultSortRules);
-  const cols = useColumnConfig(columnDefs, defaultSticky);
+  const cols = useColumnConfig(columnDefs);
 
   const [limit, setLimit] = useState<number>(defaultPageSize);
   const [offset, setOffset] = useState(0);

@@ -157,8 +157,8 @@ export function CatalogPage() {
       // SKU price, Parameters, Actions. Every real column stays toggleable
       // from the dropdown (hidden by default), including one per parameter
       // definition (FR-028). The caret disclosure column is itself a column
-      // ("Toggle"), pinned by default via defaultSticky (iteration 16).
-      { key: '__caret', label: t({ id: 'pages.inventory.catalog.col.toggle' }), dataType: 'text', visible: true, order: -1 },
+      // ("Toggle"), pinned left by default (iterations 16 + 48).
+      { key: '__caret', label: t({ id: 'pages.inventory.catalog.col.toggle' }), dataType: 'text', visible: true, order: -1, pin: 'left' },
       { key: 'acquisition_summary', label: t({ id: 'pages.inventory.catalog.col.acquisition' }), dataType: 'text', visible: true, order: 0 },
       { key: 'item_summary', label: t({ id: 'pages.inventory.catalog.col.item' }), dataType: 'text', visible: true, order: 1 },
       { key: 'sku_price', label: t({ id: 'pages.inventory.items.col.skuPrice' }), dataType: 'number', visible: true, order: 3 },
@@ -182,7 +182,8 @@ export function CatalogPage() {
         visible: false,
         order: 14 + i,
       })),
-      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 99 },
+      // Actions pinned right by default (iterations 27 + 48).
+      { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 99, pin: 'right' },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, definitions],
@@ -196,9 +197,6 @@ export function CatalogPage() {
     columnDefs,
     // Default sort (spec): Obtained descending, NULLS FIRST (pending on top).
     defaultSortRules: [{ field: 'acquisition__obtained_at', direction: 'desc', nulls: 'first' }],
-    // The Toggle (caret) column is pinned left and the Actions column pinned
-    // right by default (FR-003, iterations 16 + 27).
-    defaultSticky: { left: true, right: true },
     // Default view (iterations 17→24): YTD acquisitions + pending (no
     // obtained date yet) — ONE or-group with plain conditions, lit in the
     // Filter toolbar, freely editable/clearable.
@@ -407,12 +405,7 @@ export function CatalogPage() {
 
   const colDefMap = useMemo<Record<string, ProColumns<CatalogRow>>>(
     () => {
-      const getFixed = (key: string) =>
-        cols.visibleColumns[0]?.key === key
-          ? cols.firstColumnFixed
-          : cols.visibleColumns.at(-1)?.key === key
-            ? cols.lastColumnFixed
-            : undefined;
+      const getFixed = cols.fixedForKey;
       // Width = max(measured content, header) + padding — NO arbitrary floors.
       const w = (key: string, label: string) => widthForHeader(label, dataWidths[key] ?? 0);
       const wId = (key: string, labelId: string) => w(key, t({ id: labelId }));
@@ -733,8 +726,12 @@ export function CatalogPage() {
       }
       return map;
     },
+    // toggledIds: the Item/date cells render merged-vs-split content via
+    // itemFor()/isExpanded() closures — they must rebuild when expansion
+    // changes (previously masked by visibleColumns changing identity every
+    // render; the 017 hook memoizes it).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, flatMode, definitions, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns, navigate, currencySymbolsMap],
+    [t, dataWidths, actionsColWidth, flatMode, definitions, toggledIds, sort.sortOrderForField, sort.activeRules, cols.fixedForKey, cols.visibleColumns, navigate, currencySymbolsMap],
   );
 
   const caretColumn = useMemo<ProColumns<CatalogRow>>(
@@ -742,7 +739,7 @@ export function CatalogPage() {
       key: '__caret',
       title: '',
       width: 44,
-      fixed: cols.visibleColumns[0]?.key === '__caret' ? cols.firstColumnFixed : undefined,
+      fixed: cols.fixedForKey('__caret'),
       render: (_, r) =>
         isAcquisition(r) && r.children.length > 0 ? (
           <span style={{ cursor: 'pointer' }} onClick={() => toggleExpand(r.id)}>
@@ -751,7 +748,7 @@ export function CatalogPage() {
         ) : null,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [toggledIds, cols.firstColumnFixed, cols.visibleColumns],
+    [toggledIds, cols.fixedForKey],
   );
 
   const columns = useMemo<ProColumns<CatalogRow>[]>(() => {
@@ -766,7 +763,7 @@ export function CatalogPage() {
   return (
     <>
       <PageTable<CatalogRow>
-        key={`${flatMode}-${cols.visibleColumns[0]?.key ?? ''}-${cols.visibleColumns.at(-1)?.key ?? ''}-${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
+        key={`${flatMode}-${cols.pinFingerprint}`}
         pageTitle={t({ id: 'pages.inventory.catalog.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/inventory/acquisitions/new')}>

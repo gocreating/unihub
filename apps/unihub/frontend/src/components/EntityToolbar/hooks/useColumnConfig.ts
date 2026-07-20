@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { ColumnDef, ColumnState } from '../types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ColumnDef, ColumnState, PinSide } from '../types';
 
 export interface UseColumnConfigReturn {
   /** Column state being edited in the panel (not yet applied). */
@@ -14,57 +14,67 @@ export interface UseColumnConfigReturn {
   reset: () => void;
   /** Update the pending state (called from panel UI). */
   setPendingState: (state: ColumnState) => void;
-  /** Ordered visible columns derived from activeState. */
+  /** Visible columns in DISPLAY order: left-pinned group, unpinned, right-pinned group. */
   visibleColumns: ColumnDef[];
-  /** `'left'` when stickyLeft is active, otherwise undefined. */
-  firstColumnFixed: 'left' | undefined;
-  /** `'right'` when stickyRight is active, otherwise undefined. */
-  lastColumnFixed: 'right' | undefined;
+  /** Pinned edge for a VISIBLE column key (undefined for unpinned/hidden/unknown). */
+  fixedForKey: (key: string) => PinSide | undefined;
+  /**
+   * Remount-key component (constitution XII): display-ordered `key:side` pairs of
+   * visible pinned columns joined with '|' — changes exactly when the pin layout does.
+   */
+  pinFingerprint: string;
   /** True when the column config differs from the initial default state. */
   isCustomised: boolean;
   /** True when pendingState differs from activeState (panel has unsaved changes). */
   isDirty: boolean;
 }
 
+function pinRank(pin: PinSide | undefined): number {
+  return pin === 'left' ? 0 : pin === 'right' ? 2 : 1;
+}
+
+/**
+ * The single display-order comparator: pin-group-major (left, unpinned, right),
+ * `order`-minor. rc-table requires fixed columns to be contiguous at the array
+ * edges; deriving the grouped order (instead of mutating `order` on pin) keeps
+ * each column's home position for when it is unpinned again. Used by the table
+ * (visibleColumns) AND the ColumnPanel row list so the panel is WYSIWYG.
+ */
+export function compareDisplayOrder(a: ColumnDef, b: ColumnDef): number {
+  return pinRank(a.pin) - pinRank(b.pin) || a.order - b.order;
+}
+
 function sortedVisible(state: ColumnState): ColumnDef[] {
-  return [...state.columns]
-    .filter((c) => c.visible)
-    .sort((a, b) => a.order - b.order);
+  return [...state.columns].filter((c) => c.visible).sort(compareDisplayOrder);
 }
 
 function statesEqual(a: ColumnState, b: ColumnState): boolean {
-  if (a.stickyLeft !== b.stickyLeft || a.stickyRight !== b.stickyRight) return false;
   if (a.columns.length !== b.columns.length) return false;
   return a.columns.every((ac, i) => {
     const bc = b.columns[i];
-    return ac.key === bc?.key && ac.visible === bc.visible && ac.order === bc.order;
+    return (
+      ac.key === bc?.key &&
+      ac.visible === bc.visible &&
+      ac.order === bc.order &&
+      ac.pin === bc.pin
+    );
   });
 }
 
 /**
- * Manage column visibility, display order, and sticky-pinning state.
- * `defaultSticky` seeds the pin flags of the initial/default state (a page can
- * ship pinned-by-default columns); user changes still win and Reset restores
- * the seeded default.
+ * Manage column visibility, display order, and per-column sticky pinning.
+ * Default pins ride on `initialColumns[].pin` (a page can ship pinned-by-default
+ * columns); user changes still win and Reset restores the seeded defaults.
  */
-export function useColumnConfig(
-  initialColumns: ColumnDef[],
-  defaultSticky?: { left?: boolean; right?: boolean },
-): UseColumnConfigReturn {
-  const seedLeft = !!defaultSticky?.left;
-  const seedRight = !!defaultSticky?.right;
-  const initial: ColumnState = {
-    columns: initialColumns,
-    stickyLeft: seedLeft,
-    stickyRight: seedRight,
-  };
+export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigReturn {
+  const initial: ColumnState = { columns: initialColumns };
 
   const [activeState, setActiveState] = useState<ColumnState>(initial);
   const [pendingState, setPendingState] = useState<ColumnState>(initial);
 
   // When a parent re-renders with updated columns (e.g. async currency labels,
   // or attribute-definition columns loading after mount — iteration 14):
-  //   - patch labels of existing columns without disturbing visibility/order,
+  //   - patch labels of existing columns without disturbing visibility/order/pin,
   //   - append columns whose key is new (e.g. a freshly created parameter),
   //   - drop columns whose key no longer exists (e.g. a deleted parameter).
   // Only updates state when something actually changed to avoid re-renders.
@@ -97,16 +107,27 @@ export function useColumnConfig(
   }, [activeState]);
 
   const reset = useCallback(() => {
-    const defaultState: ColumnState = {
-      columns: initialColumns,
-      stickyLeft: seedLeft,
-      stickyRight: seedRight,
-    };
+    const defaultState: ColumnState = { columns: initialColumns };
     setActiveState(defaultState);
     setPendingState(defaultState);
-  }, [initialColumns, seedLeft, seedRight]);
+  }, [initialColumns]);
 
-  const visible = sortedVisible(activeState);
+  const visible = useMemo(() => sortedVisible(activeState), [activeState]);
+
+  const fixedForKey = useCallback(
+    (key: string): PinSide | undefined =>
+      visible.find((c) => c.key === key)?.pin,
+    [visible],
+  );
+
+  const pinFingerprint = useMemo(
+    () =>
+      visible
+        .filter((c) => c.pin)
+        .map((c) => `${c.key}:${c.pin}`)
+        .join('|'),
+    [visible],
+  );
 
   return {
     pendingState,
@@ -116,8 +137,8 @@ export function useColumnConfig(
     reset,
     setPendingState,
     visibleColumns: visible,
-    firstColumnFixed: activeState.stickyLeft && visible.length > 0 ? 'left' : undefined,
-    lastColumnFixed: activeState.stickyRight && visible.length > 0 ? 'right' : undefined,
+    fixedForKey,
+    pinFingerprint,
     isCustomised: !statesEqual(activeState, initial),
     isDirty: !statesEqual(pendingState, activeState),
   };

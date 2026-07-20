@@ -71,12 +71,7 @@ export function ScenariosPage() {
 
   const colDefMap = useMemo<Record<string, ProColumns<Scenario>>>(
     () => {
-      const getFixed = (key: string) =>
-        cols.visibleColumns[0]?.key === key
-          ? cols.firstColumnFixed
-          : cols.visibleColumns.at(-1)?.key === key
-            ? cols.lastColumnFixed
-            : undefined;
+      const getFixed = cols.fixedForKey;
       return {
         name: {
           dataIndex: 'name',
@@ -100,7 +95,7 @@ export function ScenariosPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, nameWidth, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns],
+    [t, nameWidth, sort.sortOrderForField, sort.activeRules, cols.fixedForKey, cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<Scenario>[]>(
@@ -114,7 +109,7 @@ export function ScenariosPage() {
   return (
     <>
       <PageTable<Scenario>
-        key={`${cols.visibleColumns[0]?.key ?? ''}-${cols.visibleColumns.at(-1)?.key ?? ''}-${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
+        key={cols.pinFingerprint}
         pageTitle={t({ id: 'pages.inventory.scenarios.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>

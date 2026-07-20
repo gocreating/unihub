@@ -59,6 +59,14 @@ describe('SyncTab publish pinning (015 US1)', () => {
       repo_url: 'https://github.com/user/repo',
     });
     vi.mocked(syncService.getPublishPreview).mockResolvedValue(PREVIEW);
+    vi.mocked(syncService.getSyncHistory).mockResolvedValue({
+      commits: [],
+      has_more: false,
+      remote_head: null,
+      local_commit: null,
+      has_local_changes: true,
+      history_rewritten: false,
+    });
   });
 
   it('sends the previewed base_commit and diff_digest on confirm', async () => {
@@ -70,8 +78,8 @@ describe('SyncTab publish pinning (015 US1)', () => {
     const user = userEvent.setup();
     renderTab();
 
-    await user.click(await screen.findByRole('button', { name: /preview push/i }));
-    await user.click(await screen.findByRole('button', { name: /apply push/i }));
+    await user.click(await screen.findByRole('button', { name: /review & publish/i }));
+    await user.click(await screen.findByRole('button', { name: /publish staged changes/i }));
 
     await waitFor(() => expect(syncService.publishSync).toHaveBeenCalledTimes(1));
     expect(vi.mocked(syncService.publishSync).mock.calls[0]?.[0]).toEqual({
@@ -88,10 +96,10 @@ describe('SyncTab publish pinning (015 US1)', () => {
     const user = userEvent.setup();
     renderTab();
 
-    await user.click(await screen.findByRole('button', { name: /preview push/i }));
+    await user.click(await screen.findByRole('button', { name: /review & publish/i }));
     expect(vi.mocked(syncService.getPublishPreview)).toHaveBeenCalledTimes(1);
 
-    await user.click(await screen.findByRole('button', { name: /apply push/i }));
+    await user.click(await screen.findByRole('button', { name: /publish staged changes/i }));
 
     // The stale rejection must trigger a fresh preview fetch (never a publish
     // of anything other than what was previewed).

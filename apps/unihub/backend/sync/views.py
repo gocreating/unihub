@@ -239,33 +239,110 @@ class SyncPublishPreviewView(APIView):
         )
 
 
-class SyncApplyPreviewView(APIView):
-    """GET /api/v1/sync/apply/preview/ — fetch remote and return per-table diff."""
+def _checkout_target(config: SyncConfig, commit: str | None):
+    """Shared checkout validation: reset, resolve, and gate the target commit.
+
+    Returns:
+        (svc, error_response) — exactly one is None.
+    """
+    if not commit:
+        return None, Response({"error": "missing_commit"}, status=status.HTTP_400_BAD_REQUEST)
+
+    svc = _get_git_service(config)
+    try:
+        svc.reset_to_remote()
+    except GitError as exc:
+        return None, Response(
+            {"error": "git_error", "message": str(exc)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    if not svc.commit_exists(commit):
+        return None, Response({"error": "unknown_commit"}, status=status.HTTP_400_BAD_REQUEST)
+
+    from sync.services.compatibility import classify_commit
+
+    compat = classify_commit(svc.clone_dir, commit)
+    if not compat.compatible:
+        return None, Response(
+            {"error": "incompatible_commit", "reason": compat.reason},
+            status=status.HTTP_409_CONFLICT,
+        )
+    return svc, None
+
+
+class SyncCheckoutPreviewView(APIView):
+    """GET /api/v1/sync/checkout/preview/?commit=<sha> — diff a snapshot vs the DB."""
 
     def get(self, request: Request) -> Response:
         config = SyncConfig.objects.first()
         if config is None:
             return Response({"error": "not_configured"}, status=status.HTTP_400_BAD_REQUEST)
 
-        changes = _get_git_service(config).apply_preview()
-        if changes is None:
+        commit = request.query_params.get("commit")
+        svc, error = _checkout_target(config, commit)
+        if error is not None:
+            return error
+
+        from sync.services.apply_helper import preview_from_commit
+        from sync.services.digest import diff_digest
+
+        changes = preview_from_commit(svc.clone_dir, commit)
+        if not changes:
             return Response({"status": "up_to_date"})
-        return Response({"status": "has_changes", "changes": changes})
+        return Response(
+            {
+                "status": "has_changes",
+                "base_commit": commit,
+                "diff_digest": diff_digest(changes),
+                "changes": changes,
+            }
+        )
 
 
-class SyncApplyConfirmView(APIView):
-    """POST /api/v1/sync/apply/confirm/ — pull and import all tables."""
+class SyncCheckoutConfirmView(APIView):
+    """POST /api/v1/sync/checkout/confirm/ — apply the staged subset of a snapshot."""
 
     def post(self, request: Request) -> Response:
         config = SyncConfig.objects.first()
         if config is None:
             return Response({"error": "not_configured"}, status=status.HTTP_400_BAD_REQUEST)
 
-        results = _get_git_service(config).apply_confirm()
+        commit = request.data.get("commit")
+        digest = request.data.get("diff_digest")
+        excluded = request.data.get("excluded") or []
+        if not digest:
+            return Response({"error": "missing_digest"}, status=status.HTTP_400_BAD_REQUEST)
+
+        svc, error = _checkout_target(config, commit)
+        if error is not None:
+            return error
+
+        from data_io.services.change_preview import apply_selected
+        from sync.services.apply_helper import preview_from_commit
+        from sync.services.digest import diff_digest
+
+        changes = preview_from_commit(svc.clone_dir, commit)
+        if diff_digest(changes) != digest:
+            return Response({"error": "preview_stale"}, status=status.HTTP_409_CONFLICT)
+
+        excluded_refs = {(ref["table"], ref["pk"]) for ref in excluded}
+        all_refs = {(ch["table"], row["pk"]) for ch in changes for row in ch["rows"]}
+        if all_refs and not (all_refs - excluded_refs):
+            return Response({"error": "nothing_staged"}, status=status.HTTP_400_BAD_REQUEST)
+
+        diffs_by_table = {ch["table"]: ch["rows"] for ch in changes}
+        results, auto_included = apply_selected(diffs_by_table, excluded_refs)
 
         from datetime import datetime, timezone
 
-        SyncConfig.objects.filter(pk=config.pk).update(
-            last_applied_at=datetime.now(timezone.utc),
-        )
-        return Response({"status": "applied", "results": results})
+        update_fields = {
+            "last_applied_at": datetime.now(timezone.utc),
+            "last_applied_commit": commit,
+        }
+        if not excluded_refs:
+            # Only a FULL checkout leaves the DB exactly at the snapshot.
+            update_fields["local_state_commit"] = commit
+        SyncConfig.objects.filter(pk=config.pk).update(**update_fields)
+
+        return Response({"status": "applied", "results": results, "auto_included": auto_included})

@@ -11,9 +11,7 @@ def _csv_filename(content_type_label: str) -> str:
     return content_type_label.replace(".", "_") + ".csv"
 
 
-def write_csvs_to_clone(
-    clone_dir: Path, excluded: set[tuple[str, str]] | None = None
-) -> list[str]:
+def write_csvs_to_clone(clone_dir: Path, excluded: set[tuple[str, str]] | None = None) -> list[str]:
     """Export all registered tables as CSV files into clone_dir.
 
     With ``excluded`` refs, the written CSVs are hybrids: the full local
@@ -35,9 +33,7 @@ def write_csvs_to_clone(
         csv_bytes = export_table(descriptor)
         excluded_pks = {pk for (table, pk) in excluded or set() if table == label}
         if excluded_pks:
-            csv_bytes = _revert_excluded_rows(
-                clone_dir, label, descriptor, csv_bytes, excluded_pks
-            )
+            csv_bytes = _revert_excluded_rows(clone_dir, label, descriptor, csv_bytes, excluded_pks)
         dest = clone_dir / _csv_filename(label)
         dest.write_bytes(csv_bytes)
         exported.append(label)
@@ -78,9 +74,7 @@ def _revert_excluded_rows(
         for row in head_reader:
             # Re-key the HEAD row onto the local export's headers (bare-name
             # match tolerates type-suffix renames between snapshots).
-            mapped = {
-                lh: row.get(head_bare.get(lh.split(":")[0], lh), "") for lh in local_headers
-            }
+            mapped = {lh: row.get(head_bare.get(lh.split(":")[0], lh), "") for lh in local_headers}
             head_rows[mapped.get(pk_header, "")] = mapped
 
     output_rows: list[dict[str, str]] = []

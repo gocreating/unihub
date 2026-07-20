@@ -61,7 +61,15 @@ function NodeRow({
   );
 }
 
-function CommitNode({ commit, isLast }: { commit: SyncHistoryCommit; isLast: boolean }) {
+function CommitNode({
+  commit,
+  isLast,
+  onCheckout,
+}: {
+  commit: SyncHistoryCommit;
+  isLast: boolean;
+  onCheckout?: (sha: string) => void;
+}) {
   const { formatMessage: t } = useIntl();
 
   const content = (
@@ -78,6 +86,11 @@ function CommitNode({ commit, isLast }: { commit: SyncHistoryCommit; isLast: boo
         )}
         {commit.is_local_state && (
           <Tag color="blue">{t({ id: 'pages.io.sync.graph.localBadge' })}</Tag>
+        )}
+        {onCheckout && commit.compatible && (
+          <Button size="small" onClick={() => onCheckout(commit.sha)}>
+            {t({ id: 'pages.io.sync.graph.checkoutAction' })}
+          </Button>
         )}
       </div>
       <div>
@@ -106,7 +119,15 @@ function CommitNode({ commit, isLast }: { commit: SyncHistoryCommit; isLast: boo
   return content;
 }
 
-export function CommitGraph() {
+export interface CommitGraphProps {
+  /** Renders a publish action on the pending-local-changes node (015 US5). */
+  onPublish?: () => void;
+  publishing?: boolean;
+  /** Renders a checkout action on every COMPATIBLE commit node (015 US5). */
+  onCheckout?: (sha: string) => void;
+}
+
+export function CommitGraph({ onPublish, publishing, onCheckout }: CommitGraphProps) {
   const { formatMessage: t } = useIntl();
 
   const query = useInfiniteQuery({
@@ -159,9 +180,14 @@ export function CommitGraph() {
               isLast={commits.length === 0}
               testId="commit-node-pending"
             >
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <CloudUploadOutlined style={{ color: '#1677ff' }} />
                 <Text strong>{t({ id: 'pages.io.sync.graph.pendingNode' })}</Text>
+                {onPublish && (
+                  <Button type="primary" size="small" loading={publishing} onClick={onPublish}>
+                    {t({ id: 'pages.io.sync.graph.publishAction' })}
+                  </Button>
+                )}
               </div>
             </NodeRow>
           )}
@@ -171,7 +197,12 @@ export function CommitGraph() {
           )}
 
           {commits.map((commit, idx) => (
-            <CommitNode key={commit.sha} commit={commit} isLast={idx === commits.length - 1} />
+            <CommitNode
+              key={commit.sha}
+              commit={commit}
+              isLast={idx === commits.length - 1}
+              onCheckout={onCheckout}
+            />
           ))}
 
           {query.hasNextPage && (

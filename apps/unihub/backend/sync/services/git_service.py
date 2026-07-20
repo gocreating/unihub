@@ -273,6 +273,11 @@ class GitSyncService:
         res = self._run(["git", "merge-base", "--is-ancestor", ancestor, descendant], check=False)
         return res.returncode == 0
 
+    def commit_exists(self, sha: str) -> bool:
+        """True when ``sha`` resolves to a commit in the clone (call after fetch)."""
+        res = self._run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=False)
+        return res.returncode == 0
+
     def local_changes_exist(self) -> bool:
         """True when the DB differs from the clone's current HEAD snapshot."""
         from sync.services.publish_helper import preview_publish_against_head
@@ -297,9 +302,7 @@ class GitSyncService:
 
     # ── Publish ───────────────────────────────────────────────────────────────
 
-    def _verify_pinning(
-        self, base_commit: str | None, diff_digest: str | None
-    ) -> list | None:
+    def _verify_pinning(self, base_commit: str | None, diff_digest: str | None) -> list | None:
         """Verify a pinned confirm still matches its preview.
 
         Assumes the clone has just been reset to the remote head.
@@ -337,9 +340,7 @@ class GitSyncService:
         excluded_refs = {(ref["table"], ref["pk"]) for ref in excluded or []}
         if excluded_refs and changes is not None:
             all_refs = {
-                (change["table"], row["pk"])
-                for change in changes
-                for row in change["rows"]
+                (change["table"], row["pk"]) for change in changes for row in change["rows"]
             }
             if all_refs and not (all_refs - excluded_refs):
                 raise NothingStagedException("Every previewed change was excluded.")

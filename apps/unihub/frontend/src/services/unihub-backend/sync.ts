@@ -41,9 +41,23 @@ export interface SyncApplyChange {
   rows: ChangeRecord[];
 }
 
-export interface SyncApplyPreviewResult {
+export interface SyncCheckoutPreviewResult {
   status: 'up_to_date' | 'has_changes';
+  base_commit?: string;
+  diff_digest?: string;
   changes?: SyncApplyChange[];
+}
+
+export interface SyncCheckoutConfirmRequest {
+  commit: string;
+  diff_digest: string;
+  excluded?: Array<{ table: string; pk: string }>;
+}
+
+export interface SyncCheckoutConfirmResult {
+  status: 'applied';
+  results: Array<{ table: string; display_name: string; applied: number }>;
+  auto_included: Array<{ table: string; pk: string; operation: string }>;
 }
 
 export interface SyncPublishPreviewChange {
@@ -70,11 +84,6 @@ export interface SyncPublishPin {
   diff_digest: string;
   /** Unstaged rows to leave out of the publish (015 US4); omitted/empty = all staged. */
   excluded?: Array<{ table: string; pk: string }>;
-}
-
-export interface SyncApplyConfirmResult {
-  status: 'applied';
-  results: Array<{ table: string; display_name: string; applied: number }>;
 }
 
 export interface SyncHistoryCommit {
@@ -169,21 +178,34 @@ export async function forcePublishSync(): Promise<SyncPublishResult> {
   return res.json() as Promise<SyncPublishResult>;
 }
 
-export async function getApplyPreview(): Promise<SyncApplyPreviewResult> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/sync/apply/preview/`, { credentials: 'include' });
-  if (!res.ok) throw new Error('Failed to fetch apply preview');
-  return res.json() as Promise<SyncApplyPreviewResult>;
+export async function getCheckoutPreview(commit: string): Promise<SyncCheckoutPreviewResult> {
+  const qs = new URLSearchParams({ commit });
+  const res = await fetch(`${API_BASE_URL}/api/v1/sync/checkout/preview/?${qs.toString()}`, {
+    credentials: 'include',
+  });
+  if (res.status === 409) {
+    const body = (await res.json()) as { error: string };
+    throw Object.assign(new Error(body.error), { code: body.error });
+  }
+  if (!res.ok) throw new Error('Failed to fetch checkout preview');
+  return res.json() as Promise<SyncCheckoutPreviewResult>;
 }
 
-export async function confirmApply(): Promise<SyncApplyConfirmResult> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/sync/apply/confirm/`, {
+export async function confirmCheckout(
+  req: SyncCheckoutConfirmRequest,
+): Promise<SyncCheckoutConfirmResult> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/sync/checkout/confirm/`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-    body: '{}',
+    body: JSON.stringify(req),
   });
-  if (!res.ok) throw new Error('Apply failed');
-  return res.json() as Promise<SyncApplyConfirmResult>;
+  if (res.status === 409) {
+    const body = (await res.json()) as { error: string };
+    throw Object.assign(new Error(body.error), { code: body.error });
+  }
+  if (!res.ok) throw new Error('Checkout failed');
+  return res.json() as Promise<SyncCheckoutConfirmResult>;
 }
 
 export async function getPublishPreview(): Promise<SyncPublishPreviewResult> {

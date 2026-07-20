@@ -1,8 +1,8 @@
 from django.urls import path
 
 from sync.views import (
-    SyncApplyConfirmView,
-    SyncApplyPreviewView,
+    SyncCheckoutConfirmView,
+    SyncCheckoutPreviewView,
     SyncConfigView,
     SyncForcePublishView,
     SyncHistoryView,
@@ -18,6 +18,6 @@ urlpatterns = [
     path("publish/preview/", SyncPublishPreviewView.as_view()),
     path("publish/", SyncPublishView.as_view()),
     path("force-publish/", SyncForcePublishView.as_view()),
-    path("apply/preview/", SyncApplyPreviewView.as_view()),
-    path("apply/confirm/", SyncApplyConfirmView.as_view()),
+    path("checkout/preview/", SyncCheckoutPreviewView.as_view()),
+    path("checkout/confirm/", SyncCheckoutConfirmView.as_view()),
 ]

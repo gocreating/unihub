@@ -64,7 +64,7 @@ function renderTab() {
 
 async function openPreview(user: ReturnType<typeof userEvent.setup>) {
   renderTab();
-  await user.click(await screen.findByRole('button', { name: /preview push/i }));
+  await user.click(await screen.findByRole('button', { name: /review & publish/i }));
   await screen.findByText('Items');
 }
 
@@ -76,6 +76,14 @@ describe('SyncTab staging (015 US4)', () => {
       repo_url: 'https://github.com/user/repo',
     });
     vi.mocked(syncService.getPublishPreview).mockResolvedValue(PREVIEW);
+    vi.mocked(syncService.getSyncHistory).mockResolvedValue({
+      commits: [],
+      has_more: false,
+      remote_head: null,
+      local_commit: null,
+      has_local_changes: true,
+      history_rewritten: false,
+    });
     vi.mocked(syncService.publishSync).mockResolvedValue({
       status: 'published',
       commit_sha: 'c'.repeat(40),
@@ -113,7 +121,7 @@ describe('SyncTab staging (015 US4)', () => {
     await openPreview(user);
 
     await user.click(screen.getByRole('checkbox', { name: /stage all changes/i }));
-    const confirm = screen.getByRole('button', { name: /apply push/i });
+    const confirm = screen.getByRole('button', { name: /publish staged changes/i });
     expect((confirm as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/nothing staged/i)).toBeTruthy();
     expect(vi.mocked(syncService.publishSync)).not.toHaveBeenCalled();
@@ -124,7 +132,7 @@ describe('SyncTab staging (015 US4)', () => {
     await openPreview(user);
 
     await user.click(screen.getByRole('checkbox', { name: /stage all: acquisitions/i }));
-    await user.click(screen.getByRole('button', { name: /apply push/i }));
+    await user.click(screen.getByRole('button', { name: /publish staged changes/i }));
 
     await waitFor(() => expect(vi.mocked(syncService.publishSync)).toHaveBeenCalledTimes(1));
     expect(vi.mocked(syncService.publishSync).mock.calls[0]?.[0]).toEqual({

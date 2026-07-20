@@ -335,9 +335,7 @@ def _dependency_closure(
                 ):
                     staged.add(dep)
                     queue.append(dep)
-                    auto_included.append(
-                        {"table": dep[0], "pk": value, "operation": "create"}
-                    )
+                    auto_included.append({"table": dep[0], "pk": value, "operation": "create"})
 
         elif record["operation"] == "delete":
             for child_label, child_desc in registry.items():
@@ -381,9 +379,7 @@ def apply_selected(
 
     registry = get_registry()
     staged: set[tuple[str, str]] = {
-        (label, record["pk"])
-        for label, records in diffs_by_table.items()
-        for record in records
+        (label, record["pk"]) for label, records in diffs_by_table.items() for record in records
     } - set(excluded)
 
     auto_included = _dependency_closure(diffs_by_table, staged)

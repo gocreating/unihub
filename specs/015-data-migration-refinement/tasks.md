@@ -127,14 +127,14 @@
 
 ### Tests for User Story 5 (write first, must fail)
 
-- [ ] T030 [P] [US5] Write failing tests in tests/sync/test_views_checkout.py: checkout preview of an older sha diffs commit-vs-DB (replace semantics) with `base_commit`/`diff_digest`; `up_to_date` when DB matches; incompatible sha → `409 incompatible_commit`; confirm applies staged subset via the US4 engine, returns `results` + `auto_included`, sets `local_state_commit`/`last_applied_*`; digest drift → `409 preview_stale`; full-selection checkout of remote head ≡ legacy apply; legacy `apply/preview` + `apply/confirm` routes are gone (404)
+- [x] T030 [P] [US5] Write failing tests in tests/sync/test_views_checkout.py: checkout preview of an older sha diffs commit-vs-DB (replace semantics) with `base_commit`/`diff_digest`; `up_to_date` when DB matches; incompatible sha → `409 incompatible_commit`; confirm applies staged subset via the US4 engine, returns `results` + `auto_included`, sets `local_state_commit`/`last_applied_*`; digest drift → `409 preview_stale`; full-selection checkout of remote head ≡ legacy apply; legacy `apply/preview` + `apply/confirm` routes are gone (404)
 
 ### Implementation for User Story 5
 
-- [ ] T031 [US5] Generalize sync/services/apply_helper.py to `preview_from_commit(clone_dir, sha)`; add `CheckoutPreviewView` + `CheckoutConfirmView` (with compatibility gate via T019) in sync/views.py + sync/serializers.py + sync/urls.py; delete `SyncApplyPreviewView`/`SyncApplyConfirmView` and their routes; make T030 pass; run backend loop
-- [ ] T032 [US5] Regenerate OpenAPI + `pnpm generate-types`; update src/services/unihub-backend/sync.ts — add `getCheckoutPreview`/`confirmCheckout`, remove `getApplyPreview`/`confirmApply`
-- [ ] T033 [P] [US5] Write failing RTL tests in src/pages/io/SyncTab/SyncTab.actions.test.tsx: the four legacy buttons are gone; pending-local node offers Publish (and Force publish in the rewritten/diverged state with the existing two recovery choices); commit node opens checkout preview with staging and confirms only on explicit action; incompatible node offers no checkout; checkout preview warns local unpublished changes would be overwritten; `auto_included` rows surfaced to the user after confirm
-- [ ] T034 [US5] Rebuild src/pages/io/SyncTab/index.tsx interactions graph-first (node actions on CommitGraph nodes via src/pages/io/SyncTab/CommitGraph.tsx, publish/checkout flows reusing the staging preview, legacy buttons removed); locales en-US + zh-TW; make T033 pass; run frontend loop + `pnpm build`
+- [x] T031 [US5] Generalize sync/services/apply_helper.py to `preview_from_commit(clone_dir, sha)`; add `CheckoutPreviewView` + `CheckoutConfirmView` (with compatibility gate via T019) in sync/views.py + sync/serializers.py + sync/urls.py; delete `SyncApplyPreviewView`/`SyncApplyConfirmView` and their routes; make T030 pass; run backend loop
+- [x] T032 [US5] Regenerate OpenAPI + `pnpm generate-types`; update src/services/unihub-backend/sync.ts — add `getCheckoutPreview`/`confirmCheckout`, remove `getApplyPreview`/`confirmApply`
+- [x] T033 [P] [US5] Write failing RTL tests in src/pages/io/SyncTab/SyncTab.actions.test.tsx: the four legacy buttons are gone; pending-local node offers Publish (and Force publish in the rewritten/diverged state with the existing two recovery choices); commit node opens checkout preview with staging and confirms only on explicit action; incompatible node offers no checkout; checkout preview warns local unpublished changes would be overwritten; `auto_included` rows surfaced to the user after confirm
+- [x] T034 [US5] Rebuild src/pages/io/SyncTab/index.tsx interactions graph-first (node actions on CommitGraph nodes via src/pages/io/SyncTab/CommitGraph.tsx, publish/checkout flows reusing the staging preview, legacy buttons removed); locales en-US + zh-TW; make T033 pass; run frontend loop + `pnpm build`
 
 **Checkpoint**: All five stories complete.
 

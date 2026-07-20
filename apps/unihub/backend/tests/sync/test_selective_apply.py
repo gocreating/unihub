@@ -118,9 +118,7 @@ def test_staged_parent_delete_auto_includes_excluded_child_delete() -> None:
         "inventory.item": _delete_records(item_rows),
     }
     # The user stages the acquisition deletion but unchecks the item deletion.
-    _results, auto_included = apply_selected(
-        diffs, excluded={("inventory.item", str(item.pk))}
-    )
+    _results, auto_included = apply_selected(diffs, excluded={("inventory.item", str(item.pk))})
 
     assert not Acquisition.objects.filter(pk=acq.pk).exists()
     assert not Item.objects.filter(pk=item.pk).exists()

@@ -1,23 +1,25 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.21.0 → 1.22.0 (minor — Principle VIII gains one NEW mandatory
-  rule from user feedback, 2026-07-12: "Grammatical number (plurals)" — every
-  English message that embeds a count MUST use ICU plural syntax
-  ({n, plural, one {...} other {...}}); "1 records"-style output is a
-  violation. Applies to ALL existing keys immediately (audited in the same
-  change); zh-TW keeps its uninflected forms.)
+Version change: 1.22.0 → 1.23.0 (minor — Principle XII's column-pinning
+  guidance updated for feature 017-multiple-sticky-columns, 2026-07-20:
+  pinning is now PER-COLUMN (`ColumnDef.pin: 'left' | 'right'`, any number of
+  columns per side, edge-grouped display order) instead of the two view-wide
+  "pin first/last visible column" booleans. The remount-key rule now references
+  the pin fingerprint and the label-patch rule lists `pin` among never-touched
+  fields. Material change to existing guidance = MINOR.)
 Modified principles:
-  - VIII. Internationalisation (i18n) — added "Grammatical number (plurals)"
-    mandatory rule.
+  - XII. Entity Toolbar & Sort Controls — "ProTable Remount Key" bullet now
+    requires the pin fingerprint (visible pinned columns + sides, display
+    order) in the key; "Async Label Patching" bullet's preserved fields are
+    now `visible`, `order`, `pin` (stickyLeft/stickyRight removed).
 Added sections: none
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed (generic gate)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: none — all count-bearing en-US keys audited/converted in the
-  same iteration (EntityOffsetFooter "records" default and any others).
+Follow-up TODOs: none.
 -->
 
 # UniHub Constitution
@@ -585,8 +587,10 @@ When sort or column-pin state changes via a panel, ProTable MUST remount.
 
 - Every entity list page using `useEntitySort` MUST include `sort.panelApplyCount`
   in its `PageTable` `key` prop.
-- Pages using `useColumnConfig` MUST also include the sticky-pin state (first/last
-  visible column identity + fixed flags) in the `key`.
+- Pages using `useColumnConfig` MUST also include the sticky-pin state — the
+  hook's `pinFingerprint` (visible pinned columns + sides, in display order) —
+  in the `key`. Column `fixed` values MUST come from `fixedForKey(key)`; no
+  page-local first/last-visible logic.
 - `panelApplyCount` increments on `apply()` and `reset()` but NOT on header clicks.
 - Without remount, ProTable's internal column-layout initialisation (sticky shadow,
   sorterStates) stays stale when props change after mount.
@@ -630,7 +634,7 @@ name), `useColumnConfig` MUST patch labels without resetting user configuration.
 
 - `useColumnConfig` watches `initialColumns` via `useEffect` and, on each change,
   compares labels by column key. Only `label` is updated; `visible`, `order`,
-  `stickyLeft`, `stickyRight` are never touched by the patch.
+  and `pin` are never touched by the patch.
 - The patch MUST apply to BOTH `activeState` and `pendingState` so the column panel
   shows the updated label immediately regardless of panel-open state.
 - `isDirty` MUST remain unchanged after a label-only patch.
@@ -713,4 +717,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.22.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-12
+**Version**: 1.23.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-20

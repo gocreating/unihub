@@ -106,21 +106,25 @@ export type SortState = SortRule[];
 
 // ── Column ────────────────────────────────────────────────────────────────────
 
+/** Edge a column is pinned (fixed) to. */
+export type PinSide = 'left' | 'right';
+
 export interface ColumnDef {
   key: string;
   label: string;
   dataType: AttributeDataType;
   visible: boolean;
-  /** Display position — lower numbers appear further left. */
+  /** Display position — lower numbers appear further left (within a pin group). */
   order: number;
+  /**
+   * Pinned edge; undefined = not pinned. At most one side per column.
+   * On a page's initial columnDefs this seeds the DEFAULT pin (restored by Reset).
+   */
+  pin?: PinSide;
 }
 
 export interface ColumnState {
   columns: ColumnDef[];
-  /** When true the first visible column is pinned to the left edge. */
-  stickyLeft: boolean;
-  /** When true the last visible column is pinned to the right edge. */
-  stickyRight: boolean;
 }
 
 // ── Pagination ────────────────────────────────────────────────────────────────

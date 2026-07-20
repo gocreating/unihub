@@ -782,3 +782,76 @@ describe('CatalogPage (iteration 47 — deprecate-modal item preview, FR-003c)',
     expect(within(modal).getByRole('checkbox')).toBeInTheDocument();
   });
 });
+
+describe('CatalogPage (iteration 48 — per-column pins, 017-multiple-sticky-columns)', () => {
+  // CAT48-01 (US2/FR-001): a second right pin via the panel — BOTH columns fix
+  // right, and the boundary class sits only on the display-first of the group.
+  it('pins a second column right via the panel — both fixed right, one boundary', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    const pinBtn = await waitFor(() => {
+      const btn = document.querySelector<HTMLButtonElement>(
+        '[data-column-row="sku_price"] [data-sticky-pin="right"]',
+      );
+      expect(btn).toBeTruthy();
+      return btn!;
+    });
+    fireEvent.click(pinBtn);
+    fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
+
+    await waitFor(() => {
+      expect(
+        container.querySelectorAll('.ant-table-thead th.ant-table-cell-fix-right'),
+      ).toHaveLength(2);
+    });
+    const firstMarks = container.querySelectorAll('.ant-table-thead th.ant-table-cell-fix-right-first');
+    expect(firstMarks).toHaveLength(1);
+    // Display order of the right group: SKU Price (order 3) before Actions (99).
+    expect(firstMarks[0]?.textContent).toContain('SKU Price');
+  });
+
+  // CAT48-02 (US3/FR-005/FR-006): Reset restores the seeded default pins after
+  // the user re-pins other columns.
+  it('Reset in the Columns panel restores the default pins', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+
+    // Customise: unpin the caret (default left), pin the Item column instead.
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    const caretPin = await waitFor(() => {
+      const btn = document.querySelector<HTMLButtonElement>(
+        '[data-column-row="__caret"] [data-sticky-pin="left"]',
+      );
+      expect(btn).toBeTruthy();
+      return btn!;
+    });
+    fireEvent.click(caretPin);
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>(
+        '[data-column-row="item_summary"] [data-sticky-pin="left"]',
+      )!,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
+
+    const itemTh = () =>
+      Array.from(container.querySelectorAll('.ant-table-thead th')).find((th) =>
+        th.textContent?.includes('Item'),
+      );
+    await waitFor(() => {
+      expect(itemTh()?.className).toContain('ant-table-cell-fix-left');
+    });
+
+    // Reset → caret pinned left again, Item unpinned.
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Reset$/ }));
+    await waitFor(() => {
+      const caret = container.querySelector(
+        '.ant-table-tbody tr.ant-table-row td .anticon-caret-down, .ant-table-tbody tr.ant-table-row td .anticon-caret-right',
+      );
+      expect(caret?.closest('td')?.className).toContain('ant-table-cell-fix-left');
+    });
+    expect(itemTh()?.className).not.toContain('ant-table-cell-fix-left');
+    // Two panel round-trips + two table remounts exceed the 5s default in JSDOM.
+  }, 15_000);
+});

@@ -208,10 +208,7 @@ export function AccountsPage() {
   // Depends on sort.sortOrderForField so sort highlighting updates when active rules change.
   const colDefMap = useMemo<Record<string, ProColumns<Account>>>(
     () => {
-      const getFixed = (key: string) =>
-        cols.visibleColumns[0]?.key === key ? cols.firstColumnFixed
-          : cols.visibleColumns.at(-1)?.key === key ? cols.lastColumnFixed
-          : undefined;
+      const getFixed = cols.fixedForKey;
       return {
       name: {
         dataIndex: 'name',
@@ -289,7 +286,7 @@ export function AccountsPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, sort.sortOrderForField, sort.activeRules, cols.firstColumnFixed, cols.lastColumnFixed, cols.visibleColumns],
+    [t, dataWidths, actionsColWidth, sort.sortOrderForField, sort.activeRules, cols.fixedForKey, cols.visibleColumns],
   );
 
   // Column array derived from the visible column order — this is what makes reordering work.
@@ -306,7 +303,7 @@ export function AccountsPage() {
   return (
     <>
       <PageTable<Account>
-        key={`${cols.visibleColumns[0]?.key ?? ''}-${cols.visibleColumns.at(-1)?.key ?? ''}-${!!cols.firstColumnFixed}-${!!cols.lastColumnFixed}`}
+        key={cols.pinFingerprint}
         pageTitle={t({ id: 'pages.finance.accounts.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

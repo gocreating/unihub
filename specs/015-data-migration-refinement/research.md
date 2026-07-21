@@ -208,6 +208,62 @@ types re-generated via `openapi-typescript` (constitution Principle IV).
   memory rule about real-browser geometry locks applies only if visual-geometry issues
   emerge).
 
+## Refinement round (clarified 2026-07-21) — R9–R12
+
+### R9. Commit-node timestamps
+
+**Decision**: replace `new Date(...).toLocaleString()` with the constitution's two-row
+datetime rendering — `dayjs(author_date).format('YYYY-MM-DD HH:mm')` primary row,
+`dayjs(author_date).fromNow()` as muted secondary text. The rail layout has vertical
+room, so the permitted tooltip fallback is not used.
+
+**Rationale**: the shipped `toLocaleString()` was a straight constitution violation;
+dayjs + `relativeTime` are already registered at app entry.
+**Alternatives**: single-line `YYYY-MM-DD HH:mm (X ago)` — explicitly superseded by the
+constitution's two-row default.
+
+### R10. Per-node kebab menus, tooltip anchoring, badge colors
+
+**Decision**: each commit node's actions move into an AntD `Dropdown` menu triggered by
+a text `Button` with `MoreOutlined` (aria-labelled per node). "Checkout" renders as a
+disabled menu item carrying the `incompatible_reason` for incompatible commits — so the
+unavailable action explains itself where the action lives (FR-022). The remaining
+node-level tooltip (incompatible explanation) anchors to a content-fit target
+(`width: fit-content`), never the full row (FR-021). Both "Local" and "Remote latest"
+`Tag`s use `color="blue"` — equal-rank info markers (FR-007).
+
+**Rationale**: uncluttered rows; AntD Dropdown is the house overflow-menu idiom; the
+full-width tooltip target made the bubble center far from the node content.
+**Alternatives**: `Popover` action panels (heavier); keeping inline buttons behind a
+hover reveal (undiscoverable, non-standard).
+
+### R11. Inline pending review in the uncommitted node
+
+**Decision**: delete the "Review & publish" trigger and the "Local changes not yet
+published" placeholder. `index.tsx` converts the imperative publish-preview handler to
+a React Query query (`['sync','publish-preview']`) with `enabled` driven by the history
+payload's `has_local_changes`; the staged review (staging header, per-table collapse,
+Publish confirm disabled at zero staged, error + retry) renders as the uncommitted
+node's body via a `pendingContent` slot on `CommitGraph` (FR-023). Opening a checkout
+review supersedes the inline review — one active staged review at a time, shared
+staging-selection state resets on switch (FR-024). Confirm pinning (`base_commit` +
+`diff_digest`, 409 `preview_stale` → refetch) is unchanged.
+
+**Rationale**: zero-click visibility of pending work; reuses the existing endpoint and
+staging machinery wholesale; a slot keeps `CommitGraph` presentation-only.
+**Alternatives**: lifting the history query out of `CommitGraph` (bigger refactor, no
+user-visible gain); a second "review" node type (overstates one-off UI as data).
+
+### R12. History window sizes
+
+**Decision**: initial `limit=10`, load-more batches `limit=20` — both client-passed;
+the server contract (default 50, max 200) is unchanged.
+
+**Rationale**: the user asked for "the most recent several commits first"; sync commits
+are publishes, so 10 covers recent activity while load-more reaches depth in few clicks.
+**Alternatives**: keeping 50 (rejected by clarification); uniform 10 (tedious deep
+paging).
+
 ## Resolved decisions summary
 
 | # | Decision |
@@ -220,3 +276,7 @@ types re-generated via `openapi-typescript` (constitution Principle IV).
 | R6 | Checkout generalizes apply (legacy apply endpoints removed); compatibility = header-row validation per registered table via `git show` |
 | R7 | API per contracts/sync-api.md; OpenAPI + generated types regenerated |
 | R8 | bare_repo-fixture pytest suite (test-first) + RTL suites; no e2e needed |
+| R9 | Constitution two-row dayjs timestamps on commit nodes (2026-07-21) |
+| R10 | Per-node kebab (`Dropdown`+`MoreOutlined`); disabled item carries incompatible reason; content-fit tooltip targets; both badges blue (2026-07-21) |
+| R11 | Auto-loaded inline pending review via `pendingContent` slot; "Review & publish" + placeholder removed; one active review at a time (2026-07-21) |
+| R12 | Client-passed history window: initial 10, load-more 20 (2026-07-21) |

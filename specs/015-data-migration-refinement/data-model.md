@@ -43,7 +43,7 @@ infrastructure model and defines several **API-level (non-persisted) shapes**.
 
 | Field | Type | Notes |
 |---|---|---|
-| commits | CommitNode[] | newest-first, page of `limit` (default 50) |
+| commits | CommitNode[] | newest-first, page of `limit` (server default 50; client passes 10 initial / 20 per load-more — R12) |
 | has_more | bool | older commits exist (`before` cursor paging) |
 | remote_head | string \| null | null for empty remote |
 | local_commit | string \| null | `local_state_commit` |

@@ -1,6 +1,6 @@
 # Implementation Plan: Data Migration Refinement
 
-**Branch**: `015-data-migration-refinement` | **Date**: 2026-07-20 | **Spec**: [spec.md](spec.md)
+**Branch**: `015-data-migration-refinement` | **Date**: 2026-07-20 (refinement round planned 2026-07-21) | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/015-data-migration-refinement/spec.md`
 
@@ -139,3 +139,57 @@ Produced by `/speckit-tasks` into [tasks.md](tasks.md). Suggested story order fo
 spec priorities: US1 (P1 bug + pinning) → US2 (footer) → US3 (history + graph) →
 US4 (staging) → US5 (node interactions + checkout + legacy-button removal), each story
 landing test-first and leaving the app releasable.
+
+---
+
+## Refinement Round — Sync Tab UI (clarified 2026-07-21)
+
+User review of the shipped Sync tab produced six directives (spec §Clarifications
+Session 2026-07-21; FR-006/007/009 amendments + FR-021–FR-024, SC-007). Decisions
+R9–R12 in [research.md](research.md).
+
+### Scope & technical context delta
+
+**Frontend-only.** No backend, API, schema, or migration changes:
+
+- `GET /sync/history/` already accepts `limit` (1–200) + `before` cursor — the smaller
+  initial window (10) and load-more batch size (20) are client-passed parameters.
+- The inline pending review reuses `GET /sync/publish/preview/` unchanged, converted
+  client-side from an imperative handler to a React Query query auto-enabled when the
+  history payload reports `has_local_changes` (staleness pinning via `base_commit` +
+  `diff_digest` untouched).
+- `dayjs` (+`relativeTime` plugin, registered at app entry) is already a constitution-
+  mandated dependency; **no new dependencies** (kebab = AntD `Dropdown` + `MoreOutlined`).
+- The sync service layer stays hand-typed (004-era precedent) — no OpenAPI regeneration.
+
+### Design (what changes where)
+
+| Directive | Design |
+|---|---|
+| Constitution timestamps (FR-006) | `CommitGraph` node date: two stacked rows — `dayjs(...).format('YYYY-MM-DD HH:mm')` primary, `fromNow()` as `Text type="secondary"` — replacing `toLocaleString()`. Rail nodes have vertical room; no tooltip fallback needed. |
+| Kebab menus (FR-022) | Each commit node gets an AntD `Dropdown` (trigger: text `Button` with `MoreOutlined`, aria-labelled). Items: "Checkout" — disabled with the `incompatible_reason` explanation on incompatible commits. Inline node buttons removed. |
+| Tooltip targets (FR-021) | Incompatible-node tooltip moves off the full-width row wrapper onto a content-fit target (`width: fit-content` wrapper / the kebab-item content), so the tooltip centers on what it describes. |
+| Inline pending review (FR-023/024) | The "Review & publish" button and `pendingNode` placeholder string are removed. `index.tsx` auto-loads the publish preview (query keyed `['sync','publish-preview']`, `enabled` by `has_local_changes`) and passes the staged review (staging header, per-table collapse, Publish confirm, error+retry state) into `CommitGraph` as the uncommitted node's body content. An open checkout review supersedes the inline review until confirmed/dismissed (FR-024). |
+| Badge colors (FR-007) | Both `Tag`s use `color="blue"` ("Remote latest" was green). |
+| History window (FR-009) | `useInfiniteQuery` passes `limit=10` on the first page and `limit=20` on `fetchNextPage`; "Load more" button retained. |
+
+### Constitution check delta — PASS
+
+Datetime rule compliance is the point of the first directive (previous
+`toLocaleString()` was a violation). All new/changed strings land in **both** en-US and
+zh-TW (removed strings deleted from both). No new deps (III), no contract changes (IV),
+TDD per Principle V — RTL specs updated/added before component changes. No PageTable
+implications (graph is a control surface, not tabular data).
+
+### Files touched
+
+```text
+apps/unihub/frontend/src/
+├── pages/io/SyncTab/
+│   ├── CommitGraph.tsx            # timestamps, kebab, tooltip target, badges, window sizes,
+│   │                              #   pendingContent slot replacing publish button/placeholder
+│   ├── index.tsx                  # auto-loaded pending review threaded into CommitGraph
+│   ├── CommitGraph.test.tsx       # updated + new RTL specs
+│   └── SyncTab.actions.test.tsx   # updated flows (no Review & publish trigger)
+└── locales/en-US/pages.ts, zh-TW/pages.ts   # string adds/removals in both
+```

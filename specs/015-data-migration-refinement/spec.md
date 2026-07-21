@@ -4,9 +4,22 @@
 
 **Created**: 2026-07-20
 
-**Status**: Implemented (all user stories, 2026-07-20)
+**Status**: Implemented (all user stories, 2026-07-20); Sync-tab UI refinement round clarified 2026-07-21 — pending implementation
 
 **Input**: User description: "for github issue #35" — GitHub issue #35 "Data migration refinement" (label: uni-infra): (1) critical bug — the catalog's default filter (obtained this year OR no obtained date) appears to be applied to the data sync push preview, showing 1000+ deletions of inventory items; (2) UI constitution violation — the preview table's page-size selector must sit to the left of the paginators; (3) new features — a commit graph in the sync tab (including force-push visibility), row-level staging of changes (default all checked, toggleable per row / per table / all), and replacing the legacy Preview/Apply Push/Pull buttons with commit-node interactions, where schema-incompatible commits are disabled for checkout.
+
+## Clarifications
+
+### Session 2026-07-21
+
+User-review feedback on the shipped Sync tab, provided directly (no questions needed):
+
+- Q: How should commit timestamps on the graph render? → A: Per the constitution's datetime rule — two stacked rows: absolute `YYYY-MM-DD HH:mm` primary, relative time (`fromNow()`) as muted secondary text.
+- Q: How are node-level actions presented on the graph? → A: All per-node action buttons fold into a kebab (overflow "⋮") menu on each node; no standalone inline action buttons on graph rows.
+- Q: How should graph tooltips anchor? → A: The hover target must be sized to fit its content (not the full row width) so the tooltip centers properly over what it describes.
+- Q: How does the user review and publish local changes? → A: The "Review & publish" button and the "Local changes not yet published" placeholder are removed; the uncommitted node directly renders the pending (unstaged) changes — staging controls, per-table changesets, confirm — auto-loaded without a manual trigger.
+- Q: What colors do the "Remote latest" and "Local" badges use? → A: Both use the standard blue info color (equal-rank informational markers).
+- Q: How is a very long commit history handled? → A: Load the most recent few commits first (initial window: 10) with a "Load more" button fetching older commits in batches (20); the existing cursor pagination is retained with the smaller initial window.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -53,7 +66,7 @@ The user opens the Sync tab and sees the data repository's history as a graph of
 
 **Acceptance Scenarios**:
 
-1. **Given** a configured sync repository with existing history, **When** the user opens the Sync tab, **Then** a commit graph loads automatically showing commit nodes with their time and message/summary, with a loading indicator while it fetches.
+1. **Given** a configured sync repository with existing history, **When** the user opens the Sync tab, **Then** a commit graph loads automatically showing commit nodes with their time (rendered per the constitution's two-row datetime rule: absolute `YYYY-MM-DD HH:mm` primary, relative time secondary) and message/summary, with a loading indicator while it fetches.
 2. **Given** the graph is displayed, **When** the user inspects it, **Then** they can identify which commit the local data state corresponds to and which commit is the newest on the remote (ahead / behind / in-sync at a glance).
 3. **Given** the remote repository's history was rewritten (force-pushed) since the local state last synced, **When** the user opens or refreshes the Sync tab, **Then** the graph visibly indicates that the remote history no longer matches what was previously known, rather than failing or showing a misleading linear history.
 4. **Given** the remote is unreachable, **When** the graph loads, **Then** the user sees a descriptive error and can retry.
@@ -80,7 +93,7 @@ Before confirming a sync operation, the user reviews the change preview and unch
 
 ### User Story 5 - Operate Sync Through Commit-Node Interactions (Priority: P5)
 
-Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Apply Push", "Apply Pull"), the user drives sync by interacting with nodes on the commit graph. Interacting with a commit node lets the user check out that snapshot — restoring local data to the state captured at that commit — after reviewing a change preview. Publishing the current local changes is likewise initiated from the graph (via the node/affordance representing the local, not-yet-published state). Commits whose data layout is incompatible with the current application are visibly disabled so the user cannot check out to them.
+Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Apply Push", "Apply Pull"), the user drives sync by interacting with nodes on the commit graph. Each node exposes its actions through a kebab (overflow) menu — graph rows carry no standalone inline action buttons. Interacting with a commit node lets the user check out that snapshot — restoring local data to the state captured at that commit — after reviewing a change preview. The node representing the local uncommitted state directly renders the pending changes (with staging controls) so the user reviews and confirms a publish in place — there is no separate "Review & publish" step or placeholder message. Commits whose data layout is incompatible with the current application are visibly disabled so the user cannot check out to them.
 
 **Why this priority**: The full interaction redesign. It depends on the graph (User Story 3) and reuses trustworthy previews (User Story 1) and staging (User Story 4), so it lands last.
 
@@ -91,7 +104,7 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 1. **Given** the commit graph is displayed, **When** the user looks for sync actions, **Then** publishing local changes and applying/checking out remote snapshots are all available through interactions with graph nodes, and the four legacy standalone buttons are gone.
 2. **Given** the user interacts with a compatible commit node, **When** they choose to check out that snapshot, **Then** the system shows a change preview of what would change locally (with row-level staging per User Story 4) and applies it only after explicit confirmation.
 3. **Given** a commit whose data layout is incompatible with the current application version (a breaking change to the synced table structure), **When** the graph renders it, **Then** the node is visibly disabled with an explanation, and no checkout to it can be initiated.
-4. **Given** the user has local changes not yet published, **When** they view the graph, **Then** the local pending state is represented and publishing from it behaves like today's publish (including the existing diverged-history recovery choices: apply the newer remote first, or force-overwrite the remote).
+4. **Given** the user has local changes not yet published, **When** they view the graph, **Then** the uncommitted node directly renders those pending changes — staging controls, per-table changesets, and the publish confirmation — without any manual trigger, and publishing behaves like today's publish (including the existing diverged-history recovery choices: apply the newer remote first, or force-overwrite the remote).
 5. **Given** the user checks out an older commit and later publishes, **When** the publish completes, **Then** the remote gains a new latest snapshot reflecting the user's current local data (history moves forward; no silent rewriting of existing remote commits).
 
 ---
@@ -124,10 +137,11 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 
 **Commit graph**
 
-- **FR-006**: The Sync tab MUST display the configured data repository's history as a graph of commit nodes, each showing at least the commit time and its message/summary, loading automatically when the tab opens (with a loading indicator) using the already-configured repository credentials.
-- **FR-007**: The graph MUST distinctly mark (a) the commit corresponding to the current local data state and (b) the latest remote commit, making ahead / behind / in-sync status readable at a glance.
+- **FR-006**: The Sync tab MUST display the configured data repository's history as a graph of commit nodes, each showing at least the commit time and its message/summary, loading automatically when the tab opens (with a loading indicator) using the already-configured repository credentials. Commit timestamps MUST follow the constitution's datetime display rule: absolute `YYYY-MM-DD HH:mm` as the primary row with the relative time as muted secondary text below it.
+- **FR-007**: The graph MUST distinctly mark (a) the commit corresponding to the current local data state and (b) the latest remote commit, making ahead / behind / in-sync status readable at a glance. Both the "Local" and "Remote latest" badges MUST use the standard blue info color — they are equal-rank informational markers; position and label convey the distinction, not contrasting colors.
 - **FR-008**: The graph MUST make remote history rewrites (force-pushes) visible: when previously known commits are no longer part of the remote history, the user is explicitly informed instead of being shown a misleading linear history.
-- **FR-009**: The graph MUST load a bounded window of recent history by default and allow the user to load older commits on demand.
+- **FR-009**: The graph MUST load only the most recent commits by default (initial window: 10) and let the user load older commits on demand via a "Load more" control that fetches further batches (20 per batch) using cursor pagination; history is never fetched unbounded.
+- **FR-021**: Every tooltip on the graph MUST anchor to a hover target sized to fit its content (not stretched to the full row/card width) so the tooltip renders centered over the element it describes.
 
 **Row-level staging**
 
@@ -145,6 +159,9 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 - **FR-018**: Incompatible commits MUST be visibly disabled on the graph with an explanation of why, and the system MUST refuse any checkout attempt against them.
 - **FR-019**: Publishing MUST remain available when local and remote histories have diverged, presenting the existing recovery choices (apply the newer remote state first, or force-overwrite the remote) explicitly.
 - **FR-020**: Publishing after a checkout to an older commit MUST create a new latest snapshot on the remote reflecting the current local data; the system itself MUST never rewrite existing remote history as a side effect of a normal publish.
+- **FR-022**: Node-level actions MUST be presented in a per-node kebab (overflow) menu instead of inline buttons — graph rows carry no standalone action buttons. An action unavailable for a node (e.g., checkout of an incompatible commit) appears as a disabled menu item with its explanation.
+- **FR-023**: When local unpublished changes exist, the uncommitted node MUST directly render the pending changes — staging controls per FR-010–FR-014, per-table changesets, and the publish confirmation — auto-loaded with no manual trigger. The "Review & publish" button and the "Local changes not yet published" placeholder text are removed. If the pending-changes preview fails to load, the node shows a descriptive error with a retry.
+- **FR-024**: At most one staged review is active at a time: initiating a checkout review supersedes the uncommitted node's inline review (and its staging selection) until the checkout is confirmed or dismissed, after which the inline pending-changes review returns.
 
 ### Key Entities
 
@@ -164,6 +181,7 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 - **SC-004**: Within 10 seconds of opening the Sync tab, the user can determine which commit their local data corresponds to, whether the remote is ahead/behind/in sync, and whether the remote history was rewritten.
 - **SC-005**: The user can exclude any subset of rows from a changeset; the resulting operation contains exactly the staged changes and zero unstaged changes are lost (they reappear in the next preview).
 - **SC-006**: Every capability previously reachable via the four legacy buttons is reachable through the commit graph; checkouts to compatible commits reproduce that snapshot exactly, and zero checkouts to incompatible commits are possible.
+- **SC-007**: Graph rows contain zero standalone inline action buttons — every node action sits in that node's kebab menu — and when local changes exist their staged review is visible in the uncommitted node without a single prior click.
 
 ## Assumptions
 
@@ -172,6 +190,7 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 - When a staged change depends on an unstaged one, the default resolution is to auto-include the dependency and inform the user (rather than blocking the operation).
 - Commit compatibility follows the existing import tolerance: snapshots with only additive/omitted-column differences that the current import already fills with safe defaults are compatible; missing tables, renamed/removed structures, or values the current application cannot ingest make a commit incompatible.
 - The commit graph reads history using the already-configured repository credentials; no new credentials or external registrations are introduced.
-- The graph's default history window is a bounded recent set of commits (on the order of the most recent 50) with load-more; exact size is an implementation choice.
+- The graph's default history window is the 10 most recent commits, with "Load more" fetching older commits in batches of 20 (clarified 2026-07-21; supersedes the earlier ~50 default).
+- Auto-rendering the pending changes in the uncommitted node reuses the existing publish-preview computation on Sync tab load; at this application's personal scale that cost is acceptable, and the preview's staleness pinning (`base_commit` + digest) continues to guard the confirm.
 - Checkout moves the local dataset to the selected commit's state; the remote repository is never modified by a checkout. Publishing afterwards always appends a new latest snapshot (force-overwrite remains an explicit, separate recovery action).
 - The existing behaviors not called out by issue #35 — configuration form, PAT guidance, automatic status check on tab load, up-to-date short-circuits — are preserved.

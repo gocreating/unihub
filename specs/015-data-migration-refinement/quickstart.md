@@ -43,6 +43,22 @@ pnpm build          # stricter than typecheck — run before committing (memory 
    flags rewritten history; commit with a doctored CSV header (drop a required column)
    → node disabled with reason.
 
+## Manual verification — Sync tab UI refinement round (2026-07-21)
+
+With the scratch remote from above seeded with 12+ commits and pending local edits:
+
+1. Commit nodes show two-row timestamps (`YYYY-MM-DD HH:mm` + relative time below).
+2. Node rows carry a kebab (⋮) menu and **no** inline action buttons; an incompatible
+   commit's Checkout item is disabled with the reason; its tooltip centers on the node
+   content, not the card width.
+3. The uncommitted node shows the staged changes immediately — no "Review & publish"
+   button, no "Local changes not yet published" text; Publish confirm sits with the
+   rendered changes and disables at zero staged rows.
+4. "Local" and "Remote latest" badges are both blue.
+5. Graph initially lists 10 commits; "Load more" appends 20 older ones.
+6. Opening a checkout review hides the inline pending review; dismissing it brings the
+   pending review back.
+
 ## Definition of done (per constitution)
 
 - All new/changed backend endpoints covered by pytest (happy + error paths), written

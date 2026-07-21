@@ -8,7 +8,8 @@ backend changes, regenerate `openapi.yaml` and the frontend's generated types
 ## GET /api/v1/sync/history/  — NEW
 
 Query: `limit` (int, default 50, max 200), `before` (sha cursor — return commits older
-than this sha).
+than this sha). The frontend passes `limit=10` for the initial window and `limit=20`
+per load-more page (2026-07-21 refinement, R12 — server contract unchanged).
 
 Behavior: fetch + hard-reset clone to remote head (R1); record
 `last_known_remote_commit`; compute `history_rewritten` (R4); classify compatibility per

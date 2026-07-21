@@ -149,6 +149,27 @@
 
 ---
 
+## Phase 9: Refinement Round — Sync Tab UI (clarified 2026-07-21)
+
+**Goal**: Apply the six user-review directives (spec §Clarifications 2026-07-21; FR-021–FR-024 + FR-006/007/009 amendments; research R9–R12). **Frontend-only** — no backend, OpenAPI, or migration work. Display refinements map to US3 (graph rendering), interaction refinements to US5 (node interactions).
+
+**Independent Test**: quickstart.md §"Manual verification — Sync tab UI refinement round" — six checks against a scratch remote; all RTL suites green.
+
+### Tests for the refinement round (write first, must fail)
+
+- [ ] T039 [P] [US3] Extend/update RTL specs in src/pages/io/SyncTab/CommitGraph.test.tsx: (a) commit nodes render the two-row constitution datetime — absolute `YYYY-MM-DD HH:mm` primary + relative-time secondary (no `toLocaleString()` output); (b) "Local" and "Remote latest" `Tag`s both carry the blue color; (c) `getSyncHistory` called with `limit: 10` initially and `limit: 20` on load-more; (d) each commit node exposes a kebab (aria-labelled Dropdown trigger) and NO inline action `<button>` in the row; (e) incompatible commit → kebab's Checkout item disabled with `incompatible_reason` text reachable; (f) the incompatible tooltip's hover target is a content-fit element (not the full-width row wrapper); (g) a `pendingContent` node renders inside the uncommitted node section when `has_local_changes` (and the old placeholder/publish-button strings are gone)
+- [ ] T040 [P] [US5] Update src/pages/io/SyncTab/SyncTab.actions.test.tsx (+ SyncTab.staging.test.tsx where flows start from the trigger button): no "Review & publish" button and no "Local changes not yet published" text anywhere; when history reports `has_local_changes` the staged publish review (staging header, per-table collapse, Publish confirm) auto-renders inside the uncommitted node without any click; Publish confirm disabled at zero staged; publish-preview fetch failure → descriptive error with a Retry control that refetches; opening a checkout review hides the inline pending review, dismissing it restores the pending review (FR-024); confirm still sends `base_commit`/`diff_digest`/`excluded[]` and 409 `preview_stale` refetches
+
+### Implementation for the refinement round
+
+- [ ] T041 [US3] Rework src/pages/io/SyncTab/CommitGraph.tsx: dayjs two-row timestamps (R9); both badges `color="blue"`; `limit=10` initial / `limit=20` on `fetchNextPage` (R12); per-node kebab via AntD `Dropdown` + `MoreOutlined` text button replacing the inline Checkout button (disabled item carries `incompatible_reason`); tooltip hover target `width: fit-content` (R10); replace the pending-node placeholder + `onPublish` button with a `pendingContent?: ReactNode` slot rendered as the uncommitted node's body (R11); extract a shared `useSyncHistory` hook (colocated useSyncHistory.ts) so index.tsx can read `has_local_changes`; update en-US + zh-TW locales (add kebab/menu + retry strings; delete `pages.io.sync.graph.pendingNode` + `publishAction`); make T039 pass
+- [ ] T042 [US5] Rework src/pages/io/SyncTab/index.tsx: replace the imperative `handlePushPreview` trigger with a query (`['sync','publish-preview']`) `enabled` when `useSyncHistory` reports `has_local_changes`; render the staged publish review (staging header, collapse, Publish confirm, error + Retry) into `CommitGraph`'s `pendingContent`; enforce one-active-review (checkout supersedes inline pending; staging selection resets on switch — FR-024); keep pinning/`preview_stale` handling and the diverged/force-publish modal intact; update both locales; make T040 pass
+- [ ] T043 Run both quality loops (backend untouched — must stay green: `uv run ruff check . && uv run pytest`; frontend: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`)
+- [ ] T044 [P] Manual six-point walk-through per quickstart.md §refinement round against a scratch `file://` remote (SC-007) — human session if no live app/DB is available in the implementation environment
+- [ ] T045 Update the CLAUDE.md SPECKIT block and spec.md status to record the refinement round as shipped
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -161,6 +182,7 @@
 - **US4 (Phase 6)**: needs US1's pinning plumbing (T008–T011) for the digest-checked confirm body.
 - **US5 (Phase 7)**: needs US3 (graph + compatibility classifier) and US4 (staging + selective-apply engine); US2's footer applies to its checkout previews automatically.
 - **Phase 8**: after all desired stories.
+- **Phase 9 (refinement round)**: after Phase 8 (amends shipped US3/US5 surfaces). T039 ∥ T040 (different spec files) → T041 (makes T039 pass) → T042 (needs T041's `pendingContent` slot + `useSyncHistory`; makes T040 pass) → T043 → T044/T045.
 
 ### Within Each Story
 

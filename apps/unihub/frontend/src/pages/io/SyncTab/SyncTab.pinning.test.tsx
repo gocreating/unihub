@@ -78,7 +78,7 @@ describe('SyncTab publish pinning (015 US1)', () => {
     const user = userEvent.setup();
     renderTab();
 
-    await user.click(await screen.findByRole('button', { name: /review & publish/i }));
+    // The staged review auto-renders in the uncommitted node (FR-023).
     await user.click(await screen.findByRole('button', { name: /publish staged changes/i }));
 
     await waitFor(() => expect(syncService.publishSync).toHaveBeenCalledTimes(1));
@@ -96,10 +96,9 @@ describe('SyncTab publish pinning (015 US1)', () => {
     const user = userEvent.setup();
     renderTab();
 
-    await user.click(await screen.findByRole('button', { name: /review & publish/i }));
+    const confirm = await screen.findByRole('button', { name: /publish staged changes/i });
     expect(vi.mocked(syncService.getPublishPreview)).toHaveBeenCalledTimes(1);
-
-    await user.click(await screen.findByRole('button', { name: /publish staged changes/i }));
+    await user.click(confirm);
 
     // The stale rejection must trigger a fresh preview fetch (never a publish
     // of anything other than what was previewed).

@@ -301,7 +301,7 @@ export default {
     'The remote history was rewritten (force-pushed) — previously known commits are no longer part of it.',
   'pages.io.sync.graph.localBadge': 'Local',
   'pages.io.sync.graph.remoteBadge': 'Remote latest',
-  'pages.io.sync.graph.pendingNode': 'Local changes not yet published',
+  'pages.io.sync.graph.nodeActions': 'Node actions',
   'pages.io.sync.graph.incompatible': 'Incompatible with this app version: {reason}',
   'pages.io.sync.graph.loadMore': 'Load more',
   'pages.io.sync.graph.empty': 'No commits yet.',
@@ -310,7 +310,6 @@ export default {
   'pages.io.sync.staging.count':
     '{selected} of {total, plural, one {# change} other {# changes}} staged',
   'pages.io.sync.staging.nothing': 'Nothing staged — check at least one row to apply.',
-  'pages.io.sync.graph.publishAction': 'Review & publish',
   'pages.io.sync.graph.checkoutAction': 'Checkout',
   'pages.io.sync.checkout.overwriteWarning':
     'Applying {sha} restores your local data to this snapshot — unpublished local changes to the staged rows below will be overwritten.',

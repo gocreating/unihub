@@ -62,9 +62,9 @@ function renderTab() {
   );
 }
 
-async function openPreview(user: ReturnType<typeof userEvent.setup>) {
+// The staged review auto-renders in the uncommitted node (2026-07-21, FR-023).
+async function openPreview() {
   renderTab();
-  await user.click(await screen.findByRole('button', { name: /review & publish/i }));
   await screen.findByText('Items');
 }
 
@@ -92,14 +92,13 @@ describe('SyncTab staging (015 US4)', () => {
   });
 
   it('shows staged-of-total counts, all staged by default', async () => {
-    const user = userEvent.setup();
-    await openPreview(user);
+    await openPreview();
     expect(screen.getByText(/3 of 3 changes staged/i)).toBeTruthy();
   });
 
   it('table-scope toggle unstages the whole table without collapsing it', async () => {
     const user = userEvent.setup();
-    await openPreview(user);
+    await openPreview();
 
     await user.click(screen.getByRole('checkbox', { name: /stage all: items/i }));
     expect(screen.getByText(/1 of 3 changes staged/i)).toBeTruthy();
@@ -107,7 +106,7 @@ describe('SyncTab staging (015 US4)', () => {
 
   it('all-changes toggle unstages and restages everything', async () => {
     const user = userEvent.setup();
-    await openPreview(user);
+    await openPreview();
 
     const master = screen.getByRole('checkbox', { name: /stage all changes/i });
     await user.click(master);
@@ -118,7 +117,7 @@ describe('SyncTab staging (015 US4)', () => {
 
   it('blocks confirm with an explanation when nothing is staged', async () => {
     const user = userEvent.setup();
-    await openPreview(user);
+    await openPreview();
 
     await user.click(screen.getByRole('checkbox', { name: /stage all changes/i }));
     const confirm = screen.getByRole('button', { name: /publish staged changes/i });
@@ -129,7 +128,7 @@ describe('SyncTab staging (015 US4)', () => {
 
   it('sends the excluded refs with the publish', async () => {
     const user = userEvent.setup();
-    await openPreview(user);
+    await openPreview();
 
     await user.click(screen.getByRole('checkbox', { name: /stage all: acquisitions/i }));
     await user.click(screen.getByRole('button', { name: /publish staged changes/i }));

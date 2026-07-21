@@ -300,7 +300,7 @@ export default {
   'pages.io.sync.graph.rewritten': '遠端歷史已被改寫（force push）— 先前已知的提交已不在其中。',
   'pages.io.sync.graph.localBadge': '本機',
   'pages.io.sync.graph.remoteBadge': '遠端最新',
-  'pages.io.sync.graph.pendingNode': '尚未發佈的本機變更',
+  'pages.io.sync.graph.nodeActions': '節點操作',
   'pages.io.sync.graph.incompatible': '與此應用程式版本不相容：{reason}',
   'pages.io.sync.graph.loadMore': '載入更多',
   'pages.io.sync.graph.empty': '尚無提交。',
@@ -308,7 +308,6 @@ export default {
   'pages.io.sync.staging.tableLabel': '暫存全部：{name}',
   'pages.io.sync.staging.count': '已暫存 {selected} / {total, plural, other {# 筆變更}}',
   'pages.io.sync.staging.nothing': '尚未暫存任何變更 — 請至少勾選一列。',
-  'pages.io.sync.graph.publishAction': '檢視並發佈',
   'pages.io.sync.graph.checkoutAction': '簽出',
   'pages.io.sync.checkout.overwriteWarning':
     '套用 {sha} 會將本機資料還原至此快照 — 下列已暫存資料的未發佈本機變更將被覆寫。',

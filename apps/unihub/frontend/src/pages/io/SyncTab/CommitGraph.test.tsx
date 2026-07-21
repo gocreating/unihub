@@ -1,20 +1,29 @@
-// US3 (015 FR-006..FR-009): the Sync tab's commit graph — local/remote markers,
-// force-push visibility, compatibility gating, bounded history with load-more.
+// US3 (015 FR-006..FR-009, 2026-07-21 refinement FR-021/FR-022): the Sync tab's
+// commit graph — local/remote markers, force-push visibility, compatibility
+// gating, bounded history (10 + load-more 20), constitution timestamps,
+// per-node kebab menus, content-fit tooltip targets, pendingContent slot.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
 import enUS from '@/locales/en-US';
 import { CommitGraph } from './CommitGraph';
+import type { CommitGraphProps } from './CommitGraph';
 import * as syncService from '@/services/unihub-backend/sync';
 import type { SyncHistoryResult } from '@/services/unihub-backend/sync';
 
 vi.mock('@/services/unihub-backend/sync');
 
+dayjs.extend(relativeTime);
+
 const SHA_HEAD = 'aaaa111'.padEnd(40, '0');
 const SHA_OLD = 'bbbb222'.padEnd(40, '0');
 const SHA_BAD = 'cccc333'.padEnd(40, '0');
+
+const HEAD_DATE = '2026-07-19T12:00:00Z';
 
 function historyResult(overrides: Partial<SyncHistoryResult> = {}): SyncHistoryResult {
   return {
@@ -22,7 +31,7 @@ function historyResult(overrides: Partial<SyncHistoryResult> = {}): SyncHistoryR
       {
         sha: SHA_HEAD,
         parents: [SHA_OLD],
-        author_date: '2026-07-19T12:00:00Z',
+        author_date: HEAD_DATE,
         message: 'sync: inventory.item',
         is_remote_head: true,
         is_local_state: false,
@@ -59,12 +68,12 @@ function historyResult(overrides: Partial<SyncHistoryResult> = {}): SyncHistoryR
   };
 }
 
-function renderGraph() {
+function renderGraph(props: CommitGraphProps = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <IntlProvider locale="en-US" messages={enUS}>
-        <CommitGraph />
+        <CommitGraph {...props} />
       </IntlProvider>
     </QueryClientProvider>,
   );
@@ -85,12 +94,106 @@ describe('CommitGraph (015 US3)', () => {
     expect(screen.getByText('Local')).toBeTruthy();
   });
 
-  it('shows a pending-local-changes node when the dataset differs from the local commit', async () => {
+  it('renders both the Local and Remote latest badges in the blue info color', async () => {
+    renderGraph();
+
+    const remote = (await screen.findByText('Remote latest')).closest('.ant-tag');
+    const local = screen.getByText('Local').closest('.ant-tag');
+    expect(remote?.className).toContain('ant-tag-blue');
+    expect(local?.className).toContain('ant-tag-blue');
+  });
+
+  it('renders commit timestamps as the constitution two-row datetime', async () => {
+    renderGraph();
+
+    const headNode = await screen.findByTestId(`commit-node-${SHA_HEAD}`);
+    expect(within(headNode).getByText(dayjs(HEAD_DATE).format('YYYY-MM-DD HH:mm'))).toBeTruthy();
+    expect(within(headNode).getByText(dayjs(HEAD_DATE).fromNow())).toBeTruthy();
+  });
+
+  it('requests an initial window of 10 commits', async () => {
+    renderGraph();
+
+    await screen.findByText('aaaa111');
+    expect(vi.mocked(syncService.getSyncHistory).mock.calls[0]?.[0]).toEqual({
+      limit: 10,
+    });
+  });
+
+  it('folds node actions into a kebab menu instead of inline buttons', async () => {
+    renderGraph();
+
+    const headNode = await screen.findByTestId(`commit-node-${SHA_HEAD}`);
+    // The kebab trigger is the ONLY button in a commit row.
+    const buttons = within(headNode).getAllByRole('button');
+    expect(buttons).toHaveLength(1);
+    expect(within(headNode).getByRole('button', { name: /node actions/i })).toBeTruthy();
+  });
+
+  it('offers Checkout in the kebab of a compatible commit', async () => {
+    const onCheckout = vi.fn();
+    const user = userEvent.setup();
+    renderGraph({ onCheckout });
+
+    const oldNode = await screen.findByTestId(`commit-node-${SHA_OLD}`);
+    await user.click(within(oldNode).getByRole('button', { name: /node actions/i }));
+    const item = await screen.findByRole('menuitem', { name: /checkout/i });
+    expect(item.getAttribute('aria-disabled')).not.toBe('true');
+
+    await user.click(item);
+    expect(onCheckout).toHaveBeenCalledWith(SHA_OLD);
+  });
+
+  it('disables the kebab Checkout item with the reason on incompatible commits', async () => {
+    const onCheckout = vi.fn();
+    const user = userEvent.setup();
+    renderGraph({ onCheckout });
+
+    const badNode = await screen.findByTestId(`commit-node-${SHA_BAD}`);
+    expect(badNode.getAttribute('data-compatible')).toBe('false');
+
+    await user.click(within(badNode).getByRole('button', { name: /node actions/i }));
+    const item = await screen.findByRole('menuitem', { name: /checkout/i });
+    expect(item.getAttribute('aria-disabled')).toBe('true');
+    expect(within(item).getByText(/Missing required column: id:string/)).toBeTruthy();
+
+    await user.click(item);
+    expect(onCheckout).not.toHaveBeenCalled();
+  });
+
+  it('anchors the incompatible tooltip to a content-fit hover target', async () => {
+    const user = userEvent.setup();
+    renderGraph();
+
+    const badNode = await screen.findByTestId(`commit-node-${SHA_BAD}`);
+    // The tooltip's hover target wraps the node content, sized to fit it —
+    // never stretched to the full row/card width (FR-021).
+    expect((badNode.parentElement as HTMLElement).style.width).toBe('fit-content');
+
+    await user.hover(within(badNode).getByText('sync: broken snapshot'));
+    expect(
+      (await screen.findAllByText(/Missing required column: id:string/)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('renders pendingContent inside the uncommitted node, without the old placeholder', async () => {
     vi.mocked(syncService.getSyncHistory).mockResolvedValue(
       historyResult({ has_local_changes: true }),
     );
-    renderGraph();
-    expect(await screen.findByText('Local changes not yet published')).toBeTruthy();
+    renderGraph({ pendingContent: <div data-testid="pending-review">staged review</div> });
+
+    const pendingNode = await screen.findByTestId('commit-node-pending');
+    expect(within(pendingNode).getByTestId('pending-review')).toBeTruthy();
+    expect(screen.queryByText('Local changes not yet published')).toBeNull();
+    expect(screen.queryByRole('button', { name: /review & publish/i })).toBeNull();
+  });
+
+  it('renders no uncommitted node when there are no local changes', async () => {
+    renderGraph({ pendingContent: <div data-testid="pending-review" /> });
+
+    await screen.findByText('aaaa111');
+    expect(screen.queryByTestId('commit-node-pending')).toBeNull();
+    expect(screen.queryByTestId('pending-review')).toBeNull();
   });
 
   it('shows a rewritten-history warning after a force-push', async () => {
@@ -102,20 +205,7 @@ describe('CommitGraph (015 US3)', () => {
     expect(alert.textContent).toMatch(/rewritten/i);
   });
 
-  it('marks incompatible commits and explains why on hover', async () => {
-    const user = userEvent.setup();
-    renderGraph();
-
-    const badNode = await screen.findByTestId(`commit-node-${SHA_BAD}`);
-    expect(badNode.getAttribute('data-compatible')).toBe('false');
-
-    await user.hover(screen.getByText('sync: broken snapshot'));
-    expect(
-      await screen.findByText(/Missing required column: id:string/),
-    ).toBeTruthy();
-  });
-
-  it('loads older commits via the load-more button', async () => {
+  it('loads older commits in batches of 20 via the load-more button', async () => {
     const user = userEvent.setup();
     vi.mocked(syncService.getSyncHistory).mockResolvedValue(historyResult({ has_more: true }));
     renderGraph();
@@ -126,6 +216,7 @@ describe('CommitGraph (015 US3)', () => {
       expect(vi.mocked(syncService.getSyncHistory)).toHaveBeenCalledTimes(2),
     );
     expect(vi.mocked(syncService.getSyncHistory).mock.calls[1]?.[0]).toEqual({
+      limit: 20,
       before: SHA_BAD,
     });
   });

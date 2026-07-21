@@ -26,5 +26,8 @@ export default defineConfig({
     exclude: ['e2e/**', 'node_modules/**'],
     css: false,
     passWithNoTests: true,
+    // Interaction-heavy RTL suites exceed the 5s default under full-suite
+    // parallel load (varying files trip it run to run, not just this one).
+    testTimeout: 15000,
   },
 });

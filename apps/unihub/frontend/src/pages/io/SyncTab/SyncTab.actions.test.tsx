@@ -1,6 +1,7 @@
-// US5 (015 FR-015..FR-020): sync operations run from commit-graph nodes — the
-// four legacy buttons are gone, checkout flows through a staged preview, and
-// incompatible commits offer no checkout.
+// US5 (015 FR-015..FR-020, 2026-07-21 refinement FR-022..FR-024): sync
+// operations run from commit-graph nodes — no legacy buttons, node actions in
+// kebab menus, the uncommitted node auto-renders the staged publish review
+// (no "Review & publish" trigger), and checkout supersedes the inline review.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -58,6 +59,31 @@ const HISTORY: SyncHistoryResult = {
   history_rewritten: false,
 };
 
+const PUSH_PREVIEW = {
+  status: 'has_changes' as const,
+  base_commit: SHA_HEAD,
+  diff_digest: DIGEST,
+  changes: [
+    {
+      table: 'inventory.item',
+      display_name: 'Items',
+      added: 1,
+      modified: 0,
+      deleted: 0,
+      is_new_table: false,
+      rows: [
+        {
+          pk: 'itm-1',
+          operation: 'create' as const,
+          before: null,
+          after: { 'id:string': 'itm-1' },
+          changed_fields: [],
+        },
+      ],
+    },
+  ],
+};
+
 const CHECKOUT_PREVIEW = {
   status: 'has_changes' as const,
   base_commit: SHA_OLD,
@@ -93,6 +119,12 @@ function renderTab() {
   );
 }
 
+async function openCheckout(user: ReturnType<typeof userEvent.setup>, sha: string) {
+  const node = await screen.findByTestId(`commit-node-${sha}`);
+  await user.click(within(node).getByRole('button', { name: /node actions/i }));
+  await user.click(await screen.findByRole('menuitem', { name: /checkout/i }));
+}
+
 describe('SyncTab commit-node interactions (015 US5)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -101,6 +133,7 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
       repo_url: 'https://github.com/user/repo',
     });
     vi.mocked(syncService.getSyncHistory).mockResolvedValue(HISTORY);
+    vi.mocked(syncService.getPublishPreview).mockResolvedValue(PUSH_PREVIEW);
     vi.mocked(syncService.getCheckoutPreview).mockResolvedValue(CHECKOUT_PREVIEW);
     vi.mocked(syncService.confirmCheckout).mockResolvedValue({
       status: 'applied',
@@ -109,35 +142,62 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
     });
   });
 
-  it('renders no legacy action buttons', async () => {
+  it('renders no legacy action buttons and no Review & publish trigger', async () => {
     renderTab();
     await screen.findByText('sync: latest');
     expect(screen.queryByRole('button', { name: /preview push/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /preview pull/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /review & publish/i })).toBeNull();
+    expect(screen.queryByText('Local changes not yet published')).toBeNull();
   });
 
-  it('publishes from the pending-local-changes node', async () => {
-    vi.mocked(syncService.getPublishPreview).mockResolvedValue({
-      status: 'up_to_date',
-    });
+  it('auto-renders the staged publish review inside the uncommitted node', async () => {
+    renderTab();
+
+    // No clicks: the pending changes appear directly in the uncommitted node.
+    const pendingNode = await screen.findByTestId('commit-node-pending');
+    expect(await within(pendingNode).findByText('Items')).toBeTruthy();
+    expect(
+      within(pendingNode).getByRole('button', { name: /publish staged changes/i }),
+    ).toBeTruthy();
+    expect(vi.mocked(syncService.getPublishPreview)).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows an error with retry inside the uncommitted node when the preview fails', async () => {
+    vi.mocked(syncService.getPublishPreview).mockRejectedValueOnce(new Error('boom'));
     const user = userEvent.setup();
     renderTab();
 
-    await user.click(await screen.findByRole('button', { name: /review & publish/i }));
-    await waitFor(() =>
-      expect(vi.mocked(syncService.getPublishPreview)).toHaveBeenCalledTimes(1),
-    );
+    const pendingNode = await screen.findByTestId('commit-node-pending');
+    expect(
+      await within(pendingNode).findByText(/failed to compute publish preview/i),
+    ).toBeTruthy();
+
+    await user.click(within(pendingNode).getByRole('button', { name: /retry/i }));
+    expect(await within(pendingNode).findByText('Items')).toBeTruthy();
+    expect(vi.mocked(syncService.getPublishPreview)).toHaveBeenCalledTimes(2);
   });
 
-  it('offers checkout on compatible nodes only', async () => {
+  it('offers checkout through the kebab of compatible nodes', async () => {
+    const user = userEvent.setup();
     renderTab();
     await screen.findByText('sync: latest');
 
-    const oldNode = screen.getByTestId(`commit-node-${SHA_OLD}`);
-    expect(within(oldNode).getByRole('button', { name: /checkout/i })).toBeTruthy();
+    await openCheckout(user, SHA_OLD);
+    expect(vi.mocked(syncService.getCheckoutPreview)).toHaveBeenCalledWith(SHA_OLD);
+  });
+
+  it('disables the kebab checkout with the reason on incompatible nodes', async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await screen.findByText('sync: latest');
 
     const badNode = screen.getByTestId(`commit-node-${SHA_BAD}`);
-    expect(within(badNode).queryByRole('button', { name: /checkout/i })).toBeNull();
+    await user.click(within(badNode).getByRole('button', { name: /node actions/i }));
+    const item = await screen.findByRole('menuitem', { name: /checkout/i });
+    expect(item.getAttribute('aria-disabled')).toBe('true');
+    await user.click(item);
+    expect(vi.mocked(syncService.getCheckoutPreview)).not.toHaveBeenCalled();
   });
 
   it('checkout shows a staged preview with an overwrite warning and confirms with exclusions', async () => {
@@ -145,14 +205,9 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
     renderTab();
     await screen.findByText('sync: latest');
 
-    const oldNode = screen.getByTestId(`commit-node-${SHA_OLD}`);
-    await user.click(within(oldNode).getByRole('button', { name: /checkout/i }));
+    await openCheckout(user, SHA_OLD);
 
-    expect(vi.mocked(syncService.getCheckoutPreview)).toHaveBeenCalledWith(SHA_OLD);
-    await screen.findByText('Items');
-    // The user is warned that local data will be restored to the snapshot.
-    expect(screen.getByText(/restores your local data/i)).toBeTruthy();
-
+    await screen.findByText(/restores your local data/i);
     await user.click(screen.getByRole('button', { name: /restore this snapshot/i }));
     await waitFor(() =>
       expect(vi.mocked(syncService.confirmCheckout)).toHaveBeenCalledTimes(1),
@@ -162,6 +217,23 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
       diff_digest: DIGEST,
       excluded: [],
     });
+  });
+
+  it('hides the inline pending review while a checkout review is open and restores it after', async () => {
+    const user = userEvent.setup();
+    renderTab();
+
+    // Pending review visible first (FR-023).
+    await screen.findByRole('button', { name: /publish staged changes/i });
+
+    await openCheckout(user, SHA_OLD);
+    await screen.findByRole('button', { name: /restore this snapshot/i });
+    // One active staged review at a time (FR-024).
+    expect(screen.queryByRole('button', { name: /publish staged changes/i })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(await screen.findByRole('button', { name: /publish staged changes/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /restore this snapshot/i })).toBeNull();
   });
 
   it('surfaces auto-included dependent rows after a checkout', async () => {
@@ -174,39 +246,13 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
     renderTab();
     await screen.findByText('sync: latest');
 
-    const oldNode = screen.getByTestId(`commit-node-${SHA_OLD}`);
-    await user.click(within(oldNode).getByRole('button', { name: /checkout/i }));
-    await screen.findByText('Items');
-    await user.click(screen.getByRole('button', { name: /restore this snapshot/i }));
+    await openCheckout(user, SHA_OLD);
+    await user.click(await screen.findByRole('button', { name: /restore this snapshot/i }));
 
     expect(await screen.findByText(/automatically included/i)).toBeTruthy();
   });
 
   it('keeps force-publish reachable when a publish race diverges', async () => {
-    vi.mocked(syncService.getPublishPreview).mockResolvedValue({
-      status: 'has_changes',
-      base_commit: SHA_HEAD,
-      diff_digest: DIGEST,
-      changes: [
-        {
-          table: 'inventory.item',
-          display_name: 'Items',
-          added: 1,
-          modified: 0,
-          deleted: 0,
-          is_new_table: false,
-          rows: [
-            {
-              pk: 'itm-1',
-              operation: 'create' as const,
-              before: null,
-              after: { 'id:string': 'itm-1' },
-              changed_fields: [],
-            },
-          ],
-        },
-      ],
-    });
     vi.mocked(syncService.publishSync).mockRejectedValue(
       Object.assign(new Error('diverged'), { code: 'diverged' }),
     );
@@ -218,7 +264,6 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
     const user = userEvent.setup();
     renderTab();
 
-    await user.click(await screen.findByRole('button', { name: /review & publish/i }));
     await user.click(await screen.findByRole('button', { name: /publish staged changes/i }));
 
     const force = await screen.findByRole('button', { name: /force publish/i });

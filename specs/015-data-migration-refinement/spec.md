@@ -31,6 +31,8 @@ Second user-review round on the shipped commit rail, provided directly (no quest
 - Q: How do the hash chip and the "Remote latest"/"Local" badges relate visually? → A: All three are badges of the same size (same chip height and font size); the hash renders as a badge, not inline code text.
 - Q: What is the exact commit-node arrangement? → A: Line 1: hash badge, marker badge(s), kebab. Line 2: `{absolute time} ({relative time})` on a single line. Line 3: commit message. (User-directed deviation from the constitution's two-row datetime for this surface — both absolute and relative remain shown.)
 - Q: What is the publish confirmation button's label? → A: "Publish Selected Changes" (renamed from "Publish staged changes"; the internal staging model and its terminology are unchanged — only the user-facing label changes).
+- Q: On pages taller than the viewport, full-page captures show the grey app canvas ending at viewport height with a white band below — in scope? → A: Yes, batched into this branch although it is a global app-shell issue (visible in this PR's own screenshots): the grey canvas background MUST extend to the bottom of the HTML document on every page.
+- Q: Where does the checkout review render? → A: Embedded inside the commit node being checked out — exactly like the uncommitted node embeds the staged publish review — not as a separate section below the rail.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -176,6 +178,8 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 - **FR-025**: The commit rail MUST render directly on the Sync tab with no enclosing titled or collapsible container — the former "History" block is removed; loading, error, and rewritten-history states render in the same bare layout.
 - **FR-026**: The commit hash MUST render as a badge visually uniform with the "Remote latest" and "Local" marker badges — identical chip height and font size for all three.
 - **FR-027**: Each commit node MUST follow this arrangement: first line — hash badge, marker badge(s), kebab trigger; second line — the single-line timestamp per FR-006; third line — the commit message.
+- **FR-028** *(global app shell, clarified 2026-07-22)*: The application shell's grey canvas background MUST span the full height of the HTML document on every page — when page content exceeds the viewport, no white band may appear below the first viewport height. This must hold in full-page captures (which render beyond-viewport regions), not merely during live scrolling; the mobile side-menu drawer behavior (existing viewport-fixed overrides) must be unaffected.
+- **FR-029** *(clarified 2026-07-22)*: The checkout review — overwrite warning, staging controls per FR-010–FR-014, per-table changesets, and confirm/cancel — MUST render embedded inside the commit node being checked out, mirroring the uncommitted node's inline review (FR-023). No standalone review section renders below the rail; FR-024's one-active-review rule is unchanged.
 
 ### Key Entities
 
@@ -197,6 +201,8 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 - **SC-006**: Every capability previously reachable via the four legacy buttons is reachable through the commit graph; checkouts to compatible commits reproduce that snapshot exactly, and zero checkouts to incompatible commits are possible.
 - **SC-007**: Graph rows contain zero standalone inline action buttons — every node action sits in that node's kebab menu — and when local changes exist their staged review is visible in the uncommitted node without a single prior click.
 - **SC-008**: The commit rail renders with zero container chrome (no "History" title or card/collapse wrapper); 100% of commit nodes follow the FR-027 arrangement; the hash and marker badges share one chip size; "Load more" appears only as a timeline node; no menu anywhere embeds an incompatibility reason.
+- **SC-009**: A pixel probe at the bottom corners of a full-page screenshot of any page taller than the viewport samples the grey canvas color, never white — locked by an automated e2e geometry assertion.
+- **SC-010**: Every staged review renders inside a rail node — the publish review in the uncommitted node, the checkout review in its target commit node; zero review sections render below the rail.
 
 ## Assumptions
 

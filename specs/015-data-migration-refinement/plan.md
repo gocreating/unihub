@@ -237,7 +237,51 @@ apps/unihub/frontend/src/
 
 ---
 
-## Refinement Round 3 — Publish Button Label (clarified 2026-07-22)
+## Refinement Round 4 — Full-Document Canvas Background (clarified 2026-07-22)
+
+Global app-shell fix batched into this branch (spec FR-028, SC-009). **Diagnosed by
+live probe** (house geometry-bug rule: reproduce before fixing): the ONLY element
+painting the grey canvas (`#f0f2f5`) is ProLayout's `.ant-pro-layout-bg-list` —
+`position: fixed`, viewport-height (720 px in the probe) — while the document was
+1172 px and every in-flow ancestor (`html`, `body`, `#root`, `.ant-pro-layout`,
+`.ant-layout`) is transparent. Live scrolling always keeps the fixed layer under the
+viewport, so the gap is invisible interactively; full-page captures render
+beyond-viewport regions where nothing paints → white band.
+
+**Fix (R16)**: paint the canvas color on `.ant-pro-layout` in `src/index.css` — the
+probe shows it already spans the full document height and grows with content, so the
+grey extends to the document bottom with no fixed positioning and no ProLayout
+internals touched. The fixed bg-list layer remains harmlessly on top; the mobile
+drawer overrides in index.css are untouched.
+
+**Lock**: new `e2e/layout-background.spec.ts` — renders a taller-than-viewport page
+(mocked Sync tab), takes a full-page screenshot, decodes it in-page via canvas 2D, and
+pixel-probes the bottom corners for the canvas color (SC-009). Written FIRST and must
+fail against the unfixed shell. Afterwards the three full-page 015 PR screenshots
+(02/03/06) are regenerated so PR #40 shows the fixed canvas.
+
+Constitution check delta — PASS (a CSS addition in the existing global stylesheet;
+no deps, no API, no i18n surface).
+
+---
+
+## Refinement Round 5 — Embedded Checkout Review (clarified 2026-07-22)
+
+Spec FR-029/SC-010 (research R17): the checkout review moves from a standalone
+section below the rail into the body of the commit node being checked out —
+symmetric with the uncommitted node's `pendingContent` (FR-023). Frontend-only:
+
+- `CommitGraph` gains `commitContent?: { sha: string; node: ReactNode } | null`;
+  the matching `CommitNode` renders it as an additional block below the message line
+  (only ever a compatible node — no interplay with the incompatible tooltip wrapper).
+- `index.tsx` (`ActionsCard`) moves the existing checkout-review JSX (overwrite
+  warning, staging header, collapse, Restore/Cancel) into that slot keyed by
+  `checkout.sha`; FR-024 exclusivity and staleness pinning unchanged.
+- Tests: SyncTab.actions specs assert the review renders `within()` the target
+  commit node's testid; CommitGraph spec covers the slot. Screenshot 06 shows the
+  embedded review after regeneration (round-4 T058 covers it).
+
+Constitution check delta — PASS (no deps, no API, strings unchanged).
 
 Label-only micro-change (spec FR-023 amendment): the publish confirmation button
 reads **"Publish Selected Changes"** (was "Publish staged changes"). One locale key —

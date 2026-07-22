@@ -304,6 +304,42 @@ arrangement mirrors familiar VCS log UIs (identity line, then time, then message
 **Alternatives**: keeping the two-row `DateTimeCell` (rejected by clarification);
 styling `Text code` to match Tag metrics by hand (fragile against AntD token changes).
 
+## Refinement round 4 (clarified 2026-07-22) — R16
+
+### R16. Full-document canvas background
+
+**Decision**: add `.ant-pro-layout { background: #f0f2f5; }` (the canvas color ProLayout
+already uses) to `src/index.css`. Live probe showed the grey is painted ONLY by
+`.ant-pro-layout-bg-list` (`position: fixed`, viewport-height), while `.ant-pro-layout`
+is transparent but already spans the full document height (1172 px vs 720 px viewport in
+the probe) — so painting it there extends the canvas to the document bottom on every
+page. Locked by `e2e/layout-background.spec.ts`: full-page screenshot of a
+taller-than-viewport page, decoded in-page via canvas 2D, bottom-corner pixels must be
+the canvas color (SC-009).
+
+**Rationale**: fixes the class of bug (full-page captures showing a white band below
+the viewport) at the shell root with one in-flow CSS rule; no ProLayout internals or
+fixed-position overrides; mobile drawer CSS untouched.
+**Alternatives**: `html { background }` (works, but paints outside the app shell's
+scope — e.g. the login page canvas — changing more than reported); unfixing
+`.ant-pro-layout-bg-list` itself (ProLayout internals, upgrade-fragile); ProLayout
+`token.bgLayout` (styles the same fixed layer — does not extend it).
+
+## Refinement round 5 (clarified 2026-07-22) — R17
+
+### R17. Checkout review embedded in the target commit node
+
+**Decision**: a `commitContent?: { sha, node }` slot on `CommitGraph`, rendered by the
+matching `CommitNode` below its message line; `ActionsCard` supplies the existing
+checkout-review JSX through it. Symmetric with `pendingContent` (R11); FR-024
+exclusivity and digest pinning untouched.
+
+**Rationale**: the review appears exactly where the user acted (the node), matching
+the uncommitted node's pattern; `CommitGraph` stays presentation-only.
+**Alternatives**: rendering into every node via a render-prop (needless generality for
+one active review); an expandable "detail drawer" per node (heavier interaction model
+than requested).
+
 ## Resolved decisions summary
 
 | # | Decision |
@@ -321,5 +357,7 @@ styling `Text code` to match Tag metrics by hand (fragile against AntD token cha
 | R11 | Auto-loaded inline pending review via `pendingContent` slot; "Review & publish" + placeholder removed; one active review at a time (2026-07-21) |
 | R12 | Client-passed history window: initial 10, load-more 20 (2026-07-21) |
 | R13 | Bare rail (no "History" Card); load-more as a terminal timeline node (2026-07-22) |
+| R16 | Canvas color painted on `.ant-pro-layout` (in-flow, full-document height) — ProLayout's fixed `bg-list` only covers the viewport; pixel-probe e2e lock (2026-07-22) |
+| R17 | Checkout review embedded in its target commit node via a `commitContent` slot, symmetric with `pendingContent` (2026-07-22) |
 | R14 | Disabled kebab items are label-only; reasons live on the node tooltip (2026-07-22) |
 | R15 | Hash as a Tag (uniform chip size); three-line node arrangement with single-line datetime — recorded constitution deviation (2026-07-22) |

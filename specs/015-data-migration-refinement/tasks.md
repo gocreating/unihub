@@ -203,6 +203,31 @@
 
 ---
 
+## Phase 12: Full-Document Canvas Background (clarified 2026-07-22, round 4)
+
+**Goal**: The app shell's grey canvas spans the full document height on every page (FR-028, SC-009; research R16). Global fix batched into this branch; visible today as a white band below viewport height in full-page PR screenshots.
+
+**Independent Test**: `e2e/layout-background.spec.ts` green; regenerated full-page PR screenshots (02/03/06) show grey to the bottom edge.
+
+- [ ] T056 Write the failing pixel-probe e2e lock in e2e/layout-background.spec.ts (dev server on an open port, mocked APIs): render the Sync tab with enough content that `document.scrollHeight` exceeds the viewport, take a `fullPage` screenshot, decode it in-page via canvas 2D, and assert the bottom-corner pixels are the canvas grey `rgb(240,242,245)` — must FAIL against the unfixed shell
+- [ ] T057 Add the R16 rule to src/index.css — paint the canvas color on `.ant-pro-layout` (in-flow, full-document height; comment explaining ProLayout's viewport-fixed `bg-list` gap) — and make T056 pass; verify the mobile-drawer overrides in the same file still apply
+- [ ] T058 Regenerate the 015 screenshots (`BASE_URL=<port> pnpm exec playwright test e2e/take-screenshots-015.spec.ts`), visually verify the three full-page captures (02/03/06) now show grey to the bottom, and commit the updated PNGs in apps/unihub/docs/screenshots/015-data-migration-refinement/
+- [ ] T059 Run the frontend quality loop (`pnpm lint && pnpm typecheck && pnpm test && pnpm build` from apps/unihub/frontend/); backend untouched
+- [ ] T060 Update the CLAUDE.md SPECKIT block and spec.md status to record round 4 as shipped
+
+---
+
+## Phase 13: Embedded Checkout Review (clarified 2026-07-22, round 5)
+
+**Goal**: The checkout review renders inside the commit node being checked out, mirroring the uncommitted node's inline review (FR-029, SC-010; research R17). Runs BEFORE Phase 12's screenshot regeneration (T058) so screenshot 06 captures the embedded review.
+
+**Independent Test**: In RTL, initiating a checkout renders the overwrite warning, staging, and Restore/Cancel `within()` the target commit node's testid; no review markup below the rail.
+
+- [ ] T061 [P] [US5] Update RTL specs first (must fail): in src/pages/io/SyncTab/SyncTab.actions.test.tsx assert the checkout review (overwrite warning, staging header, Restore this snapshot, Cancel) renders within `commit-node-<sha>` and the FR-024 exclusivity flow still holds; in src/pages/io/SyncTab/CommitGraph.test.tsx cover the `commitContent` slot (renders inside the matching node only)
+- [ ] T062 [US5] Add `commitContent?: { sha: string; node: ReactNode } | null` to src/pages/io/SyncTab/CommitGraph.tsx (rendered by the matching CommitNode below its message line) and move the checkout-review JSX in src/pages/io/SyncTab/index.tsx into that slot; make T061 pass
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -218,6 +243,8 @@
 - **Phase 9 (refinement round)**: after Phase 8 (amends shipped US3/US5 surfaces). T039 ∥ T040 (different spec files) → T041 (makes T039 pass) → T042 (needs T041's `pendingContent` slot + `useSyncHistory`; makes T040 pass) → T043 → T044/T045.
 - **Phase 10 (commit-rail polish)**: after Phase 9. T046 ∥ T047 (different spec files) → T048 (single implementation task, makes both pass) → T049 → T050/T051.
 - **Phase 11 (label rename)**: after Phase 10. T052 → T053 → T054 → T055 (strictly sequential; trivial scope).
+- **Phase 12 (canvas background)**: after Phase 11. T056 (failing pixel-probe lock) → T057 (CSS fix, makes T056 pass); T058 (screenshot regeneration) DEFERRED until after Phase 13 so captures include the embedded checkout review; then T059 → T060.
+- **Phase 13 (embedded checkout review)**: after T057. T061 (failing RTL specs) → T062 (slot + move, makes T061 pass) → then Phase 12's T058/T059/T060 close both rounds.
 
 ### Within Each Story
 

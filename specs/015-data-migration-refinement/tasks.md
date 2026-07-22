@@ -190,6 +190,19 @@
 
 ---
 
+## Phase 11: Publish Button Label Rename (clarified 2026-07-22, round 3)
+
+**Goal**: The publish confirmation button reads "Publish Selected Changes" (spec FR-023 amendment). Label-only; internal staging terminology unchanged.
+
+**Independent Test**: The uncommitted node's confirm button renders "Publish Selected Changes"; no UI surface still says "Publish staged changes"; all suites green.
+
+- [ ] T052 [US4] Update label expectations first (must fail): replace /publish staged changes/i with /publish selected changes/i in src/pages/io/SyncTab/SyncTab.actions.test.tsx, src/pages/io/SyncTab/SyncTab.staging.test.tsx, and src/pages/io/SyncTab/SyncTab.pinning.test.tsx
+- [ ] T053 [US4] Update `pages.io.sync.publishPreview.confirmButton` to 'Publish Selected Changes' in src/locales/en-US/pages.ts and '發佈所選變更' in src/locales/zh-TW/pages.ts; make T052 pass
+- [ ] T054 Run the frontend quality loop (`pnpm lint && pnpm typecheck && pnpm test && pnpm build` from apps/unihub/frontend/); backend untouched
+- [ ] T055 Update the CLAUDE.md SPECKIT block and spec.md status to record round 3 as shipped
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -204,6 +217,7 @@
 - **Phase 8**: after all desired stories.
 - **Phase 9 (refinement round)**: after Phase 8 (amends shipped US3/US5 surfaces). T039 ∥ T040 (different spec files) → T041 (makes T039 pass) → T042 (needs T041's `pendingContent` slot + `useSyncHistory`; makes T040 pass) → T043 → T044/T045.
 - **Phase 10 (commit-rail polish)**: after Phase 9. T046 ∥ T047 (different spec files) → T048 (single implementation task, makes both pass) → T049 → T050/T051.
+- **Phase 11 (label rename)**: after Phase 10. T052 → T053 → T054 → T055 (strictly sequential; trivial scope).
 
 ### Within Each Story
 

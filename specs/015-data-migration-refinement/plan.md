@@ -234,3 +234,15 @@ apps/unihub/frontend/src/
 │   └── SyncTab.actions.test.tsx   # incompatible-kebab spec: reason NOT in menu
 └── locales/en-US/pages.ts, zh-TW/pages.ts   # remove pages.io.sync.graph.title
 ```
+
+---
+
+## Refinement Round 3 — Publish Button Label (clarified 2026-07-22)
+
+Label-only micro-change (spec FR-023 amendment): the publish confirmation button
+reads **"Publish Selected Changes"** (was "Publish staged changes"). One locale key —
+`pages.io.sync.publishPreview.confirmButton` — updated in both locales (en-US
+`Publish Selected Changes`, zh-TW `發佈所選變更`); the internal staging model,
+terminology, and every other string are untouched. Test regexes matching the old
+label (SyncTab.actions/staging/pinning suites) updated first per TDD. No constitution
+implications; no new decisions (no research entry needed).

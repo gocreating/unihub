@@ -71,10 +71,13 @@ function CommitNode({
   commit,
   isLast,
   onCheckout,
+  extra,
 }: {
   commit: SyncHistoryCommit;
   isLast: boolean;
   onCheckout?: (sha: string) => void;
+  /** Embedded review content for THIS commit (015 FR-029). */
+  extra?: React.ReactNode;
 }) {
   const { formatMessage: t } = useIntl();
 
@@ -139,6 +142,9 @@ function CommitNode({
       <div>
         <Text>{commit.message}</Text>
       </div>
+      {extra !== undefined && extra !== null && (
+        <div style={{ marginTop: 12 }}>{extra}</div>
+      )}
     </NodeRow>
   );
 
@@ -165,11 +171,16 @@ export interface CommitGraphProps {
    * publish review, rendered whenever local unpublished changes exist.
    */
   pendingContent?: React.ReactNode;
+  /**
+   * Review content embedded inside a specific commit's node (015 FR-029) —
+   * the checkout review renders where the user acted, mirroring pendingContent.
+   */
+  commitContent?: { sha: string; node: React.ReactNode } | null;
   /** Kebab checkout action on every COMPATIBLE commit node (015 US5). */
   onCheckout?: (sha: string) => void;
 }
 
-export function CommitGraph({ pendingContent, onCheckout }: CommitGraphProps) {
+export function CommitGraph({ pendingContent, commitContent, onCheckout }: CommitGraphProps) {
   const { formatMessage: t } = useIntl();
 
   const query = useSyncHistory();
@@ -231,6 +242,7 @@ export function CommitGraph({ pendingContent, onCheckout }: CommitGraphProps) {
               commit={commit}
               isLast={idx === commits.length - 1 && railEndsAtCommits}
               onCheckout={onCheckout}
+              extra={commitContent?.sha === commit.sha ? commitContent.node : undefined}
             />
           ))}
 

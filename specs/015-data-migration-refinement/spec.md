@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-20
 
-**Status**: Implemented (all user stories, 2026-07-20); Sync-tab UI refinement round clarified and implemented 2026-07-21; commit-rail polish round and publish-button label rename clarified and implemented 2026-07-22 (manual walk-throughs T044/T050 pending a human session)
+**Status**: Implemented (all user stories, 2026-07-20); refinement rounds 1–5 clarified and implemented 2026-07-21/22 — kebab/inline-review UI, commit-rail polish, "Publish Selected Changes" label, full-document canvas background (FR-028), embedded checkout review (FR-029). Manual walk-throughs T044/T050 pending a human session
 
 **Input**: User description: "for github issue #35" — GitHub issue #35 "Data migration refinement" (label: uni-infra): (1) critical bug — the catalog's default filter (obtained this year OR no obtained date) appears to be applied to the data sync push preview, showing 1000+ deletions of inventory items; (2) UI constitution violation — the preview table's page-size selector must sit to the left of the paginators; (3) new features — a commit graph in the sync tab (including force-push visibility), row-level staging of changes (default all checked, toggleable per row / per table / all), and replacing the legacy Preview/Apply Push/Pull buttons with commit-node interactions, where schema-incompatible commits are disabled for checkout.
 

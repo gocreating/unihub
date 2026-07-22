@@ -202,15 +202,18 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
     expect(vi.mocked(syncService.getCheckoutPreview)).not.toHaveBeenCalled();
   });
 
-  it('checkout shows a staged preview with an overwrite warning and confirms with exclusions', async () => {
+  it('checkout shows a staged preview embedded in the commit node and confirms with exclusions', async () => {
     const user = userEvent.setup();
     renderTab();
     await screen.findByText('sync: latest');
 
     await openCheckout(user, SHA_OLD);
 
-    await screen.findByText(/restores your local data/i);
-    await user.click(screen.getByRole('button', { name: /restore this snapshot/i }));
+    // FR-029: the whole review renders inside the target commit's node.
+    const oldNode = screen.getByTestId(`commit-node-${SHA_OLD}`);
+    await within(oldNode).findByText(/restores your local data/i);
+    expect(within(oldNode).getByText('Items')).toBeTruthy();
+    await user.click(within(oldNode).getByRole('button', { name: /restore this snapshot/i }));
     await waitFor(() =>
       expect(vi.mocked(syncService.confirmCheckout)).toHaveBeenCalledTimes(1),
     );
@@ -229,8 +232,10 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
     await screen.findByRole('button', { name: /publish selected changes/i });
 
     await openCheckout(user, SHA_OLD);
-    await screen.findByRole('button', { name: /restore this snapshot/i });
-    // One active staged review at a time (FR-024).
+    // The review is embedded in the target commit node (FR-029)…
+    const oldNode = screen.getByTestId(`commit-node-${SHA_OLD}`);
+    await within(oldNode).findByRole('button', { name: /restore this snapshot/i });
+    // …and one staged review is active at a time (FR-024).
     expect(screen.queryByRole('button', { name: /publish selected changes/i })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: /cancel/i }));

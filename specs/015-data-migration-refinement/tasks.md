@@ -209,11 +209,11 @@
 
 **Independent Test**: `e2e/layout-background.spec.ts` green; regenerated full-page PR screenshots (02/03/06) show grey to the bottom edge.
 
-- [ ] T056 Write the failing pixel-probe e2e lock in e2e/layout-background.spec.ts (dev server on an open port, mocked APIs): render the Sync tab with enough content that `document.scrollHeight` exceeds the viewport, take a `fullPage` screenshot, decode it in-page via canvas 2D, and assert the bottom-corner pixels are the canvas grey `rgb(240,242,245)` — must FAIL against the unfixed shell
-- [ ] T057 Add the R16 rule to src/index.css — paint the canvas color on `.ant-pro-layout` (in-flow, full-document height; comment explaining ProLayout's viewport-fixed `bg-list` gap) — and make T056 pass; verify the mobile-drawer overrides in the same file still apply
-- [ ] T058 Regenerate the 015 screenshots (`BASE_URL=<port> pnpm exec playwright test e2e/take-screenshots-015.spec.ts`), visually verify the three full-page captures (02/03/06) now show grey to the bottom, and commit the updated PNGs in apps/unihub/docs/screenshots/015-data-migration-refinement/
-- [ ] T059 Run the frontend quality loop (`pnpm lint && pnpm typecheck && pnpm test && pnpm build` from apps/unihub/frontend/); backend untouched
-- [ ] T060 Update the CLAUDE.md SPECKIT block and spec.md status to record round 4 as shipped
+- [x] T056 Write the failing pixel-probe e2e lock in e2e/layout-background.spec.ts (dev server on an open port, mocked APIs): render the Sync tab with enough content that `document.scrollHeight` exceeds the viewport, take a `fullPage` screenshot, decode it in-page via canvas 2D, and assert the bottom-corner pixels are the canvas grey `rgb(240,242,245)` — must FAIL against the unfixed shell
+- [x] T057 Add the R16 rule to src/index.css — paint the canvas color on `.ant-pro-layout` (in-flow, full-document height; comment explaining ProLayout's viewport-fixed `bg-list` gap) — and make T056 pass; verify the mobile-drawer overrides in the same file still apply
+- [x] T058 Regenerate the 015 screenshots (`BASE_URL=<port> pnpm exec playwright test e2e/take-screenshots-015.spec.ts`), visually verify the three full-page captures (02/03/06) now show grey to the bottom, and commit the updated PNGs in apps/unihub/docs/screenshots/015-data-migration-refinement/
+- [x] T059 Run the frontend quality loop (`pnpm lint && pnpm typecheck && pnpm test && pnpm build` from apps/unihub/frontend/); backend untouched
+- [x] T060 Update the CLAUDE.md SPECKIT block and spec.md status to record round 4 as shipped
 
 ---
 
@@ -223,8 +223,8 @@
 
 **Independent Test**: In RTL, initiating a checkout renders the overwrite warning, staging, and Restore/Cancel `within()` the target commit node's testid; no review markup below the rail.
 
-- [ ] T061 [P] [US5] Update RTL specs first (must fail): in src/pages/io/SyncTab/SyncTab.actions.test.tsx assert the checkout review (overwrite warning, staging header, Restore this snapshot, Cancel) renders within `commit-node-<sha>` and the FR-024 exclusivity flow still holds; in src/pages/io/SyncTab/CommitGraph.test.tsx cover the `commitContent` slot (renders inside the matching node only)
-- [ ] T062 [US5] Add `commitContent?: { sha: string; node: ReactNode } | null` to src/pages/io/SyncTab/CommitGraph.tsx (rendered by the matching CommitNode below its message line) and move the checkout-review JSX in src/pages/io/SyncTab/index.tsx into that slot; make T061 pass
+- [x] T061 [P] [US5] Update RTL specs first (must fail): in src/pages/io/SyncTab/SyncTab.actions.test.tsx assert the checkout review (overwrite warning, staging header, Restore this snapshot, Cancel) renders within `commit-node-<sha>` and the FR-024 exclusivity flow still holds; in src/pages/io/SyncTab/CommitGraph.test.tsx cover the `commitContent` slot (renders inside the matching node only)
+- [x] T062 [US5] Add `commitContent?: { sha: string; node: ReactNode } | null` to src/pages/io/SyncTab/CommitGraph.tsx (rendered by the matching CommitNode below its message line) and move the checkout-review JSX in src/pages/io/SyncTab/index.tsx into that slot; make T061 pass
 
 ---
 

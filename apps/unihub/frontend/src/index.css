@@ -18,6 +18,22 @@ body {
 }
 
 /*
+ * The grey app canvas must span the FULL document height (015 FR-028).
+ *
+ * ProLayout paints the canvas only via .ant-pro-layout-bg-list, which is
+ * position:fixed and therefore exactly viewport-sized: live scrolling always
+ * keeps it under the viewport, but full-page captures render beyond-viewport
+ * regions where nothing paints — a white band below the first viewport height.
+ * .ant-pro-layout itself is in normal flow and grows with the content, so
+ * painting the same canvas color here extends the grey to the document bottom.
+ * (Color mirrors ProLayout's bgLayout token; e2e/layout-background.spec.ts
+ * pixel-probes it.)
+ */
+.ant-pro-layout {
+  background: #f0f2f5;
+}
+
+/*
  * Fix: mobile side-menu drawer mask and panel scroll with the page.
  *
  * ProLayout renders its mobile sider as an inline Drawer (getContainer=false),

@@ -213,6 +213,17 @@ describe('CommitGraph (015 US3)', () => {
     expect(screen.queryByRole('button', { name: /review & publish/i })).toBeNull();
   });
 
+  it('renders commitContent inside the matching commit node only (FR-029)', async () => {
+    renderGraph({
+      commitContent: { sha: SHA_OLD, node: <div data-testid="checkout-review">review</div> },
+    });
+
+    const oldNode = await screen.findByTestId(`commit-node-${SHA_OLD}`);
+    expect(within(oldNode).getByTestId('checkout-review')).toBeTruthy();
+    const headNode = screen.getByTestId(`commit-node-${SHA_HEAD}`);
+    expect(within(headNode).queryByTestId('checkout-review')).toBeNull();
+  });
+
   it('renders no uncommitted node when there are no local changes', async () => {
     renderGraph({ pendingContent: <div data-testid="pending-review" /> });
 

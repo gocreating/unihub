@@ -283,6 +283,31 @@ symmetric with the uncommitted node's `pendingContent` (FR-023). Frontend-only:
 
 Constitution check delta — PASS (no deps, no API, strings unchanged).
 
+---
+
+## Refinement Round 6 — Full-Height Sider Border (clarified 2026-07-22)
+
+Spec FR-030/SC-011 (research R18). **Diagnosed by live probe**: the sider's visual
+boundary is a 1 px `rgba(5,5,5,0.06)` border on `.ant-layout-sider-children`, inside
+the `position: fixed` `.ant-pro-sider-fixed` (viewport-height) — so in full-page
+captures the line stops at the first viewport. The sider column itself is transparent
+over the canvas (ProLayout's `bg-list` has no children); there is no white column to
+extend — only the border line.
+
+**Fix (R18)**: `border-inline-start: 1px solid rgba(5,5,5,0.06)` on
+`.ant-pro-layout-container` (in-flow, spans the full document height, and its left
+edge sits exactly at the sider boundary via ProLayout's own margin — tracking
+expanded/collapsed width automatically). Scoped away from mobile drawer mode. The
+fixed sider's own border overlaps the same pixel column above the fold, so no double
+line.
+
+**Lock**: second pixel-probe test in `e2e/layout-background.spec.ts` — near the
+document bottom of a taller-than-viewport page, the pixel window at the measured sider
+boundary contains a non-canvas-colored pixel (the border), written first and failing
+red. Screenshots regenerated afterwards.
+
+Constitution check delta — PASS (one CSS rule; nothing else).
+
 Label-only micro-change (spec FR-023 amendment): the publish confirmation button
 reads **"Publish Selected Changes"** (was "Publish staged changes"). One locale key —
 `pages.io.sync.publishPreview.confirmButton` — updated in both locales (en-US

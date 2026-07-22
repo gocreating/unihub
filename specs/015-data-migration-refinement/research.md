@@ -340,6 +340,25 @@ the uncommitted node's pattern; `CommitGraph` stays presentation-only.
 one active review); an expandable "detail drawer" per node (heavier interaction model
 than requested).
 
+## Refinement round 6 (clarified 2026-07-22) — R18
+
+### R18. Full-height sider border
+
+**Decision**: `border-inline-start: 1px solid rgba(5,5,5,0.06)` on
+`.ant-pro-layout-container` in `src/index.css`, scoped out of mobile drawer mode.
+Probe facts: the only sider boundary paint is the 1 px border on
+`.ant-layout-sider-children` inside the viewport-fixed sider; the sider column itself
+is transparent over the canvas (bg-list has no children); `.ant-pro-layout-container`
+is in-flow, full document height, and its left edge tracks the sider width via
+ProLayout's own margin. Locked by a second pixel-probe test in
+`e2e/layout-background.spec.ts` (SC-011).
+
+**Rationale**: one rule on an in-flow element that inherits correct width in every
+sider state; overlaps the existing border pixel column above the fold (no double line).
+**Alternatives**: a `::before` column with `:has()`-driven widths (hardcodes 215/64 px,
+breaks on theme/width changes); un-fixing the sider (`fixSiderbar: false` — changes
+the interactive scroll behavior FR-030 explicitly preserves).
+
 ## Resolved decisions summary
 
 | # | Decision |
@@ -359,5 +378,6 @@ than requested).
 | R13 | Bare rail (no "History" Card); load-more as a terminal timeline node (2026-07-22) |
 | R16 | Canvas color painted on `.ant-pro-layout` (in-flow, full-document height) — ProLayout's fixed `bg-list` only covers the viewport; pixel-probe e2e lock (2026-07-22) |
 | R17 | Checkout review embedded in its target commit node via a `commitContent` slot, symmetric with `pendingContent` (2026-07-22) |
+| R18 | Sider right border extended full-height via `border-inline-start` on the in-flow `.ant-pro-layout-container`; pixel-probe lock (2026-07-22) |
 | R14 | Disabled kebab items are label-only; reasons live on the node tooltip (2026-07-22) |
 | R15 | Hash as a Tag (uniform chip size); three-line node arrangement with single-line datetime — recorded constitution deviation (2026-07-22) |

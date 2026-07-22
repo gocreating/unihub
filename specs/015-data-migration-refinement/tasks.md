@@ -228,6 +228,19 @@
 
 ---
 
+## Phase 14: Full-Height Sider Border (clarified 2026-07-22, round 6)
+
+**Goal**: The side panel's right border extends to the document bottom on taller-than-viewport pages (FR-030, SC-011; research R18) — the fixed sider's 1px border currently stops at viewport height in full-page captures.
+
+**Independent Test**: The new pixel-probe test in `e2e/layout-background.spec.ts` is green; regenerated full-page PR screenshots show the border line to the bottom edge.
+
+- [ ] T063 Extend e2e/layout-background.spec.ts with a failing second test: on the tall mocked Sync page, measure the fixed sider's width from the DOM, take a `fullPage` screenshot, decode in-page via canvas 2D, and assert the pixel window at the sider boundary near the document bottom contains a non-canvas-grey pixel (the border line) — must FAIL against the unfixed shell
+- [ ] T064 Add the R18 rule to src/index.css — `border-inline-start: 1px solid rgba(5,5,5,0.06)` on `.ant-pro-layout-container`, scoped out of mobile drawer mode, with a comment referencing the viewport-fixed sider border — and make T063 pass
+- [ ] T065 Regenerate the 015 screenshots (`BASE_URL=<port> pnpm exec playwright test e2e/take-screenshots-015.spec.ts`), visually verify the full-page captures show the border to the bottom, run the frontend quality loop (`pnpm lint && pnpm typecheck && pnpm test && pnpm build`), and commit
+- [ ] T066 Update the CLAUDE.md SPECKIT block and spec.md status to record round 6 as shipped
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -245,6 +258,7 @@
 - **Phase 11 (label rename)**: after Phase 10. T052 → T053 → T054 → T055 (strictly sequential; trivial scope).
 - **Phase 12 (canvas background)**: after Phase 11. T056 (failing pixel-probe lock) → T057 (CSS fix, makes T056 pass); T058 (screenshot regeneration) DEFERRED until after Phase 13 so captures include the embedded checkout review; then T059 → T060.
 - **Phase 13 (embedded checkout review)**: after T057. T061 (failing RTL specs) → T062 (slot + move, makes T061 pass) → then Phase 12's T058/T059/T060 close both rounds.
+- **Phase 14 (sider border)**: after Phase 13. T063 (failing pixel probe) → T064 (CSS fix) → T065 (screenshots + loops) → T066.
 
 ### Within Each Story
 

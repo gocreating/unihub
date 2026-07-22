@@ -33,6 +33,7 @@ Second user-review round on the shipped commit rail, provided directly (no quest
 - Q: What is the publish confirmation button's label? → A: "Publish Selected Changes" (renamed from "Publish staged changes"; the internal staging model and its terminology are unchanged — only the user-facing label changes).
 - Q: On pages taller than the viewport, full-page captures show the grey app canvas ending at viewport height with a white band below — in scope? → A: Yes, batched into this branch although it is a global app-shell issue (visible in this PR's own screenshots): the grey canvas background MUST extend to the bottom of the HTML document on every page.
 - Q: Where does the checkout review render? → A: Embedded inside the commit node being checked out — exactly like the uncommitted node embeds the staged publish review — not as a separate section below the rail.
+- Q: The side panel (and its right border) still stops at viewport height on taller-than-viewport pages — extend it too? → A: Yes: the side panel's visual column, including its right border, MUST extend to the bottom of the document, matching the FR-028 canvas behavior.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -180,6 +181,7 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 - **FR-027**: Each commit node MUST follow this arrangement: first line — hash badge, marker badge(s), kebab trigger; second line — the single-line timestamp per FR-006; third line — the commit message.
 - **FR-028** *(global app shell, clarified 2026-07-22)*: The application shell's grey canvas background MUST span the full height of the HTML document on every page — when page content exceeds the viewport, no white band may appear below the first viewport height. This must hold in full-page captures (which render beyond-viewport regions), not merely during live scrolling; the mobile side-menu drawer behavior (existing viewport-fixed overrides) must be unaffected.
 - **FR-029** *(clarified 2026-07-22)*: The checkout review — overwrite warning, staging controls per FR-010–FR-014, per-table changesets, and confirm/cancel — MUST render embedded inside the commit node being checked out, mirroring the uncommitted node's inline review (FR-023). No standalone review section renders below the rail; FR-024's one-active-review rule is unchanged.
+- **FR-030** *(global app shell, clarified 2026-07-22)*: The side panel's right border MUST extend to the bottom of the HTML document on pages taller than the viewport, like the FR-028 canvas (the panel column itself shares the canvas background — the border line is its only painted boundary). Interactive behavior (the menu staying visible while scrolling, the mobile drawer) is unchanged, and the extended line must track the panel's width (expanded/collapsed) and not appear in mobile drawer mode.
 
 ### Key Entities
 
@@ -203,6 +205,7 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 - **SC-008**: The commit rail renders with zero container chrome (no "History" title or card/collapse wrapper); 100% of commit nodes follow the FR-027 arrangement; the hash and marker badges share one chip size; "Load more" appears only as a timeline node; no menu anywhere embeds an incompatibility reason.
 - **SC-009**: A pixel probe at the bottom corners of a full-page screenshot of any page taller than the viewport samples the grey canvas color, never white — locked by an automated e2e geometry assertion.
 - **SC-010**: Every staged review renders inside a rail node — the publish review in the uncommitted node, the checkout review in its target commit node; zero review sections render below the rail.
+- **SC-011**: In a full-page capture of a page taller than the viewport, a pixel row near the document bottom shows a visible border line at the side panel's right edge (a non-canvas-colored pixel at the panel boundary) — locked by an automated e2e geometry assertion.
 
 ## Assumptions
 

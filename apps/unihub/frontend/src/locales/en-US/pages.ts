@@ -294,7 +294,6 @@ export default {
   'pages.io.sync.publish.upToDate': 'Already up to date — nothing to publish.',
   'pages.io.sync.publish.error': 'Publish failed.',
   'pages.io.sync.publish.stale': 'The data changed since this preview — refreshing the preview.',
-  'pages.io.sync.graph.title': 'History',
   'pages.io.sync.graph.error': 'Failed to load sync history.',
   'pages.io.sync.graph.retry': 'Retry',
   'pages.io.sync.graph.rewritten':

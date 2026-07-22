@@ -187,7 +187,7 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
     expect(vi.mocked(syncService.getCheckoutPreview)).toHaveBeenCalledWith(SHA_OLD);
   });
 
-  it('disables the kebab checkout with the reason on incompatible nodes', async () => {
+  it('disables the kebab checkout on incompatible nodes without embedding the reason', async () => {
     const user = userEvent.setup();
     renderTab();
     await screen.findByText('sync: latest');
@@ -196,6 +196,8 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
     await user.click(within(badNode).getByRole('button', { name: /node actions/i }));
     const item = await screen.findByRole('menuitem', { name: /checkout/i });
     expect(item.getAttribute('aria-disabled')).toBe('true');
+    // FR-022 (2026-07-22): the menu item is label-only — no reason text inside.
+    expect(within(item).queryByText(/Missing required column/)).toBeNull();
     await user.click(item);
     expect(vi.mocked(syncService.getCheckoutPreview)).not.toHaveBeenCalled();
   });

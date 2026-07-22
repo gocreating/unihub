@@ -294,7 +294,6 @@ export default {
   'pages.io.sync.publish.upToDate': '已是最新狀態，無需發佈。',
   'pages.io.sync.publish.error': '發佈失敗。',
   'pages.io.sync.publish.stale': '資料在預覽後已變更，正在重新整理預覽。',
-  'pages.io.sync.graph.title': '歷史記錄',
   'pages.io.sync.graph.error': '無法載入同步歷史。',
   'pages.io.sync.graph.retry': '重試',
   'pages.io.sync.graph.rewritten': '遠端歷史已被改寫（force push）— 先前已知的提交已不在其中。',

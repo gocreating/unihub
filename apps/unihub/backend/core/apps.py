@@ -45,6 +45,25 @@ class CoreConfig(AppConfig):
                         is_json=True,
                         nullable=True,
                     ),
+                    # Added in iterations 26/27; optional so pre-existing
+                    # snapshots without the columns remain importable. Omitting
+                    # them from the descriptor caused issue #35's family wipe:
+                    # a full apply re-created definitions with unit_family=''
+                    # and every later dimension-value import crashed.
+                    FieldDescriptor(
+                        column_name="unit_family",
+                        csv_header="unit_family:string",
+                        data_type="string",
+                        optional=True,
+                        default_value="",
+                    ),
+                    FieldDescriptor(
+                        column_name="emoji",
+                        csv_header="emoji:string",
+                        data_type="string",
+                        optional=True,
+                        default_value="",
+                    ),
                 ],
                 has_user_attributes=False,
                 import_order=2,

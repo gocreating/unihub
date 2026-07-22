@@ -1,0 +1,83 @@
+# Quickstart — Data Migration Refinement (015)
+
+## Where the work lives
+
+- **Backend**: `apps/unihub/backend/sync/` (views, serializers, `services/git_service.py`,
+  `services/publish_helper.py`, `services/apply_helper.py`), shared diff machinery in
+  `apps/unihub/backend/data_io/services/` (`csv_exporter.py`, `csv_importer.py`,
+  `change_preview.py`), registry FK metadata in `data_io/registry.py`.
+- **Frontend**: `apps/unihub/frontend/src/pages/io/SyncTab/index.tsx` (tab UI → gains the
+  commit graph, loses the four legacy buttons),
+  `src/components/ImportExport/ChangePreviewTable.tsx` (staging checkboxes + compliant
+  footer), `src/services/unihub-backend/sync.ts` (service layer).
+- **Tests**: `apps/unihub/backend/tests/sync/` (uses the `bare_repo` fixture —
+  local bare repo + `file://` URL, no network); frontend RTL colocated per house style.
+
+## Dev loop
+
+```bash
+# Backend (from apps/unihub/backend/) — test-first, reproduction before fix
+uv run pytest tests/sync/ -x
+uv run ruff format . && uv run ruff check . --fix
+uv run pytest
+
+# OpenAPI → frontend types (after serializer/view changes)
+uv run python manage.py spectacular --file openapi.yaml   # or the project's schema task
+# then from apps/unihub/frontend/:
+pnpm generate:api   # openapi-typescript (see package.json scripts for exact name)
+
+# Frontend (from apps/unihub/frontend/)
+pnpm lint && pnpm typecheck && pnpm test
+pnpm build          # stricter than typecheck — run before committing (memory rule)
+```
+
+## Manual verification against a throwaway remote
+
+1. Create a scratch bare repo: `git init --bare /tmp/claude-scratch-sync.git` and
+   configure the Sync tab with `file:///tmp/claude-scratch-sync.git` + any PAT string
+   (file transport ignores it) — or use a private GitHub scratch repo.
+2. Seed multi-year inventory data (the legacy import management command, or fixtures).
+3. Exercise: publish → graph shows the commit; edit rows → preview shows exactly those
+   rows; uncheck some → publish → unchecked reappear in next preview; checkout an older
+   commit → DB matches snapshot; force-push the scratch remote from a shell → graph
+   flags rewritten history; commit with a doctored CSV header (drop a required column)
+   → node disabled with reason.
+
+## Manual verification — Sync tab UI refinement round (2026-07-21)
+
+With the scratch remote from above seeded with 12+ commits and pending local edits:
+
+1. Commit nodes show two-row timestamps (`YYYY-MM-DD HH:mm` + relative time below).
+2. Node rows carry a kebab (⋮) menu and **no** inline action buttons; an incompatible
+   commit's Checkout item is disabled with the reason; its tooltip centers on the node
+   content, not the card width.
+3. The uncommitted node shows the staged changes immediately — no "Review & publish"
+   button, no "Local changes not yet published" text; Publish confirm sits with the
+   rendered changes and disables at zero staged rows.
+4. "Local" and "Remote latest" badges are both blue.
+5. Graph initially lists 10 commits; "Load more" appends 20 older ones.
+6. Opening a checkout review hides the inline pending review; dismissing it brings the
+   pending review back.
+
+## Manual verification — commit-rail polish round (2026-07-22)
+
+With the same scratch remote (12+ commits, one incompatible, pending local edits):
+
+1. The rail renders directly on the tab — no "History" title, card, or collapse.
+2. Each commit node reads: `[hash] [badges] [⋮]` / `YYYY-MM-DD HH:mm (relative)` /
+   message — hash and marker badges are visibly the same chip size.
+3. The incompatible node's kebab Checkout item is disabled with NO reason text in the
+   menu; the reason still appears on the node tooltip.
+4. "Load more" is a node on the timeline (rail line runs into it) and disappears when
+   history is exhausted.
+
+## Definition of done (per constitution)
+
+- All new/changed backend endpoints covered by pytest (happy + error paths), written
+  before implementation; the FR-004 filter regression test exists and passes.
+- `openapi.yaml` regenerated; frontend uses regenerated types; zero hand-written
+  response types added.
+- `pnpm lint` (0 warnings) / `pnpm typecheck` / `pnpm test` / `pnpm build` and
+  `uv run ruff format .` / `uv run ruff check .` / `uv run pytest` all green.
+- All new UI strings in both `en-US` and `zh-TW` locale files; counts use ICU plurals.
+- Preview-table footer matches the constitution layout (RTL-locked).

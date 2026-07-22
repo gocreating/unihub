@@ -107,8 +107,10 @@ def test_publish_preview_not_configured(auth_client: Client, db: None) -> None:
 
 
 def test_publish_preview_has_changes(auth_client: Client, db: None) -> None:
+    from sync.services.git_service import PublishPreviewData
+
     auth_client.put("/api/v1/sync/config/", VALID_CONFIG, content_type="application/json")
-    preview_data = [
+    changes = [
         {
             "table": "finance.account",
             "display_name": "Accounts",
@@ -118,13 +120,17 @@ def test_publish_preview_has_changes(auth_client: Client, db: None) -> None:
         }
     ]
     svc = MagicMock()
-    svc.publish_preview.return_value = preview_data
+    svc.publish_preview.return_value = PublishPreviewData(
+        base_commit="a" * 40, diff_digest="b" * 64, changes=changes
+    )
     with patch("sync.views._get_git_service", return_value=svc):
         resp = auth_client.get(PREVIEW_URL)
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "has_changes"
-    assert body["changes"] == preview_data
+    assert body["changes"] == changes
+    assert body["base_commit"] == "a" * 40
+    assert body["diff_digest"] == "b" * 64
 
 
 def test_publish_preview_up_to_date(auth_client: Client, db: None) -> None:

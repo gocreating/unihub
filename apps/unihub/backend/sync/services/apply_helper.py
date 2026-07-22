@@ -10,28 +10,69 @@ def _csv_filename(content_type_label: str) -> str:
     return content_type_label.replace(".", "_") + ".csv"
 
 
-def preview_from_fetch_head(clone_dir: Path) -> list:
-    """Read CSVs from FETCH_HEAD tree and return per-table change previews."""
+def _batch_pks(raw_csvs: dict[str, str]) -> dict[str, set[str]]:
+    """Collect each table's pks from the raw snapshot CSVs.
+
+    Passed to parse_csv as allowed_fk_pks so rows may reference parents that
+    only exist elsewhere in the same snapshot (not yet in the DB).
+    """
+    import csv
+    import io
+
+    from data_io.registry import get_registry
+
+    registry = get_registry()
+    allowed: dict[str, set[str]] = {}
+    for label, text in raw_csvs.items():
+        descriptor = registry[label]
+        pk_bare = next(
+            (f.csv_header.split(":")[0] for f in descriptor.system_fields if f.is_pk), None
+        )
+        if pk_bare is None:
+            continue
+        reader = csv.DictReader(io.StringIO(text))
+        pk_header = next((h for h in (reader.fieldnames or []) if h.split(":")[0] == pk_bare), None)
+        if pk_header is None:
+            continue
+        allowed[label] = {row[pk_header] for row in reader if row.get(pk_header)}
+    return allowed
+
+
+def preview_from_commit(clone_dir: Path, ref: str) -> list:
+    """Diff the snapshot at ``ref`` against the local DB (replace semantics).
+
+    Args:
+        clone_dir: The server clone containing the ref.
+        ref: Any commit-ish (sha, FETCH_HEAD, …).
+
+    Returns:
+        Per-table change dicts describing what applying the snapshot would do
+        locally. Tables absent from the snapshot are left untouched.
+    """
     from data_io.registry import get_registry
     from data_io.services.change_preview import compute_diff
     from data_io.services.csv_importer import parse_csv
 
     registry = get_registry()
-    results = []
 
-    for label, descriptor in registry.items():
-        filename = _csv_filename(label)
+    raw_csvs: dict[str, str] = {}
+    for label in registry:
         proc = subprocess.run(
-            ["git", "show", f"FETCH_HEAD:{filename}"],
+            ["git", "show", f"{ref}:{_csv_filename(label)}"],
             cwd=str(clone_dir),
             capture_output=True,
             text=True,
             timeout=30,
         )
-        if proc.returncode != 0:
-            continue  # table not present in remote snapshot
+        if proc.returncode == 0:
+            raw_csvs[label] = proc.stdout
 
-        parsed_rows, errors = parse_csv(proc.stdout, descriptor)
+    allowed_fk_pks = _batch_pks(raw_csvs)
+
+    results = []
+    for label, text in raw_csvs.items():
+        descriptor = registry[label]
+        parsed_rows, errors = parse_csv(text, descriptor, allowed_fk_pks=allowed_fk_pks)
         if errors:
             continue
 
@@ -54,6 +95,11 @@ def preview_from_fetch_head(clone_dir: Path) -> list:
         )
 
     return results
+
+
+def preview_from_fetch_head(clone_dir: Path) -> list:
+    """Read CSVs from the FETCH_HEAD tree and return per-table change previews."""
+    return preview_from_commit(clone_dir, "FETCH_HEAD")
 
 
 def import_from_clone(clone_dir: Path) -> list:

@@ -22,6 +22,7 @@ class SyncConfigReadSerializer(serializers.ModelSerializer):
             "last_published_commit",
             "last_applied_at",
             "last_applied_commit",
+            "local_state_commit",
         ]
 
     def get_is_configured(self, obj: SyncConfig) -> bool:  # noqa: ARG002

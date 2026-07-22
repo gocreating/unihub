@@ -280,6 +280,146 @@ def _has_auto_now(model_class: type, attname: str) -> bool:
         return False
 
 
+def _fk_fields(descriptor: TableDescriptor) -> list[FieldDescriptor]:
+    """Real FK fields (contenttype natural keys excluded)."""
+    return [
+        f
+        for f in descriptor.system_fields
+        if f.is_fk
+        and f.fk_content_type_label
+        and f.fk_content_type_label != "contenttypes.contenttype"
+    ]
+
+
+def _dependency_closure(
+    diffs_by_table: dict[str, list[dict[str, Any]]],
+    staged: set[tuple[str, str]],
+) -> list[dict[str, Any]]:
+    """Grow ``staged`` in place with the FK closure; return the auto-included refs.
+
+    Two rules, both driven purely by registry metadata (Principle II):
+    - A staged create/update referencing a row that only exists among the
+      diff's UNSTAGED creates pulls that create in (transitively).
+    - A staged delete whose child rows are also deleted in the diff pulls
+      those child deletes in, so the parent delete cannot orphan or silently
+      cascade over rows the user never confirmed seeing applied.
+    """
+    from data_io.registry import get_registry
+
+    registry = get_registry()
+    record_index = {
+        (label, record["pk"]): record
+        for label, records in diffs_by_table.items()
+        for record in records
+    }
+
+    auto_included: list[dict[str, Any]] = []
+    queue = list(staged)
+    while queue:
+        label, pk = queue.pop()
+        record = record_index[(label, pk)]
+        descriptor = registry.get(label)
+        if descriptor is None:
+            continue
+
+        if record["operation"] in ("create", "update"):
+            after = record.get("after") or {}
+            for fd in _fk_fields(descriptor):
+                value = after.get(fd.csv_header, "")
+                dep = (fd.fk_content_type_label, value)
+                if (
+                    value
+                    and dep in record_index
+                    and dep not in staged
+                    and record_index[dep]["operation"] == "create"
+                ):
+                    staged.add(dep)
+                    queue.append(dep)
+                    auto_included.append({"table": dep[0], "pk": value, "operation": "create"})
+
+        elif record["operation"] == "delete":
+            for child_label, child_desc in registry.items():
+                for fd in _fk_fields(child_desc):
+                    if fd.fk_content_type_label != label:
+                        continue
+                    for child_rec in diffs_by_table.get(child_label, []):
+                        if child_rec["operation"] != "delete":
+                            continue
+                        before = child_rec.get("before") or {}
+                        dep = (child_label, child_rec["pk"])
+                        if before.get(fd.csv_header, "") == pk and dep not in staged:
+                            staged.add(dep)
+                            queue.append(dep)
+                            auto_included.append(
+                                {
+                                    "table": dep[0],
+                                    "pk": child_rec["pk"],
+                                    "operation": "delete",
+                                }
+                            )
+
+    return auto_included
+
+
+def apply_selected(
+    diffs_by_table: dict[str, list[dict[str, Any]]],
+    excluded: set[tuple[str, str]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Apply only the staged ChangeRecords, in registry dependency order.
+
+    Args:
+        diffs_by_table: content_type_label → full ChangeRecord list.
+        excluded: (label, pk) refs the user unchecked.
+
+    Returns:
+        (results, auto_included) — per-table applied counts, and the refs the
+        FK closure added back to keep the database internally consistent.
+    """
+    from data_io.registry import get_registry, topo_sort
+
+    registry = get_registry()
+    staged: set[tuple[str, str]] = {
+        (label, record["pk"]) for label, records in diffs_by_table.items() for record in records
+    } - set(excluded)
+
+    auto_included = _dependency_closure(diffs_by_table, staged)
+
+    order = topo_sort(list(diffs_by_table.keys()))
+    applied_counts: dict[str, int] = {}
+
+    with transaction.atomic():
+        # Creates/updates parents-first…
+        for label in order:
+            records = [
+                r
+                for r in diffs_by_table.get(label, [])
+                if (label, r["pk"]) in staged and r["operation"] != "delete"
+            ]
+            if records:
+                counts = apply_diff(records, registry[label], mode="replace")
+                applied_counts[label] = applied_counts.get(label, 0) + sum(counts.values())
+        # …deletes children-first.
+        for label in reversed(order):
+            records = [
+                r
+                for r in diffs_by_table.get(label, [])
+                if (label, r["pk"]) in staged and r["operation"] == "delete"
+            ]
+            if records:
+                counts = apply_diff(records, registry[label], mode="replace")
+                applied_counts[label] = applied_counts.get(label, 0) + sum(counts.values())
+
+    results = [
+        {
+            "table": label,
+            "display_name": registry[label].display_name,
+            "applied": count,
+        }
+        for label, count in applied_counts.items()
+    ]
+    return results, auto_included
+
+
 def apply_diff(
     change_records: list[dict[str, Any]],
     descriptor: TableDescriptor,

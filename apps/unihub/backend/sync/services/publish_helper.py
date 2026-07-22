@@ -11,10 +11,17 @@ def _csv_filename(content_type_label: str) -> str:
     return content_type_label.replace(".", "_") + ".csv"
 
 
-def write_csvs_to_clone(clone_dir: Path) -> list[str]:
+def write_csvs_to_clone(clone_dir: Path, excluded: set[tuple[str, str]] | None = None) -> list[str]:
     """Export all registered tables as CSV files into clone_dir.
 
-    Returns the list of content_type_labels that were written.
+    With ``excluded`` refs, the written CSVs are hybrids: the full local
+    export with each excluded row reverted to its state at the clone's HEAD
+    (excluded update → HEAD version kept; excluded create → row dropped;
+    excluded delete → HEAD row restored). Unstaged changes therefore remain
+    local-only and reappear in the next preview.
+
+    Returns:
+        The list of content_type_labels that were written.
     """
     from data_io.registry import get_registry
     from data_io.services.csv_exporter import export_table
@@ -24,11 +31,77 @@ def write_csvs_to_clone(clone_dir: Path) -> list[str]:
 
     for label, descriptor in registry.items():
         csv_bytes = export_table(descriptor)
+        excluded_pks = {pk for (table, pk) in excluded or set() if table == label}
+        if excluded_pks:
+            csv_bytes = _revert_excluded_rows(clone_dir, label, descriptor, csv_bytes, excluded_pks)
         dest = clone_dir / _csv_filename(label)
         dest.write_bytes(csv_bytes)
         exported.append(label)
 
     return exported
+
+
+def _revert_excluded_rows(
+    clone_dir: Path,
+    label: str,
+    descriptor,
+    local_csv: bytes,
+    excluded_pks: set[str],
+) -> bytes:
+    """Return the local CSV with each excluded pk reverted to the HEAD version."""
+    import csv
+    import io
+
+    from data_io.services.change_preview import _get_pk_header
+
+    pk_header = _get_pk_header(descriptor)
+
+    local_reader = csv.DictReader(io.StringIO(local_csv.decode("utf-8")))
+    local_headers = list(local_reader.fieldnames or [])
+    local_rows = list(local_reader)
+
+    head_rows: dict[str, dict[str, str]] = {}
+    proc = subprocess.run(
+        ["git", "show", f"HEAD:{_csv_filename(label)}"],
+        cwd=str(clone_dir),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if proc.returncode == 0:
+        head_reader = csv.DictReader(io.StringIO(proc.stdout))
+        head_bare = {h.split(":")[0]: h for h in (head_reader.fieldnames or [])}
+        for row in head_reader:
+            # Re-key the HEAD row onto the local export's headers (bare-name
+            # match tolerates type-suffix renames between snapshots).
+            mapped = {lh: row.get(head_bare.get(lh.split(":")[0], lh), "") for lh in local_headers}
+            head_rows[mapped.get(pk_header, "")] = mapped
+
+    output_rows: list[dict[str, str]] = []
+    seen_pks: set[str] = set()
+    for row in local_rows:
+        pk = row.get(pk_header, "")
+        seen_pks.add(pk)
+        if pk in excluded_pks:
+            head_version = head_rows.get(pk)
+            if head_version is not None:
+                output_rows.append(head_version)  # excluded update → HEAD version
+            # excluded create → drop the row entirely
+        else:
+            output_rows.append(row)
+
+    # Excluded deletes: rows present at HEAD but locally gone are restored.
+    for pk in excluded_pks - seen_pks:
+        head_version = head_rows.get(pk)
+        if head_version is not None:
+            output_rows.append(head_version)
+
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=local_headers, extrasaction="ignore")
+    writer.writeheader()
+    for row in output_rows:
+        writer.writerow(row)
+    return out.getvalue().encode("utf-8")
 
 
 def _diff_row_sets(

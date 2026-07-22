@@ -28,6 +28,20 @@ class SyncPublishData:
     tables_exported: list[str]
 
 
+@dataclass
+class PublishPreviewData:
+    """A publish preview pinned to the remote base it was computed against.
+
+    ``base_commit`` is the remote head sha the diff used (None for an empty
+    remote); ``diff_digest`` is the sha256 over the canonical changes JSON.
+    A confirm echoes both so it can only apply exactly what was previewed.
+    """
+
+    base_commit: str | None
+    diff_digest: str
+    changes: list
+
+
 class GitSyncService:
     """Manages a local git clone for sync operations.
 
@@ -93,10 +107,44 @@ class GitSyncService:
 
             shutil.rmtree(self.clone_dir)
         self.clone_dir.mkdir(parents=True, exist_ok=True)
-        self._run(
+        clone = self._run(
             ["git", "clone", self._authenticated_url(), str(self.clone_dir)],
             cwd=self.clone_dir.parent,
+            check=False,
         )
+        if clone.returncode != 0:
+            raise GitError(self._sanitise(clone.stderr.strip()))
+
+    def reset_to_remote(self) -> str | None:
+        """Fetch the remote head and hard-reset the clone to it.
+
+        The clone is a disposable cache of the remote; the database is the
+        source of truth. Discards any stray local-only commits or working-tree
+        changes so every sync operation starts from the true remote state.
+
+        Returns:
+            The remote head sha, or None when the remote has no commits yet.
+
+        Raises:
+            GitError: when the remote cannot be reached or the reset fails.
+        """
+        self.ensure_clone()
+        fetch = self._run(["git", "fetch", self._authenticated_url(), "--quiet"], check=False)
+        if fetch.returncode != 0:
+            stderr = fetch.stderr.strip()
+            if "couldn't find remote ref" in stderr or "does not have any commits" in stderr:
+                return None
+            raise GitError(self._sanitise(stderr))
+
+        head = self._run(["git", "rev-parse", "--verify", "FETCH_HEAD"], check=False)
+        if head.returncode != 0:
+            return None  # empty remote — nothing fetched
+        sha = head.stdout.strip()
+
+        reset = self._run(["git", "reset", "--hard", sha], check=False)
+        if reset.returncode != 0:
+            raise GitError(self._sanitise(reset.stderr))
+        return sha
 
     # ── Status ────────────────────────────────────────────────────────────────
 
@@ -179,6 +227,63 @@ class GitSyncService:
                 error_message=self._sanitise(str(exc)),
             )
 
+    # ── History ───────────────────────────────────────────────────────────────
+
+    def history(self, limit: int = 50, before: str | None = None) -> tuple[list[dict], bool]:
+        """Return newest-first commits from the clone's HEAD (call after reset).
+
+        Args:
+            limit: Maximum commits to return.
+            before: Return only commits strictly older than this sha.
+
+        Returns:
+            (commits, has_more) — each commit is a dict with sha, parents,
+            author_date (ISO), and message.
+        """
+        start = "HEAD" if before is None else f"{before}~1"
+        log = self._run(
+            [
+                "git",
+                "log",
+                "--format=%H%x1f%P%x1f%aI%x1f%s",
+                f"--max-count={limit + 1}",
+                start,
+            ],
+            check=False,
+        )
+        if log.returncode != 0:
+            return [], False  # `before` was the root commit (or unknown sha)
+
+        commits: list[dict] = []
+        for line in log.stdout.splitlines():
+            sha, parents, author_date, message = line.split("\x1f", 3)
+            commits.append(
+                {
+                    "sha": sha,
+                    "parents": parents.split() if parents else [],
+                    "author_date": author_date,
+                    "message": message,
+                }
+            )
+        has_more = len(commits) > limit
+        return commits[:limit], has_more
+
+    def is_ancestor(self, ancestor: str, descendant: str) -> bool:
+        """True when ``ancestor`` is reachable from ``descendant`` (or equal)."""
+        res = self._run(["git", "merge-base", "--is-ancestor", ancestor, descendant], check=False)
+        return res.returncode == 0
+
+    def commit_exists(self, sha: str) -> bool:
+        """True when ``sha`` resolves to a commit in the clone (call after fetch)."""
+        res = self._run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], check=False)
+        return res.returncode == 0
+
+    def local_changes_exist(self) -> bool:
+        """True when the DB differs from the clone's current HEAD snapshot."""
+        from sync.services.publish_helper import preview_publish_against_head
+
+        return bool(preview_publish_against_head(self.clone_dir))
+
     def _changed_tables(self, all_tables: list[str]) -> list[str]:
         """Return only the tables whose CSV files are staged as changed."""
         from sync.services.publish_helper import _csv_filename
@@ -197,18 +302,80 @@ class GitSyncService:
 
     # ── Publish ───────────────────────────────────────────────────────────────
 
-    def publish(self) -> SyncPublishData | None:
-        """Export all tables to CSV, commit, push. Returns None if up-to-date.
+    def _verify_pinning(self, base_commit: str | None, diff_digest: str | None) -> list | None:
+        """Verify a pinned confirm still matches its preview.
+
+        Assumes the clone has just been reset to the remote head.
+
+        Returns:
+            The recomputed changes when pinned, None for an unpinned call.
 
         Raises:
-            DivergedException: if remote has commits the local clone lacks.
+            PreviewStaleException: when the remote moved or the local dataset
+                changed since the preview was computed.
+        """
+        if diff_digest is None:
+            return None
+        from sync.services.digest import diff_digest as compute_digest
+        from sync.services.publish_helper import preview_publish_against_head
+
+        current_base = self._run(["git", "rev-parse", "--verify", "HEAD"], check=False)
+        actual_base = current_base.stdout.strip() if current_base.returncode == 0 else None
+        if actual_base != base_commit:
+            raise PreviewStaleException("The remote moved since the preview was computed.")
+        changes = preview_publish_against_head(self.clone_dir)
+        if compute_digest(changes) != diff_digest:
+            raise PreviewStaleException("The dataset changed since the preview was computed.")
+        return changes
+
+    @staticmethod
+    def _staged_exclusions(
+        changes: list | None, excluded: list[dict] | None
+    ) -> set[tuple[str, str]]:
+        """Normalize exclusions and guard against an empty staged set.
+
+        Raises:
+            NothingStagedException: every previewed change was excluded.
+        """
+        excluded_refs = {(ref["table"], ref["pk"]) for ref in excluded or []}
+        if excluded_refs and changes is not None:
+            all_refs = {
+                (change["table"], row["pk"]) for change in changes for row in change["rows"]
+            }
+            if all_refs and not (all_refs - excluded_refs):
+                raise NothingStagedException("Every previewed change was excluded.")
+        return excluded_refs
+
+    def publish(
+        self,
+        base_commit: str | None = None,
+        diff_digest: str | None = None,
+        excluded: list[dict] | None = None,
+    ) -> SyncPublishData | None:
+        """Export all tables to CSV on the remote-head base, commit, push.
+
+        The clone is reset to the remote head first, so the commit is always a
+        fast-forward of the true remote state. When ``diff_digest`` is given,
+        the publish is pinned: the diff is recomputed and must match the
+        previewed one exactly. ``excluded`` rows (unstaged) are reverted to
+        their base-commit state in the written CSVs.
+
+        Returns:
+            None if up-to-date, else the publish result.
+
+        Raises:
+            PreviewStaleException: pinned publish no longer matches its preview.
+            NothingStagedException: every previewed change was excluded.
+            DivergedException: the push was rejected (a race with another push).
         """
         from sync.services.publish_helper import write_csvs_to_clone
 
-        self.ensure_clone()
+        self.reset_to_remote()
         self._configure_identity()
+        changes = self._verify_pinning(base_commit, diff_digest)
+        excluded_refs = self._staged_exclusions(changes, excluded)
 
-        tables_exported = write_csvs_to_clone(self.clone_dir)
+        tables_exported = write_csvs_to_clone(self.clone_dir, excluded=excluded_refs)
 
         self._run(["git", "add", "-A"])
 
@@ -228,14 +395,21 @@ class GitSyncService:
         sha = self._run(["git", "rev-parse", "HEAD"]).stdout.strip()
         return SyncPublishData(commit_sha=sha, tables_exported=changed)
 
-    def force_publish(self) -> SyncPublishData | None:
+    def force_publish(
+        self,
+        base_commit: str | None = None,
+        diff_digest: str | None = None,
+        excluded: list[dict] | None = None,
+    ) -> SyncPublishData | None:
         """Like publish() but force-pushes, overwriting the remote."""
         from sync.services.publish_helper import write_csvs_to_clone
 
-        self.ensure_clone()
+        self.reset_to_remote()
         self._configure_identity()
+        changes = self._verify_pinning(base_commit, diff_digest)
+        excluded_refs = self._staged_exclusions(changes, excluded)
 
-        tables_exported = write_csvs_to_clone(self.clone_dir)
+        tables_exported = write_csvs_to_clone(self.clone_dir, excluded=excluded_refs)
         self._run(["git", "add", "-A"])
 
         diff = self._run(["git", "diff", "--cached", "--quiet"], check=False)
@@ -254,47 +428,45 @@ class GitSyncService:
 
     # ── Apply ─────────────────────────────────────────────────────────────────
 
-    def publish_preview(self) -> list | None:
-        """Compute per-table change summary without staging or committing.
+    def publish_preview(self) -> PublishPreviewData | None:
+        """Compute the per-table publish diff against the true remote head.
+
+        The clone is reset to the remote head first — a stale clone must never
+        contribute rows to the diff (issue #35 P1 bug).
 
         Returns:
-            None when nothing has changed since the last publish.
-            A list of per-table change dicts otherwise.
+            None when the dataset matches the remote head, else the preview
+            with its pinning fields.
         """
+        from sync.services.digest import diff_digest
         from sync.services.publish_helper import preview_publish_against_head
 
-        self.ensure_clone()
+        base = self.reset_to_remote()
         changes = preview_publish_against_head(self.clone_dir)
-        return changes if changes else None
+        if not changes:
+            return None
+        return PublishPreviewData(
+            base_commit=base, diff_digest=diff_digest(changes), changes=changes
+        )
 
     def apply_preview(self) -> list | None:
-        """Fetch latest remote state, return per-table change preview or None if up-to-date."""
-        self.ensure_clone()
-        fetch = self._run(["git", "fetch", self._authenticated_url(), "--quiet"], check=False)
-        if fetch.returncode != 0:
-            stderr = fetch.stderr.strip()
-            if "couldn't find remote ref" in stderr or "does not have any commits" in stderr:
-                return None  # empty remote repo — nothing to apply
-            raise GitError(self._sanitise(stderr))
+        """Reset to the remote head, return per-table change preview or None if up-to-date.
 
-        # Always diff FETCH_HEAD CSVs against the local DB — the git ahead/behind
-        # count only reflects commit history, not whether the DB is in sync with
-        # the latest snapshot (e.g. a fresh clone already has HEAD == FETCH_HEAD
-        # but the local DB may be empty).
+        Always diffs the remote snapshot against the local DB — commit history
+        alone cannot tell whether the DB matches the latest snapshot.
+        """
+        if self.reset_to_remote() is None:
+            return None  # empty remote repo — nothing to apply
+
         from sync.services.apply_helper import preview_from_fetch_head
 
         changes = preview_from_fetch_head(self.clone_dir)
         return changes if changes else None
 
     def apply_confirm(self) -> list:
-        """Pull latest remote state and import all tables. Returns confirm results."""
-        self.ensure_clone()
-
-        pull = self._run(
-            ["git", "pull", self._authenticated_url(), "HEAD", "--ff-only"], check=False
-        )
-        if pull.returncode != 0:
-            raise GitError(self._sanitise(pull.stderr))
+        """Reset to the remote head and import all tables. Returns confirm results."""
+        if self.reset_to_remote() is None:
+            return []  # empty remote repo — nothing to import
 
         from sync.services.apply_helper import import_from_clone
 
@@ -303,6 +475,14 @@ class GitSyncService:
 
 class DivergedException(Exception):
     """Raised when git push is rejected due to diverged history."""
+
+
+class PreviewStaleException(Exception):
+    """Raised when a pinned confirm no longer matches its preview."""
+
+
+class NothingStagedException(Exception):
+    """Raised when every previewed change was excluded from the confirm."""
 
 
 class GitError(Exception):

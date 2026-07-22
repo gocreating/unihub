@@ -13,7 +13,9 @@ class Acquisition(models.Model):
 
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     # Stable legacy-import key (FR-029f c) — importer-internal, not in the API.
-    legacy_ref = models.CharField(max_length=32, null=True, blank=True, db_index=True, editable=False)
+    legacy_ref = models.CharField(
+        max_length=32, null=True, blank=True, db_index=True, editable=False
+    )
     source = models.CharField(max_length=200, blank=True)  # store, seller, or person
     request_time = models.DateTimeField(null=True, blank=True)  # when the order was initiated
     obtained_at = models.DateTimeField(null=True, blank=True)  # when received
@@ -53,6 +55,9 @@ class CostFactor(models.Model):
     currency = models.CharField(max_length=3, blank=True)
     type = models.CharField(max_length=20, default="accumulated")  # free-form label
     display_order = models.IntegerField(default=0)  # user-defined ordering
+    # Only consulted on accumulated rows: True = the user manually set this
+    # amount (incl. clearing to 0) and no flow may auto-recalculate it (018).
+    user_managed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -81,7 +86,9 @@ class Item(models.Model):
     # Stable legacy-import key (FR-029f c): "<year>:<acq>:<item>" — lets
     # re-imports UPSERT in place so item PKs (and scenario memberships)
     # survive. Never exposed through the API.
-    legacy_ref = models.CharField(max_length=32, null=True, blank=True, db_index=True, editable=False)
+    legacy_ref = models.CharField(
+        max_length=32, null=True, blank=True, db_index=True, editable=False
+    )
     name = models.CharField(max_length=200)
     # The user's own familiar name — preferred in displays (FR-030).
     alias_name = models.CharField(max_length=200, blank=True)

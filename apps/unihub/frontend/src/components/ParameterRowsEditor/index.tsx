@@ -11,7 +11,7 @@ import {
 } from '@/services/unihub-backend/core';
 import type { AttributeDefinition } from '@/services/unihub-backend/core';
 import type { ItemParameterWrite, UnitFamily } from '@/services/unihub-backend/inventory';
-import { UNIT_FAMILY_OPTIONS } from '@/services/unihub-backend/inventory';
+import { UNIT_FAMILY_OPTIONS, defaultUnitFor } from '@/services/unihub-backend/inventory';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { KeyEmoji } from '@/components/ItemDisplay';
 import { RangeValueInput } from '@/components/RangeValueInput';
@@ -113,7 +113,7 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
         setRow(draft.rowIndex, {
           definition_id: created.id,
           value: '',
-          unit: created.unit_family ? UNIT_FAMILY_OPTIONS[created.unit_family][0] : undefined,
+          unit: created.unit_family ? defaultUnitFor(created.unit_family) : undefined,
         });
         setDraft(null);
       }
@@ -212,7 +212,7 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
       definition_id: definitionId,
       value: '',
       unit: definition?.unit_family
-        ? UNIT_FAMILY_OPTIONS[definition.unit_family as UnitFamily][0]
+        ? defaultUnitFor(definition.unit_family as UnitFamily)
         : undefined,
     });
   };
@@ -234,7 +234,7 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
             />
             <Select
               style={{ width: 88, flex: 'none' }}
-              value={row.unit || units[0]}
+              value={row.unit || defaultUnitFor(definition.unit_family as UnitFamily)}
               options={units.map((u) => ({ value: u, label: u }))}
               onChange={(unit) => setRow(index, { ...row, unit })}
             />

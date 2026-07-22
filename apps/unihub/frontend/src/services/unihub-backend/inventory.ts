@@ -43,6 +43,23 @@ export const UNIT_FAMILY_OPTIONS: Record<UnitFamily, readonly string[]> = {
   battery: BATTERY_UNITS,
 };
 
+// Entry default per family (018 US2): lengths default to cm — real-world
+// entries are almost always centimetres — every other family keeps its first
+// listed unit. Display order in the dropdowns stays UNIT_FAMILY_OPTIONS.
+export const DEFAULT_FAMILY_UNIT: Record<UnitFamily, string> = {
+  length: 'cm',
+  weight: WEIGHT_UNITS[0]!,
+  volume: VOLUME_UNITS[0]!,
+  temperature: TEMPERATURE_UNITS[0]!,
+  time: TIME_UNITS[0]!,
+  battery: BATTERY_UNITS[0]!,
+};
+
+/** The unit pre-selected wherever a family unit has not been chosen yet. */
+export function defaultUnitFor(family: UnitFamily): string {
+  return DEFAULT_FAMILY_UNIT[family];
+}
+
 export interface Measurement {
   value: string;
   unit: string;
@@ -115,12 +132,16 @@ export interface CostFactor {
   currency: string;
   type: string; // free-form; CostFactorType values are suggestions
   display_order: number;
+  // Accumulated rows only: true = the user manually set this amount and no
+  // flow may auto-recalculate it (018 US1).
+  user_managed: boolean;
 }
 
 export interface CostFactorWrite {
   value: string;
   currency?: string;
   type?: string; // free-form; sent in display order (server assigns display_order)
+  user_managed?: boolean;
 }
 
 /** Per-currency net cost = sum of cost-factor values (value carries its sign). */

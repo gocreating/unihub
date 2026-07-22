@@ -277,30 +277,52 @@ test.describe('Column pin — sticky behavior', () => {
 
   // ── US3: defaults, reset, hidden-pin retention, no global toggles ──────────
 
-  // M-04 [US3]: catalog ships default pins (caret left, Actions right) with NO
-  // user interaction; Reset restores them after customisation (FR-006, SC-004).
+  // M-04 [US3 + 018/US3]: catalog ships default pins — Toggle (caret) AND
+  // Acquisition left, Actions right — with NO user interaction; the left group
+  // is contiguous and immobile mid-scroll; Reset restores the defaults after
+  // customisation (018 FR-009/FR-010, SC-004).
   test('catalog: default pins present; Reset restores them', async ({ page }) => {
     await gotoTable(page, '/inventory/catalog');
 
-    // Defaults: caret column fixed left, Actions fixed right — no interaction.
-    await expect(page.locator('.ant-table-thead th.ant-table-cell-fix-left').first()).toBeVisible();
+    // Defaults: TWO left-fixed header cells (Toggle + Acquisition), one
+    // right-fixed (Actions) — no interaction (feature 018).
+    const before = await headerBoxes(page, 'ant-table-cell-fix-left');
+    expect(before, 'two left-fixed header cells by default').toHaveLength(2);
+    expect(before[1]!.text).toContain('Acquisition');
+    // Contiguous group: Acquisition starts where the caret column ends.
+    expect(Math.abs(before[1]!.left - before[0]!.right)).toBeLessThanOrEqual(1.5);
     await expect(page.locator('.ant-table-thead th.ant-table-cell-fix-right').first()).toBeVisible();
 
-    // Customise: unpin the caret, pin the Item column left instead.
+    // Both stay put while the body scrolls (real sticky geometry).
+    await scrollTableTo(page, 300);
+    const after = await headerBoxes(page, 'ant-table-cell-fix-left');
+    expect(after).toHaveLength(2);
+    for (let i = 0; i < 2; i++) {
+      expect(
+        Math.abs(after[i]!.left - before[i]!.left),
+        `pinned header ${i} must not move`,
+      ).toBeLessThanOrEqual(1);
+    }
+    await scrollTableTo(page, 0);
+
+    // Customise: unpin both defaults, pin the Item column left instead.
     await openColumnPanel(page);
     await clickPin(page, '__caret', 'left'); // active left → unpin
+    await clickPin(page, 'acquisition_summary', 'left'); // active left → unpin
     await clickPin(page, 'item_summary', 'left');
     await applyPanel(page);
     const leftCount = await page.locator('.ant-table-thead th.ant-table-cell-fix-left').count();
     expect(leftCount).toBe(1);
 
-    // Reset → seeded defaults return.
+    // Reset → seeded defaults return (Toggle + Acquisition left, Actions right).
     await openColumnPanel(page);
     const resetBtn = page.locator('button:has-text("Reset"), button:has-text("重設")').last();
     await expect(resetBtn).toBeEnabled();
     await resetBtn.click();
     await page.waitForTimeout(500);
-    await expect(page.locator('.ant-table-thead th.ant-table-cell-fix-left').first()).toBeVisible();
+    const restored = await headerBoxes(page, 'ant-table-cell-fix-left');
+    expect(restored, 'defaults restored: two left-fixed').toHaveLength(2);
+    expect(restored[1]!.text).toContain('Acquisition');
     await expect(page.locator('.ant-table-thead th.ant-table-cell-fix-right').first()).toBeVisible();
   });
 

@@ -1,6 +1,6 @@
 # Implementation Plan: Data Migration Refinement
 
-**Branch**: `015-data-migration-refinement` | **Date**: 2026-07-20 (refinement round planned 2026-07-21) | **Spec**: [spec.md](spec.md)
+**Branch**: `015-data-migration-refinement` | **Date**: 2026-07-20 (refinement rounds planned 2026-07-21 and 2026-07-22) | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/015-data-migration-refinement/spec.md`
 
@@ -192,4 +192,45 @@ apps/unihub/frontend/src/
 │   ├── CommitGraph.test.tsx       # updated + new RTL specs
 │   └── SyncTab.actions.test.tsx   # updated flows (no Review & publish trigger)
 └── locales/en-US/pages.ts, zh-TW/pages.ts   # string adds/removals in both
+```
+
+---
+
+## Refinement Round 2 — Commit-Rail Polish (clarified 2026-07-22)
+
+Second user-review round (spec §Clarifications Session 2026-07-22; FR-006/009/022
+amendments + FR-025–FR-027, SC-008). Decisions R13–R15 in [research.md](research.md).
+**Frontend-only**, one component: `CommitGraph.tsx` (+ its specs and the two locale
+files). No backend, API, service-layer, or `index.tsx` changes.
+
+### Design (what changes where)
+
+| Directive | Design |
+|---|---|
+| No "History" container (FR-025) | Drop the `Card` wrapper — `CommitGraph` returns the rail (and its loading/error/rewritten states) bare; delete the now-unused `pages.io.sync.graph.title` key from both locales. |
+| Load-more timeline node (FR-009) | The "Load more" button becomes the content of a terminal `NodeRow` (own gray `RailDot`, `data-testid="commit-node-load-more"`), rendered only while `hasNextPage`; the last commit node is `isLast` only when no more pages exist, so the rail line runs into the load-more node. |
+| No reason in kebab (FR-022) | The disabled Checkout item renders its plain label only; the incompatibility explanation remains solely on the node tooltip (FR-018/FR-021, content-fit target unchanged). |
+| Uniform badges (FR-026) | The sha7 hash renders as a default AntD `Tag` (monospace font style) — identical chip height/font size to the blue "Remote latest"/"Local" `Tag`s, replacing `Text code`. |
+| Node arrangement (FR-027) | Row 1: hash badge + marker badges + kebab. Row 2: `dayjs(...).format('YYYY-MM-DD HH:mm')` + ` (` + `fromNow()` + `)` as one muted secondary line (replaces the `DateTimeCell` two-row block). Row 3: message. `dayjs.extend(relativeTime)` locally in the component (same pattern as `DateTimeCell`). |
+
+### Constitution check delta — PASS with one recorded deviation
+
+The single-line `YYYY-MM-DD HH:mm (relative)` timestamp deviates from the
+constitution's two-row datetime default. Justification: explicit user directive
+(2026-07-22 clarification) scoped to the commit rail only; both the absolute and the
+relative value remain displayed, so the rule's intent (never make the user compute
+"how long ago") is preserved. Recorded in spec §Assumptions; formalizing the pattern
+would be a constitution amendment. Everything else unchanged: no new deps, both
+locales updated (one key removed), TDD per Principle V.
+
+### Files touched (round 2)
+
+```text
+apps/unihub/frontend/src/
+├── pages/io/SyncTab/
+│   ├── CommitGraph.tsx            # Card removed, load-more node, plain disabled item,
+│   │                              #   Tag hash, three-line arrangement, single-line datetime
+│   ├── CommitGraph.test.tsx       # updated RTL specs
+│   └── SyncTab.actions.test.tsx   # incompatible-kebab spec: reason NOT in menu
+└── locales/en-US/pages.ts, zh-TW/pages.ts   # remove pages.io.sync.graph.title
 ```

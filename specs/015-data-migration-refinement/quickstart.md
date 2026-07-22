@@ -59,6 +59,18 @@ With the scratch remote from above seeded with 12+ commits and pending local edi
 6. Opening a checkout review hides the inline pending review; dismissing it brings the
    pending review back.
 
+## Manual verification — commit-rail polish round (2026-07-22)
+
+With the same scratch remote (12+ commits, one incompatible, pending local edits):
+
+1. The rail renders directly on the tab — no "History" title, card, or collapse.
+2. Each commit node reads: `[hash] [badges] [⋮]` / `YYYY-MM-DD HH:mm (relative)` /
+   message — hash and marker badges are visibly the same chip size.
+3. The incompatible node's kebab Checkout item is disabled with NO reason text in the
+   menu; the reason still appears on the node tooltip.
+4. "Load more" is a node on the timeline (rail line runs into it) and disappears when
+   history is exhausted.
+
 ## Definition of done (per constitution)
 
 - All new/changed backend endpoints covered by pytest (happy + error paths), written

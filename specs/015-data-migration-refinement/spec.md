@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-20
 
-**Status**: Implemented (all user stories, 2026-07-20); Sync-tab UI refinement round clarified and implemented 2026-07-21 (manual six-point walk-through pending a human session — tasks T044)
+**Status**: Implemented (all user stories, 2026-07-20); Sync-tab UI refinement round clarified and implemented 2026-07-21 (manual six-point walk-through pending a human session — tasks T044); commit-rail polish round clarified 2026-07-22 — pending implementation
 
 **Input**: User description: "for github issue #35" — GitHub issue #35 "Data migration refinement" (label: uni-infra): (1) critical bug — the catalog's default filter (obtained this year OR no obtained date) appears to be applied to the data sync push preview, showing 1000+ deletions of inventory items; (2) UI constitution violation — the preview table's page-size selector must sit to the left of the paginators; (3) new features — a commit graph in the sync tab (including force-push visibility), row-level staging of changes (default all checked, toggleable per row / per table / all), and replacing the legacy Preview/Apply Push/Pull buttons with commit-node interactions, where schema-incompatible commits are disabled for checkout.
 
@@ -20,6 +20,16 @@ User-review feedback on the shipped Sync tab, provided directly (no questions ne
 - Q: How does the user review and publish local changes? → A: The "Review & publish" button and the "Local changes not yet published" placeholder are removed; the uncommitted node directly renders the pending (unstaged) changes — staging controls, per-table changesets, confirm — auto-loaded without a manual trigger.
 - Q: What colors do the "Remote latest" and "Local" badges use? → A: Both use the standard blue info color (equal-rank informational markers).
 - Q: How is a very long commit history handled? → A: Load the most recent few commits first (initial window: 10) with a "Load more" button fetching older commits in batches (20); the existing cursor pagination is retained with the smaller initial window.
+
+### Session 2026-07-22
+
+Second user-review round on the shipped commit rail, provided directly (no questions needed):
+
+- Q: Does the commit graph keep its "History" container? → A: No — the content moves out of the "History" block and the container is removed entirely; the rail renders directly on the Sync tab.
+- Q: Where does the "Load more" control live? → A: As its own timeline node at the end of the rail (own rail dot, part of the timeline), not a button below it.
+- Q: Does the disabled Checkout kebab item show the incompatibility reason inline? → A: No — showing the reason inside the menu is an anti-pattern; the item is simply disabled, and the explanation stays on the node's tooltip (FR-018/FR-021).
+- Q: How do the hash chip and the "Remote latest"/"Local" badges relate visually? → A: All three are badges of the same size (same chip height and font size); the hash renders as a badge, not inline code text.
+- Q: What is the exact commit-node arrangement? → A: Line 1: hash badge, marker badge(s), kebab. Line 2: `{absolute time} ({relative time})` on a single line. Line 3: commit message. (User-directed deviation from the constitution's two-row datetime for this surface — both absolute and relative remain shown.)
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -66,7 +76,7 @@ The user opens the Sync tab and sees the data repository's history as a graph of
 
 **Acceptance Scenarios**:
 
-1. **Given** a configured sync repository with existing history, **When** the user opens the Sync tab, **Then** a commit graph loads automatically showing commit nodes with their time (rendered per the constitution's two-row datetime rule: absolute `YYYY-MM-DD HH:mm` primary, relative time secondary) and message/summary, with a loading indicator while it fetches.
+1. **Given** a configured sync repository with existing history, **When** the user opens the Sync tab, **Then** a commit rail loads automatically directly on the tab (no enclosing "History" container), each node arranged per FR-027 — hash badge + marker badges + kebab, then a single-line `YYYY-MM-DD HH:mm (relative)` timestamp, then the message — with a loading indicator while it fetches.
 2. **Given** the graph is displayed, **When** the user inspects it, **Then** they can identify which commit the local data state corresponds to and which commit is the newest on the remote (ahead / behind / in-sync at a glance).
 3. **Given** the remote repository's history was rewritten (force-pushed) since the local state last synced, **When** the user opens or refreshes the Sync tab, **Then** the graph visibly indicates that the remote history no longer matches what was previously known, rather than failing or showing a misleading linear history.
 4. **Given** the remote is unreachable, **When** the graph loads, **Then** the user sees a descriptive error and can retry.
@@ -137,10 +147,10 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 
 **Commit graph**
 
-- **FR-006**: The Sync tab MUST display the configured data repository's history as a graph of commit nodes, each showing at least the commit time and its message/summary, loading automatically when the tab opens (with a loading indicator) using the already-configured repository credentials. Commit timestamps MUST follow the constitution's datetime display rule: absolute `YYYY-MM-DD HH:mm` as the primary row with the relative time as muted secondary text below it.
+- **FR-006**: The Sync tab MUST display the configured data repository's history as a graph of commit nodes, each showing at least the commit time and its message/summary, loading automatically when the tab opens (with a loading indicator) using the already-configured repository credentials. Commit timestamps MUST render on a single line — absolute `YYYY-MM-DD HH:mm` followed by the relative time in parentheses (clarified 2026-07-22: an explicit user-directed deviation from the constitution's two-row datetime default for this surface; both absolute and relative values remain present).
 - **FR-007**: The graph MUST distinctly mark (a) the commit corresponding to the current local data state and (b) the latest remote commit, making ahead / behind / in-sync status readable at a glance. Both the "Local" and "Remote latest" badges MUST use the standard blue info color — they are equal-rank informational markers; position and label convey the distinction, not contrasting colors.
 - **FR-008**: The graph MUST make remote history rewrites (force-pushes) visible: when previously known commits are no longer part of the remote history, the user is explicitly informed instead of being shown a misleading linear history.
-- **FR-009**: The graph MUST load only the most recent commits by default (initial window: 10) and let the user load older commits on demand via a "Load more" control that fetches further batches (20 per batch) using cursor pagination; history is never fetched unbounded.
+- **FR-009**: The graph MUST load only the most recent commits by default (initial window: 10) and let the user load older commits on demand via a "Load more" control that fetches further batches (20 per batch) using cursor pagination; history is never fetched unbounded. The "Load more" control MUST render as its own timeline node at the end of the rail (own rail dot, connected to the timeline), shown only while older commits exist.
 - **FR-021**: Every tooltip on the graph MUST anchor to a hover target sized to fit its content (not stretched to the full row/card width) so the tooltip renders centered over the element it describes.
 
 **Row-level staging**
@@ -159,9 +169,12 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 - **FR-018**: Incompatible commits MUST be visibly disabled on the graph with an explanation of why, and the system MUST refuse any checkout attempt against them.
 - **FR-019**: Publishing MUST remain available when local and remote histories have diverged, presenting the existing recovery choices (apply the newer remote state first, or force-overwrite the remote) explicitly.
 - **FR-020**: Publishing after a checkout to an older commit MUST create a new latest snapshot on the remote reflecting the current local data; the system itself MUST never rewrite existing remote history as a side effect of a normal publish.
-- **FR-022**: Node-level actions MUST be presented in a per-node kebab (overflow) menu instead of inline buttons — graph rows carry no standalone action buttons. An action unavailable for a node (e.g., checkout of an incompatible commit) appears as a disabled menu item with its explanation.
+- **FR-022**: Node-level actions MUST be presented in a per-node kebab (overflow) menu instead of inline buttons — graph rows carry no standalone action buttons. An action unavailable for a node (e.g., checkout of an incompatible commit) appears as a plainly disabled menu item; the menu MUST NOT embed the explanation text (clarified 2026-07-22) — the reason is conveyed by the node's tooltip per FR-018/FR-021.
 - **FR-023**: When local unpublished changes exist, the uncommitted node MUST directly render the pending changes — staging controls per FR-010–FR-014, per-table changesets, and the publish confirmation — auto-loaded with no manual trigger. The "Review & publish" button and the "Local changes not yet published" placeholder text are removed. If the pending-changes preview fails to load, the node shows a descriptive error with a retry.
 - **FR-024**: At most one staged review is active at a time: initiating a checkout review supersedes the uncommitted node's inline review (and its staging selection) until the checkout is confirmed or dismissed, after which the inline pending-changes review returns.
+- **FR-025**: The commit rail MUST render directly on the Sync tab with no enclosing titled or collapsible container — the former "History" block is removed; loading, error, and rewritten-history states render in the same bare layout.
+- **FR-026**: The commit hash MUST render as a badge visually uniform with the "Remote latest" and "Local" marker badges — identical chip height and font size for all three.
+- **FR-027**: Each commit node MUST follow this arrangement: first line — hash badge, marker badge(s), kebab trigger; second line — the single-line timestamp per FR-006; third line — the commit message.
 
 ### Key Entities
 
@@ -182,6 +195,7 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 - **SC-005**: The user can exclude any subset of rows from a changeset; the resulting operation contains exactly the staged changes and zero unstaged changes are lost (they reappear in the next preview).
 - **SC-006**: Every capability previously reachable via the four legacy buttons is reachable through the commit graph; checkouts to compatible commits reproduce that snapshot exactly, and zero checkouts to incompatible commits are possible.
 - **SC-007**: Graph rows contain zero standalone inline action buttons — every node action sits in that node's kebab menu — and when local changes exist their staged review is visible in the uncommitted node without a single prior click.
+- **SC-008**: The commit rail renders with zero container chrome (no "History" title or card/collapse wrapper); 100% of commit nodes follow the FR-027 arrangement; the hash and marker badges share one chip size; "Load more" appears only as a timeline node; no menu anywhere embeds an incompatibility reason.
 
 ## Assumptions
 
@@ -192,5 +206,6 @@ Instead of the four legacy action buttons ("Preview Push", "Preview Pull", "Appl
 - The commit graph reads history using the already-configured repository credentials; no new credentials or external registrations are introduced.
 - The graph's default history window is the 10 most recent commits, with "Load more" fetching older commits in batches of 20 (clarified 2026-07-21; supersedes the earlier ~50 default).
 - Auto-rendering the pending changes in the uncommitted node reuses the existing publish-preview computation on Sync tab load; at this application's personal scale that cost is acceptable, and the preview's staleness pinning (`base_commit` + digest) continues to guard the confirm.
+- The single-line commit-node timestamp (FR-006, clarified 2026-07-22) is an explicit user-directed deviation from the constitution's two-row datetime default, scoped to the commit rail only; other surfaces keep the two-row rule. Formalizing the pattern would require a constitution amendment.
 - Checkout moves the local dataset to the selected commit's state; the remote repository is never modified by a checkout. Publishing afterwards always appends a new latest snapshot (force-overwrite remains an explicit, separate recovery action).
 - The existing behaviors not called out by issue #35 — configuration form, PAT guidance, automatic status check on tab load, up-to-date short-circuits — are preserved.

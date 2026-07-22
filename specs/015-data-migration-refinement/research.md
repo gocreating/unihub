@@ -264,6 +264,46 @@ are publishes, so 10 covers recent activity while load-more reaches depth in few
 **Alternatives**: keeping 50 (rejected by clarification); uniform 10 (tedious deep
 paging).
 
+## Refinement round 2 (clarified 2026-07-22) — R13–R15
+
+### R13. Bare rail + load-more as a timeline node
+
+**Decision**: remove the `Card` ("History") wrapper entirely — the rail, its loading
+spinner, error alert, and rewritten-history banner render directly on the Sync tab.
+The "Load more" button becomes the body of a terminal timeline node (own gray rail
+dot, `commit-node-load-more` testid) shown only while older commits exist; the last
+commit node keeps its connector line running into it.
+
+**Rationale**: the user reads the box + title as noise; making load-more a node keeps
+the timeline metaphor honest (the rail visibly continues into unloaded history).
+**Alternatives**: keeping a borderless Card body (still renders chrome); a centered
+button below the rail (breaks the timeline; rejected by clarification).
+
+### R14. Disabled kebab items carry no explanation text
+
+**Decision**: the incompatible commit's Checkout item is plainly disabled — label
+only. The explanation lives exclusively on the node's tooltip (content-fit target,
+FR-018/FR-021).
+
+**Rationale**: user feedback — embedding paragraph text inside a menu item is an
+anti-pattern; menus list actions, tooltips explain state.
+**Alternatives**: `Tooltip` on the disabled menu item (nested-overlay flakiness, and
+the node tooltip already covers it).
+
+### R15. Uniform badges + three-line node arrangement (single-line datetime deviation)
+
+**Decision**: the sha7 hash renders as a default AntD `Tag` (monospace font style) so
+hash / "Remote latest" / "Local" share one chip size. Node layout: row 1 — hash badge,
+marker badges, kebab trigger; row 2 — `YYYY-MM-DD HH:mm (relative)` as one muted line;
+row 3 — commit message. The single-line datetime is an explicit user-directed
+constitution deviation scoped to this surface (both values still shown); recorded in
+spec §Assumptions and the plan's constitution check.
+
+**Rationale**: `Text code` rendered a visibly smaller chip than the `Tag`s; the
+arrangement mirrors familiar VCS log UIs (identity line, then time, then message).
+**Alternatives**: keeping the two-row `DateTimeCell` (rejected by clarification);
+styling `Text code` to match Tag metrics by hand (fragile against AntD token changes).
+
 ## Resolved decisions summary
 
 | # | Decision |
@@ -280,3 +320,6 @@ paging).
 | R10 | Per-node kebab (`Dropdown`+`MoreOutlined`); disabled item carries incompatible reason; content-fit tooltip targets; both badges blue (2026-07-21) |
 | R11 | Auto-loaded inline pending review via `pendingContent` slot; "Review & publish" + placeholder removed; one active review at a time (2026-07-21) |
 | R12 | Client-passed history window: initial 10, load-more 20 (2026-07-21) |
+| R13 | Bare rail (no "History" Card); load-more as a terminal timeline node (2026-07-22) |
+| R14 | Disabled kebab items are label-only; reasons live on the node tooltip (2026-07-22) |
+| R15 | Hash as a Tag (uniform chip size); three-line node arrangement with single-line datetime — recorded constitution deviation (2026-07-22) |

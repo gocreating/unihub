@@ -170,6 +170,26 @@
 
 ---
 
+## Phase 10: Commit-Rail Polish Round (clarified 2026-07-22)
+
+**Goal**: Apply the five second-round directives (spec §Clarifications 2026-07-22; FR-025–FR-027 + FR-006/009/022 amendments; research R13–R15). **Frontend-only, one component** — `CommitGraph.tsx` + its specs + locales. All map to US3 (graph rendering) except the kebab-content change (US5 interactions).
+
+**Independent Test**: quickstart.md §"Manual verification — commit-rail polish round" — four checks; all RTL suites green.
+
+### Tests for the polish round (write first, must fail)
+
+- [ ] T046 [P] [US3] Update RTL specs in src/pages/io/SyncTab/CommitGraph.test.tsx: (a) no "History" container — `History` text absent and no `.ant-card` element wraps the rail; (b) commit-node arrangement per FR-027 — within a node the DOM/text order is hash → single-line `YYYY-MM-DD HH:mm (relative)` timestamp → message (replaces the two-row datetime spec); (c) the sha7 hash renders as an `.ant-tag` chip, as do "Remote latest" and "Local" (uniform size via the same component); (d) "Load more" renders inside its own timeline node (`commit-node-load-more` testid) only when `has_more`, and the preceding commit node still draws its connector line; (e) the incompatible node's kebab Checkout item is disabled WITHOUT any reason text inside the menu (reason text absent from the menu, still shown by the node tooltip)
+- [ ] T047 [P] [US5] Update src/pages/io/SyncTab/SyncTab.actions.test.tsx 'disables the kebab checkout' spec: assert the menu item is disabled and contains NO incompatibility reason text; checkout still not callable
+
+### Implementation for the polish round
+
+- [ ] T048 [US3] Rework src/pages/io/SyncTab/CommitGraph.tsx per R13–R15: remove the `Card` wrapper (bare rail incl. loading/error/rewritten states); "Load more" as a terminal `NodeRow` (gray dot, `commit-node-load-more`, only while `hasNextPage`; last commit `isLast` only when history exhausted); kebab Checkout item label-only when disabled; sha7 as a default monospace `Tag` replacing `Text code`; node content rows = badges+kebab / single-line `dayjs` `YYYY-MM-DD HH:mm (fromNow())` muted text (drop `DateTimeCell` usage, extend `relativeTime` locally) / message; delete `pages.io.sync.graph.title` from src/locales/en-US/pages.ts and src/locales/zh-TW/pages.ts; make T046+T047 pass
+- [ ] T049 Run both quality loops (frontend: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` from apps/unihub/frontend/; backend untouched: `uv run ruff check . && uv run pytest` from apps/unihub/backend/)
+- [ ] T050 [P] Manual four-point walk-through per quickstart.md §commit-rail polish round against a scratch `file://` remote (SC-008) — human session if no live app/DB is available
+- [ ] T051 Update the CLAUDE.md SPECKIT block and spec.md status to record the polish round as shipped
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -183,6 +203,7 @@
 - **US5 (Phase 7)**: needs US3 (graph + compatibility classifier) and US4 (staging + selective-apply engine); US2's footer applies to its checkout previews automatically.
 - **Phase 8**: after all desired stories.
 - **Phase 9 (refinement round)**: after Phase 8 (amends shipped US3/US5 surfaces). T039 ∥ T040 (different spec files) → T041 (makes T039 pass) → T042 (needs T041's `pendingContent` slot + `useSyncHistory`; makes T040 pass) → T043 → T044/T045.
+- **Phase 10 (commit-rail polish)**: after Phase 9. T046 ∥ T047 (different spec files) → T048 (single implementation task, makes both pass) → T049 → T050/T051.
 
 ### Within Each Story
 

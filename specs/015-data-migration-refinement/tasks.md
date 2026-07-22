@@ -196,10 +196,10 @@
 
 **Independent Test**: The uncommitted node's confirm button renders "Publish Selected Changes"; no UI surface still says "Publish staged changes"; all suites green.
 
-- [ ] T052 [US4] Update label expectations first (must fail): replace /publish staged changes/i with /publish selected changes/i in src/pages/io/SyncTab/SyncTab.actions.test.tsx, src/pages/io/SyncTab/SyncTab.staging.test.tsx, and src/pages/io/SyncTab/SyncTab.pinning.test.tsx
-- [ ] T053 [US4] Update `pages.io.sync.publishPreview.confirmButton` to 'Publish Selected Changes' in src/locales/en-US/pages.ts and '發佈所選變更' in src/locales/zh-TW/pages.ts; make T052 pass
-- [ ] T054 Run the frontend quality loop (`pnpm lint && pnpm typecheck && pnpm test && pnpm build` from apps/unihub/frontend/); backend untouched
-- [ ] T055 Update the CLAUDE.md SPECKIT block and spec.md status to record round 3 as shipped
+- [x] T052 [US4] Update label expectations first (must fail): replace /publish staged changes/i with /publish selected changes/i in src/pages/io/SyncTab/SyncTab.actions.test.tsx, src/pages/io/SyncTab/SyncTab.staging.test.tsx, and src/pages/io/SyncTab/SyncTab.pinning.test.tsx
+- [x] T053 [US4] Update `pages.io.sync.publishPreview.confirmButton` to 'Publish Selected Changes' in src/locales/en-US/pages.ts and '發佈所選變更' in src/locales/zh-TW/pages.ts; make T052 pass
+- [x] T054 Run the frontend quality loop (`pnpm lint && pnpm typecheck && pnpm test && pnpm build` from apps/unihub/frontend/); backend untouched
+- [x] T055 Update the CLAUDE.md SPECKIT block and spec.md status to record round 3 as shipped
 
 ---
 

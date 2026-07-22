@@ -79,7 +79,7 @@ describe('SyncTab publish pinning (015 US1)', () => {
     renderTab();
 
     // The staged review auto-renders in the uncommitted node (FR-023).
-    await user.click(await screen.findByRole('button', { name: /publish staged changes/i }));
+    await user.click(await screen.findByRole('button', { name: /publish selected changes/i }));
 
     await waitFor(() => expect(syncService.publishSync).toHaveBeenCalledTimes(1));
     expect(vi.mocked(syncService.publishSync).mock.calls[0]?.[0]).toEqual({
@@ -96,7 +96,7 @@ describe('SyncTab publish pinning (015 US1)', () => {
     const user = userEvent.setup();
     renderTab();
 
-    const confirm = await screen.findByRole('button', { name: /publish staged changes/i });
+    const confirm = await screen.findByRole('button', { name: /publish selected changes/i });
     expect(vi.mocked(syncService.getPublishPreview)).toHaveBeenCalledTimes(1);
     await user.click(confirm);
 

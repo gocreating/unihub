@@ -326,7 +326,7 @@ export default {
   'pages.io.sync.apply.confirmButton': '套用拉取',
   'pages.io.sync.apply.success': '已成功套用遠端快照。',
   'pages.io.sync.apply.error': '套用失敗。',
-  'pages.io.sync.publishPreview.confirmButton': '發佈已暫存變更',
+  'pages.io.sync.publishPreview.confirmButton': '發佈所選變更',
   'pages.io.sync.publishPreview.cancelButton': '取消',
   'pages.io.sync.publishPreview.upToDate': '無需推送 — 已是最新狀態。',
   'pages.io.sync.publishPreview.error': '無法計算推送預覽。',

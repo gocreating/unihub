@@ -329,7 +329,7 @@ export default {
   'pages.io.sync.apply.confirmButton': 'Apply Pull',
   'pages.io.sync.apply.success': 'Applied remote snapshot successfully.',
   'pages.io.sync.apply.error': 'Apply failed.',
-  'pages.io.sync.publishPreview.confirmButton': 'Publish staged changes',
+  'pages.io.sync.publishPreview.confirmButton': 'Publish Selected Changes',
   'pages.io.sync.publishPreview.cancelButton': 'Cancel',
   'pages.io.sync.publishPreview.upToDate': 'Nothing to publish — already up to date.',
   'pages.io.sync.publishPreview.error': 'Failed to compute publish preview.',

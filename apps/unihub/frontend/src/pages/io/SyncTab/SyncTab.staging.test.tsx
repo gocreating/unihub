@@ -120,7 +120,7 @@ describe('SyncTab staging (015 US4)', () => {
     await openPreview();
 
     await user.click(screen.getByRole('checkbox', { name: /stage all changes/i }));
-    const confirm = screen.getByRole('button', { name: /publish staged changes/i });
+    const confirm = screen.getByRole('button', { name: /publish selected changes/i });
     expect((confirm as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/nothing staged/i)).toBeTruthy();
     expect(vi.mocked(syncService.publishSync)).not.toHaveBeenCalled();
@@ -131,7 +131,7 @@ describe('SyncTab staging (015 US4)', () => {
     await openPreview();
 
     await user.click(screen.getByRole('checkbox', { name: /stage all: acquisitions/i }));
-    await user.click(screen.getByRole('button', { name: /publish staged changes/i }));
+    await user.click(screen.getByRole('button', { name: /publish selected changes/i }));
 
     await waitFor(() => expect(vi.mocked(syncService.publishSync)).toHaveBeenCalledTimes(1));
     expect(vi.mocked(syncService.publishSync).mock.calls[0]?.[0]).toEqual({

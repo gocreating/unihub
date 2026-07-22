@@ -158,7 +158,7 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
     const pendingNode = await screen.findByTestId('commit-node-pending');
     expect(await within(pendingNode).findByText('Items')).toBeTruthy();
     expect(
-      within(pendingNode).getByRole('button', { name: /publish staged changes/i }),
+      within(pendingNode).getByRole('button', { name: /publish selected changes/i }),
     ).toBeTruthy();
     expect(vi.mocked(syncService.getPublishPreview)).toHaveBeenCalledTimes(1);
   });
@@ -226,15 +226,15 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
     renderTab();
 
     // Pending review visible first (FR-023).
-    await screen.findByRole('button', { name: /publish staged changes/i });
+    await screen.findByRole('button', { name: /publish selected changes/i });
 
     await openCheckout(user, SHA_OLD);
     await screen.findByRole('button', { name: /restore this snapshot/i });
     // One active staged review at a time (FR-024).
-    expect(screen.queryByRole('button', { name: /publish staged changes/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /publish selected changes/i })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: /cancel/i }));
-    expect(await screen.findByRole('button', { name: /publish staged changes/i })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /publish selected changes/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /restore this snapshot/i })).toBeNull();
   });
 
@@ -266,7 +266,7 @@ describe('SyncTab commit-node interactions (015 US5)', () => {
     const user = userEvent.setup();
     renderTab();
 
-    await user.click(await screen.findByRole('button', { name: /publish staged changes/i }));
+    await user.click(await screen.findByRole('button', { name: /publish selected changes/i }));
 
     const force = await screen.findByRole('button', { name: /force publish/i });
     await user.click(force);

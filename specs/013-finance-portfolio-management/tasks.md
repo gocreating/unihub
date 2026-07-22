@@ -9,8 +9,8 @@
 
 ## Phase 2: Foundational
 
-- [ ] T001 [P] Add `pages.finance.portfolios.detail.*` locale keys (panel title "Portfolio", kebab aria label, delete confirm title/body reused or added as needed) to apps/unihub/frontend/src/locales/en-US/pages.ts
-- [ ] T002 [P] Add the same keys with Traditional Chinese values to apps/unihub/frontend/src/locales/zh-TW/pages.ts (same commit as T001 — Principle VIII)
+- [X] T001 [P] Add `pages.finance.portfolios.detail.*` locale keys (panel title "Portfolio", kebab aria label, delete confirm title/body reused or added as needed) to apps/unihub/frontend/src/locales/en-US/pages.ts
+- [X] T002 [P] Add the same keys with Traditional Chinese values to apps/unihub/frontend/src/locales/zh-TW/pages.ts (same commit as T001 — Principle VIII)
 
 ## Phase 3: User Story 2 — Manage Portfolios (P2)
 
@@ -20,18 +20,18 @@
 
 ### Tests first (MUST fail before implementation)
 
-- [ ] T003 [P] [US2] Create apps/unihub/frontend/src/pages/finance/portfolios/PortfoliosPage.test.tsx: assert (a) Name cell renders an anchor with `href="/finance/portfolios/<id>"`; (b) View action renders as an anchor/`Button href` with the same href; (c) plain click SPA-navigates while ctrl/meta-click does NOT call preventDefault (guard pattern); (d) row contains NO Edit button and NO Delete button; (e) Create button and toolbar unaffected
-- [ ] T004 [P] [US2] Create apps/unihub/frontend/src/pages/finance/portfolios/PortfolioDetailPage.test.tsx: assert (a) breadcrumb shows Portfolios → portfolio name, Portfolios crumb has `href="/finance/portfolios"` and navigates on click; (b) NO ArrowLeft back-link remains; (c) a Card titled with the `pages.finance.portfolios.detail.panelTitle` message shows name, base currency (Tag), state, first/last transaction time fields; (d) header shows visible Edit button and kebab whose menu contains Delete (danger); (e) Edit opens the portfolio form modal prefilled; (f) kebab → Delete shows `Modal.confirm`, on confirm calls the delete service and navigates to `/finance/portfolios`; (g) delete-blocked (FR-010) error path shows `message.error` and does NOT navigate
+- [X] T003 [P] [US2] Create apps/unihub/frontend/src/pages/finance/portfolios/PortfoliosPage.test.tsx: assert (a) Name cell renders an anchor with `href="/finance/portfolios/<id>"`; (b) View action renders as an anchor/`Button href` with the same href; (c) plain click SPA-navigates while ctrl/meta-click does NOT call preventDefault (guard pattern); (d) row contains NO Edit button and NO Delete button; (e) Create button and toolbar unaffected
+- [X] T004 [P] [US2] Create apps/unihub/frontend/src/pages/finance/portfolios/PortfolioDetailPage.test.tsx: assert (a) breadcrumb shows Portfolios → portfolio name, Portfolios crumb has `href="/finance/portfolios"` and navigates on click; (b) NO ArrowLeft back-link remains; (c) a Card titled with the `pages.finance.portfolios.detail.panelTitle` message shows name, base currency (Tag), state, first/last transaction time fields; (d) header shows visible Edit button and kebab whose menu contains Delete (danger); (e) Edit opens the portfolio form modal prefilled; (f) kebab → Delete shows `Modal.confirm`, on confirm calls the delete service and navigates to `/finance/portfolios`; (g) delete-blocked (FR-010) error path shows `message.error` and does NOT navigate
 
 ### Implementation
 
-- [ ] T005 [US2] Update apps/unihub/frontend/src/pages/finance/portfolios/index.tsx: Name cell → real anchor (href + metaKey/ctrlKey guard + SPA navigate); View action Button gains `href` + guard (catalog iter-19 pattern); REMOVE row Edit/Delete actions, `openEdit`/`editingPortfolio` state, and delete confirm from the list (keep `PortfolioFormModal` solely for Create); remove now-unused imports/icons
-- [ ] T006 [US2] Update apps/unihub/frontend/src/pages/finance/portfolios/detail.tsx: replace arrow back-link with `Breadcrumb` (balance-sheets detail pattern); wrap portfolio info in `Card title={t('pages.finance.portfolios.detail.panelTitle')}` with `extra=<PanelHeaderActions narrow={isNarrow} visible=[Edit] advanced=[Delete] kebabLabel="portfolio-actions">`; `useContainerWidth(720)` for narrowness; Edit opens `PortfolioFormModal` (staged mutations — no API call before Save); Delete → `Modal.confirm` (`okType: 'danger'`, locale keys) → delete mutation → `message.success` + `navigate('/finance/portfolios')`; FR-010 error → `message.error`, stay on page
+- [X] T005 [US2] Update apps/unihub/frontend/src/pages/finance/portfolios/index.tsx: Name cell → real anchor (href + metaKey/ctrlKey guard + SPA navigate); View action Button gains `href` + guard (catalog iter-19 pattern); REMOVE row Edit/Delete actions, `openEdit`/`editingPortfolio` state, and delete confirm from the list (keep `PortfolioFormModal` solely for Create); remove now-unused imports/icons
+- [X] T006 [US2] Update apps/unihub/frontend/src/pages/finance/portfolios/detail.tsx: replace arrow back-link with `Breadcrumb` (balance-sheets detail pattern); wrap portfolio info in `Card title={t('pages.finance.portfolios.detail.panelTitle')}` with `extra=<PanelHeaderActions narrow={isNarrow} visible=[Edit] advanced=[Delete] kebabLabel="portfolio-actions">`; `useContainerWidth(720)` for narrowness; Edit opens `PortfolioFormModal` (staged mutations — no API call before Save); Delete → `Modal.confirm` (`okType: 'danger'`, locale keys) → delete mutation → `message.success` + `navigate('/finance/portfolios')`; FR-010 error → `message.error`, stay on page
 
 ## Phase 4: Polish & Cross-Cutting
 
-- [ ] T007 Run the full frontend quality loop from apps/unihub/frontend/: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` — zero warnings, all green (Principle V + build-in-quality-loop)
-- [ ] T008 Verify en-US/zh-TW key parity for all keys added in T001/T002 and that no now-orphaned `pages.finance.portfolios.*` keys remain referenced (grep both locale files vs usages)
+- [X] T007 Run the full frontend quality loop from apps/unihub/frontend/: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` — zero warnings, all green (Principle V + build-in-quality-loop)
+- [X] T008 Verify en-US/zh-TW key parity for all keys added in T001/T002 and that no now-orphaned `pages.finance.portfolios.*` keys remain referenced (grep both locale files vs usages)
 
 ## Dependencies
 

@@ -114,10 +114,7 @@ export function AssetsPage() {
 
   const colDefMap = useMemo<Record<string, ProColumns<Asset>>>(
     () => {
-      const getFixed = (key: string) =>
-        table.cols.visibleColumns[0]?.key === key ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === key ? table.cols.lastColumnFixed
-          : undefined;
+      const getFixed = table.cols.fixedForKey;
       return {
         name: {
           dataIndex: 'name',
@@ -164,7 +161,7 @@ export function AssetsPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.firstColumnFixed, table.cols.lastColumnFixed, table.cols.visibleColumns],
+    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<Asset>[]>(
@@ -175,7 +172,7 @@ export function AssetsPage() {
   return (
     <>
       <PageTable<Asset>
-        key={`${table.cols.visibleColumns[0]?.key ?? ''}-${table.cols.visibleColumns.at(-1)?.key ?? ''}-${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
+        key={table.cols.pinFingerprint}
         pageTitle={t({ id: 'pages.finance.assets.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

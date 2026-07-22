@@ -483,6 +483,7 @@ export default {
   'pages.finance.portfolios.form.baseCurrency': 'Base Currency',
   'pages.finance.portfolios.form.baseCurrencyPlaceholder': 'Select currency',
   'pages.finance.portfolios.form.state': 'State',
+  'pages.finance.portfolios.detail.panelTitle': 'Portfolio',
 
   // Finance — Transactions
   'pages.finance.transactions.title': 'Transactions',

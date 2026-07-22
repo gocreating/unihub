@@ -1,28 +1,19 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Modal, Select, Space, Tag, Typography, message } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Space, Tag, Typography, message } from 'antd';
+import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import dayjs from 'dayjs';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
 import type { Portfolio } from '@/services/unihub-backend/finance';
-import { createPortfolio, deletePortfolio, listCurrencies, listPortfolios, updatePortfolio } from '@/services/unihub-backend/finance';
+import { createPortfolio, listCurrencies, listPortfolios, updatePortfolio } from '@/services/unihub-backend/finance';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
-
-interface PortfolioCreateFormValues {
-  name: string;
-  base_currency: string;
-  state: 'active' | 'closed';
-}
-
-interface PortfolioUpdateFormValues {
-  name: string;
-  state: 'active' | 'closed';
-}
+import { PortfolioFormModal } from './PortfolioFormModal';
+import type { PortfolioCreateFormValues } from './PortfolioFormModal';
 
 const EMPTY_CELL = <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
 
@@ -43,9 +34,6 @@ export function PortfoliosPage() {
   const queryClient = useQueryClient();
   const { formatMessage: t } = useIntl();
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingPortfolio, setEditingPortfolio] = useState<Portfolio | null>(null);
-  const [createForm] = Form.useForm<PortfolioCreateFormValues>();
-  const [updateForm] = Form.useForm<PortfolioUpdateFormValues>();
 
   const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
     { key: 'name', label: t({ id: 'pages.finance.portfolios.col.name' }), dataType: 'text' },
@@ -87,7 +75,6 @@ export function PortfoliosPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finance', 'portfolios'] });
       setModalOpen(false);
-      createForm.resetFields();
       message.success(t({ id: 'pages.finance.portfolios.created' }));
     },
     onError: () => message.error(t({ id: 'pages.finance.portfolios.createError' })),
@@ -98,54 +85,30 @@ export function PortfoliosPage() {
       updatePortfolio(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finance', 'portfolios'] });
-      setModalOpen(false);
-      updateForm.resetFields();
       message.success(t({ id: 'pages.finance.portfolios.updated' }));
     },
     onError: () => message.error(t({ id: 'pages.finance.portfolios.updateError' })),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: deletePortfolio,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['finance', 'portfolios'] });
-      message.success(t({ id: 'pages.finance.portfolios.deleted' }));
-    },
-    onError: (error: Error & { status?: number }) => {
-      if (error.status === 409) {
-        message.error(t({ id: 'pages.finance.portfolios.deleteProtected' }));
-      } else {
-        message.error(t({ id: 'pages.finance.portfolios.deleteError' }));
-      }
-    },
-  });
-
-  const openCreate = () => {
-    setEditingPortfolio(null);
-    createForm.resetFields();
-    createForm.setFieldsValue({ state: 'active' });
-    setModalOpen(true);
-  };
-
-  const openEdit = (portfolio: Portfolio) => {
-    setEditingPortfolio(portfolio);
-    updateForm.setFieldsValue({ name: portfolio.name, state: portfolio.state });
-    setModalOpen(true);
-  };
-
   const onCreateFinish = (values: PortfolioCreateFormValues) => {
     createMutation.mutate({ name: values.name, base_currency: values.base_currency, state: values.state ?? 'active' });
-  };
-
-  const onUpdateFinish = (values: PortfolioUpdateFormValues) => {
-    if (!editingPortfolio) return;
-    updateMutation.mutate({ id: editingPortfolio.id, data: { name: values.name, state: values.state } });
   };
 
   const toggleState = (portfolio: Portfolio) => {
     const newState = portfolio.state === 'active' ? 'closed' : 'active';
     updateMutation.mutate({ id: portfolio.id, data: { state: newState } });
   };
+
+  /* Real hyperlink (constitution v1.23.0): middle/ctrl-click opens a tab;
+     plain left click stays SPA. */
+  const detailLinkProps = (portfolioId: string) => ({
+    href: `/finance/portfolios/${portfolioId}`,
+    onClick: (e: React.MouseEvent) => {
+      if (e.metaKey || e.ctrlKey) return;
+      e.preventDefault();
+      navigate(`/finance/portfolios/${portfolioId}`);
+    },
+  });
 
   const actionsColWidth = useActionsColWidth(portfolios);
 
@@ -160,15 +123,13 @@ export function PortfoliosPage() {
 
   const colDefMap = useMemo<Record<string, ProColumns<Portfolio>>>(
     () => {
-      const getFixed = (key: string) =>
-        table.cols.visibleColumns[0]?.key === key ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === key ? table.cols.lastColumnFixed
-          : undefined;
+      const getFixed = table.cols.fixedForKey;
       return {
         name: {
           dataIndex: 'name',
           ...widthForHeader(t({ id: 'pages.finance.portfolios.col.name' }), dataWidths.name),
           fixed: getFixed('name'),
+          render: (_, record) => <a {...detailLinkProps(record.id)}>{record.name}</a>,
           ...makeSortProps('name', t({ id: 'pages.finance.portfolios.col.name' }), table.sort),
         },
         base_currency: {
@@ -213,29 +174,13 @@ export function PortfoliosPage() {
           render: (_, record) => (
             <span data-actions-col>
               <Space>
-                <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/finance/portfolios/${record.id}`)}>
+                <Button size="small" icon={<EyeOutlined />} {...detailLinkProps(record.id)}>
                   {t({ id: 'common.view' })}
                 </Button>
                 <Button size="small" onClick={() => toggleState(record)}>
                   {record.state === 'active'
                     ? t({ id: 'pages.finance.portfolios.action.close' })
                     : t({ id: 'pages.finance.portfolios.action.reopen' })}
-                </Button>
-                <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-                  {t({ id: 'common.edit' })}
-                </Button>
-                <Button
-                  size="small" danger icon={<DeleteOutlined />}
-                  onClick={() =>
-                    Modal.confirm({
-                      title: t({ id: 'pages.finance.portfolios.delete.title' }),
-                      content: t({ id: 'pages.finance.portfolios.delete.confirm' }, { name: record.name }),
-                      okType: 'danger',
-                      onOk: () => deleteMutation.mutate(record.id),
-                    })
-                  }
-                >
-                  {t({ id: 'common.delete' })}
                 </Button>
               </Space>
             </span>
@@ -244,7 +189,7 @@ export function PortfoliosPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.firstColumnFixed, table.cols.lastColumnFixed, table.cols.visibleColumns],
+    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<Portfolio>[]>(
@@ -255,10 +200,10 @@ export function PortfoliosPage() {
   return (
     <>
       <PageTable<Portfolio>
-        key={`${table.cols.visibleColumns[0]?.key ?? ''}-${table.cols.visibleColumns.at(-1)?.key ?? ''}-${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
+        key={table.cols.pinFingerprint}
         pageTitle={t({ id: 'pages.finance.portfolios.title' })}
         action={
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
             {t({ id: 'pages.finance.portfolios.new' })}
           </Button>
         }
@@ -279,53 +224,14 @@ export function PortfoliosPage() {
         footer={() => <EntityOffsetFooter {...table.paginationProps(portfoliosData?.count)} />}
       />
 
-      <Modal
-        title={editingPortfolio ? t({ id: 'pages.finance.portfolios.edit' }) : t({ id: 'pages.finance.portfolios.new' })}
+      <PortfolioFormModal
         open={modalOpen}
-        onCancel={() => {
-          setModalOpen(false);
-          createForm.resetFields();
-          updateForm.resetFields();
-        }}
-        onOk={() => editingPortfolio ? updateForm.submit() : createForm.submit()}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
-      >
-        {editingPortfolio ? (
-          <Form form={updateForm} layout="vertical" onFinish={onUpdateFinish}>
-            <Form.Item name="name" label={t({ id: 'pages.finance.portfolios.form.name' })} rules={[{ required: true }]}>
-              <Input placeholder={t({ id: 'pages.finance.portfolios.form.namePlaceholder' })} />
-            </Form.Item>
-            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-              {t({ id: 'pages.finance.portfolios.col.baseCurrency' })}: <Tag>{editingPortfolio.base_currency}</Tag>
-            </Typography.Text>
-            <Form.Item name="state" label={t({ id: 'pages.finance.portfolios.form.state' })}>
-              <Select>
-                <Select.Option value="active">{t({ id: 'pages.finance.portfolios.state.active' })}</Select.Option>
-                <Select.Option value="closed">{t({ id: 'pages.finance.portfolios.state.closed' })}</Select.Option>
-              </Select>
-            </Form.Item>
-          </Form>
-        ) : (
-          <Form form={createForm} layout="vertical" onFinish={onCreateFinish}>
-            <Form.Item name="name" label={t({ id: 'pages.finance.portfolios.form.name' })} rules={[{ required: true }]}>
-              <Input placeholder={t({ id: 'pages.finance.portfolios.form.namePlaceholder' })} />
-            </Form.Item>
-            <Form.Item name="base_currency" label={t({ id: 'pages.finance.portfolios.form.baseCurrency' })} rules={[{ required: true }]}>
-              <Select placeholder={t({ id: 'pages.finance.portfolios.form.baseCurrencyPlaceholder' })}>
-                {currencies.map((c) => (
-                  <Select.Option key={c.code} value={c.code}>{c.code} — {c.name}</Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-            <Form.Item name="state" label={t({ id: 'pages.finance.portfolios.form.state' })} initialValue="active">
-              <Select>
-                <Select.Option value="active">{t({ id: 'pages.finance.portfolios.state.active' })}</Select.Option>
-                <Select.Option value="closed">{t({ id: 'pages.finance.portfolios.state.closed' })}</Select.Option>
-              </Select>
-            </Form.Item>
-          </Form>
-        )}
-      </Modal>
+        portfolio={null}
+        currencies={currencies}
+        submitting={createMutation.isPending}
+        onCancel={() => setModalOpen(false)}
+        onCreate={onCreateFinish}
+      />
     </>
   );
 }

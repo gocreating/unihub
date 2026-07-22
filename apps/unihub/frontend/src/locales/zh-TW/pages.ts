@@ -476,6 +476,7 @@ export default {
   'pages.finance.portfolios.form.baseCurrency': '基準貨幣',
   'pages.finance.portfolios.form.baseCurrencyPlaceholder': '選擇貨幣',
   'pages.finance.portfolios.form.state': '狀態',
+  'pages.finance.portfolios.detail.panelTitle': '投資組合',
 
   // Finance — Transactions
   'pages.finance.transactions.title': '交易記錄',

@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Button, DatePicker, Form, Input, InputNumber, Modal,
+  Breadcrumb, Button, Card, DatePicker, Form, Input, InputNumber, Modal,
   Select, Space, Spin, Tag, Typography, message,
 } from 'antd';
-import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
-import { ProCard } from '@ant-design/pro-components';
+import { DeleteOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -15,12 +14,18 @@ import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthF
 import type { Transaction, TransferInput } from '@/services/unihub-backend/finance';
 import {
   createTransaction,
+  deletePortfolio,
   deleteTransaction,
   getPortfolio,
   listAssets,
   listTransactions,
+  updatePortfolio,
   updateTransaction,
 } from '@/services/unihub-backend/finance';
+import { PanelHeaderActions } from '@/components/PanelHeaderActions';
+import { useContainerWidth } from '@/hooks/useContainerWidth';
+import { PortfolioFormModal } from './PortfolioFormModal';
+import type { PortfolioUpdateFormValues } from './PortfolioFormModal';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
 import type { ColumnDef, EntityListParams, FilterableAttribute } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
@@ -58,7 +63,9 @@ export function PortfolioDetailPage() {
   const { formatMessage: t } = useIntl();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [portfolioModalOpen, setPortfolioModalOpen] = useState(false);
   const [form] = Form.useForm<TransactionFormValues>();
+  const { ref: panelRef, isNarrow } = useContainerWidth(720);
 
   const { data: portfolio, isLoading: portfolioLoading } = useQuery({
     queryKey: ['finance', 'portfolios', id],
@@ -142,6 +149,41 @@ export function PortfolioDetailPage() {
     onError: () => message.error(t({ id: 'pages.finance.transactions.deleteError' })),
   });
 
+  const updatePortfolioMutation = useMutation({
+    mutationFn: (data: PortfolioUpdateFormValues) => updatePortfolio(id!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'portfolios'] });
+      setPortfolioModalOpen(false);
+      message.success(t({ id: 'pages.finance.portfolios.updated' }));
+    },
+    onError: () => message.error(t({ id: 'pages.finance.portfolios.updateError' })),
+  });
+
+  const deletePortfolioMutation = useMutation({
+    mutationFn: () => deletePortfolio(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'portfolios'] });
+      message.success(t({ id: 'pages.finance.portfolios.deleted' }));
+      navigate('/finance/portfolios');
+    },
+    onError: (error: Error & { status?: number }) => {
+      if (error.status === 409) {
+        message.error(t({ id: 'pages.finance.portfolios.deleteProtected' }));
+      } else {
+        message.error(t({ id: 'pages.finance.portfolios.deleteError' }));
+      }
+    },
+  });
+
+  const confirmDeletePortfolio = () => {
+    Modal.confirm({
+      title: t({ id: 'pages.finance.portfolios.delete.title' }),
+      content: t({ id: 'pages.finance.portfolios.delete.confirm' }, { name: portfolio?.name ?? '' }),
+      okType: 'danger',
+      onOk: () => deletePortfolioMutation.mutate(),
+    });
+  };
+
   const openCreate = () => {
     setEditingTransaction(null);
     form.resetFields();
@@ -196,10 +238,7 @@ export function PortfolioDetailPage() {
 
   const colDefMap = useMemo<Record<string, ProColumns<Transaction>>>(
     () => {
-      const getFixed = (key: string) =>
-        table.cols.visibleColumns[0]?.key === key ? table.cols.firstColumnFixed
-          : table.cols.visibleColumns.at(-1)?.key === key ? table.cols.lastColumnFixed
-          : undefined;
+      const getFixed = table.cols.fixedForKey;
       return {
         timestamp: {
           dataIndex: 'timestamp',
@@ -261,7 +300,7 @@ export function PortfolioDetailPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.firstColumnFixed, table.cols.lastColumnFixed, table.cols.visibleColumns],
+    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<Transaction>[]>(
@@ -296,38 +335,76 @@ export function PortfolioDetailPage() {
 
   return (
     <>
-      <div style={{ marginBottom: 16 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/finance/portfolios')}>
-          {t({ id: 'pages.finance.portfolios.title' })}
-        </Button>
+      <Breadcrumb
+        style={{ marginBottom: 16 }}
+        items={[
+          {
+            title: t({ id: 'pages.finance.portfolios.title' }),
+            href: '/finance/portfolios',
+            onClick: (e) => {
+              if (e.metaKey || e.ctrlKey) return;
+              e.preventDefault();
+              navigate('/finance/portfolios');
+            },
+          },
+          { title: portfolio?.name },
+        ]}
+      />
+
+      <div ref={panelRef}>
+        <Card
+          title={t({ id: 'pages.finance.portfolios.detail.panelTitle' })}
+          style={{ marginBottom: 16 }}
+          extra={
+            <PanelHeaderActions
+              narrow={isNarrow}
+              kebabLabel="portfolio-actions"
+              visible={[
+                {
+                  key: 'edit',
+                  label: t({ id: 'common.edit' }),
+                  icon: <EditOutlined />,
+                  onClick: () => setPortfolioModalOpen(true),
+                },
+              ]}
+              advanced={[
+                {
+                  key: 'delete',
+                  label: t({ id: 'common.delete' }),
+                  icon: <DeleteOutlined />,
+                  danger: true,
+                  onClick: confirmDeletePortfolio,
+                },
+              ]}
+            />
+          }
+        >
+          <Space size="large" wrap>
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {portfolio?.name}
+            </Typography.Title>
+            <Tag>{portfolio?.base_currency}</Tag>
+            <Tag color={portfolio?.state === 'active' ? 'green' : 'default'}>
+              {portfolio?.state === 'active'
+                ? t({ id: 'pages.finance.portfolios.state.active' })
+                : t({ id: 'pages.finance.portfolios.state.closed' })}
+            </Tag>
+          </Space>
+          <div style={{ marginTop: 12, display: 'flex', gap: 32 }}>
+            <div>
+              <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.firstTransactionTime' })}</Typography.Text>
+              <div>{formatTransactionTime(portfolio?.first_transaction_time)}</div>
+            </div>
+            <div>
+              <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.lastTransactionTime' })}</Typography.Text>
+              <div>{formatTransactionTime(portfolio?.last_transaction_time)}</div>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      <ProCard style={{ marginBottom: 16 }}>
-        <Space size="large" wrap>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            {portfolio?.name}
-          </Typography.Title>
-          <Tag>{portfolio?.base_currency}</Tag>
-          <Tag color={portfolio?.state === 'active' ? 'green' : 'default'}>
-            {portfolio?.state === 'active'
-              ? t({ id: 'pages.finance.portfolios.state.active' })
-              : t({ id: 'pages.finance.portfolios.state.closed' })}
-          </Tag>
-        </Space>
-        <div style={{ marginTop: 12, display: 'flex', gap: 32 }}>
-          <div>
-            <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.firstTransactionTime' })}</Typography.Text>
-            <div>{formatTransactionTime(portfolio?.first_transaction_time)}</div>
-          </div>
-          <div>
-            <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.lastTransactionTime' })}</Typography.Text>
-            <div>{formatTransactionTime(portfolio?.last_transaction_time)}</div>
-          </div>
-        </div>
-      </ProCard>
-
       <PageTable<Transaction>
-        key={`${table.cols.visibleColumns[0]?.key ?? ''}-${table.cols.visibleColumns.at(-1)?.key ?? ''}-${!!table.cols.firstColumnFixed}-${!!table.cols.lastColumnFixed}`}
+        key={table.cols.pinFingerprint}
         pageTitle={t({ id: 'pages.finance.transactions.title' })}
         action={
           <Button
@@ -370,6 +447,16 @@ export function PortfolioDetailPage() {
           rowExpandable: (record) => record.transfers.length > 0,
         }}
       />
+
+      {portfolio && (
+        <PortfolioFormModal
+          open={portfolioModalOpen}
+          portfolio={portfolio}
+          submitting={updatePortfolioMutation.isPending}
+          onCancel={() => setPortfolioModalOpen(false)}
+          onUpdate={(values) => updatePortfolioMutation.mutate(values)}
+        />
+      )}
 
       <Modal
         title={editingTransaction ? t({ id: 'pages.finance.transactions.edit' }) : t({ id: 'pages.finance.transactions.new' })}

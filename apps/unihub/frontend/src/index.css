@@ -34,6 +34,26 @@ body {
 }
 
 /*
+ * The sider's right border must also reach the document bottom (015 FR-030).
+ *
+ * The only painted sider boundary is the 1px border on
+ * .ant-layout-sider-children, inside the position:fixed sider — viewport-high,
+ * so full-page captures show the line stopping at the first viewport height.
+ * .ant-pro-layout-container is in normal flow, spans the full document, and
+ * its left edge sits exactly at the sider boundary via ProLayout's own margin
+ * (tracking expanded/collapsed width). Border color matches AntD's split line
+ * so the two overlap into one line above the fold. Skipped below ProLayout's
+ * md breakpoint (768px), where the sider becomes a drawer and no column
+ * exists (the root carries no dedicated mobile class — only screen-* tags).
+ * Pixel-probed by e2e/layout-background.spec.ts.
+ */
+@media (min-width: 768px) {
+  .ant-pro-layout .ant-pro-layout-container {
+    border-inline-start: 1px solid rgba(5, 5, 5, 0.06);
+  }
+}
+
+/*
  * Fix: mobile side-menu drawer mask and panel scroll with the page.
  *
  * ProLayout renders its mobile sider as an inline Drawer (getContainer=false),

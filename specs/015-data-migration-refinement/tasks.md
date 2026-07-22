@@ -234,10 +234,10 @@
 
 **Independent Test**: The new pixel-probe test in `e2e/layout-background.spec.ts` is green; regenerated full-page PR screenshots show the border line to the bottom edge.
 
-- [ ] T063 Extend e2e/layout-background.spec.ts with a failing second test: on the tall mocked Sync page, measure the fixed sider's width from the DOM, take a `fullPage` screenshot, decode in-page via canvas 2D, and assert the pixel window at the sider boundary near the document bottom contains a non-canvas-grey pixel (the border line) — must FAIL against the unfixed shell
-- [ ] T064 Add the R18 rule to src/index.css — `border-inline-start: 1px solid rgba(5,5,5,0.06)` on `.ant-pro-layout-container`, scoped out of mobile drawer mode, with a comment referencing the viewport-fixed sider border — and make T063 pass
-- [ ] T065 Regenerate the 015 screenshots (`BASE_URL=<port> pnpm exec playwright test e2e/take-screenshots-015.spec.ts`), visually verify the full-page captures show the border to the bottom, run the frontend quality loop (`pnpm lint && pnpm typecheck && pnpm test && pnpm build`), and commit
-- [ ] T066 Update the CLAUDE.md SPECKIT block and spec.md status to record round 6 as shipped
+- [x] T063 Extend e2e/layout-background.spec.ts with a failing second test: on the tall mocked Sync page, measure the fixed sider's width from the DOM, take a `fullPage` screenshot, decode in-page via canvas 2D, and assert the pixel window at the sider boundary near the document bottom contains a non-canvas-grey pixel (the border line) — must FAIL against the unfixed shell
+- [x] T064 Add the R18 rule to src/index.css — `border-inline-start: 1px solid rgba(5,5,5,0.06)` on `.ant-pro-layout-container`, scoped out of mobile drawer mode, with a comment referencing the viewport-fixed sider border — and make T063 pass
+- [x] T065 Regenerate the 015 screenshots (`BASE_URL=<port> pnpm exec playwright test e2e/take-screenshots-015.spec.ts`), visually verify the full-page captures show the border to the bottom, run the frontend quality loop (`pnpm lint && pnpm typecheck && pnpm test && pnpm build`), and commit
+- [x] T066 Update the CLAUDE.md SPECKIT block and spec.md status to record round 6 as shipped
 
 ---
 

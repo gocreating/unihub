@@ -159,7 +159,8 @@ export function CatalogPage() {
       // definition (FR-028). The caret disclosure column is itself a column
       // ("Toggle"), pinned left by default (iterations 16 + 48).
       { key: '__caret', label: t({ id: 'pages.inventory.catalog.col.toggle' }), dataType: 'text', visible: true, order: -1, pin: 'left' },
-      { key: 'acquisition_summary', label: t({ id: 'pages.inventory.catalog.col.acquisition' }), dataType: 'text', visible: true, order: 0 },
+      // Acquisition pinned left beside the caret by default (feature 018 US3).
+      { key: 'acquisition_summary', label: t({ id: 'pages.inventory.catalog.col.acquisition' }), dataType: 'text', visible: true, order: 0, pin: 'left' },
       { key: 'item_summary', label: t({ id: 'pages.inventory.catalog.col.item' }), dataType: 'text', visible: true, order: 1 },
       { key: 'sku_price', label: t({ id: 'pages.inventory.items.col.skuPrice' }), dataType: 'number', visible: true, order: 3 },
       { key: 'parameters', label: t({ id: 'pages.inventory.catalog.col.parameters' }), dataType: 'text', visible: true, order: 4 },
@@ -190,9 +191,9 @@ export function CatalogPage() {
   );
 
   const table = useEntityTable({
-    // v7: iteration-27 defaults (Actions pinned sticky-right) — bump so
+    // v8: feature-018 defaults (Acquisition pinned sticky-left) — bump so
     // previously-saved state doesn't shadow the new defaults.
-    key: 'inventory-catalog-v7',
+    key: 'inventory-catalog-v8',
     filterableAttrs,
     columnDefs,
     // Default sort (spec): Obtained descending, NULLS FIRST (pending on top).

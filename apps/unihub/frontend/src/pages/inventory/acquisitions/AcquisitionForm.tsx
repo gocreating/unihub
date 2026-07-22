@@ -78,14 +78,17 @@ interface Card {
   dirty?: boolean;
 }
 
-// A cost-factor row in the editor. Accumulated rows are system-managed (one per
-// currency, pinned, reset-only); manual rows are user-added and drag-sortable.
+// A cost-factor row in the editor. Accumulated rows are system-seeded (one per
+// currency, pinned); manual rows are user-added and drag-sortable. Editing an
+// accumulated amount makes the row user-managed: frozen at the user's value
+// until its Reset control re-derives it (018 US1).
 interface FactorRow {
   key: string;
   value: string;
   currency: string;
   type: string;
   kind: 'accumulated' | 'manual';
+  userManaged: boolean;
 }
 
 function itemToWrite(item: Item): ItemWrite {
@@ -110,7 +113,7 @@ function emptyCard(): Card {
   return { data: { name: '', quantity: 1 } };
 }
 
-// Σ (sku_price × quantity) per item currency.
+// Σ (sku_price × quantity) per item currency; empty when no item is priced.
 function deriveAccumulated(cards: Card[]): { currency: string; value: string }[] {
   const totals = new Map<string, number>();
   for (const c of cards) {
@@ -120,10 +123,25 @@ function deriveAccumulated(cards: Card[]): { currency: string; value: string }[]
       totals.set(cur, (totals.get(cur) ?? 0) + Number(p) * (c.data.quantity ?? 1));
     }
   }
-  if (totals.size === 0) return [{ currency: '', value: '0' }];
   return [...totals.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([currency, value]) => ({ currency, value: String(value) }));
+}
+
+function autoAccumulatedRow(currency: string, value: string): FactorRow {
+  return {
+    key: `acc:${currency}`,
+    value,
+    currency,
+    type: 'accumulated',
+    kind: 'accumulated',
+    userManaged: false,
+  };
+}
+
+// The ≥1-accumulated-row placeholder shown while no accumulated row exists.
+function placeholderAccumulatedRow(): FactorRow {
+  return autoAccumulatedRow('', '0');
 }
 
 interface AcquisitionFormProps {
@@ -173,14 +191,9 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
           currency: f.currency,
           type: f.type,
           kind: f.type === 'accumulated' ? 'accumulated' : 'manual',
+          userManaged: f.type === 'accumulated' && Boolean(f.user_managed),
         }))
-      : deriveAccumulated([emptyCard()]).map((a) => ({
-          key: `acc:${a.currency}`,
-          value: a.value,
-          currency: a.currency,
-          type: 'accumulated',
-          kind: 'accumulated',
-        })),
+      : [placeholderAccumulatedRow()],
   );
   // Staged removals of EXISTING items — applied only on Save (FR-006, iter 33).
   const [removedIds, setRemovedIds] = useState<string[]>([]);
@@ -188,9 +201,10 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [sourceOptions, setSourceOptions] = useState<{ value: string }[]>([]);
 
-  // Reconcile accumulated rows with the items' currencies as cards change:
-  // add a row for each new currency (at the derived value), drop currencies with
-  // no priced item, and preserve any overridden value for currencies that remain.
+  // Reconcile accumulated rows with the items' currencies as cards change
+  // (018 US1): auto rows track the fresh derived Σ (and drop with their
+  // currency's last priced item); user-managed rows are never touched and
+  // survive their currency vanishing; new currencies always enter as auto.
   const mounted = useRef(false);
   useEffect(() => {
     if (!mounted.current) {
@@ -200,17 +214,18 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     const desired = deriveAccumulated(cards);
     setFactors((prev) => {
       const manual = prev.filter((f) => f.kind === 'manual');
-      const prevAcc = new Map(prev.filter((f) => f.kind === 'accumulated').map((f) => [f.currency, f]));
+      const prevAcc = prev.filter((f) => f.kind === 'accumulated');
+      const byCurrency = new Map(prevAcc.map((f) => [f.currency, f]));
       const acc: FactorRow[] = desired.map((d) => {
-        const existing = prevAcc.get(d.currency);
-        return existing ?? {
-          key: `acc:${d.currency}`,
-          value: d.value,
-          currency: d.currency,
-          type: 'accumulated',
-          kind: 'accumulated',
-        };
+        const existing = byCurrency.get(d.currency);
+        if (existing?.userManaged) return existing;
+        if (existing) return existing.value === d.value ? existing : { ...existing, value: d.value };
+        return autoAccumulatedRow(d.currency, d.value);
       });
+      for (const f of prevAcc) {
+        if (f.userManaged && !desired.some((d) => d.currency === f.currency)) acc.push(f);
+      }
+      if (acc.length === 0) acc.push(placeholderAccumulatedRow());
       return [...acc, ...manual];
     });
   }, [cards]);
@@ -282,24 +297,23 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     };
   };
 
-  const manualPayload = (): CostFactorWrite[] =>
-    factors
-      .filter((f) => f.kind === 'manual')
-      .map((f) => ({ value: String(f.value ?? '0'), currency: f.currency ?? '', type: f.type || 'other' }));
-
-  const fullPayload = (): CostFactorWrite[] =>
-    factors.map((f) => ({ value: String(f.value ?? '0'), currency: f.currency ?? '', type: f.type }));
+  // The FULL factor set exactly as displayed — accumulated rows carry their
+  // user-managed flag so a cleared line is stored verbatim (018 FR-001).
+  const factorPayload = (): CostFactorWrite[] =>
+    factors.map((f) => ({
+      value: String(f.value ?? '0'),
+      currency: f.currency ?? '',
+      type: f.kind === 'accumulated' ? 'accumulated' : f.type || 'other',
+      user_managed: f.kind === 'accumulated' && f.userManaged,
+    }));
 
   const createMutation = useMutation({
-    mutationFn: () => {
-      const manual = manualPayload();
-      return createAcquisition({
+    mutationFn: () =>
+      createAcquisition({
         ...scalarPayload(),
-        // accumulated is server-derived on create; send only manual factors.
-        ...(manual.length ? { cost_factors: manual } : {}),
+        cost_factors: factorPayload(),
         items: cards.map((c) => c.data),
-      });
-    },
+      }),
     onSuccess: () => {
       invalidate();
       message.success(t({ id: 'pages.inventory.acquisitions.saved' }));
@@ -318,7 +332,7 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
       const newItems = cards.filter((c) => !c.id).map((c) => c.data);
       return updateAcquisition(initial!.id, {
         ...scalarPayload(),
-        cost_factors: fullPayload(),
+        cost_factors: factorPayload(),
         items: newItems,
       });
     },
@@ -382,14 +396,18 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
     setFactors((prev) => prev.map((f) => (f.key === key ? { ...f, ...patch } : f)));
 
   const addFactor = () =>
-    setFactors((prev) => [...prev, { key: nextKey(), value: '0', currency: '', type: '', kind: 'manual' }]);
+    setFactors((prev) => [
+      ...prev,
+      { key: nextKey(), value: '0', currency: '', type: '', kind: 'manual', userManaged: false },
+    ]);
 
   const removeFactor = (key: string) => setFactors((prev) => prev.filter((f) => f.key !== key));
 
-  // Reset one accumulated row's value to the derived Σ for its currency.
+  // Reset one accumulated row to the derived Σ for its currency AND back to
+  // auto-managed, so it tracks item edits again (018 FR-005).
   const resetAccumulated = (currency: string) => {
     const derived = deriveAccumulated(cards).find((d) => d.currency === currency);
-    if (derived) updateFactor(`acc:${currency}`, { value: derived.value });
+    updateFactor(`acc:${currency}`, { value: derived?.value ?? '0', userManaged: false });
   };
 
   const onDragEnd = (e: DragEndEvent) => {
@@ -421,7 +439,14 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
       currency={f.currency}
       codes={currencyOptions}
       currencyDisabled={currencyDisabled}
-      onAmount={(v) => updateFactor(f.key, { value: v == null ? '0' : String(v) })}
+      onAmount={(v) =>
+        updateFactor(f.key, {
+          value: v == null ? '0' : String(v),
+          // Manually editing an accumulated amount (incl. clearing it) makes
+          // the row user-managed — frozen until Reset (018 FR-002).
+          ...(f.kind === 'accumulated' ? { userManaged: true } : {}),
+        })
+      }
       onCurrency={(v) => updateFactor(f.key, { currency: v ?? '' })}
     />
   );

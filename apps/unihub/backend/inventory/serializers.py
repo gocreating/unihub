@@ -215,7 +215,7 @@ class ItemSerializer(serializers.ModelSerializer):
 class CostFactorSerializer(serializers.ModelSerializer):
     class Meta:
         model = CostFactor
-        fields = ["id", "value", "currency", "type", "display_order"]
+        fields = ["id", "value", "currency", "type", "display_order", "user_managed"]
         # display_order is assigned server-side from the payload order.
         read_only_fields = ["id", "display_order"]
 
@@ -263,9 +263,16 @@ class AcquisitionSerializer(serializers.ModelSerializer):
                 )
         if not totals:
             # No priced items → keep the ≥1-factor invariant with a zero accumulated.
-            return [{"value": Decimal("0"), "currency": "", "type": "accumulated"}]
+            return [
+                {
+                    "value": Decimal("0"),
+                    "currency": "",
+                    "type": "accumulated",
+                    "user_managed": False,
+                }
+            ]
         return [
-            {"value": total, "currency": currency, "type": "accumulated"}
+            {"value": total, "currency": currency, "type": "accumulated", "user_managed": False}
             for currency, total in sorted(totals.items())
         ]
 
@@ -284,18 +291,12 @@ class AcquisitionSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"items": "An acquisition needs at least 1 item."}
                 )
-            # accumulated is system-derived on create; clients may only send manual factors.
-            if factors and any(f.get("type") == "accumulated" for f in factors):
-                raise serializers.ValidationError(
-                    {"cost_factors": "The accumulated factor is system-managed."}
-                )
-        else:
-            if "cost_factors" in attrs and not attrs["cost_factors"]:
-                raise serializers.ValidationError(
-                    {"cost_factors": "An acquisition needs at least 1 cost factor."}
-                )
-            if factors:
-                self._reject_duplicate_accumulated(factors)
+        elif "cost_factors" in attrs and not attrs["cost_factors"]:
+            raise serializers.ValidationError(
+                {"cost_factors": "An acquisition needs at least 1 cost factor."}
+            )
+        if factors:
+            self._reject_duplicate_accumulated(factors)
         return attrs
 
     @staticmethod
@@ -307,6 +308,7 @@ class AcquisitionSerializer(serializers.ModelSerializer):
                 currency=factor.get("currency", ""),
                 type=factor.get("type", "other"),
                 display_order=order,
+                user_managed=factor.get("user_managed", False),
             )
 
     @staticmethod
@@ -324,8 +326,15 @@ class AcquisitionSerializer(serializers.ModelSerializer):
         acquisition = Acquisition.objects.create(**validated_data)
         for item_data in items_data:
             self._create_item(acquisition, item_data)
-        # Derived accumulated (per currency) first, then any manual factors.
-        self._write_factors(acquisition, self._derive_accumulated(items_data) + list(factors_data))
+        # A payload carrying any accumulated factor is stored verbatim (the
+        # client owns the full set — 018 FR-001); otherwise the accumulated
+        # rows are derived per currency, followed by any manual factors.
+        if any(f.get("type") == "accumulated" for f in factors_data):
+            self._write_factors(acquisition, list(factors_data))
+        else:
+            self._write_factors(
+                acquisition, self._derive_accumulated(items_data) + list(factors_data)
+            )
         return acquisition
 
     @transaction.atomic

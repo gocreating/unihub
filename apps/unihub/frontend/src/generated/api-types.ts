@@ -835,6 +835,7 @@ export interface components {
             currency?: string;
             type?: string;
             readonly display_order: number;
+            user_managed?: boolean;
         };
         Currency: {
             code: string;

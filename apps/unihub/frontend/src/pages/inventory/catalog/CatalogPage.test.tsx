@@ -122,7 +122,7 @@ const ACQ = {
   obtained_at: OBTAINED,
   remark: '',
   cost_factors: [
-    { id: 'cf-1', value: '10', currency: 'USD', type: 'accumulated', display_order: 0 },
+    { id: 'cf-1', value: '10', currency: 'USD', type: 'accumulated', display_order: 0, user_managed: false },
   ],
   net_cost: [{ currency: 'USD', total: '10.0000' }],
   items: [ITEM, PLAIN_ITEM],
@@ -852,6 +852,56 @@ describe('CatalogPage (iteration 48 — per-column pins, 017-multiple-sticky-col
       expect(caret?.closest('td')?.className).toContain('ant-table-cell-fix-left');
     });
     expect(itemTh()?.className).not.toContain('ant-table-cell-fix-left');
+    // Two panel round-trips + two table remounts exceed the 5s default in JSDOM.
+  }, 15_000);
+});
+
+describe('CatalogPage (feature 018 US3 — Acquisition pinned left by default)', () => {
+  const findTh = (container: HTMLElement, text: string) =>
+    Array.from(container.querySelectorAll('.ant-table-thead th')).find((th) =>
+      th.textContent?.includes(text),
+    );
+
+  // CAT018-01 (FR-009): fresh defaults pin Toggle AND Acquisition to the left
+  // edge, Actions stays pinned right.
+  it('pins the Acquisition column sticky-left by default', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    expect(findTh(container, 'Acquisition')?.className).toContain('ant-table-cell-fix-left');
+    const caret = container.querySelector(
+      '.ant-table-tbody tr.ant-table-row td .anticon-caret-down, .ant-table-tbody tr.ant-table-row td .anticon-caret-right',
+    )!;
+    expect(caret.closest('td')!.className).toContain('ant-table-cell-fix-left');
+    expect(findTh(container, 'Actions')?.className).toContain('ant-table-cell-fix-right');
+  });
+
+  // CAT018-02 (FR-010): the user can still unpin Acquisition; Reset restores
+  // the seeded defaults (Toggle + Acquisition left).
+  it('unpins Acquisition via the panel and Reset restores it', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    const acqPin = await waitFor(() => {
+      const btn = document.querySelector<HTMLButtonElement>(
+        '[data-column-row="acquisition_summary"] [data-sticky-pin="left"]',
+      );
+      expect(btn).toBeTruthy();
+      return btn!;
+    });
+    fireEvent.click(acqPin); // active left pin → unpin
+    fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
+    await waitFor(() => {
+      expect(findTh(container, 'Acquisition')?.className).not.toContain(
+        'ant-table-cell-fix-left',
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Reset$/ }));
+    await waitFor(() => {
+      expect(findTh(container, 'Acquisition')?.className).toContain('ant-table-cell-fix-left');
+    });
     // Two panel round-trips + two table remounts exceed the 5s default in JSDOM.
   }, 15_000);
 });

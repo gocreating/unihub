@@ -21,7 +21,7 @@ const ACQ: Acquisition = {
   obtained_at: '2026-07-01T00:00:00Z',
   remark: '',
   cost_factors: [
-    { id: 'cf-1', value: '10', currency: 'USD', type: 'accumulated', display_order: 0 },
+    { id: 'cf-1', value: '10', currency: 'USD', type: 'accumulated', display_order: 0, user_managed: false },
   ],
   net_cost: [{ currency: 'USD', total: '10.0000' }],
   items: [

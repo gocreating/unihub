@@ -16,6 +16,7 @@ const DEFS = [
   { id: 'd-weight', content_type: 7, content_type_label: 'inventory.item', name: 'weight', data_type: 'dimension', unit_family: 'weight', is_system: true, display_order: 2, options: [], emoji: '' },
   { id: 'd-capacity', content_type: 7, content_type_label: 'inventory.item', name: 'capacity', data_type: 'number', unit_family: '', is_system: false, display_order: 10, options: [], emoji: '' },
   { id: 'd-batt', content_type: 7, content_type_label: 'inventory.item', name: 'batt', data_type: 'dimension', unit_family: 'battery', is_system: false, display_order: 11, options: [], emoji: '' },
+  { id: 'd-length', content_type: 7, content_type_label: 'inventory.item', name: 'length', data_type: 'dimension', unit_family: 'length', is_system: true, display_order: 3, options: [], emoji: '' },
 ] as AttributeDefinition[];
 
 function Harness({
@@ -297,6 +298,70 @@ describe('ParameterRowsEditor (iteration 16 — form grid + definition delete)',
     fireEvent.change(numbers[1]!, { target: { value: '200' } });
     expect(onChange).toHaveBeenLastCalledWith([
       { definition_id: 'd-capacity', value: '74~200' },
+    ]);
+  });
+});
+
+describe('ParameterRowsEditor (feature 018 US2 — length defaults to cm)', () => {
+  beforeEach(() => {
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+  });
+
+  // CM-01 (FR-007): picking a length-family key defaults the unit to cm.
+  it('defaults the unit to cm when a length-family key is chosen', async () => {
+    const onChange = vi.fn();
+    renderEditor([], onChange);
+    fireEvent.click(await screen.findByRole('button', { name: /Add parameter/ }));
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[0]!);
+    fireEvent.click(within(lastDropdown()).getByText(/^length$/i));
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ definition_id: 'd-length', unit: 'cm' }),
+    ]);
+  });
+
+  // CM-02 (FR-007): creating a NEW length-family definition pre-fills cm.
+  it('pre-fills cm on the row created by a new length-family definition', async () => {
+    const created = {
+      id: 'd-new', content_type: 7, content_type_label: 'inventory.item', name: 'depth',
+      data_type: 'dimension', unit_family: 'length', is_system: false, display_order: 12, options: [], emoji: '',
+    } as AttributeDefinition;
+    vi.mocked(coreService.createAttributeDefinition).mockResolvedValue(created);
+    const onChange = vi.fn();
+    renderEditor([], onChange);
+    fireEvent.click(await screen.findByRole('button', { name: /Add parameter/ }));
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[0]!);
+    fireEvent.click(within(lastDropdown()).getByText(/New parameter/));
+    fireEvent.change(screen.getByPlaceholderText('Parameter name'), { target: { value: 'depth' } });
+    const typeSelect = screen.getAllByRole('combobox').pop()!;
+    fireEvent.mouseDown(typeSelect);
+    fireEvent.click(within(lastDropdown()).getByText('Dimension'));
+    const familySelect = screen.getAllByRole('combobox').pop()!;
+    fireEvent.mouseDown(familySelect);
+    fireEvent.click(within(lastDropdown()).getByText('Length'));
+    fireEvent.click(screen.getByRole('button', { name: /^Create$/ }));
+    await waitFor(() =>
+      expect(onChange).toHaveBeenLastCalledWith([
+        expect.objectContaining({ definition_id: 'd-new', unit: 'cm' }),
+      ]),
+    );
+  });
+
+  // CM-03 (FR-008): a stored unit is never rewritten by the new default.
+  it('keeps a stored mm unit untouched', async () => {
+    renderEditor([{ definition_id: 'd-length', value: '74', unit: 'mm' }]);
+    expect(await screen.findByText('mm')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('74')).toBeInTheDocument();
+  });
+
+  // CM-04: other families keep their first-unit default (weight → g).
+  it('keeps the weight-family default at g', async () => {
+    const onChange = vi.fn();
+    renderEditor([], onChange);
+    fireEvent.click(await screen.findByRole('button', { name: /Add parameter/ }));
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[0]!);
+    fireEvent.click(within(lastDropdown()).getByText('Weight'));
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ definition_id: 'd-weight', unit: 'g' }),
     ]);
   });
 });

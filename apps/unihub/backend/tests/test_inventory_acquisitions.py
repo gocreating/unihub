@@ -60,18 +60,6 @@ class TestAcquisitions:
         by_cur = {f["currency"]: f["value"] for f in acc}
         assert by_cur == {"USD": "20.0000", "TWD": "5.0000"}
 
-    def test_client_cannot_create_accumulated_type(self, auth_client):
-        resp = _post(
-            auth_client,
-            ACQ,
-            {
-                "source": "X",
-                "cost_factors": [{"type": "accumulated", "value": "99", "currency": "USD"}],
-                "items": [{"name": "A"}],
-            },
-        )
-        assert resp.status_code == 400
-
     def test_cost_factor_type_accepts_free_text(self, auth_client):
         acq = _post(
             auth_client,
@@ -264,6 +252,162 @@ class TestAcquisitions:
 
 
 @pytest.mark.django_db
+class TestAccumulatedOwnership:
+    """Feature 018 US1 — user-managed accumulated factors (FR-001..FR-006).
+
+    Create contract: client-sent accumulated factors are stored verbatim (the
+    server derives NOTHING when any accumulated factor is present); derivation
+    only runs when the payload carries no accumulated factor.
+    """
+
+    def test_create_acquisition_accumulated_zero_stored_verbatim(self, auth_client):
+        resp = _post(
+            auth_client,
+            ACQ,
+            {
+                "source": "Shop",
+                "cost_factors": [
+                    {"type": "accumulated", "value": "0", "currency": "USD", "user_managed": True}
+                ],
+                "items": [
+                    {"name": "A", "quantity": 2, "sku_price": "10", "sku_price_currency": "USD"}
+                ],
+            },
+        )
+        assert resp.status_code == 201, resp.content
+        acq = resp.json()
+        acc = [f for f in acq["cost_factors"] if f["type"] == "accumulated"]
+        assert len(acc) == 1
+        assert acc[0]["value"] == "0.0000"
+        assert acc[0]["user_managed"] is True
+        assert acq["net_cost"] == [{"currency": "USD", "total": "0.0000"}]
+
+    def test_create_acquisition_accumulated_nonzero_round_trip(self, auth_client):
+        # Replaces the pre-018 "system-managed" rejection: verbatim storage now.
+        resp = _post(
+            auth_client,
+            ACQ,
+            {
+                "source": "X",
+                "cost_factors": [
+                    {"type": "accumulated", "value": "99", "currency": "USD", "user_managed": True},
+                    {"type": "shipping", "value": "5", "currency": "USD"},
+                ],
+                "items": [{"name": "A", "sku_price": "3300", "sku_price_currency": "USD"}],
+            },
+        )
+        assert resp.status_code == 201, resp.content
+        factors = resp.json()["cost_factors"]
+        assert [f["type"] for f in factors] == ["accumulated", "shipping"]
+        assert factors[0]["value"] == "99.0000"
+        assert factors[0]["user_managed"] is True
+        assert factors[1]["user_managed"] is False
+
+    def test_create_acquisition_any_accumulated_disables_derivation(self, auth_client):
+        # Items are priced in USD and TWD but the client's accumulated set only
+        # covers USD — the server must not derive a TWD row on top.
+        acq = _post(
+            auth_client,
+            ACQ,
+            {
+                "source": "Multi",
+                "cost_factors": [
+                    {"type": "accumulated", "value": "0", "currency": "USD", "user_managed": True}
+                ],
+                "items": [
+                    {"name": "A", "sku_price": "10", "sku_price_currency": "USD"},
+                    {"name": "B", "sku_price": "5", "sku_price_currency": "TWD"},
+                ],
+            },
+        ).json()
+        acc = [f for f in acq["cost_factors"] if f["type"] == "accumulated"]
+        assert [(f["currency"], f["value"]) for f in acc] == [("USD", "0.0000")]
+
+    def test_create_acquisition_duplicate_accumulated_currency_rejected(self, auth_client):
+        resp = _post(
+            auth_client,
+            ACQ,
+            {
+                "source": "X",
+                "cost_factors": [
+                    {"type": "accumulated", "value": "10", "currency": "USD"},
+                    {"type": "accumulated", "value": "20", "currency": "USD"},
+                ],
+                "items": [{"name": "A"}],
+            },
+        )
+        assert resp.status_code == 400
+
+    def test_create_acquisition_derived_accumulated_user_managed_false(self, auth_client):
+        acq = _post(
+            auth_client,
+            ACQ,
+            {
+                "source": "Shop",
+                "items": [{"name": "A", "sku_price": "10", "sku_price_currency": "USD"}],
+            },
+        ).json()
+        factor = acq["cost_factors"][0]
+        assert factor["type"] == "accumulated"
+        assert factor["user_managed"] is False
+
+    def test_update_acquisition_round_trips_user_managed(self, auth_client):
+        acq = _post(
+            auth_client,
+            ACQ,
+            {
+                "source": "X",
+                "items": [
+                    {"name": "A", "quantity": 3, "sku_price": "10", "sku_price_currency": "USD"}
+                ],
+            },
+        ).json()
+        resp = auth_client.patch(
+            f"{ACQ}{acq['id']}/",
+            json.dumps(
+                {
+                    "cost_factors": [
+                        {
+                            "type": "accumulated",
+                            "value": "0",
+                            "currency": "USD",
+                            "user_managed": True,
+                        },
+                        {"type": "shipping", "value": "5", "currency": "USD"},
+                    ]
+                }
+            ),
+            content_type="application/json",
+        )
+        assert resp.status_code == 200, resp.content
+        acc = next(f for f in resp.json()["cost_factors"] if f["type"] == "accumulated")
+        assert acc["value"] == "0.0000"
+        assert acc["user_managed"] is True
+        # The user-managed state persists on a fresh read (FR-004).
+        detail = auth_client.get(f"{ACQ}{acq['id']}/").json()
+        acc = next(f for f in detail["cost_factors"] if f["type"] == "accumulated")
+        assert acc["user_managed"] is True
+
+    def test_update_acquisition_user_managed_defaults_false_when_omitted(self, auth_client):
+        acq = _post(auth_client, ACQ, {"source": "X", "items": [{"name": "A"}]}).json()
+        resp = auth_client.patch(
+            f"{ACQ}{acq['id']}/",
+            json.dumps(
+                {"cost_factors": [{"type": "accumulated", "value": "10", "currency": "USD"}]}
+            ),
+            content_type="application/json",
+        )
+        assert resp.status_code == 200, resp.content
+        assert resp.json()["cost_factors"][0]["user_managed"] is False
+
+    def test_data_io_descriptor_carries_user_managed(self):
+        from data_io.registry import get_table
+
+        names = [f.column_name for f in get_table("inventory.costfactor").system_fields]
+        assert "user_managed" in names
+
+
+@pytest.mark.django_db
 class TestIsEmptyOnDateFields:
     """Iteration 17: is_empty on a datetime column must not 500 (the empty-
     string leg of the lookup only applies to text fields)."""
@@ -274,22 +418,44 @@ class TestIsEmptyOnDateFields:
         return urllib.parse.quote(json.dumps({"groups": groups}))
 
     def test_obtained_is_empty_returns_pending_only(self, auth_client):
-        _post(auth_client, ACQ, {"source": "Dated", "obtained_at": "2026-01-04T00:00:00Z", "items": [{"name": "A"}]})
+        _post(
+            auth_client,
+            ACQ,
+            {"source": "Dated", "obtained_at": "2026-01-04T00:00:00Z", "items": [{"name": "A"}]},
+        )
         _post(auth_client, ACQ, {"source": "Pending", "items": [{"name": "B"}]})
-        qs = self._filters([{"logic": "and", "conditions": [{"attr": "obtained_at", "op": "is_empty", "val": ""}]}])
+        qs = self._filters(
+            [{"logic": "and", "conditions": [{"attr": "obtained_at", "op": "is_empty", "val": ""}]}]
+        )
         resp = auth_client.get(f"{ACQ}?filters={qs}")
         assert resp.status_code == 200, resp.content
         sources = [a["source"] for a in resp.json()["results"]]
         assert sources == ["Pending"]
 
     def test_ytd_or_empty_seeded_default_filter(self, auth_client):
-        _post(auth_client, ACQ, {"source": "Old", "obtained_at": "2024-03-01T00:00:00Z", "items": [{"name": "O"}]})
-        _post(auth_client, ACQ, {"source": "ThisYear", "obtained_at": "2026-02-01T00:00:00Z", "items": [{"name": "T"}]})
+        _post(
+            auth_client,
+            ACQ,
+            {"source": "Old", "obtained_at": "2024-03-01T00:00:00Z", "items": [{"name": "O"}]},
+        )
+        _post(
+            auth_client,
+            ACQ,
+            {"source": "ThisYear", "obtained_at": "2026-02-01T00:00:00Z", "items": [{"name": "T"}]},
+        )
         _post(auth_client, ACQ, {"source": "Pending", "items": [{"name": "P"}]})
-        qs = self._filters([
-            {"logic": "and", "conditions": [{"attr": "obtained_at", "op": "gte", "val": "2026-01-01"}]},
-            {"logic": "and", "conditions": [{"attr": "obtained_at", "op": "is_empty", "val": ""}]},
-        ])
+        qs = self._filters(
+            [
+                {
+                    "logic": "and",
+                    "conditions": [{"attr": "obtained_at", "op": "gte", "val": "2026-01-01"}],
+                },
+                {
+                    "logic": "and",
+                    "conditions": [{"attr": "obtained_at", "op": "is_empty", "val": ""}],
+                },
+            ]
+        )
         resp = auth_client.get(f"{ACQ}?filters={qs}")
         assert resp.status_code == 200, resp.content
         sources = {a["source"] for a in resp.json()["results"]}
@@ -298,18 +464,28 @@ class TestIsEmptyOnDateFields:
     def test_single_or_group_matches_ytd_or_empty(self, auth_client):
         # Iteration 24: the catalog's default seed is ONE or-group with two
         # plain conditions — identical semantics to the former two groups.
-        _post(auth_client, ACQ, {"source": "Old", "obtained_at": "2024-03-01T00:00:00Z", "items": [{"name": "O"}]})
-        _post(auth_client, ACQ, {"source": "ThisYear", "obtained_at": "2026-02-01T00:00:00Z", "items": [{"name": "T"}]})
+        _post(
+            auth_client,
+            ACQ,
+            {"source": "Old", "obtained_at": "2024-03-01T00:00:00Z", "items": [{"name": "O"}]},
+        )
+        _post(
+            auth_client,
+            ACQ,
+            {"source": "ThisYear", "obtained_at": "2026-02-01T00:00:00Z", "items": [{"name": "T"}]},
+        )
         _post(auth_client, ACQ, {"source": "Pending", "items": [{"name": "P"}]})
-        qs = self._filters([
-            {
-                "logic": "or",
-                "conditions": [
-                    {"attr": "obtained_at", "op": "gte", "val": "2026-01-01"},
-                    {"attr": "obtained_at", "op": "is_empty", "val": ""},
-                ],
-            }
-        ])
+        qs = self._filters(
+            [
+                {
+                    "logic": "or",
+                    "conditions": [
+                        {"attr": "obtained_at", "op": "gte", "val": "2026-01-01"},
+                        {"attr": "obtained_at", "op": "is_empty", "val": ""},
+                    ],
+                }
+            ]
+        )
         resp = auth_client.get(f"{ACQ}?filters={qs}")
         assert resp.status_code == 200, resp.content
         sources = {a["source"] for a in resp.json()["results"]}

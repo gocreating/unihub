@@ -50,14 +50,12 @@ export function CurrenciesPage() {
 
   const table = useEntityTable({ key: 'finance-currencies', filterableAttrs, columnDefs });
 
-  // The "Tabular" baseline the view tabs diff against (016 views).
+  // The default-view baseline the view tabs diff against (016 views).
   const defaultViewConfig = useMemo<ViewConfig>(
     () => ({
       filters: [],
       sort: [],
-      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order })),
-      stickyLeft: false,
-      stickyRight: false,
+      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order, pin: c.pin })),
       pageSize: 25,
     }),
     [columnDefs],

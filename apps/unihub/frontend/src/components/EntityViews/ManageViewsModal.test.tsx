@@ -15,6 +15,7 @@ function makeView(overrides: Partial<EntityView> = {}): EntityView {
     config: {},
     pinned: false,
     position: 0,
+    is_default: false,
     created_at: '',
     updated_at: '',
     ...overrides,
@@ -41,8 +42,11 @@ function makeViews(savedViews: EntityView[]): UseEntityViewsReturn {
     addAnonymousTab: vi.fn(),
     closeTab: vi.fn(),
     openView: vi.fn(),
+    collapsed: false,
+    reveal: vi.fn(),
     saveActiveTab: vi.fn().mockResolvedValue('saved'),
     saveActiveTabAs: vi.fn().mockResolvedValue(undefined),
+    renameTab: vi.fn().mockResolvedValue(undefined),
     duplicateActiveTab: vi.fn(),
     commitManageChanges: vi.fn().mockResolvedValue(undefined),
   } as UseEntityViewsReturn;
@@ -133,6 +137,44 @@ describe('ManageViewsModal', () => {
     expect(views.commitManageChanges).toHaveBeenCalledWith({
       items: [{ id: 'v2', name: 'Second', pinned: false }],
       deletedIds: ['v1'],
+    });
+  });
+
+  it('the default view row allows rename/pin but offers no delete and no drag handle (FR-003)', () => {
+    const views = makeViews([
+      makeView({ id: 'd1', name: 'YTD', is_default: true, pinned: true }),
+      makeView({ id: 'v2', name: 'Second' }),
+    ]);
+    renderModal(views);
+
+    const defaultRow = screen.getByTestId('manage-default-row');
+    // Rename + pin present on the default row…
+    expect(defaultRow.querySelector('input')).not.toBeNull();
+    expect(screen.getByDisplayValue('YTD')).toBeInTheDocument();
+    // …but the default row carries no Delete control (only the plain view does).
+    expect(screen.getAllByLabelText('Delete')).toHaveLength(1);
+    // The default's drag handle is hidden (not part of the reorder list).
+    const handle = defaultRow.querySelector('span[style*="hidden"]');
+    expect(handle).not.toBeNull();
+  });
+
+  it('Save includes the staged default view first, then the reorderable rest', async () => {
+    const views = makeViews([
+      makeView({ id: 'd1', name: 'YTD', is_default: true, pinned: true }),
+      makeView({ id: 'v2', name: 'Second' }),
+    ]);
+    renderModal(views);
+
+    fireEvent.change(screen.getByDisplayValue('YTD'), { target: { value: 'This year' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(views.commitManageChanges).toHaveBeenCalledTimes(1));
+    expect(views.commitManageChanges).toHaveBeenCalledWith({
+      items: [
+        { id: 'd1', name: 'This year', pinned: true },
+        { id: 'v2', name: 'Second', pinned: false },
+      ],
+      deletedIds: [],
     });
   });
 

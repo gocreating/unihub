@@ -117,7 +117,9 @@ class TestScenarioItemMove:
         s, (a, b, c) = self._setup(auth_client)
         # Organize all three at the top level, then move C to the front.
         for line, idx in ((a["id"], 0), (b["id"], 1), (c["id"], 2)):
-            assert _move(auth_client, s["id"], line, container_id=None, index=idx).status_code == 200
+            assert (
+                _move(auth_client, s["id"], line, container_id=None, index=idx).status_code == 200
+            )
         assert _move(auth_client, s["id"], c["id"], container_id=None, index=0).status_code == 200
         by_name = {
             line["item"]["name"]: line["display_order"]

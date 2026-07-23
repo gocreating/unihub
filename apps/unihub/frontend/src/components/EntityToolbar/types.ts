@@ -129,22 +129,24 @@ export interface ColumnState {
 
 // ── Entity views (016) ───────────────────────────────────────────────────────
 
-/** One column entry inside a ViewConfig — key/visibility/position only;
+/** One column entry inside a ViewConfig — key/visibility/position/pin only;
  *  labels and dataTypes are runtime concerns (localized, async-patched). */
 export interface ViewColumn {
   key: string;
   visible: boolean;
   order: number;
+  /** v2 — per-column pin, mirroring ColumnDef.pin (any number per side). */
+  pin?: PinSide;
 }
 
 /** The serializable payload of an entity view: everything a table tab restores.
- *  Stored verbatim as EntityView.config and transported via view[<tableKey>]. */
+ *  Stored verbatim as EntityView.config and transported as per-facet
+ *  `<tableKey>.<facet>` URL params (v2 — per-column pins; the view-wide
+ *  stickyLeft/stickyRight booleans are gone, migrated by core/0006). */
 export interface ViewConfig {
   filters: FilterPayload['groups'];
   sort: SortRule[];
   columns: ViewColumn[];
-  stickyLeft: boolean;
-  stickyRight: boolean;
   pageSize: number;
 }
 

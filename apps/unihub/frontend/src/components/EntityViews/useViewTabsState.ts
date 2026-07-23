@@ -24,6 +24,8 @@ export interface InternalTab {
 interface PersistedState {
   tabs: InternalTab[];
   activeTabId: string;
+  /** Manual view-row reveal (FR-025) — survives reloads within the session. */
+  revealed: boolean;
 }
 
 function storageKey(tableKey: string): string {
@@ -38,6 +40,7 @@ function restore(tableKey: string, defaultConfig: ViewConfig): PersistedState {
   const fallback: PersistedState = {
     tabs: [defaultTab(defaultConfig)],
     activeTabId: DEFAULT_TAB_ID,
+    revealed: false,
   };
   try {
     const raw = window.sessionStorage.getItem(storageKey(tableKey));
@@ -49,7 +52,7 @@ function restore(tableKey: string, defaultConfig: ViewConfig): PersistedState {
     const activeTabId = tabs.some((tab) => tab.tabId === parsed.activeTabId)
       ? parsed.activeTabId
       : tabs[0]!.tabId;
-    return { tabs, activeTabId };
+    return { tabs, activeTabId, revealed: parsed.revealed === true };
   } catch {
     return fallback;
   }
@@ -60,6 +63,8 @@ export interface UseViewTabsStateReturn {
   setTabs: React.Dispatch<React.SetStateAction<InternalTab[]>>;
   activeTabId: string;
   setActiveTabId: React.Dispatch<React.SetStateAction<string>>;
+  revealed: boolean;
+  setRevealed: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export function useViewTabsState(
@@ -69,14 +74,18 @@ export function useViewTabsState(
   const [state] = useState(() => restore(tableKey, defaultConfig));
   const [tabs, setTabs] = useState<InternalTab[]>(state.tabs);
   const [activeTabId, setActiveTabId] = useState<string>(state.activeTabId);
+  const [revealed, setRevealed] = useState<boolean>(state.revealed);
 
   useEffect(() => {
     try {
-      window.sessionStorage.setItem(storageKey(tableKey), JSON.stringify({ tabs, activeTabId }));
+      window.sessionStorage.setItem(
+        storageKey(tableKey),
+        JSON.stringify({ tabs, activeTabId, revealed }),
+      );
     } catch {
       // Storage full/unavailable — tabs simply won't survive a reload.
     }
-  }, [tableKey, tabs, activeTabId]);
+  }, [tableKey, tabs, activeTabId, revealed]);
 
-  return { tabs, setTabs, activeTabId, setActiveTabId };
+  return { tabs, setTabs, activeTabId, setActiveTabId, revealed, setRevealed };
 }

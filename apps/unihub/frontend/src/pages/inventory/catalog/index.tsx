@@ -230,14 +230,12 @@ export function CatalogPage() {
   });
   const { filter, sort, cols } = table;
 
-  // The "Tabular" baseline the view tabs diff against (016 views).
+  // The default-view baseline the view tabs diff against (016 views).
   const defaultViewConfig = useMemo<ViewConfig>(
     () => ({
       filters: defaultFilterGroups,
       sort: defaultSortRules,
-      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order })),
-      stickyLeft: true,
-      stickyRight: true,
+      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order, pin: c.pin })),
       pageSize: 50,
     }),
     [defaultFilterGroups, defaultSortRules, columnDefs],
@@ -246,6 +244,9 @@ export function CatalogPage() {
     tableKey: table.tableKey,
     table,
     defaultConfig: defaultViewConfig,
+    // The catalog's built-in configuration IS a year-to-date filter — name
+    // its default view accordingly (spec FR-003, round 2).
+    defaultViewName: 'YTD',
   });
 
   // Flat mode when any active filter/sort targets an item-level column.

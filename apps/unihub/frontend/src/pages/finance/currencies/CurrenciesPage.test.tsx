@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
@@ -40,11 +40,13 @@ describe('CurrenciesPage — entity views (016)', () => {
     vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
   });
 
-  // 016 US1: the view row renders above the toolbar with the pinned Tabular tab.
-  it('renders the entity-views row with the default Tabular tab active', async () => {
+  // 016 round 2: the view row auto-hides with only the default view; the
+  // reveal affordance shows the default "Table" tab active.
+  it('reveals the entity-views row with the default Table tab active', async () => {
     renderPage();
     await screen.findByText('New Taiwan Dollar');
-    const tab = screen.getByRole('tab', { name: /tabular/i });
+    fireEvent.click(screen.getByLabelText('Show views'));
+    const tab = screen.getByRole('tab', { name: /table/i });
     expect(tab.getAttribute('aria-selected')).toBe('true');
   });
 });

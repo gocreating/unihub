@@ -1,15 +1,19 @@
 /**
- * ViewTabs — the view-control row above the entity toolbar (016):
+ * ViewTabs — the view-control row above the entity toolbar (016, round 2):
  *
- *   [+]  _Tab1_  Tab2  Tab3 …            [View ▾]
+ *   _Tab1_  Tab2  Tab3 … [+]                [View ▾]
  *
- * "+" is fixed at the left edge, the tab strip scrolls horizontally in the
- * middle (narrow screens — FR-020), and the View control is fixed at the
- * right edge. Rendered inside PageTable's `viewBar` slot.
+ * The tab strip scrolls horizontally when it overflows; the "+" button sits
+ * immediately AFTER the rightmost tab and stays always visible (outside the
+ * scrolling strip — FR-009/FR-020); the View control is fixed at the right
+ * edge. When the table has only its default view, the row auto-hides behind a
+ * compact reveal affordance carrying the dirty dot (FR-025). Double-clicking
+ * a tab starts the edit-name flow (FR-023). Rendered inside PageTable's
+ * `viewBar` slot.
  */
 import { useState } from 'react';
-import { Button, message } from 'antd';
-import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
+import { Badge, Button, Input, Tooltip, message } from 'antd';
+import { CloseOutlined, PlusOutlined, TableOutlined } from '@ant-design/icons';
 import { createStyles } from 'antd-style';
 import { useIntl } from 'react-intl';
 import { OverflowTooltip } from '../OverflowTooltip';
@@ -24,16 +28,23 @@ const useStyles = createStyles(({ token }) => ({
     alignItems: 'center',
     gap: token.marginXXS,
   },
-  addButton: {
-    flex: 'none',
+  collapsedRow: {
+    display: 'flex',
+    justifyContent: 'flex-end',
   },
   strip: {
-    flex: 1,
+    flex: '0 1 auto',
     minWidth: 0,
     display: 'flex',
     alignItems: 'stretch',
     overflowX: 'auto',
     scrollbarWidth: 'thin',
+  },
+  addButton: {
+    flex: 'none',
+  },
+  spacer: {
+    flex: 1,
   },
   tab: {
     flex: 'none',
@@ -73,6 +84,9 @@ const useStyles = createStyles(({ token }) => ({
       color: token.colorText,
     },
   },
+  renameInput: {
+    width: 140,
+  },
   viewControl: {
     flex: 'none',
   },
@@ -87,26 +101,73 @@ export function ViewTabs({ views }: ViewTabsProps) {
   const { formatMessage: t } = useIntl();
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
 
   const displayName = (tab: ViewTabState): string => {
-    if (tab.kind === 'default') return t({ id: 'common.entityViews.tabular' });
+    if (tab.kind === 'default') {
+      return tab.name || t({ id: 'common.entityViews.defaultTable' });
+    }
     return tab.name || t({ id: 'common.entityViews.newViewName' });
   };
 
+  const startRename = (tab: ViewTabState) => {
+    if (tab.kind === 'anonymous') {
+      // Naming an anonymous tab IS saving it (FR-014/FR-023).
+      setSaveModalOpen(true);
+      return;
+    }
+    setEditingTabId(tab.tabId);
+    setEditingValue(displayName(tab));
+  };
+
+  const commitRename = async (tab: ViewTabState) => {
+    const name = editingValue.trim();
+    if (!name || name === displayName(tab)) {
+      setEditingTabId(null);
+      return;
+    }
+    try {
+      await views.renameTab(tab.tabId, name);
+      setEditingTabId(null);
+    } catch (err) {
+      const e = err as { status?: number; body?: { name?: unknown } };
+      message.error(
+        t({
+          id:
+            e.status === 400 && e.body?.name
+              ? 'common.entityViews.duplicateName'
+              : 'common.entityViews.renameError',
+        }),
+      );
+      // Keep the input open so the user can adjust the name.
+    }
+  };
+
+  if (views.collapsed) {
+    return (
+      <div className={styles.collapsedRow} data-testid="view-tabs-collapsed">
+        <Tooltip title={t({ id: 'common.entityViews.showViews' })}>
+          <Badge dot={views.activeTab.dirty} data-testid="view-reveal-badge">
+            <Button
+              type="text"
+              size="small"
+              icon={<TableOutlined />}
+              aria-label={t({ id: 'common.entityViews.showViews' })}
+              onClick={views.reveal}
+            />
+          </Badge>
+        </Tooltip>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.row} data-testid="view-tabs-row">
-      <Button
-        className={styles.addButton}
-        type="text"
-        size="small"
-        icon={<PlusOutlined />}
-        aria-label={t({ id: 'common.entityViews.newTab' })}
-        onClick={views.addAnonymousTab}
-      />
-
       <div className={styles.strip} role="tablist" data-testid="view-tabs-strip">
         {views.tabs.map((tab) => {
           const active = tab.tabId === views.activeTabId;
+          const editing = tab.tabId === editingTabId;
           return (
             <button
               key={tab.tabId}
@@ -114,18 +175,43 @@ export function ViewTabs({ views }: ViewTabsProps) {
               role="tab"
               aria-selected={active}
               className={cx(styles.tab, active && styles.tabActive)}
-              onClick={() => views.switchTab(tab.tabId)}
+              onClick={() => {
+                if (!editing) views.switchTab(tab.tabId);
+              }}
+              onDoubleClick={() => {
+                if (!editing) startRename(tab);
+              }}
             >
-              <OverflowTooltip title={displayName(tab)} style={{ maxWidth: 160 }}>
-                {displayName(tab)}
-              </OverflowTooltip>
-              {tab.dirty && (
+              {editing ? (
+                <Input
+                  className={styles.renameInput}
+                  size="small"
+                  autoFocus
+                  value={editingValue}
+                  aria-label={t({ id: 'common.entityViews.viewName' })}
+                  onChange={(e) => setEditingValue(e.target.value)}
+                  onPressEnter={() => void commitRename(tab)}
+                  onBlur={() => void commitRename(tab)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.stopPropagation();
+                      setEditingTabId(null);
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <OverflowTooltip title={displayName(tab)} style={{ maxWidth: 160 }}>
+                  {displayName(tab)}
+                </OverflowTooltip>
+              )}
+              {!editing && tab.dirty && (
                 <span
                   className={styles.dirtyDot}
                   aria-label={t({ id: 'common.entityViews.unsaved' })}
                 />
               )}
-              {tab.closable && (
+              {!editing && tab.closable && (
                 <span
                   role="button"
                   tabIndex={0}
@@ -149,6 +235,17 @@ export function ViewTabs({ views }: ViewTabsProps) {
           );
         })}
       </div>
+
+      <Button
+        className={styles.addButton}
+        type="text"
+        size="small"
+        icon={<PlusOutlined />}
+        aria-label={t({ id: 'common.entityViews.newTab' })}
+        onClick={views.addAnonymousTab}
+      />
+
+      <div className={styles.spacer} />
 
       <div className={styles.viewControl}>
         <ViewDropdown
@@ -176,11 +273,7 @@ export function ViewTabs({ views }: ViewTabsProps) {
         }}
       />
 
-      <ManageViewsModal
-        open={manageOpen}
-        views={views}
-        onClose={() => setManageOpen(false)}
-      />
+      <ManageViewsModal open={manageOpen} views={views} onClose={() => setManageOpen(false)} />
     </div>
   );
 }

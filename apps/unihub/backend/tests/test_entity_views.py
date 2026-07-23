@@ -239,3 +239,114 @@ def test_position_appended_on_create(owner_client):
     # Appending continues after the max.
     d = create_view(owner_client, name="AfterMax")
     assert d["position"] == 10
+
+
+# ---------------------------------------------------------------------------
+# Round 2 (2026-07-23): the default view is a plain, materializable view.
+# ---------------------------------------------------------------------------
+
+
+def test_create_default_view(owner_client, other_client):
+    default = create_view(owner_client, name="YTD", is_default=True, pinned=True)
+    assert default["is_default"] is True
+
+    second = owner_client.post(
+        VIEWS,
+        json.dumps(
+            {
+                "table_key": "inventory-catalog",
+                "name": "Another default",
+                "config": SAMPLE_CONFIG,
+                "is_default": True,
+            }
+        ),
+        content_type="application/json",
+    )
+    assert second.status_code == 400
+
+    # A default on a DIFFERENT table is fine; so is another user's default.
+    create_view(owner_client, table_key="finance-accounts", name="Table", is_default=True)
+    create_view(other_client, name="YTD", is_default=True)
+
+    # Plain views still default to is_default=False.
+    plain = create_view(owner_client, name="Plain")
+    assert plain["is_default"] is False
+
+
+def test_patch_cannot_change_is_default(owner_client):
+    default = create_view(owner_client, name="YTD", is_default=True)
+    plain = create_view(owner_client, name="Extra")
+
+    down = owner_client.patch(
+        f"{VIEWS}{default['id']}/",
+        json.dumps({"is_default": False}),
+        content_type="application/json",
+    )
+    assert down.status_code == 400
+
+    up = owner_client.patch(
+        f"{VIEWS}{plain['id']}/",
+        json.dumps({"is_default": True}),
+        content_type="application/json",
+    )
+    assert up.status_code == 400
+
+    # Same-value PATCH is an idempotent no-op; other fields still editable.
+    same = owner_client.patch(
+        f"{VIEWS}{default['id']}/",
+        json.dumps({"is_default": True, "name": "My YTD"}),
+        content_type="application/json",
+    )
+    assert same.status_code == 200
+    assert same.json()["name"] == "My YTD"
+
+
+def test_delete_default_view_rejected(owner_client):
+    default = create_view(owner_client, name="YTD", is_default=True)
+    plain = create_view(owner_client, name="Extra")
+
+    resp = owner_client.delete(f"{VIEWS}{default['id']}/")
+    assert resp.status_code == 400
+
+    assert owner_client.delete(f"{VIEWS}{plain['id']}/").status_code == 204
+    assert owner_client.get(f"{VIEWS}{default['id']}/").status_code == 200
+
+
+def test_config_migration_sticky_to_pins():
+    """Migration 0006 rewrites v1 sticky booleans into per-column pins."""
+    import importlib
+
+    migration = importlib.import_module("core.migrations.0006_entityview_is_default")
+
+    v1 = {
+        "filters": [],
+        "sort": [],
+        "columns": [
+            {"key": "hidden", "visible": False, "order": 0},
+            {"key": "a", "visible": True, "order": 1},
+            {"key": "b", "visible": True, "order": 2},
+            {"key": "c", "visible": True, "order": 3},
+        ],
+        "stickyLeft": True,
+        "stickyRight": True,
+        "pageSize": 50,
+    }
+    out = migration.migrate_config(v1)
+    assert "stickyLeft" not in out and "stickyRight" not in out
+    by_key = {c["key"]: c for c in out["columns"]}
+    assert by_key["a"].get("pin") == "left"  # first VISIBLE by order (hidden skipped)
+    assert by_key["c"].get("pin") == "right"  # last visible
+    assert "pin" not in by_key["hidden"] and "pin" not in by_key["b"]
+    assert out["pageSize"] == 50
+
+    # Already-v2 configs pass through unchanged (idempotent).
+    assert migration.migrate_config(out) == out
+
+    # stickyLeft-only variant: no right pin appears anywhere.
+    left_only = dict(v1, stickyRight=False)
+    left_out = migration.migrate_config(left_only)
+    assert all(c.get("pin") != "right" for c in left_out["columns"])
+    assert {c["key"]: c.get("pin") for c in left_out["columns"]}["a"] == "left"
+
+    # Foreign shapes are left alone rather than corrupted.
+    assert migration.migrate_config({"anything": {"goes": True}}) == {"anything": {"goes": True}}

@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0003_attributevalue_value_number_max_and_more'),
+        ("core", "0003_attributevalue_value_number_max_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='attributedefinition',
-            name='emoji',
-            field=models.CharField(blank=True, default='', max_length=8),
+            model_name="attributedefinition",
+            name="emoji",
+            field=models.CharField(blank=True, default="", max_length=8),
         ),
     ]

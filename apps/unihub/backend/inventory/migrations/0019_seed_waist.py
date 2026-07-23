@@ -30,9 +30,7 @@ def unseed(apps, schema_editor):
         item_ct = ContentType.objects.get(app_label="inventory", model="item")
     except ContentType.DoesNotExist:
         return
-    AttributeDefinition.objects.filter(
-        content_type=item_ct, name="waist", is_system=True
-    ).delete()
+    AttributeDefinition.objects.filter(content_type=item_ct, name="waist", is_system=True).delete()
 
 
 class Migration(migrations.Migration):

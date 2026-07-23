@@ -84,6 +84,16 @@ class EntityViewViewSet(viewsets.ModelViewSet):
             qs = qs.filter(table_key=table_key)
         return qs
 
+    def destroy(self, request: Request, *args, **kwargs) -> Response:
+        """Reject deleting the default view — it is the guaranteed fallback (FR-003)."""
+        view = self.get_object()
+        if view.is_default:
+            return Response(
+                {"detail": "The default view cannot be deleted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
     def perform_create(self, serializer: BaseSerializer) -> None:
         """Stamp the owner; append position after the table's max when omitted."""
         owner = self.request.user

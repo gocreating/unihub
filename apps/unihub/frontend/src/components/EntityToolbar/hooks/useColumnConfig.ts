@@ -30,7 +30,7 @@ export interface UseColumnConfigReturn {
   /** Load a whole column state from a ViewConfig (016 views): sets active AND
    *  pending. Reconciles drift — stale keys dropped, missing runtime columns
    *  appended with their default visibility; labels/dataTypes stay runtime. */
-  loadState: (columns: ViewColumn[], sticky: { left: boolean; right: boolean }) => void;
+  loadState: (columns: ViewColumn[]) => void;
 }
 
 function pinRank(pin: PinSide | undefined): number {
@@ -117,35 +117,25 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
   }, [initialColumns]);
 
   const loadState = useCallback(
-    (viewColumns: ViewColumn[], sticky: { left: boolean; right: boolean }) => {
+    (viewColumns: ViewColumn[]) => {
       const byKey = new Map(initialColumns.map((c) => [c.key, c]));
       const listed = [...viewColumns]
         .sort((a, b) => a.order - b.order)
         .filter((vc) => byKey.has(vc.key));
       const listedKeys = new Set(listed.map((vc) => vc.key));
       const appended = initialColumns.filter((c) => !listedKeys.has(c.key));
-      // Default pins ride along from initialColumns; the view's boolean pin
-      // pair (016 URL contract) then projects onto the per-column model (017):
-      // false strips that edge's pins, true with no default pin on that edge
-      // pins the first/last listed visible column.
-      let columns: ColumnDef[] = [
-        ...listed.map((vc, i) => ({ ...byKey.get(vc.key)!, visible: vc.visible, order: i })),
+      // v2 (016 round 2): listed columns take their stored per-column pin
+      // verbatim (undefined = unpinned); appended runtime columns keep their
+      // default pin from initialColumns.
+      const columns: ColumnDef[] = [
+        ...listed.map((vc, i) => ({
+          ...byKey.get(vc.key)!,
+          visible: vc.visible,
+          order: i,
+          pin: vc.pin,
+        })),
         ...appended.map((c, i) => ({ ...c, order: listed.length + i })),
       ];
-      columns = columns.map((c) =>
-        (c.pin === 'left' && !sticky.left) || (c.pin === 'right' && !sticky.right)
-          ? { ...c, pin: undefined }
-          : c,
-      );
-      const visibleOrdered = columns.filter((c) => c.visible).sort(compareDisplayOrder);
-      if (sticky.left && !visibleOrdered.some((c) => c.pin === 'left')) {
-        const first = visibleOrdered[0];
-        if (first) columns = columns.map((c) => (c.key === first.key ? { ...c, pin: 'left' as PinSide } : c));
-      }
-      if (sticky.right && !visibleOrdered.some((c) => c.pin === 'right')) {
-        const last = visibleOrdered[visibleOrdered.length - 1];
-        if (last) columns = columns.map((c) => (c.key === last.key ? { ...c, pin: 'right' as PinSide } : c));
-      }
       const next: ColumnState = { columns };
       setActiveState(next);
       setPendingState(next);

@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('inventory', '0013_scenarioitem_organized'),
+        ("inventory", "0013_scenarioitem_organized"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='item',
-            name='alias_name',
+            model_name="item",
+            name="alias_name",
             field=models.CharField(blank=True, max_length=200),
         ),
     ]

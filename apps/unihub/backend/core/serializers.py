@@ -69,6 +69,7 @@ class EntityViewSerializer(serializers.ModelSerializer):
             "config",
             "pinned",
             "position",
+            "is_default",
             "created_at",
             "updated_at",
         ]
@@ -96,8 +97,14 @@ class EntityViewSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("config must be a JSON object.")
         return value
 
+    def validate_is_default(self, value: bool) -> bool:
+        """``is_default`` is create-only: any change on an existing view is rejected."""
+        if self.instance is not None and value != self.instance.is_default:
+            raise serializers.ValidationError("is_default cannot be changed after creation.")
+        return value
+
     def validate(self, attrs: dict) -> dict:
-        """Enforce the per-owner unique (table_key, name) constraint as a 400."""
+        """Enforce per-owner uniqueness of (table_key, name) and of the default view as 400s."""
         request = self.context.get("request")
         owner = getattr(request, "user", None)
         if owner is None or not owner.is_authenticated:
@@ -110,6 +117,13 @@ class EntityViewSerializer(serializers.ModelSerializer):
                 qs = qs.exclude(pk=self.instance.pk)
             if qs.exists():
                 raise serializers.ValidationError({"name": "A view with this name already exists."})
+        if self.instance is None and attrs.get("is_default") and table_key:
+            if EntityView.objects.filter(
+                owner=owner, table_key=table_key, is_default=True
+            ).exists():
+                raise serializers.ValidationError(
+                    {"is_default": "This table already has a default view."}
+                )
         return attrs
 
 

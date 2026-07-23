@@ -364,12 +364,15 @@ def _dependency_closure(
 def apply_selected(
     diffs_by_table: dict[str, list[dict[str, Any]]],
     excluded: set[tuple[str, str]],
+    acting_user: Any | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Apply only the staged ChangeRecords, in registry dependency order.
 
     Args:
         diffs_by_table: content_type_label → full ChangeRecord list.
         excluded: (label, pk) refs the user unchecked.
+        acting_user: The user performing the apply; stamped into any table
+            that declares an ``owner_field``.
 
     Returns:
         (results, auto_included) — per-table applied counts, and the refs the
@@ -396,7 +399,9 @@ def apply_selected(
                 if (label, r["pk"]) in staged and r["operation"] != "delete"
             ]
             if records:
-                counts = apply_diff(records, registry[label], mode="replace")
+                counts = apply_diff(
+                    records, registry[label], mode="replace", acting_user=acting_user
+                )
                 applied_counts[label] = applied_counts.get(label, 0) + sum(counts.values())
         # …deletes children-first.
         for label in reversed(order):
@@ -406,7 +411,9 @@ def apply_selected(
                 if (label, r["pk"]) in staged and r["operation"] == "delete"
             ]
             if records:
-                counts = apply_diff(records, registry[label], mode="replace")
+                counts = apply_diff(
+                    records, registry[label], mode="replace", acting_user=acting_user
+                )
                 applied_counts[label] = applied_counts.get(label, 0) + sum(counts.values())
 
     results = [
@@ -424,14 +431,38 @@ def apply_diff(
     change_records: list[dict[str, Any]],
     descriptor: TableDescriptor,
     mode: str,
+    acting_user: Any | None = None,
 ) -> dict[str, int]:
     """Apply change records to the database inside a transaction.
 
+    Args:
+        change_records: ChangeRecord dicts from ``compute_diff``.
+        descriptor: The registered TableDescriptor.
+        mode: "upsert" or "replace".
+        acting_user: The user performing the import. Required when the
+            descriptor declares an ``owner_field`` and creates are present —
+            created rows are stamped with this user (the owner column is never
+            part of the CSV).
+
     Returns:
         Dict with keys: created, updated, deleted.
+
+    Raises:
+        ValueError: If the descriptor declares an ``owner_field`` but no
+            acting user was provided for create operations.
     """
     pk_field = next(f for f in descriptor.system_fields if f.is_pk)
     created = updated = deleted = 0
+
+    if (
+        descriptor.owner_field
+        and acting_user is None
+        and any(r["operation"] == "create" for r in change_records)
+    ):
+        raise ValueError(
+            f"Importing '{descriptor.content_type_label}' requires an acting user "
+            f"to stamp its '{descriptor.owner_field}' field."
+        )
 
     with transaction.atomic():
         for record in change_records:
@@ -441,6 +472,8 @@ def apply_diff(
             if operation == "create":
                 csv_row = record["after"]
                 kwargs = _build_model_kwargs(csv_row, descriptor, exclude_pk=False)
+                if descriptor.owner_field:
+                    kwargs[descriptor.owner_field] = acting_user
 
                 # Identify auto_now and auto_now_add fields.  Django's pre_save
                 # hooks overwrite these values during objects.create(), so we

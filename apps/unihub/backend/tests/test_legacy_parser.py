@@ -249,7 +249,9 @@ def test_factor_amounts_with_currency_adornments(parser, tmp_path):
     path = tmp_path / "factors.html"
     path.write_text(fixture, encoding="utf-8")
     (acq,) = parser.build_html(str(path))
-    values = {cf.type: (cf.value, cf.currency) for cf in acq.cost_factors if cf.type != "accumulated"}
+    values = {
+        cf.type: (cf.value, cf.currency) for cf in acq.cost_factors if cf.type != "accumulated"
+    }
     assert values["tax_refund"] == (-1450.0, "JPY")
     assert values["discount"] == (-735.0, "JPY")
 
@@ -715,7 +717,9 @@ def test_shared_total_with_discount_notes_computes_skus(parser, tmp_path):
     path = tmp_path / "bk.html"
     path.write_text(fixture, encoding="utf-8")
     (acq,) = parser.build_html(str(path))
-    skus = {i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency")) for i in acq.items}
+    skus = {
+        i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency")) for i in acq.items
+    }
     assert skus["《失落文明大百科》"] == (252.0, "TWD")
     assert skus["《霍金大見解》"] == (450.0, "TWD")
     assert any(cf.type == "accumulated" and cf.value == 702.0 for cf in acq.cost_factors)
@@ -817,7 +821,11 @@ def test_name_matched_list_prices_assign_by_fragment(parser, tmp_path):
     path.write_text(fixture, encoding="utf-8")
     (acq,) = parser.build_html(str(path))
     got = {
-        i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency"), i.fields.get("quantity") or 1)
+        i.name: (
+            i.fields.get("sku_price"),
+            i.fields.get("sku_price_currency"),
+            i.fields.get("quantity") or 1,
+        )
         for i in acq.items
     }
     assert got["棉法蘭絨被套窗格紋混墨灰色/Ｓ"] == (1390.0, "TWD", 1)
@@ -923,7 +931,9 @@ def test_anchored_list_prices_fill_shared_block_skus(parser, tmp_path):
     path = tmp_path / "filter017.html"
     path.write_text(fixture, encoding="utf-8")
     (acq,) = parser.build_html(str(path))
-    got = {i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency")) for i in acq.items}
+    got = {
+        i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency")) for i in acq.items
+    }
     assert got["Filter017 Tissue Cover"] == (680.0, "TWD")
     assert got["FILTER017 Travel Tray"] == (880.0, "TWD")
     assert got["Filter017 Storage 軍綠"] == (980.0, "TWD")
@@ -953,7 +963,10 @@ def test_annotation_listing_resolves_by_color_then_elimination(parser, tmp_path)
     path.write_text(fixture, encoding="utf-8")
     (acq,) = parser.build_html(str(path))
     got = {
-        ("50L" if "50L" in i.name else "21L"): (i.fields.get("sku_price"), i.fields.get("sku_price_currency"))
+        ("50L" if "50L" in i.name else "21L"): (
+            i.fields.get("sku_price"),
+            i.fields.get("sku_price_currency"),
+        )
         for i in acq.items
     }
     assert got["50L"] == (1380.0, "TWD")
@@ -995,7 +1008,14 @@ def test_anchored_colonless_unit_price_quartet(parser, tmp_path):
     path = tmp_path / "shorts.html"
     path.write_text(fixture, encoding="utf-8")
     (acq,) = parser.build_html(str(path))
-    got = {i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency"), i.fields.get("size")) for i in acq.items}
+    got = {
+        i.name: (
+            i.fields.get("sku_price"),
+            i.fields.get("sku_price_currency"),
+            i.fields.get("size"),
+        )
+        for i in acq.items
+    }
     assert got["舒適休閒短褲 卡其色"] == (449.0, "TWD", "34")
     assert got["綁繩休閒短褲 深灰"] == (549.0, "TWD", "32")
     assert got["標準錐型褲 卡其色"] == (799.0, "TWD", "34")
@@ -1019,7 +1039,9 @@ def test_anchored_list_price_with_rm_currency_token(parser, tmp_path):
     path = tmp_path / "aeon.html"
     path.write_text(fixture, encoding="utf-8")
     (acq,) = parser.build_html(str(path))
-    got = {i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency")) for i in acq.items}
+    got = {
+        i.name: (i.fields.get("sku_price"), i.fields.get("sku_price_currency")) for i in acq.items
+    }
     assert got["襯衫外套"] == (59.0, "RM")
     assert got["白色紋路質感衣"] == (89.0, "RM")
     assert got["仙人掌 T-shirt"] == (19.9, "RM")

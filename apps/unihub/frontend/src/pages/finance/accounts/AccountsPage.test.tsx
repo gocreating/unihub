@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
@@ -71,10 +71,13 @@ describe('AccountsPage — datetime tooltip suppression (US6)', () => {
 });
 
 describe('AccountsPage — entity views (016)', () => {
-  it('renders the view row with the Tabular tab active', async () => {
+  // 016 round 2: the row auto-hides with only the default view; reveal shows
+  // the default "Table" tab active.
+  it('reveals the view row with the default Table tab active', async () => {
     renderPage();
     await screen.findByText('Savings');
-    const tabularTab = screen.getByRole('tab', { name: /tabular/i });
-    expect(tabularTab).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByLabelText('Show views'));
+    const defaultTab = screen.getByRole('tab', { name: /table/i });
+    expect(defaultTab).toHaveAttribute('aria-selected', 'true');
   });
 });

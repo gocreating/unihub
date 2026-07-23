@@ -167,16 +167,14 @@ export function useEntityTable({
     (): ViewConfig => ({
       filters: toApiParam()?.groups ?? [],
       sort: activeRules,
+      // v2 (016 round 2): per-column pins map 1:1 to ColumnDef.pin — no
+      // projection, multi-pin layouts round-trip exactly.
       columns: activeState.columns.map((c) => ({
         key: c.key,
         visible: c.visible,
         order: c.order,
+        pin: c.pin,
       })),
-      // Boolean projection of the per-column pin model (017) onto the view
-      // contract's pin pair (016): an edge is sticky when any visible column
-      // is pinned to it. loadState performs the inverse projection.
-      stickyLeft: activeState.columns.some((c) => c.visible && c.pin === 'left'),
-      stickyRight: activeState.columns.some((c) => c.visible && c.pin === 'right'),
       pageSize: limit,
     }),
     [toApiParam, activeRules, activeState, limit],
@@ -185,7 +183,7 @@ export function useEntityTable({
     (config: ViewConfig, options?: { offset?: number }) => {
       loadGroups(config.filters);
       loadRules(config.sort);
-      loadState(config.columns, { left: config.stickyLeft, right: config.stickyRight });
+      loadState(config.columns);
       setLimit(config.pageSize);
       skipNextOffsetResetRef.current = true;
       setOffset(options?.offset ?? 0);

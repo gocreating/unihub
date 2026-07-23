@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('inventory', '0012_drop_param_columns_scenario_cleanup'),
+        ("inventory", "0012_drop_param_columns_scenario_cleanup"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='scenarioitem',
-            name='organized',
+            model_name="scenarioitem",
+            name="organized",
             field=models.BooleanField(default=False),
         ),
     ]

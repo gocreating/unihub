@@ -4,20 +4,23 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('inventory', '0014_item_alias_name'),
+        ("inventory", "0014_item_alias_name"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='acquisition',
-            name='legacy_ref',
-            field=models.CharField(blank=True, db_index=True, editable=False, max_length=32, null=True),
+            model_name="acquisition",
+            name="legacy_ref",
+            field=models.CharField(
+                blank=True, db_index=True, editable=False, max_length=32, null=True
+            ),
         ),
         migrations.AddField(
-            model_name='item',
-            name='legacy_ref',
-            field=models.CharField(blank=True, db_index=True, editable=False, max_length=32, null=True),
+            model_name="item",
+            name="legacy_ref",
+            field=models.CharField(
+                blank=True, db_index=True, editable=False, max_length=32, null=True
+            ),
         ),
     ]

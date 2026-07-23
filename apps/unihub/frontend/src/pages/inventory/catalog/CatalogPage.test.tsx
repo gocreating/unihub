@@ -200,11 +200,13 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     });
   });
 
-  // 016 US1: the view row renders above the toolbar with the pinned Tabular tab.
-  it('renders the entity-views row with the default Tabular tab active', async () => {
+  // 016 round 2: the view row auto-hides with only the default view; the
+  // reveal affordance shows the catalog's page-named default "YTD" tab active.
+  it('reveals the entity-views row with the default YTD tab active', async () => {
     renderPage();
     await screen.findByText('Backpack');
-    const tab = screen.getByRole('tab', { name: /tabular/i });
+    fireEvent.click(screen.getByLabelText('Show views'));
+    const tab = screen.getByRole('tab', { name: /ytd/i });
     expect(tab.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByLabelText('New view tab')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^view/i })).toBeInTheDocument();

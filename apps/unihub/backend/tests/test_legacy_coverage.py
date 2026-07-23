@@ -17,9 +17,7 @@ from inventory.management.commands.import_legacy_csv import _load_parser
 
 DATA_DIR = pathlib.Path(__file__).resolve().parents[4] / "data" / "財產們"
 
-pytestmark = pytest.mark.skipif(
-    not DATA_DIR.exists(), reason="legacy data directory not present"
-)
+pytestmark = pytest.mark.skipif(not DATA_DIR.exists(), reason="legacy data directory not present")
 
 
 def _norm(text: str) -> str:
@@ -37,7 +35,11 @@ def _sheet_blob(acquisitions) -> str:
             getattr(acq, "remark", "") or "",
         ]
         for cf in acq.cost_factors:
-            parts += [str(cf.value if cf.value is not None else ""), cf.currency or "", cf.type or ""]
+            parts += [
+                str(cf.value if cf.value is not None else ""),
+                cf.currency or "",
+                cf.type or "",
+            ]
         for item in acq.items:
             parts.append(item.name or "")
             for value in item.fields.values():
@@ -51,8 +53,21 @@ def _sheet_blob(acquisitions) -> str:
 # Key words the parser CONSUMES into structured fields (their values are
 # checked instead); currency spellings map to codes in the payload.
 CONSUMED_KEYS = {
-    "尺寸", "規格", "顏色", "款式", "重量", "淨重", "長度", "容量", "數量",
-    "原價", "單價", "運費", "官網連結", "size", "Size",
+    "尺寸",
+    "規格",
+    "顏色",
+    "款式",
+    "重量",
+    "淨重",
+    "長度",
+    "容量",
+    "數量",
+    "原價",
+    "單價",
+    "運費",
+    "官網連結",
+    "size",
+    "Size",
 }
 
 
@@ -71,7 +86,11 @@ def _run_covered(run: str, blob: str, parser) -> bool:
         return True  # single-char units/particles (m, g, 件, x, …)
     if run in CONSUMED_KEYS:
         return True
-    mapped = parser.CURRENCY_TOKENS.get(run) or parser.CURRENCY_TOKENS.get(run.upper()) or parser.CURRENCY_TOKENS.get(run.lower())
+    mapped = (
+        parser.CURRENCY_TOKENS.get(run)
+        or parser.CURRENCY_TOKENS.get(run.upper())
+        or parser.CURRENCY_TOKENS.get(run.lower())
+    )
     if mapped and _norm(mapped) in blob:
         return True
     return _norm(run) in blob or _norm(run).upper() in blob
@@ -155,11 +174,7 @@ def test_no_legacy_content_lost(sheet):
                 line = line.strip()
                 if not line:
                     continue
-                covered = (
-                    _line_covered(line, blob, parser)
-                    if factor_row
-                    else _norm(line) in blob
-                )
+                covered = _line_covered(line, blob, parser) if factor_row else _norm(line) in blob
                 if not covered:
                     misses.append(f"row {row_no} 備註 line: {line!r}")
 

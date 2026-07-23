@@ -1,18 +1,25 @@
 /**
- * useEntityViews — tab/view orchestration for entity tables (016).
+ * useEntityViews — tab/view orchestration for entity tables (016, round 2).
  *
- * Owns: the open-tab list (default "Tabular" + saved + anonymous tabs), the
- * active tab, saved-view fetching, per-tab dirty computation, and all view
- * mutations. The ACTIVE tab's config is always the table's live state
- * (`table.snapshotConfig()`); inactive tabs hold their last-known snapshot.
+ * Owns: the open-tab list (default tab + saved + anonymous tabs), the active
+ * tab, saved-view fetching, per-tab dirty computation, the view-row collapse
+ * state (FR-025), and all view mutations. The ACTIVE tab's config is always
+ * the table's live state (`table.snapshotConfig()`); inactive tabs hold their
+ * last-known snapshot.
+ *
+ * Round 2: the default tab is a PLAIN view — its first save or rename
+ * materializes an `is_default` EntityView row (page-provided initial name,
+ * e.g. the catalog's "YTD"); once materialized, the stored row is the tab's
+ * name/config/baseline. URL state uses the readable per-facet params
+ * (`<tableKey>.view=<name>` / `.f` / `.sort` / `.cols` / `.size` / `.page`).
  *
  * Staged-mutation rule: nothing here writes to the API except the explicit
- * save/save-as/duplicate-commit/manage-commit entry points.
+ * save/save-as/rename/duplicate-commit/manage-commit entry points.
  */
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { message } from 'antd';
 import { useIntl } from 'react-intl';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createEntityView,
@@ -25,18 +32,24 @@ import type { EntityView, EntityViewPatch } from '@/services/unihub-backend/core
 import type { UseEntityTableReturn } from '../EntityToolbar/useEntityTable';
 import type { ViewConfig } from '../EntityToolbar/types';
 import {
+  buildSearchString,
   columnsFromVisibleKeys,
+  columnsToken,
   configsEqual,
-  parseViewParam,
-  serializeInline,
-  serializeSaved,
-  viewParamName,
+  facetParam,
+  hasViewParams,
+  parseViewParams,
+  serializeInlineEntries,
+  serializeSavedEntries,
+  upgradeConfigShape,
 } from './serialization';
-import type { ParsedView } from './serialization';
+import type { ParsedViewState } from './serialization';
 import { DEFAULT_TAB_ID, useViewTabsState } from './useViewTabsState';
 import type { InternalTab, InternalTabKind } from './useViewTabsState';
 
 const uid = () => crypto.randomUUID();
+
+const FACETS = ['view', 'f', 'sort', 'cols', 'size', 'page'] as const;
 
 export { DEFAULT_TAB_ID };
 
@@ -63,8 +76,11 @@ export interface ManageChanges {
 export interface UseEntityViewsOptions {
   tableKey: string;
   table: UseEntityTableReturn;
-  /** The page's default ("Tabular") config — the baseline of the default tab. */
+  /** The page's default config — the virtual default tab's baseline. */
   defaultConfig: ViewConfig;
+  /** Page-provided initial name of the default view (e.g. catalog "YTD").
+   *  Falls back to the localized generic "Table". */
+  defaultViewName?: string;
 }
 
 export interface UseEntityViewsReturn {
@@ -74,38 +90,44 @@ export interface UseEntityViewsReturn {
   savedViews: EntityView[];
   /** True when any open view has unsaved changes (drives the Save action). */
   isAnyDirty: boolean;
+  /** FR-025: the view row is auto-hidden (only the default view/tab exists). */
+  collapsed: boolean;
+  /** Reveal the auto-hidden view row for the rest of the session. */
+  reveal: () => void;
   switchTab: (tabId: string) => void;
   addAnonymousTab: () => void;
   closeTab: (tabId: string) => void;
   openView: (viewId: string) => void;
-  /** Persist the active tab: saved views PATCH in place; default/anonymous
-   *  tabs need a name first (`'needs-name'` → open the SaveViewModal). */
+  /** Persist the active tab: saved views PATCH in place; the default tab
+   *  materializes (or PATCHes) its `is_default` row; anonymous tabs need a
+   *  name first (`'needs-name'` → open the SaveViewModal). */
   saveActiveTab: () => Promise<'saved' | 'needs-name'>;
   saveActiveTabAs: (name: string) => Promise<void>;
+  /** Rename a saved or default tab in place (double-click flow, FR-023).
+   *  Renaming the virtual default materializes it. Rejections rethrow. */
+  renameTab: (tabId: string, name: string) => Promise<void>;
   /** Duplicate the active view into an unsaved tab named "X (1)", "X (2)", …
    *  `baseName` is the rendered display name (the hook doesn't localize). */
   duplicateActiveTab: (baseName?: string) => void;
   commitManageChanges: (changes: ManageChanges) => Promise<void>;
 }
 
-/** Coerce a server-stored (unknown-shaped) config into a full ViewConfig,
- *  falling back facet-wise to the table defaults (forgiving contract). */
+/** Coerce a server-stored (unknown-shaped) config into a full v2 ViewConfig,
+ *  upgrading v1 shapes and falling back facet-wise to the table defaults. */
 export function coerceConfig(raw: unknown, defaults: ViewConfig): ViewConfig {
-  const r = (raw ?? {}) as Partial<ViewConfig>;
+  const r = (upgradeConfigShape(raw) ?? {}) as Partial<ViewConfig>;
   return {
     filters: Array.isArray(r.filters) ? r.filters : defaults.filters,
     sort: Array.isArray(r.sort) ? r.sort : defaults.sort,
     columns: Array.isArray(r.columns) && r.columns.length > 0 ? r.columns : defaults.columns,
-    stickyLeft: typeof r.stickyLeft === 'boolean' ? r.stickyLeft : defaults.stickyLeft,
-    stickyRight: typeof r.stickyRight === 'boolean' ? r.stickyRight : defaults.stickyRight,
     pageSize: typeof r.pageSize === 'number' ? r.pageSize : defaults.pageSize,
   };
 }
 
 /** Reconcile a stored config against the CURRENT column universe (FR-021):
- *  stale column keys dropped, missing runtime columns appended with their
- *  default visibility. Keeps dirty comparisons drift-free (both the baseline
- *  and the live snapshot pass through the same reconciliation). */
+ *  stale column keys dropped (their pins with them), missing runtime columns
+ *  appended with their default visibility/pin. Keeps dirty comparisons
+ *  drift-free (baseline and live snapshot pass through the same path). */
 export function reconcileConfig(config: ViewConfig, defaults: ViewConfig): ViewConfig {
   const byKey = new Map(defaults.columns.map((c) => [c.key, c]));
   const listed = [...config.columns]
@@ -116,38 +138,71 @@ export function reconcileConfig(config: ViewConfig, defaults: ViewConfig): ViewC
   return {
     ...config,
     columns: [
-      ...listed.map((c, i) => ({ key: c.key, visible: c.visible, order: i })),
-      ...appended.map((c, i) => ({ key: c.key, visible: c.visible, order: listed.length + i })),
+      ...listed.map((c, i) => ({ key: c.key, visible: c.visible, order: i, pin: c.pin })),
+      ...appended.map((c, i) => ({
+        key: c.key,
+        visible: c.visible,
+        order: listed.length + i,
+        pin: c.pin,
+      })),
     ],
   };
+}
+
+/** Facet-whole differences of `current` against `baseline` (URL overrides). */
+function facetOverrides(current: ViewConfig, baseline: ViewConfig): Partial<ViewConfig> {
+  const overrides: Partial<ViewConfig> = {};
+  if (JSON.stringify(current.filters) !== JSON.stringify(baseline.filters)) {
+    overrides.filters = current.filters;
+  }
+  if (JSON.stringify(current.sort) !== JSON.stringify(baseline.sort)) {
+    overrides.sort = current.sort;
+  }
+  if (columnsToken(current.columns) !== columnsToken(baseline.columns)) {
+    overrides.columns = current.columns;
+  }
+  if (current.pageSize !== baseline.pageSize) overrides.pageSize = current.pageSize;
+  return overrides;
 }
 
 export function useEntityViews({
   tableKey,
   table,
   defaultConfig,
+  defaultViewName,
 }: UseEntityViewsOptions): UseEntityViewsReturn {
   const { formatMessage: t } = useIntl();
   const queryClient = useQueryClient();
   const queryKey = ['core', 'entity-views', tableKey];
-  const [searchParams, setSearchParams] = useSearchParams();
-  const paramName = viewParamName(tableKey);
-  // The param value last written by us — used to skip the echo of our own
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const isViewParamKey = useCallback(
+    (key: string): boolean =>
+      key === `view[${tableKey}]` || FACETS.some((facet) => key === facetParam(tableKey, facet)),
+    [tableKey],
+  );
+  const viewEntriesOf = useCallback(
+    (params: URLSearchParams): [string, string][] =>
+      [...params.entries()].filter(([key]) => isViewParamKey(key) && !key.startsWith('view[')),
+    [isViewParamKey],
+  );
+
+  // The entries last written by us — used to skip the echo of our own
   // outbound writes.
   const lastParamRef = useRef<string | null>(null);
   // The last inbound value fully processed (applied or rejected). Never reset
-  // by outbound writes — otherwise clearing the param re-arms the inbound
+  // by outbound writes — otherwise clearing the params re-arms the inbound
   // effect for the same stale value and the two effects ping-pong forever.
   const lastProcessedRef = useRef<string | null>(null);
   // Outbound stays quiet until an inbound param (if any) has been applied.
   const inboundSettledRef = useRef(false);
 
-  const {
-    tabs,
-    setTabs,
-    activeTabId,
-    setActiveTabId,
-  } = useViewTabsState(tableKey, defaultConfig);
+  const { tabs, setTabs, activeTabId, setActiveTabId, revealed, setRevealed } = useViewTabsState(
+    tableKey,
+    defaultConfig,
+  );
 
   const {
     data: savedViews = [],
@@ -168,6 +223,19 @@ export function useEntityViews({
     [savedViews],
   );
 
+  // The materialized default view, when one exists (round 2, FR-003).
+  const defaultView = useMemo(() => savedViews.find((v) => v.is_default), [savedViews]);
+  const defaultBaseline = useMemo(
+    () =>
+      defaultView
+        ? reconcileConfig(coerceConfig(defaultView.config, defaultConfig), defaultConfig)
+        : defaultConfig,
+    [defaultView, defaultConfig],
+  );
+  /** The name the default tab renders and materializes under. */
+  const defaultDisplayName =
+    defaultView?.name ?? defaultViewName ?? t({ id: 'common.entityViews.defaultTable' });
+
   // Rehydrate the table ONCE from a session-restored active tab (US2): the
   // tab list survives in sessionStorage, but the table hooks boot from page
   // defaults — reload the restored tab's config on mount.
@@ -175,8 +243,8 @@ export function useEntityViews({
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-    // A view param in the URL wins over the session-restored tab (US3).
-    if (searchParams.get(paramName) !== null) return;
+    // View params in the URL win over the session-restored tab (US3).
+    if (hasViewParams(searchParams, tableKey)) return;
     const active = tabs.find((tab) => tab.tabId === activeTabId);
     if (!active) return;
     if (
@@ -188,17 +256,35 @@ export function useEntityViews({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Adopt the materialized default view's stored config ONCE per mount when
+  // the default tab still sits at pristine page defaults (fresh session): the
+  // stored row IS the default tab's identity after materialization (US1).
+  const defaultAdoptedRef = useRef(false);
+  useEffect(() => {
+    if (!isFetched || defaultAdoptedRef.current) return;
+    defaultAdoptedRef.current = true;
+    if (!defaultView) return;
+    if (hasViewParams(searchParams, tableKey)) return; // URL wins
+    const active = tabs.find((tab) => tab.tabId === activeTabId);
+    if (!active || active.kind !== 'default') return; // session tab wins
+    if (!configsEqual(reconcileConfig(active.config, defaultConfig), defaultConfig)) return;
+    if (configsEqual(defaultBaseline, defaultConfig)) return; // nothing to adopt
+    setTabs((prev) =>
+      prev.map((tab) => (tab.tabId === DEFAULT_TAB_ID ? { ...tab, config: defaultBaseline } : tab)),
+    );
+    table.loadConfig(defaultBaseline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFetched, defaultView]);
+
   // Merge pinned views into the tab row (US2): default tab first, then pinned
-  // views in position order, then other session-opened tabs. Identity-stable
-  // when nothing changed so refetches don't churn renders.
+  // non-default views in position order, then other session-opened tabs.
+  // Identity-stable when nothing changed so refetches don't churn renders.
   useEffect(() => {
     setTabs((prev) => {
       const defaultTab = prev.find((tab) => tab.kind === 'default');
       if (!defaultTab) return prev;
-      const pinned = savedViews.filter((view) => view.pinned);
-      const byViewId = new Map(
-        prev.filter((tab) => tab.viewId).map((tab) => [tab.viewId!, tab]),
-      );
+      const pinned = savedViews.filter((view) => view.pinned && !view.is_default);
+      const byViewId = new Map(prev.filter((tab) => tab.viewId).map((tab) => [tab.viewId!, tab]));
       const pinnedTabs = pinned.map(
         (view) =>
           byViewId.get(view.id) ?? {
@@ -214,8 +300,7 @@ export function useEntityViews({
         (tab) => tab.kind !== 'default' && !(tab.viewId && pinnedIds.has(tab.viewId)),
       );
       const next = [defaultTab, ...pinnedTabs, ...others];
-      const unchanged =
-        next.length === prev.length && next.every((tab, i) => tab === prev[i]);
+      const unchanged = next.length === prev.length && next.every((tab, i) => tab === prev[i]);
       return unchanged ? prev : next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -228,21 +313,36 @@ export function useEntityViews({
 
   const toTabState = (tab: InternalTab): ViewTabState => {
     const view = viewById(tab.viewId);
-    const name = tab.kind === 'saved' ? (view?.name ?? tab.name) : tab.name;
-    const pinned = tab.kind === 'default' ? true : (view?.pinned ?? false);
     let dirty: boolean;
     if (tab.kind === 'anonymous') {
       dirty = true; // inherently unsaved
     } else if (tab.kind === 'default') {
-      // Reconcile before comparing — the stored default-tab config may predate
-      // async runtime columns (e.g. attr:<id> definitions loading after mount).
-      dirty = !configsEqual(reconcileConfig(currentConfigOf(tab), defaultConfig), defaultConfig);
+      // Baseline = the materialized default's stored config, else page
+      // defaults. Reconcile before comparing — configs may predate async
+      // runtime columns (e.g. attr:<id> definitions loading after mount).
+      dirty = !configsEqual(
+        reconcileConfig(currentConfigOf(tab), defaultConfig),
+        reconcileConfig(defaultBaseline, defaultConfig),
+      );
     } else if (view) {
       const baseline = reconcileConfig(coerceConfig(view.config, defaultConfig), defaultConfig);
       dirty = !configsEqual(reconcileConfig(currentConfigOf(tab), defaultConfig), baseline);
     } else {
       dirty = false; // saved list not loaded yet — assume clean
     }
+    if (tab.kind === 'default') {
+      return {
+        tabId: tab.tabId,
+        kind: tab.kind,
+        viewId: defaultView?.id,
+        name: defaultView?.name ?? defaultViewName ?? '',
+        dirty,
+        pinned: defaultView?.pinned ?? true,
+        closable: false,
+      };
+    }
+    const name = tab.kind === 'saved' ? (view?.name ?? tab.name) : tab.name;
+    const pinned = view?.pinned ?? false;
     return {
       tabId: tab.tabId,
       kind: tab.kind,
@@ -250,13 +350,32 @@ export function useEntityViews({
       name,
       dirty,
       pinned,
-      closable: tab.kind !== 'default' && !pinned,
+      closable: !pinned,
     };
   };
 
   const tabStates = tabs.map(toTabState);
   const activeTab = tabStates.find((tab) => tab.tabId === activeTabId) ?? tabStates[0]!;
   const isAnyDirty = tabStates.some((tab) => tab.dirty);
+
+  // ── View-row auto-hide (FR-025) ────────────────────────────────────────────
+
+  // Captured ONCE at mount — before any of our own outbound URL writes — so a
+  // lone materialized default (which round-trips its config through the URL)
+  // is not mistaken for URL-addressed non-default state. A URL that addresses
+  // view state AT LOAD forces the row open; later dirtying of the collapsed
+  // default keeps it collapsed (the affordance shows the dirty dot instead).
+  const initialUrlHadViewStateRef = useRef<boolean | null>(null);
+  if (initialUrlHadViewStateRef.current === null) {
+    initialUrlHadViewStateRef.current = hasViewParams(searchParams, tableKey);
+  }
+
+  const collapsed =
+    !revealed &&
+    !initialUrlHadViewStateRef.current &&
+    tabs.length <= 1 &&
+    !savedViews.some((view) => !view.is_default);
+  const reveal = useCallback(() => setRevealed(true), [setRevealed]);
 
   // ── Tab operations (no API writes) ─────────────────────────────────────────
 
@@ -281,6 +400,10 @@ export function useEntityViews({
 
   const openView = useCallback(
     (viewId: string) => {
+      if (defaultView && viewId === defaultView.id) {
+        switchTab(DEFAULT_TAB_ID);
+        return;
+      }
       const existing = tabs.find((tab) => tab.viewId === viewId);
       if (existing) {
         switchTab(existing.tabId);
@@ -296,7 +419,7 @@ export function useEntityViews({
       table.loadConfig(config);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tabs, viewById, defaultConfig, activeTabId, table.snapshotConfig, table.loadConfig, switchTab],
+    [tabs, viewById, defaultView, defaultConfig, activeTabId, table.snapshotConfig, table.loadConfig, switchTab],
   );
 
   const addAnonymousTab = useCallback(() => {
@@ -351,11 +474,48 @@ export function useEntityViews({
 
   // ── Persistence (the ONLY API writes) ──────────────────────────────────────
 
+  /** Create the `is_default` row for this table (first save/rename). */
+  const materializeDefault = useCallback(
+    async (name: string, config: ViewConfig): Promise<EntityView> => {
+      const created = await createEntityView({
+        table_key: tableKey,
+        name,
+        config: config as unknown as Record<string, unknown>,
+        is_default: true,
+        pinned: true,
+        position: 0,
+      });
+      queryClient.setQueryData<EntityView[]>(queryKey, (old = []) => [created, ...old]);
+      return created;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tableKey, queryClient],
+  );
+
   const saveActiveTab = useCallback(async (): Promise<'saved' | 'needs-name'> => {
     const active = tabs.find((tab) => tab.tabId === activeTabId);
-    if (!active || active.kind !== 'saved' || !active.viewId) return 'needs-name';
+    if (!active) return 'needs-name';
     const snapshot = table.snapshotConfig();
     try {
+      if (active.kind === 'default') {
+        // Round 2: the default tab saves in place — materializing on first save.
+        if (defaultView) {
+          const updated = await updateEntityView(defaultView.id, {
+            config: snapshot as unknown as Record<string, unknown>,
+          });
+          queryClient.setQueryData<EntityView[]>(queryKey, (old = []) =>
+            old.map((view) => (view.id === updated.id ? updated : view)),
+          );
+        } else {
+          await materializeDefault(defaultDisplayName, snapshot);
+        }
+        setTabs((prev) =>
+          prev.map((tab) => (tab.tabId === active.tabId ? { ...tab, config: snapshot } : tab)),
+        );
+        message.success(t({ id: 'common.entityViews.saved' }));
+        return 'saved';
+      }
+      if (active.kind !== 'saved' || !active.viewId) return 'needs-name';
       const updated = await updateEntityView(active.viewId, {
         config: snapshot as unknown as Record<string, unknown>,
       });
@@ -372,7 +532,7 @@ export function useEntityViews({
       throw err;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs, activeTabId, table.snapshotConfig, queryClient, t]);
+  }, [tabs, activeTabId, defaultView, defaultDisplayName, materializeDefault, table.snapshotConfig, queryClient, t]);
 
   const saveActiveTabAs = useCallback(
     async (name: string) => {
@@ -394,8 +554,8 @@ export function useEntityViews({
           ),
         );
       } else {
-        // Saving from the default (or a saved) tab opens the new view as its
-        // own tab; the Tabular tab reverts to pristine defaults.
+        // Saving-as from the default (or a saved) tab opens the new view as
+        // its own tab; the default tab reverts to its baseline.
         const tab: InternalTab = {
           tabId: uid(),
           kind: 'saved',
@@ -406,7 +566,7 @@ export function useEntityViews({
         setTabs((prev) => [
           ...prev.map((item) =>
             item.tabId === active.tabId && item.kind === 'default'
-              ? { ...item, config: defaultConfig }
+              ? { ...item, config: defaultBaseline }
               : item,
           ),
           tab,
@@ -416,7 +576,40 @@ export function useEntityViews({
       message.success(t({ id: 'common.entityViews.saved' }));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tabs, activeTabId, tableKey, defaultConfig, table.snapshotConfig, queryClient, t],
+    [tabs, activeTabId, tableKey, defaultBaseline, table.snapshotConfig, queryClient, t],
+  );
+
+  const renameTab = useCallback(
+    async (tabId: string, name: string) => {
+      const tab = tabs.find((item) => item.tabId === tabId);
+      if (!tab) return;
+      if (tab.kind === 'default') {
+        if (defaultView) {
+          const updated = await updateEntityView(defaultView.id, { name });
+          queryClient.setQueryData<EntityView[]>(queryKey, (old = []) =>
+            old.map((view) => (view.id === updated.id ? updated : view)),
+          );
+        } else {
+          // Renaming the virtual default materializes it (FR-003/FR-023).
+          const config = tabId === activeTabId ? table.snapshotConfig() : tab.config;
+          await materializeDefault(name, config);
+          setTabs((prev) =>
+            prev.map((item) => (item.tabId === tabId ? { ...item, config } : item)),
+          );
+        }
+        return;
+      }
+      if (tab.kind !== 'saved' || !tab.viewId) return;
+      const updated = await updateEntityView(tab.viewId, { name });
+      queryClient.setQueryData<EntityView[]>(queryKey, (old = []) =>
+        old.map((view) => (view.id === updated.id ? updated : view)),
+      );
+      setTabs((prev) =>
+        prev.map((item) => (item.tabId === tabId ? { ...item, name: updated.name } : item)),
+      );
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tabs, activeTabId, defaultView, materializeDefault, table.snapshotConfig, queryClient],
   );
 
   const commitManageChanges = useCallback(
@@ -464,14 +657,15 @@ export function useEntityViews({
     [savedViews, tableKey, queryClient, t],
   );
 
-  // ── URL sync (US3) ─────────────────────────────────────────────────────────
+  // ── URL sync (US3, readable per-facet params) ──────────────────────────────
 
-  // INBOUND: apply `view[<tableKey>]` from the URL — on mount, on back/forward,
-  // and on hand-edited query strings. Malformed/unresolvable params fall back
-  // to the Tabular default with a non-blocking warning (FR-008).
+  // INBOUND: apply the table's view params — on mount, on back/forward, and on
+  // hand-edited query strings. Malformed/unresolvable params fall back to the
+  // default view with a non-blocking warning (FR-008).
   useEffect(() => {
-    const raw = searchParams.get(paramName);
-    if (raw === null) {
+    const entries = viewEntriesOf(searchParams);
+    const raw = JSON.stringify(entries);
+    if (entries.length === 0) {
       inboundSettledRef.current = true;
       return;
     }
@@ -485,45 +679,64 @@ export function useEntityViews({
       lastProcessedRef.current = raw; // don't re-process the same bad value
       inboundSettledRef.current = true;
       setActiveTabId(DEFAULT_TAB_ID);
-      table.loadConfig(defaultConfig);
+      table.loadConfig(defaultBaseline);
     };
 
-    const parsed = parseViewParam(raw);
+    const parsed = parseViewParams(searchParams, tableKey);
     if (!parsed.ok) {
       fallbackToDefault('common.entityViews.invalidView');
       return;
     }
+    if (!parsed.present) {
+      inboundSettledRef.current = true;
+      return;
+    }
 
-    const applyParsed = (view: ParsedView) => {
+    const applyParsed = (view: ParsedViewState) => {
+      const target = view.viewName !== undefined
+        ? savedViews.find((sv) => sv.name === view.viewName)
+        : undefined;
+      const isDefaultTarget =
+        view.viewName !== undefined &&
+        (target ? target.is_default : view.viewName === defaultDisplayName);
+
       const baseConfig =
-        view.type === 'saved'
-          ? reconcileConfig(
-              coerceConfig(viewById(view.id)?.config, defaultConfig),
-              defaultConfig,
-            )
-          : defaultConfig;
+        view.viewName === undefined
+          ? defaultConfig
+          : isDefaultTarget
+            ? defaultBaseline
+            : reconcileConfig(coerceConfig(target!.config, defaultConfig), defaultConfig);
       const config: ViewConfig = {
         ...baseConfig,
         ...view.config,
-        columns: view.visibleColumnKeys
-          ? columnsFromVisibleKeys(view.visibleColumnKeys, defaultConfig.columns)
-          : (view.config.columns ?? baseConfig.columns),
+        columns: view.visibleColumns
+          ? columnsFromVisibleKeys(view.visibleColumns, defaultConfig.columns)
+          : baseConfig.columns,
       };
       const offset = view.page ? (view.page - 1) * config.pageSize : 0;
       const snapshot = table.snapshotConfig();
 
-      if (view.type === 'inline') {
+      if (view.viewName === undefined) {
         // Inline state belongs to a non-saved tab: the active default/anonymous
-        // tab, or the Tabular tab when a saved view is currently active.
+        // tab, or the default tab when a saved view is currently active.
         const activeInternal = tabs.find((tab) => tab.tabId === activeTabId);
         const targetId =
           activeInternal && activeInternal.kind !== 'saved' ? activeTabId : DEFAULT_TAB_ID;
-        setTabs((prev) =>
-          prev.map((tab) => (tab.tabId === targetId ? { ...tab, config } : tab)),
-        );
+        setTabs((prev) => prev.map((tab) => (tab.tabId === targetId ? { ...tab, config } : tab)));
         setActiveTabId(targetId);
+      } else if (isDefaultTarget) {
+        setTabs((prev) =>
+          prev.map((tab) =>
+            tab.tabId === DEFAULT_TAB_ID
+              ? { ...tab, config }
+              : tab.tabId === activeTabId
+                ? { ...tab, config: snapshot }
+                : tab,
+          ),
+        );
+        setActiveTabId(DEFAULT_TAB_ID);
       } else {
-        const existing = tabs.find((tab) => tab.viewId === view.id);
+        const existing = tabs.find((tab) => tab.viewId === target!.id);
         if (existing) {
           setTabs((prev) =>
             prev.map((tab) =>
@@ -536,12 +749,11 @@ export function useEntityViews({
           );
           setActiveTabId(existing.tabId);
         } else {
-          const view_ = viewById(view.id)!;
           const tab: InternalTab = {
             tabId: uid(),
             kind: 'saved',
-            viewId: view_.id,
-            name: view_.name,
+            viewId: target!.id,
+            name: target!.name,
             config,
           };
           setTabs((prev) => [
@@ -558,8 +770,9 @@ export function useEntityViews({
       inboundSettledRef.current = true;
     };
 
-    if (parsed.view.type === 'saved') {
-      if (!viewById(parsed.view.id)) {
+    if (parsed.view.viewName !== undefined) {
+      const target = savedViews.find((sv) => sv.name === parsed.view.viewName);
+      if (!target && parsed.view.viewName !== defaultDisplayName) {
         if (!isFetched) return; // wait for the saved-view list, then re-run
         fallbackToDefault('common.entityViews.unresolvedView');
         return;
@@ -570,56 +783,56 @@ export function useEntityViews({
   }, [searchParams, savedViews, isFetched]);
 
   // OUTBOUND: keep the URL describing the active tab's effective state, so
-  // copying it at any moment reproduces the visible table (SC-003). Pristine
-  // default state clears the param (clean URLs). History semantics: replace.
+  // copying it at any moment reproduces the visible table (SC-003). A clean
+  // default tab clears every view param (clean URLs). History: replace.
   useEffect(() => {
     if (!inboundSettledRef.current) return;
     const activeInternal = tabs.find((tab) => tab.tabId === activeTabId);
     if (!activeInternal) return;
     const snapshot = table.snapshotConfig();
+    const reconciled = reconcileConfig(snapshot, defaultConfig);
     const page = table.limit > 0 ? Math.floor(table.offset / table.limit) + 1 : 1;
     const pageOut = page > 1 ? page : undefined;
 
-    let inner: string;
+    let desired: [string, string][];
     const view = viewById(activeInternal.viewId);
     if (activeInternal.kind === 'saved' && activeInternal.viewId && view) {
       const baseline = reconcileConfig(coerceConfig(view.config, defaultConfig), defaultConfig);
-      const reconciled = reconcileConfig(snapshot, defaultConfig);
-      const overrides: Partial<ViewConfig> = {};
-      if (JSON.stringify(reconciled.filters) !== JSON.stringify(baseline.filters)) {
-        overrides.filters = reconciled.filters;
+      desired = serializeSavedEntries(
+        tableKey,
+        view.name,
+        facetOverrides(reconciled, baseline),
+        pageOut,
+      );
+    } else if (activeInternal.kind === 'default') {
+      const baseline = reconcileConfig(defaultBaseline, defaultConfig);
+      if (configsEqual(reconciled, baseline)) {
+        // Clean default → clean URL (page transport only).
+        desired = pageOut ? [[facetParam(tableKey, 'page'), String(pageOut)]] : [];
+      } else if (defaultView) {
+        desired = serializeSavedEntries(
+          tableKey,
+          defaultView.name,
+          facetOverrides(reconciled, baseline),
+          pageOut,
+        );
+      } else {
+        desired = serializeInlineEntries(tableKey, reconciled, defaultConfig, pageOut);
       }
-      if (JSON.stringify(reconciled.sort) !== JSON.stringify(baseline.sort)) {
-        overrides.sort = reconciled.sort;
-      }
-      const visible = (c: ViewConfig) =>
-        c.columns
-          .filter((col) => col.visible)
-          .sort((a, b) => a.order - b.order)
-          .map((col) => col.key)
-          .join(',');
-      if (visible(reconciled) !== visible(baseline)) overrides.columns = reconciled.columns;
-      if (reconciled.stickyLeft !== baseline.stickyLeft) overrides.stickyLeft = reconciled.stickyLeft;
-      if (reconciled.stickyRight !== baseline.stickyRight) {
-        overrides.stickyRight = reconciled.stickyRight;
-      }
-      if (reconciled.pageSize !== baseline.pageSize) overrides.pageSize = reconciled.pageSize;
-      inner = serializeSaved(activeInternal.viewId, overrides, pageOut);
     } else {
-      inner = serializeInline(snapshot, defaultConfig, pageOut);
+      desired = serializeInlineEntries(tableKey, reconciled, defaultConfig, pageOut);
     }
 
-    const clearParam = inner === 'type=inline';
-    const current = searchParams.get(paramName);
-    if (clearParam ? current === null : current === inner) return;
-    lastParamRef.current = clearParam ? null : inner;
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (clearParam) next.delete(paramName);
-        else next.set(paramName, inner);
-        return next;
-      },
+    const desiredJson = JSON.stringify(desired);
+    const currentJson = JSON.stringify(viewEntriesOf(searchParams));
+    if (desiredJson === currentJson && ![...searchParams.keys()].some((k) => k.startsWith('view['))) {
+      return;
+    }
+    lastParamRef.current = desired.length > 0 ? desiredJson : null;
+    const foreign = [...searchParams.entries()].filter(([key]) => !isViewParamKey(key));
+    const search = buildSearchString([...foreign, ...desired]);
+    navigate(
+      { pathname: location.pathname, search: search ? `?${search}` : '' },
       { replace: true },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -631,12 +844,15 @@ export function useEntityViews({
     activeTab,
     savedViews,
     isAnyDirty,
+    collapsed,
+    reveal,
     switchTab,
     addAnonymousTab,
     closeTab,
     openView,
     saveActiveTab,
     saveActiveTabAs,
+    renameTab,
     duplicateActiveTab,
     commitManageChanges,
   };

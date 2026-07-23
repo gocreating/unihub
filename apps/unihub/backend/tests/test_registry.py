@@ -13,6 +13,7 @@ def test_all_domain_tables_registered() -> None:
     expected_labels = {
         # core
         "core.attributedefinition",
+        "core.entityview",
         # finance
         "finance.currency",
         "finance.account",

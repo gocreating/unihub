@@ -91,14 +91,12 @@ export function AccountsPage() {
   const table = useEntityTable({ key: 'finance-accounts', filterableAttrs, columnDefs });
   const { filter, sort, cols } = table;
 
-  // The "Tabular" baseline the view tabs diff against (016 views).
+  // The default-view baseline the view tabs diff against (016 views).
   const defaultViewConfig = useMemo<ViewConfig>(
     () => ({
       filters: [],
       sort: [],
-      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order })),
-      stickyLeft: false,
-      stickyRight: false,
+      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order, pin: c.pin })),
       pageSize: 25,
     }),
     [columnDefs],

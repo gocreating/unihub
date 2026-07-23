@@ -429,14 +429,11 @@ describe('useColumnConfig loadState (016 entity views)', () => {
     const { result } = renderHook(() => useColumnConfig(cols));
 
     act(() => {
-      result.current.loadState(
-        [
-          { key: 'amount', visible: true, order: 0 },
-          { key: 'attr:deleted99', visible: true, order: 1 }, // stale — dropped (FR-021)
-          { key: 'name', visible: false, order: 2 },
-        ],
-        { left: true, right: false },
-      );
+      result.current.loadState([
+        { key: 'amount', visible: true, order: 0, pin: 'left' },
+        { key: 'attr:deleted99', visible: true, order: 1 }, // stale — dropped (FR-021)
+        { key: 'name', visible: false, order: 2 },
+      ]);
     });
 
     const state = result.current.activeState;
@@ -448,8 +445,7 @@ describe('useColumnConfig loadState (016 entity views)', () => {
     expect(state.columns[0]!.label).toBe('Amount');
     expect(state.columns[0]!.dataType).toBe('number');
     expect(result.current.visibleColumns.map((c) => c.key)).toEqual(['amount']);
-    // sticky {left:true} projects onto the per-column model: no default left
-    // pin exists, so the first visible column gains it; no right pin appears.
+    // v2: the listed column's stored per-column pin applies verbatim.
     expect(result.current.fixedForKey('amount')).toBe('left');
     expect(result.current.pinFingerprint).toBe('amount:left');
     expect(result.current.isDirty).toBe(false);
@@ -460,10 +456,7 @@ describe('useColumnConfig loadState (016 entity views)', () => {
     const { result } = renderHook(() => useColumnConfig(cols));
 
     act(() => {
-      result.current.loadState([{ key: 'name', visible: true, order: 0 }], {
-        left: false,
-        right: false,
-      });
+      result.current.loadState([{ key: 'name', visible: true, order: 0 }]);
     });
 
     const keys = result.current.activeState.columns.map((c) => c.key);

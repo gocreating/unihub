@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
@@ -47,11 +47,12 @@ describe('ExchangeRatesPage — entity views (016)', () => {
     vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
   });
 
-  it('renders the view row with the default Tabular tab active', async () => {
+  it('reveals the view row with the default Table tab active', async () => {
     renderPage();
     // Wait for the exchange-rate row to appear.
     await screen.findByText('USD');
-    const tab = screen.getByRole('tab', { name: /tabular/i });
+    fireEvent.click(screen.getByLabelText('Show views'));
+    const tab = screen.getByRole('tab', { name: /table/i });
     expect(tab).toHaveAttribute('aria-selected', 'true');
   });
 });

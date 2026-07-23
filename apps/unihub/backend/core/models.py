@@ -95,6 +95,9 @@ class EntityView(models.Model):
     config = models.JSONField(default=dict)
     pinned = models.BooleanField(default=False)
     position = models.IntegerField(default=0)
+    # Round 2: the table's materialized default view — at most one per
+    # (owner, table_key); create-only and undeletable (guaranteed fallback).
+    is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -102,7 +105,12 @@ class EntityView(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["owner", "table_key", "name"], name="unique_view_name_per_table"
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["owner", "table_key"],
+                condition=models.Q(is_default=True),
+                name="unique_default_view_per_table",
+            ),
         ]
         ordering = ["position", "created_at"]
 

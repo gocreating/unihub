@@ -78,6 +78,8 @@ export interface EntityView {
   config: Record<string, unknown>;
   pinned: boolean;
   position: number;
+  /** The table's materialized default view — create-only, undeletable (round 2). */
+  is_default: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -88,6 +90,7 @@ export interface EntityViewCreatePayload {
   config: Record<string, unknown>;
   pinned?: boolean;
   position?: number;
+  is_default?: boolean;
 }
 
 export type EntityViewPatch = Partial<Pick<EntityView, 'name' | 'config' | 'pinned' | 'position'>>;

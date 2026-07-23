@@ -1,13 +1,19 @@
 /**
- * E2E — Entity Views (016): the view tab row and URL deep-linking.
+ * E2E — Entity Views (016, round 2): the view tab row, auto-hide, and URL
+ * deep-linking.
  *
- * US2 — tab-row geometry (FR-020): `[+]` fixed at the left edge, the tab
- * strip scrolls horizontally when it overflows, and the View control stays
- * fixed at the right edge — verified at a narrow viewport with real geometry
- * (project rule: layout claims need real-browser assertions, not JSDOM).
+ * US2 — tab-row geometry (FR-009/FR-020): the tab strip scrolls horizontally
+ * when it overflows, the "+" button sits immediately after the rightmost tab
+ * and stays visible under overflow, and the View control stays fixed at the
+ * right edge — verified at a narrow viewport with real geometry (project rule:
+ * layout claims need real-browser assertions, not JSDOM).
  *
- * US3 — deep links: a URL carrying `view[<tableKey>]` state applies it on
- * load; a saved-view reference with overrides shows the unsaved indicator.
+ * FR-025 — the view row auto-hides when only the default view exists; a
+ * compact affordance reveals it on demand.
+ *
+ * US3 — deep links: a readable `<tableKey>.<facet>` URL applies its state on
+ * load; a saved-view reference by name resolves; a hand-edited facet override
+ * shows the unsaved indicator.
  *
  * Prerequisites:
  *   1. Backend running: docker compose -f docker-compose.local.yml up
@@ -25,22 +31,47 @@ async function login(page: Page) {
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10_000 });
 }
 
-test.describe('entity-views tab row (US2)', () => {
-  test('renders [+] tabs [View] with the Tabular tab pinned by default', async ({ page }) => {
+/** Reveal the view row (it auto-hides when only the default view exists). */
+async function revealRow(page: Page) {
+  const reveal = page.getByTestId('view-tabs-collapsed');
+  if (await reveal.isVisible().catch(() => false)) {
+    await reveal.getByRole('button').click();
+  }
+}
+
+test.describe('entity-views auto-hide (FR-025)', () => {
+  test('the row is hidden by default and the affordance reveals it', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
+
+    // Collapsed: only the reveal affordance shows, not the full tab row.
+    const collapsed = page.getByTestId('view-tabs-collapsed');
+    await expect(collapsed).toBeVisible();
+    await expect(page.getByTestId('view-tabs-strip')).toBeHidden();
+
+    await collapsed.getByRole('button').click();
+    await expect(page.getByTestId('view-tabs-row')).toBeVisible();
+    // The catalog's default view is named "YTD".
+    await expect(page.getByRole('tab', { name: 'YTD' })).toBeVisible();
+  });
+});
+
+test.describe('entity-views tab row (US2)', () => {
+  test('renders the strip, then "+", then the View control', async ({ page }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
-    await expect(row.getByRole('tab', { name: 'Tabular' })).toBeVisible();
+    await expect(row.getByRole('tab', { name: 'YTD' })).toBeVisible();
     await expect(row.getByLabel('New view tab')).toBeVisible();
     await expect(row.getByRole('button', { name: /^View/ })).toBeVisible();
   });
 
-  test('narrow screens scroll the strip while [+] and [View] stay at the edges', async ({
-    page,
-  }) => {
+  test('"+" stays visible right after the last tab while the strip scrolls', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
+    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
@@ -55,11 +86,19 @@ test.describe('entity-views tab row (US2)', () => {
     const overflows = await strip.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
     expect(overflows).toBe(true);
 
-    // Geometry: [+] hugs the row's left edge; View hugs the right edge.
+    // The "+" button is NOT inside the scrolling strip and stays visible.
+    await expect(addButton).toBeVisible();
+    const insideStrip = await strip.evaluate(
+      (el) => !!el.querySelector('[aria-label="New view tab"]'),
+    );
+    expect(insideStrip).toBe(false);
+
+    // Geometry: "+" sits to the right of the strip; View hugs the row's right edge.
     const rowBox = (await row.boundingBox())!;
+    const stripBox = (await strip.boundingBox())!;
     const addBox = (await addButton.boundingBox())!;
     const viewBox = (await row.getByRole('button', { name: /^View/ }).boundingBox())!;
-    expect(Math.abs(addBox.x - rowBox.x)).toBeLessThanOrEqual(4);
+    expect(addBox.x).toBeGreaterThanOrEqual(stripBox.x + stripBox.width - 4);
     expect(Math.abs(viewBox.x + viewBox.width - (rowBox.x + rowBox.width))).toBeLessThanOrEqual(4);
 
     // The strip itself scrolls horizontally.
@@ -76,30 +115,29 @@ test.describe('entity-views tab row (US2)', () => {
   });
 });
 
-test.describe('entity-views URL deep-linking (US3)', () => {
-  test('an inline view URL applies its config on load and marks the tab dirty', async ({
+test.describe('entity-views URL deep-linking (US3, readable params)', () => {
+  test('a readable inline URL applies its config on load and marks the tab dirty', async ({
     page,
   }) => {
     await login(page);
-    // Inline state: sort by source ascending, page size 100.
-    const inner = encodeURIComponent('type=inline&ordering=acquisition__source&page_size=100');
-    await page.goto(`/inventory/catalog?view[inventory-catalog]=${inner}`);
+    // Readable inline state: sort by source ascending, page size 100.
+    await page.goto(
+      '/inventory/catalog?inventory-catalog.sort=acquisition__source&inventory-catalog.size=100',
+    );
 
     const row = page.getByTestId('view-tabs-row');
-    await expect(row).toBeVisible();
-    // Inline state differing from defaults shows the unsaved dot on the active tab.
+    await expect(row).toBeVisible(); // URL view state forces the row open
     await expect(row.getByLabel('Unsaved changes').first()).toBeVisible();
-    // The page-size select reflects the transported 100/page.
     await expect(page.getByText('100 / page').first()).toBeVisible();
   });
 
-  test('editing the view query string navigates the table state', async ({ page }) => {
+  test('a hand-edited size override on the URL navigates the table state', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
+    await revealRow(page);
     await expect(page.getByTestId('view-tabs-row')).toBeVisible();
 
-    const inner = encodeURIComponent('type=inline&page_size=100');
-    await page.goto(`/inventory/catalog?view[inventory-catalog]=${inner}`);
+    await page.goto('/inventory/catalog?inventory-catalog.size=100');
     await expect(page.getByText('100 / page').first()).toBeVisible();
   });
 });

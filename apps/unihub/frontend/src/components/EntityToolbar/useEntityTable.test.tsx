@@ -351,11 +351,9 @@ describe('useEntityTable snapshotConfig / loadConfig (016 entity views)', () => 
     ],
     sort: [{ field: 'amount', direction: 'desc' as const }],
     columns: [
-      { key: 'amount', visible: true, order: 0 },
+      { key: 'amount', visible: true, order: 0, pin: 'left' as const },
       { key: 'name', visible: false, order: 1 },
     ],
-    stickyLeft: true,
-    stickyRight: false,
     pageSize: 100,
   };
 
@@ -368,11 +366,9 @@ describe('useEntityTable snapshotConfig / loadConfig (016 entity views)', () => 
     expect(snap.filters).toEqual([]);
     expect(snap.sort).toEqual([]);
     expect(snap.columns).toEqual([
-      { key: 'name', visible: true, order: 0 },
-      { key: 'amount', visible: true, order: 1 },
+      { key: 'name', visible: true, order: 0, pin: undefined },
+      { key: 'amount', visible: true, order: 1, pin: undefined },
     ]);
-    expect(snap.stickyLeft).toBe(false);
-    expect(snap.stickyRight).toBe(false);
     expect(snap.pageSize).toBe(25);
   });
 

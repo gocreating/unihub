@@ -102,12 +102,17 @@ def preview_from_fetch_head(clone_dir: Path) -> list:
     return preview_from_commit(clone_dir, "FETCH_HEAD")
 
 
-def import_from_clone(clone_dir: Path) -> list:
+def import_from_clone(clone_dir: Path, acting_user: object | None = None) -> list:
     """Import all table CSVs from the working tree into the DB.
 
     Uses truncate-then-reinsert within a single transaction so that cross-device
     NanoID mismatches don't cause unique-constraint violations on secondary keys.
     Tables are deleted in reverse dependency order and reinserted in forward order.
+
+    Args:
+        clone_dir: The server clone whose working tree holds the CSVs.
+        acting_user: The user performing the import; stamped into tables that
+            declare an ``owner_field`` (their owner column is never in the CSV).
     """
     from data_io.registry import get_registry, topo_sort
     from data_io.services.change_preview import apply_diff, compute_diff
@@ -146,7 +151,7 @@ def import_from_clone(clone_dir: Path) -> list:
         for label in sorted_labels:
             desc, parsed_rows = data_map[label]
             diff = compute_diff(parsed_rows, desc, mode="replace")
-            counts = apply_diff(diff, desc, mode="replace")
+            counts = apply_diff(diff, desc, mode="replace", acting_user=acting_user)
             results.append(
                 {
                     "table": label,

@@ -31,6 +31,10 @@ class TableDescriptor:
     system_fields: list[FieldDescriptor] = field(default_factory=list)
     has_user_attributes: bool = False
     import_order: int = 99
+    # Per-user tables: name of a model field that is NEVER serialized (exclude
+    # it from system_fields) and is stamped with the acting user on import.
+    # Importing such a table without an acting user is an explicit error.
+    owner_field: str | None = None
 
     @property
     def depends_on(self) -> list[str]:

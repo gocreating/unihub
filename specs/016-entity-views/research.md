@@ -114,3 +114,63 @@ Stored verbatim as `EntityView.config` (JSONField). Column labels/dataTypes are 
 **Decision**: `EntityViewViewSet` (ModelViewSet, `http_method_names = get/post/patch/delete`), owner-scoped queryset (`filter(owner=request.user)`), `?table_key=` list filter, `pagination_class = None` (small collections), unique-name validation surfaced as DRF 400, and a `POST /entity-views/reorder/` action accepting `{table_key, ids: […]}` that rewrites `position` in bulk. `perform_create` stamps `owner=request.user`. Config is validated as a JSON object server-side (shape enforcement stays client-side — mirrors the forgiving `EntityFilterBackend` contract and keeps the schema evolvable).
 
 **Rationale**: Matches the canonical `AccountViewSet` shape; owner scoping matches "views are personal" spec assumption; bulk reorder avoids N PATCHes from the staged modal.
+
+---
+
+# Round 2 Research (2026-07-23)
+
+Round 2 decisions per the spec's Clarifications Session 2026-07-23. Backend registry facts below come from a fresh code exploration of `data_io/registry.py`, `csv_exporter.py`, `csv_importer.py`, `change_preview.py`, `sync/views.py`, `apply_helper.py`, `publish_helper.py`.
+
+## R14. "Tabular" → "Table" + page-provided default-view names
+
+**Decision**: The generic default-tab label key (`common.entityViews.*` default-tab entry) changes to "Table" (zh-TW 「表格」). `useEntityTable`/`useEntityViews` accept a new optional `defaultViewName?: string`; the catalog page passes the literal `'YTD'` (same string both locales — it names the seeded year-to-date filter and is view data, not UI chrome). While the default view is virtual, the displayed name is the page-provided literal or the localized generic label; whatever is displayed at materialization time is stored verbatim and is thereafter user data.
+
+**Alternatives considered**: localizing "YTD" per locale (rejected — view names are user data; the user explicitly named it "YTD"); keeping "Tabular" as a stored legacy alias (rejected — nothing stored referenced the old label; it was purely an i18n value).
+
+## R15. Default view as a plain view — `is_default` materialization
+
+**Decision**: `EntityView` gains `is_default = BooleanField(default=False)` with a partial unique constraint (`owner`, `table_key`, `WHERE is_default`). The default tab binds to the stored `is_default` view when one exists (name + config from the row); otherwise it renders virtually from page defaults (round-1 behavior). First save OR rename of the virtual default POSTs with `is_default: true, pinned: true`. Rules: `is_default` is create-only (PATCH rejects changes, like `table_key`); DELETE on an `is_default` row → 400 (frontend never offers it; backend guards the invariant); the default tab is ALWAYS the first tab and is excluded from manage-modal reordering (rename/pin stay enabled; drag handle and delete hidden on its row). Unpinning the default is allowed — the fallback guarantee comes from `is_default`, not from pin state.
+
+**Rationale**: A flag beats name conventions (renamable) and beats keeping it virtual (rename/save must persist). Always-first + no-reorder keeps "guaranteed fallback" trivially true and avoids a position-backfill problem on materialization (append-position would jump the default to the end of the strip).
+
+**Alternatives considered**: seeded per-user default rows for every table (rejected round 1, still rejected: creation-on-visit noise); a separate `DefaultViewOverride` model (rejected: two models for one concept); allowing reorder of the default (rejected: position materialization ambiguity, weak user value).
+
+## R16. "+" button placement — after the last tab, always visible
+
+**Decision**: `ViewTabs` reorders to `[scrollable tab strip][+][spacer][View]`. The "+" button is a flex sibling OUTSIDE the scrollable strip (`flex: 0 0 auto`), so when tabs overflow, the strip scrolls and "+" stays docked at its right edge; when tabs fit, the strip shrink-wraps (`flex: 0 1 auto`) and "+" sits flush after the last tab. The View control keeps `margin-left: auto` (fixed right edge).
+
+**Alternatives considered**: "+" as the last element INSIDE the scrollable strip with `position: sticky; right: 0` (rejected: sticky-in-scroll paints over tab edges and needs background/shadow hacks); keeping "+" left (rejected: explicit user directive).
+
+## R17. Double-click rename — inline input in the tab
+
+**Decision**: Double-clicking a saved or default tab swaps its label for an inline AntD `Input` (autofocused, value preselected). Enter or blur commits; Esc cancels. Commit renames immediately (PATCH; or the materializing POST for a virtual default) — rename IS the save action, so the staged-mutations rule does not apply. On a 400 name collision the input stays open with error state + translated `message.error`. Double-clicking an ANONYMOUS tab opens the existing `SaveViewModal` (name-and-save, FR-014). During inline editing the tab's click/switch handlers suspend.
+
+**Alternatives considered**: reusing `SaveViewModal` for all renames (rejected: heavier than needed for an in-place rename; the modal remains for name-and-save); commit-on-blur = cancel (rejected: blur-commit matches AntD editable-text conventions; Esc is the explicit cancel).
+
+## R18. Readable URL grammar (replaces the packed `view[<tableKey>]` mini-format)
+
+**Decision**: Discrete namespaced params `<tableKey>.<facet>`; full grammar in the rewritten [contracts/view-url-serialization.md](contracts/view-url-serialization.md). Facets: `view` (saved-view reference **by name** — readable, unique per table per account; also matches the page's default name while the default is virtual), repeatable `f` (one filter group per param: `and(...)`/`or(...)` with `attr op val` conditions, `;`-separated), `sort` (existing DRF ordering string), `cols` (visible keys in display order with `~left`/`~right` pin suffixes), `size`, `page`. No `view` param → inline state; with `view` → facets are overrides. A clean default tab emits NO params (clean URLs). Serialization writes minimal percent-encoding (custom emitter; only `& = % # +` and control chars escaped — browsers render `%20` as spaces in the address bar); parsing accepts any encoding via `URLSearchParams`. The round-1 `view[<tableKey>]` format is DROPPED (not parsed): it shipped 2026-07-22 on a personal hub — stale deep-links hit the FR-008 fallback with a notice, which is acceptable; carrying two grammars is not.
+
+**Rationale**: Every facet is legible and hand-editable (`?inventory-catalog.view=YTD&inventory-catalog.size=100` reads itself), satisfying FR-022/SC-007. Name-based references are the single biggest readability win over nanoid ids; rename breaking an old bookmark degrades per FR-008. `sort` and `cols` reuse existing serializers/keys verbatim.
+
+**Alternatives considered**: keeping ids alongside names (`view=YTD~Vx3kQ9aB` — rejected: defeats readability, two sources of truth); flat unnamespaced params for single-table pages (rejected: FR-007 requires namespacing; two grammars again); JSON filters param (rejected: URL-encoded JSON is exactly the unreadable blob the user rejected).
+
+## R19. Per-column pins in ViewConfig v2 (+ stored-config migration)
+
+**Decision**: `ViewConfig.columns[]` entries gain `pin?: 'left' | 'right'`; `stickyLeft`/`stickyRight` are REMOVED. Snapshot/load map 1:1 to `useColumnConfig`'s `ColumnDef.pin` — no projection, multi-pin layouts round-trip (closes the round-1 open decision recorded in memory/CLAUDE.md). Migration `core/0006` data-migrates every stored `EntityView.config`: `stickyLeft` → `pin: 'left'` on the first visible column (by `order`), `stickyRight` → `pin: 'right'` on the last visible, keys dropped. `normalizeConfig` additionally upgrades v1 shapes in memory (sessionStorage tabs from a pre-upgrade session).
+
+## R20. data_io registration — `owner_field` stamping (deferral resolved)
+
+**Decision**: `TableDescriptor` gains `owner_field: str | None = None`. Contract: the named model field is (a) NEVER exported — `auto_system_fields` excludes it, so it appears in no CSV, no diff, no headers; (b) on import/materialize, stamped with the **acting user**, threaded as a new `acting_user` parameter through `apply_diff`, `import_from_clone`, `apply_selected` from the endpoints that own a request (`ImportConfirmView`, `ImportZipConfirmView`, `SyncCheckoutConfirmView` → `request.user`). Registering a table with `owner_field` set makes importing it without an acting user an explicit error. `core/apps.py` replaces the deferral comment with the `core.entityview` registration (`owner_field="owner"`, `is_json` config column, `import_order` beside `core.attributedefinition`).
+
+**Rationale**: Exploration confirmed the registry has NO per-field hooks and NO user context in the import chain; `use_natural_key` is contenttypes-hardwired in three sites (`csv_exporter.py:17`, `change_preview.py:17,178`). FR-024 says imported views attach to the importing account — so a username natural key is not just harder (generalizing three sites + cross-deployment username mismatches), it is WRONG per spec. Excluding owner from CSV also structurally eliminates phantom diffs (integer PKs differing across deployments — the exact class of bug from the 015 sync incident). Single-user assumption documented in spec: export writes all rows; multi-owner collisions on `(owner, table_key, name)` cannot occur in practice.
+
+**Alternatives considered**: generalized FK natural keys (`auth.user` by username — rejected: contradicts FR-024, breaks when usernames differ, triples the touched surface); static `default_value` injection (rejected: registration-time constant cannot be "the requesting user"); a post-import signal fixing owners (rejected: hides the invariant, rows would transiently violate NOT NULL).
+
+## R21. Auto-hidden view row — collapsed affordance in the same `viewBar` slot
+
+**Decision**: `ViewTabs` renders one of two modes in the SAME PageTable `viewBar` slot. Collapsed mode — a single compact icon button, right-aligned (no full row), with a tooltip and the dirty dot when the hidden default tab is dirty; clicking sets `revealed: true` (persisted in the existing `unihub.views.<tableKey>` sessionStorage state). Expanded mode — the full tab row. Expanded is forced (affordance hidden) whenever: any non-default saved view exists, OR >1 tab is open, OR the URL addresses a non-default view state. Collapsed is the initial state otherwise; `revealed` keeps a manual reveal for the session. Closing the last extra tab while `revealed` is false returns to collapsed.
+
+**Rationale**: Keeping both modes inside `viewBar` preserves Principle VII (PageTable owns structure; zero per-page markup). sessionStorage matches the spec's "manual reveal persists for the rest of the session" exactly. The dirty dot on the affordance preserves SC-005 while hidden.
+
+**Alternatives considered**: a toolbar button next to Filter/Sort (rejected: toolbar content is page-owned — five pages would each wire it; the slot already exists); localStorage persistence (rejected: spec says session lifetime); auto-expanding on dirty (rejected: config edits are constant during normal browsing — noisy; the dot on the affordance covers visibility).

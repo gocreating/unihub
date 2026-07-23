@@ -15,19 +15,20 @@
   "config": {
     "filters": [{ "logic": "and", "conditions": [{ "attr": "obtained_at", "op": "gte", "val": "2026-01-01" }] }],
     "sort": [{ "field": "acquisition__obtained_at", "direction": "desc", "nulls": "first" }],
-    "columns": [{ "key": "name", "visible": true, "order": 0 }],
-    "stickyLeft": true,
-    "stickyRight": false,
+    "columns": [{ "key": "name", "visible": true, "order": 0, "pin": "left" }],
     "pageSize": 50
   },
   "pinned": true,
   "position": 0,
+  "is_default": false,
   "created_at": "2026-07-20T09:00:00Z",
   "updated_at": "2026-07-20T09:00:00Z"
 }
 ```
 
 `owner` is never serialized in or out.
+
+**Round 2 (2026-07-23)**: `config` is ViewConfig **v2** (per-column `pin`, no `stickyLeft`/`stickyRight` — migration 0006 rewrites stored rows). New `is_default` field: write-once on create (the frontend materializes the virtual default tab with `is_default: true, pinned: true`); at most one per (owner, table_key) (partial unique constraint → 400 on a second); PATCH attempting to change it → 400; DELETE on an `is_default` row → 400 (guaranteed-fallback invariant, FR-003).
 
 ## Endpoints
 
@@ -56,6 +57,7 @@ Partial update: `name`, `config`, `pinned`, `position`. `table_key` immutable �
 ### `DELETE /api/v1/core/entity-views/{id}/`
 
 - **204** → deleted
+- **400** → `is_default` view (undeletable — round 2)
 - **404** → not found / not owner
 
 ### `POST /api/v1/core/entity-views/reorder/`
@@ -70,6 +72,14 @@ Sets `position = index` for each id, in order. All ids MUST exist, belong to the
 
 - **200** → `[EntityView, …]` (the table's views, new order)
 - **400** → unknown/foreign id in list, id of another table, duplicate ids, or missing fields
+
+## data_io / git-sync contract (round 2 — FR-024, R20)
+
+`core.entityview` is registered with the data_io registry using the new `TableDescriptor.owner_field="owner"` capability:
+
+- **Export / publish**: the owner column appears in NO CSV, NO diff, NO headers. Exported columns: `id`, `table_key`, `name`, `config` (JSON), `pinned`, `position`, `is_default`, timestamps. All rows export (single-user deployment assumption).
+- **Import / checkout**: `owner` is stamped with the **acting user**, threaded as `acting_user` through `apply_diff` / `import_from_clone` / `apply_selected` from `ImportConfirmView`, `ImportZipConfirmView`, `ImportBatchPreviewView` (confirm path), and `SyncCheckoutConfirmView` (`request.user`). Importing an `owner_field` table without an acting user is an explicit error.
+- **Round trip** (SC-008): publish → checkout (or export → import) preserves id, name, table_key, config, pinned, position, is_default for every view; owner integer PKs can never produce phantom diffs because they are never serialized.
 
 ## Test contract (pytest-django, TDD — write first)
 
@@ -86,3 +96,17 @@ Sets `position = index` for each id, in order. All ids MUST exist, belong to the
 9. `test_reorder_happy_path` — positions rewritten to list order.
 10. `test_reorder_rejects_foreign_or_mixed_ids` — 400.
 11. `test_position_appended_on_create` — omitted position lands after max.
+
+Round 2 additions (write first, red before green):
+
+12. `test_create_default_view` — `is_default: true` → 201; second default same (owner, table_key) → 400; different table → 201.
+13. `test_patch_cannot_change_is_default` — flipping either way → 400.
+14. `test_delete_default_view_rejected` — 400; non-default sibling still deletes → 204.
+15. `test_config_migration_sticky_to_pins` — migration 0006 rewrites `stickyLeft/Right` into per-column `pin` (first/last visible), removes the old keys.
+
+`backend/tests/test_entity_views_io.py` (NEW):
+
+16. `test_export_excludes_owner_column` — CSV headers contain no owner; all fields above present.
+17. `test_import_stamps_acting_user` — imported rows land with `owner == acting user`.
+18. `test_import_without_acting_user_errors` — `owner_field` table + no acting user → explicit error.
+19. `test_sync_round_trip_preserves_views` — publish → wipe → checkout on the `bare_repo` fixture restores views verbatim for the acting user (SC-008); second publish after checkout shows ZERO diffs (no phantom owner diffs).

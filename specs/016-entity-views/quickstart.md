@@ -62,3 +62,14 @@ cd apps/unihub/frontend && pnpm generate-types
 | PageTable slot | `apps/unihub/frontend/src/components/PageTable/index.tsx` (`viewBar` prop) |
 | Service | `apps/unihub/frontend/src/services/unihub-backend/core.ts` |
 | i18n | `apps/unihub/frontend/src/locales/{en-US,zh-TW}/pages.ts` (`common.entityViews.*`) |
+
+## Round 2 manual walk-through (2026-07-23)
+
+On the inventory catalog (`/inventory/catalog`), after migrations (`uv run python manage.py migrate`):
+
+1. **Auto-hide + reveal**: with no saved views, the view row is hidden; a compact affordance near the toolbar reveals it. The revealed row shows one active tab named **"YTD"** (other pages: "Table").
+2. **"+" placement**: the "+" button sits immediately right of the rightmost tab; open enough tabs to overflow — tabs scroll, "+" stays visible at the strip's right edge, View control stays at the row edge.
+3. **Default is a plain view**: change a filter on YTD → dirty dot; Save → persists (row materializes, `is_default=true`); double-click the tab → inline rename works; the manage modal offers rename/pin but no delete/drag on the default row.
+4. **Double-click rename**: double-click a saved tab → inline input (Enter/blur commits, Esc cancels, duplicate name shows an error); double-click an anonymous tab → name-and-save modal.
+5. **Readable URLs**: with YTD clean and revealed-only state, the URL has NO view params; switch to a saved view → `?inventory-catalog.view=<name>`; edit filters → readable `inventory-catalog.f=…` facets appear; paste a hand-edited `…size=100` and the table follows.
+6. **Git sync**: publish from the Sync tab → the views CSV appears in the commit (no owner column); wipe/checkout → views come back owned by the signed-in account, and a fresh publish preview shows zero view diffs.

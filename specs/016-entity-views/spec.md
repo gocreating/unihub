@@ -25,9 +25,16 @@
 
 - Q: How does a user activate a tab now that clicking the active tab opens its menu, and does double-click-to-rename survive? → A: Left-click an inactive tab switches to it; left-click the active tab opens its menu; right-click opens the menu on any tab. Double-click-to-rename is removed — rename is a menu action (replaces FR-023).
 - Q: What does the tab menu's "Set as default" do, given the default flag is unique per table? → A: It transfers the default role to that view atomically; the previous default demotes to an ordinary saved view (unpinnable, closable, deletable) while the new default becomes pinned and undeletable.
-- Q: What happens to the right-edge "View" control now that per-tab actions moved into the tab menu? → A: The kebab replaces it at the row's right edge, carrying "Add empty view", an "Open" submenu of not-currently-open views, and "Manage views…"; Save moves into each tab's own menu.
+- Q: What happens to the right-edge "View" control now that per-tab actions moved into the tab menu? → A: The kebab replaces it at the row's right edge, carrying "Add empty view", an "Open" submenu of not-currently-open views, and "Manage views…"; Save moves into each tab's own menu. *(Amended 2026-08-04: "Manage views…" is removed — the kebab carries only "Add empty view" and the "Open" submenu.)*
 - Q: Does tab drag-reordering persist, and can the default view be dragged? → A: Yes — the new order persists for saved/pinned views; the default view is draggable like any other, so it is no longer locked to the first position.
 - Q: Does setting a view as default change its position in the tab row? → A: No — the view stays where it is; the default role and tab ordering are independent.
+
+### Session 2026-08-04
+
+- Q: With Save no longer opening a modal, how does a brand-new unsaved tab get its name and become a stored view? → A: It is auto-labelled "New view"; Save stores it immediately under whatever the tab is currently called, and the Rename modal edits that label (relabelling only, until Save) — no naming prompt exists anywhere.
+- Q: Duplicate view names are now allowed, but shareable URLs reference saved views by name — how should an ambiguous name resolve? → A: Stop referencing by name; the URL carries the saved view's identifier instead, so a reference is always exact.
+- Q: Removing "Manage views" takes away the only bulk management surface — how are views that are not open as tabs managed? → A: Open the view first (kebab → "Open"), then use its own tab menu; the management modal is removed entirely.
+- Q: Now that names may repeat, should Duplicate still append a "(n)" suffix? → A: No — the copy carries exactly the same name as its source.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -41,7 +48,7 @@ A user repeatedly performs the same task on an entity table (for example, review
 
 **Acceptance Scenarios**:
 
-1. **Given** an entity table whose filters, sorting, column visibility, column ordering, or page size differ from the default, **When** the user saves the current configuration under a name, **Then** a saved view is created for that table and the active tab shows the given name with no unsaved-changes indicator.
+1. **Given** an entity table whose filters, sorting, column visibility, column ordering, or page size differ from the default, **When** the user chooses Save on the tab, **Then** a saved view is created for that table under the tab's current label — with no naming prompt — and the tab shows that name with no unsaved-changes indicator.
 2. **Given** a saved view exists for a table, **When** the user selects it from the kebab menu's "Open" submenu, **Then** it opens as a tab and the table applies exactly the stored filters, sorting, column visibility, column ordering, and page size.
 3. **Given** a saved view is open, **When** the user changes any part of its configuration, **Then** the tab shows an unsaved-changes indicator and the Save action becomes available.
 4. **Given** a saved view with unsaved changes, **When** the user chooses Save, **Then** the stored configuration is updated and the unsaved-changes indicator clears.
@@ -59,7 +66,7 @@ A user juggles several perspectives on the same data — e.g., "everything", "th
 **Acceptance Scenarios**:
 
 1. **Given** a user visits an entity table with no saved views and no view state in the URL, **When** the page loads, **Then** the view row is hidden and a compact affordance near the table toolbar reveals it on demand; the revealed row shows the table's default view — named per the page ("YTD" for the inventory catalog, "Table" otherwise) — as a pinned, active tab.
-2. **Given** the view row is displayed, **When** the user opens the kebab menu at the row's right edge and chooses "Add empty view", **Then** a new anonymous (unsaved) tab opens immediately with the default configuration, ready to be adjusted through the existing toolbar dropdowns.
+2. **Given** the view row is displayed, **When** the user opens the kebab menu at the row's right edge and chooses "Add empty view", **Then** a new unsaved tab named "New view" opens immediately with a blank configuration — no filters, no sorting, all columns visible in natural order, nothing pinned — ready to be adjusted through the existing toolbar dropdowns.
 3. **Given** saved views exist that are not currently open as tabs, **When** the user opens the kebab menu's "Open" submenu, **Then** exactly those not-open views are listed, and choosing one opens it as a tab and activates it.
 4. **Given** multiple tabs are open, **When** the user switches between them, **Then** each tab retains and re-applies its own configuration without affecting the others.
 5. **Given** multiple tabs are open, **When** the user drags a tab to a new position in the row, **Then** the tabs reorder to match, and for saved views the new order persists so a later session shows the same order.
@@ -78,7 +85,7 @@ A user wants to bookmark a specific table state or reopen it from another device
 
 **Acceptance Scenarios**:
 
-1. **Given** a table configured on an anonymous tab, **When** the user copies the page URL and opens it in another session, **Then** the same configuration is applied on load from the inlined view state.
+1. **Given** a table configured on an unsaved tab, **When** the user copies the page URL and opens it in another session, **Then** the same configuration is applied on load from the inlined view state.
 2. **Given** a URL that references a saved view together with override parameters, **When** it is opened by the view's owner, **Then** the saved configuration loads with the overrides applied on top, and the tab shows the unsaved-changes indicator because the effective configuration differs from the stored one.
 3. **Given** the user is viewing an entity table, **When** the view-related query string changes (navigation, back/forward, an edited URL), **Then** the table navigates directly to the newly described view state.
 4. **Given** a page hosting more than one entity table, **When** view parameters are present under different table namespaces, **Then** each table applies its own view state independently.
@@ -91,36 +98,39 @@ Over time a user accumulates views and needs to manage them: rename, pin or unpi
 
 **Why this priority**: Housekeeping matters once several views exist, but the feature is valuable before management tooling is complete.
 
-**Independent Test**: Can be tested by opening each tab's own menu and performing save, close, duplicate, pin, set-as-default, rename, and delete, plus opening the management modal from the kebab for bulk rename/pin/reorder/delete, and confirming each change persists.
+**Independent Test**: Can be tested by opening each tab's own menu and performing save, close, duplicate, pin, set-as-default, rename, and delete — including on a view first opened from the kebab's "Open" submenu — and confirming each change persists.
 
 **Acceptance Scenarios**:
 
-1. **Given** saved views exist for a table, **When** the user chooses "Manage views…" from the kebab menu, **Then** a management modal lists that table's saved views with controls for renaming, pinning/unpinning, reordering, and deleting.
+1. **Given** a saved view that is not currently open as a tab, **When** the user opens it from the kebab's "Open" submenu, **Then** it becomes a tab whose own menu offers the full set of management actions (rename, pin/unpin, set as default, delete) — there is no separate management modal.
 2. **Given** a tab is active, **When** the user left-clicks it (or right-clicks any tab), **Then** that tab's menu opens offering Save, Close, Duplicate, Pin/Unpin, Set as default, Rename, and Delete, with actions that cannot apply to that tab shown disabled rather than hidden.
-3. **Given** a view named "X" is active, **When** the user chooses Duplicate from its menu, **Then** a new unsaved tab opens with an identical configuration named "X (1)"; duplicating again produces "X (2)", and so on, always taking the first unused suffix.
+3. **Given** a view named "X" is active, **When** the user chooses Duplicate from its menu, **Then** a new unsaved tab opens with an identical configuration also named "X"; saving it creates a second stored view sharing that name.
 4. **Given** a pinned view, **When** the user unpins it from its tab menu, **Then** its tab no longer appears by default in future sessions while the view remains listed in the kebab's "Open" submenu.
-5. **Given** a saved view is open in a tab, **When** the user deletes that view — from its tab menu or the management modal — **Then** the tab stays open as an unsaved anonymous tab holding the same configuration, so no work in progress is lost.
+5. **Given** a saved view is open in a tab, **When** the user deletes that view from its tab menu, **Then** the tab stays open as an unsaved tab holding the same configuration, so no work in progress is lost.
 6. **Given** any saved view that is not the current default, **When** the user chooses "Set as default" from its menu, **Then** it becomes the table's default view — pinned and no longer deletable — the previous default demotes to an ordinary saved view that can be unpinned, closed, and deleted, and neither view changes position in the tab row.
-7. **Given** any open tab, **When** the user chooses Rename from its menu, **Then** the edit-name flow starts: for a saved or default view, committing a non-empty unique name renames it in place; for an anonymous tab, the name-and-save flow opens; cancelling leaves the name unchanged.
+7. **Given** any open tab, **When** the user chooses Rename from its menu, **Then** a Rename dialog opens pre-filled with the tab's current name: committing a trimmed non-empty name renames a stored view in place or relabels an unsaved tab; cancelling leaves the name unchanged.
 
 ---
 
 ### Edge Cases
 
-- A URL references a saved view that no longer exists or belongs to a different account: the table falls back to its default view and the user is informed with a non-blocking notice.
+- A URL references a saved view whose identifier no longer exists or belongs to a different account: the table falls back to its default view and the user is informed with a non-blocking notice.
 - A URL carries an invalid or corrupted inline view serialization: the table falls back to its default view with a non-blocking notice rather than failing to render.
 - A saved view references a column or attribute that no longer exists (for example, a removed dynamic parameter column): the unavailable parts are ignored, the rest of the configuration applies, and the view can be re-saved in its cleaned form.
-- The user tries to save a view under a name already used on the same table: the system rejects the name and asks for a different one (automatic "(n)" suffixes apply only to duplication).
-- The session ends while unsaved anonymous tabs are open: those tabs are discarded; saved and pinned views are unaffected.
+- Two or more views on the same table carry the same name: this is allowed. They remain distinguishable by tab order and by their URLs, which reference the stored identifier rather than the name.
+- A name is submitted as whitespace only (or with surrounding spaces): surrounding whitespace is trimmed; a name that is empty after trimming is rejected and the Rename dialog stays open.
+- The session ends while unsaved tabs are open: those tabs are discarded; saved and pinned views are unaffected.
 - All other views are unpinned or deleted: the view row always retains at least the table's default view tab as a fallback (whichever view currently holds the default role cannot be deleted).
 - A very long view name: the tab shows a truncated name with the full name available on demand, and the row's overflow behavior is unaffected.
-- A rename — via the management modal or a tab's Rename action — targets a name already used on the same table: rejected the same way as saving under a taken name; the default view's name participates in the same per-table uniqueness.
+- A rename targets a name already used on the same table: accepted — names are not unique (FR-016).
 - The view row is hidden (single default view) and the user modifies the table configuration: the reveal affordance surfaces the unsaved-changes indicator, so the dirty state stays visible without the row.
 - Every saved view is already open as a tab (or the account has none): the kebab's "Open" submenu shows a disabled "no views to open" entry rather than an empty menu.
-- "Set as default" is chosen on a tab that is not a saved view yet (anonymous), or on the view that already holds the default role: the action is unavailable (shown disabled) — a view must be saved before it can take the default role.
+- "Set as default" is chosen on a tab that has no stored view yet, or on the view that already holds the default role: the action is unavailable (shown disabled) — a view must be saved before it can take the default role.
 - The default role transfers while the previous default has unsaved changes: the demotion does not touch either tab's configuration or dirty state; only the default role, and the pinned/undeletable status that rides with it, move.
-- Another view is set as default while the page's own default view is still virtual (never saved or renamed): the promoted view takes the role, and the virtual tab — which has no stored identity to demote — stays open as an unsaved anonymous tab holding the same configuration, as it does when a saved view is deleted.
-- A tab is dragged onto the position of a tab that is not a saved view (an anonymous tab): the visual order updates for the session; only saved views contribute to the persisted order.
+- Another view is set as default while the page's own default view is still virtual (never saved or renamed): the promoted view takes the role, and the virtual tab — which has no stored identity to demote — stays open as an unsaved tab holding the same configuration, as it does when a saved view is deleted.
+- A tab is dragged onto the position of a tab that has no stored view: the visual order updates for the session; only saved views contribute to the persisted order.
+- A tab menu is open and the user clicks elsewhere on the page (another tab, the table, the toolbar): the menu closes without running any action; the click otherwise behaves normally.
+- A wide tab is dragged past a narrow one (or the reverse): the dragged tab keeps its own width throughout the drag — no horizontal stretching or squeezing to match its neighbours.
 - Tabs are dragged while the strip is scrolled: the drop position follows the pointer over the scrolled strip, and the persisted order reflects the resulting left-to-right sequence.
 
 ## Requirements *(mandatory)*
@@ -132,7 +142,7 @@ Over time a user accumulates views and needs to manage them: rename, pin or unpi
 - **FR-001**: The system MUST let a user capture an entity table's current configuration — filter conditions, sorting, column visibility, column ordering, per-column pinning (left/right, any number of columns per side), and page size — as a named saved view.
 - **FR-002**: Saved views MUST be scoped to the entity table they were created on and to the owning user account; a table's view row and kebab menu list only that table's views for the signed-in account.
 - **FR-003**: A default view MUST always exist for every entity table (formerly the fixed "Tabular" view). It is a plain view: the user can modify, rename, save, and reposition it like any saved view; only deletion is excluded — it is the guaranteed fallback and is pinned for as long as it holds the default role. Its initial name and configuration come from the hosting page: "Table" and the built-in defaults unless the page specifies otherwise (the inventory catalog's default view is named "YTD", matching its seeded year-to-date filter). Until first saved or renamed it exists virtually (nothing stored); the first save or rename materializes it as a stored view for the account. The default role is not tied to a position in the tab row — the default view can be dragged anywhere like any other tab.
-- **FR-026**: Exactly one view per table per account MUST hold the default role, and that role MUST be transferable to any other saved view of the same table. Transferring is atomic: the receiving view becomes default (pinned, no longer deletable) and the previous holder demotes to an ordinary saved view (unpinnable, closable, deletable) in the same operation, so the table is never left with zero or two defaults. Transferring the role MUST NOT change either view's configuration, dirty state, or position in the tab row.
+- **FR-026**: Exactly one view per table per account MUST hold the default role, and that role MUST be transferable to any other saved view of the same table. Transferring is atomic: the receiving view becomes default (pinned, no longer deletable) and the previous holder demotes to an ordinary saved view (unpinnable, closable, deletable) in the same operation, so the table is never left with zero or two defaults. Transferring the role MUST NOT change either view's configuration, dirty state, or position in the tab row: the promoted tab MUST stay exactly where it sits (it is never moved to the front) and the demoted view MUST remain clean — its stored configuration is still its baseline.
 
 **Serialization & URL navigation**
 
@@ -141,25 +151,25 @@ Over time a user accumulates views and needs to manage them: rename, pin or unpi
 - **FR-006**: Opening a URL containing serialized view state MUST navigate directly to that view, and subsequent changes to the view-related query string MUST navigate the table to the newly described state.
 - **FR-007**: View parameters in the URL MUST be namespaced per table so that pages hosting multiple entity tables can address each table's view independently.
 - **FR-008**: Invalid, corrupted, or unresolvable view references in a URL MUST NOT break the page; the affected table falls back to its default view and the user is informed.
-- **FR-022**: The inline URL serialization MUST be human-readable and hand-editable: each configuration facet (filters, sorting, column visibility/order, pinning, page size, page, or a saved-view reference) appears as a discrete, named query parameter under the table's namespace — never as a single opaque encoded value — so a person can read and edit the state directly in the address bar. (Replaces the round-1 packed `view[<tableKey>]` mini-format.)
+- **FR-022**: The inline URL serialization MUST be human-readable and hand-editable: each configuration facet (filters, sorting, column visibility/order, pinning, page size, page, or a saved-view reference) appears as a discrete, named query parameter under the table's namespace — never as a single opaque encoded value — so a person can read and edit the state directly in the address bar. (Replaces the round-1 packed `view[<tableKey>]` mini-format.) **The saved-view reference is the exception**: because names need not be unique (FR-016), it carries the view's stored identifier rather than its name, so a shared link always resolves to exactly one view. All other facets stay in plain readable form. A tab with no stored view (a scratch tab) carries no reference and serializes its configuration inline.
 
 **View tab row**
 
 - **FR-009**: Every entity table with the standard operations toolbar MUST provide a view-control row above that toolbar, laid out left to right as: the open view tabs, then a kebab menu fixed at the row's right edge — subject to the auto-hide behavior in FR-025. (The kebab replaces both the round-2 "+" button and the round-2 "View" control.)
 - **FR-010**: The displayed tabs MUST be the account's pinned views for that table, in their persisted order, plus any additional views opened during the current session.
-- **FR-011**: The kebab menu MUST provide: "Add empty view", which immediately opens a new anonymous (unsaved) tab with the default configuration; an "Open" submenu; and "Manage views…", which opens the view-management modal.
+- **FR-011**: The kebab menu MUST provide exactly two entries: "Add empty view" and an "Open" submenu. "Add empty view" immediately opens a new unsaved tab holding a **blank** configuration — no filter conditions, no sort rules, every column visible in the page's natural column order, and no pinned columns — at the page's default page size. (This is deliberately NOT the table's default view configuration, which may carry a seeded filter such as the inventory catalog's "YTD".)
 - **FR-012**: The kebab's "Open" submenu MUST list exactly the table's saved views that are not currently open as tabs; choosing one opens it as a tab and activates it. When no such view exists, the submenu MUST show a disabled empty-state entry.
 - **FR-013**: Modifying an open view's effective configuration — whether through the toolbar or through URL overrides — MUST mark that tab with an unsaved-changes indicator.
-- **FR-014**: Saving a modified saved view MUST persist the current configuration to that view and clear its unsaved-changes indicator; saving an anonymous tab MUST ask for a name and create a new saved view from it.
-- **FR-015**: Duplicating a view "X" from its tab menu MUST open a new unsaved tab with an identical configuration named "X (1)", "X (2)", …, using the first unused suffix.
-- **FR-016**: Saved view names MUST be unique per table per account; an attempt to save under an existing name is rejected with a request for a different name.
-- **FR-017**: The view-management modal MUST support renaming, pinning/unpinning, reordering, and deleting saved views; pin state and ordering MUST persist per account and drive which tabs appear by default. The view holding the default role participates in every one of these except deletion, and its order MUST stay consistent with the tab row (FR-027).
+- **FR-014**: Save MUST never prompt for input. Saving a modified saved view persists the current configuration to that view and clears its unsaved-changes indicator; saving a tab that has no stored view yet creates one immediately, named exactly as the tab is currently labelled (a new scratch tab is auto-labelled "New view"). No naming dialog exists anywhere in the save path.
+- **FR-015**: Duplicating a view from its tab menu MUST open a new unsaved tab with an identical configuration and **the same name** as its source — names need not be unique, so no "(n)" suffix is generated.
+- **FR-016**: Saved view names MUST NOT be required to be unique: any number of views on the same table may share a name. Leading and trailing whitespace MUST be trimmed from a name before it is stored, and a name that is empty after trimming MUST be rejected.
+- **FR-017**: Every view-management action — rename, pin/unpin, set as default, delete, and reorder — MUST be reachable from a view's own tab: rename/pin/set-as-default/delete through its tab menu, ordering through tab drag (FR-027). A view that is not currently open as a tab is managed by opening it first from the kebab's "Open" submenu. There is no separate view-management modal.
 - **FR-018**: Tabs other than the one holding the default role MUST be closable, and unpinned tabs opened during a session MUST NOT reappear in later sessions; pinned tabs MUST reappear each session until unpinned.
-- **FR-019**: Deleting a saved view that is currently open MUST keep its tab open as an unsaved anonymous tab holding the same configuration.
+- **FR-019**: Deleting a saved view that is currently open MUST keep its tab open as an unsaved tab holding the same configuration.
 - **FR-020**: When the tabs overflow the available width (including narrow screens), the tabs area MUST scroll horizontally while the kebab stays fixed and fully visible at the row's right edge. The horizontal scrollbar MUST NOT be visible; instead, an edge shadow on each side that has content scrolled out of sight signals that more tabs exist, appearing and disappearing as the strip scrolls to either end.
 - **FR-021**: A view configuration that references columns or attributes no longer available MUST degrade gracefully: unavailable parts are ignored and the remainder of the configuration applies.
-- **FR-023**: Each tab MUST expose its own menu, opened by left-clicking the tab while it is active or by right-clicking any tab (left-clicking an inactive tab switches to it instead). The menu MUST offer Save, Close, Duplicate, Pin/Unpin, Set as default, Rename, and Delete for that tab; actions that cannot apply to the tab MUST be shown disabled rather than hidden. Rename starts the edit-name flow: for a saved or default view, committing a non-empty unique name renames it in place (FR-016 uniqueness applies, default view included); for an anonymous tab, the name-and-save flow opens (per FR-014). Cancelling leaves the name unchanged. (Replaces the round-2 double-click rename gesture and the per-tab close button, which moves into this menu.)
-- **FR-027**: Tabs MUST be reorderable by dragging them within the tab row. The resulting left-to-right order MUST persist per account for saved views — surviving reload and later sessions, and matching the order shown in the view-management modal — while anonymous tabs order for the current session only. Any tab may be dragged, including the one holding the default role.
+- **FR-023**: Each tab MUST expose its own menu, opened by left-clicking the tab while it is active or by right-clicking any tab (left-clicking an inactive tab switches to it instead). The menu MUST offer Save, Close, Duplicate, Pin/Unpin, Set as default, Rename, and Delete for that tab; actions that cannot apply to the tab MUST be shown disabled rather than hidden. The menu MUST close when the user clicks anywhere outside it (and on Esc), leaving the tab otherwise untouched. Rename MUST open a **Rename dialog pre-filled with the tab's current name**: committing a trimmed non-empty name renames a stored view in place, or relabels an unsaved tab locally (it is stored on the next Save, per FR-014); cancelling leaves the name unchanged. (Replaces the round-2 double-click rename gesture, the round-3 inline rename input, and the per-tab close button, which moves into this menu.)
+- **FR-027**: Tabs MUST be reorderable by dragging them within the tab row. The resulting left-to-right order MUST persist per account for saved views — surviving reload and later sessions — while unsaved tabs order for the current session only. Any tab may be dragged, including the one holding the default role. While a tab is being dragged it MUST keep its own rendered width: the dragged tab must never stretch, shrink, or otherwise distort to the size of the tab it passes over.
 - **FR-025**: When a table has only its default view (no other saved views for the account), no additional tabs open, and no non-default view state in the URL, the view row MUST be hidden by default. A compact affordance near the table toolbar reveals it on demand; while the row is hidden, that affordance MUST surface the default tab's unsaved-changes indicator. The row MUST appear automatically as soon as a second view or tab exists (saved, session-opened, or URL-addressed); a manual reveal persists for the rest of the session.
 
 **Sync & portability**
@@ -171,7 +181,7 @@ Over time a user accumulates views and needs to manage them: rename, pin or unpi
 - **Saved View**: A named, per-account, per-table record holding a view configuration plus presentation preferences — name, owning account, target entity table, pinned flag, and display order among the account's views for that table. Participates in data export/import and git-remote sync.
 - **Default View**: The role held by exactly one of a table's views at a time — the guaranteed fallback. Initially seeded from the page's built-in configuration and page-provided name ("Table" unless the page overrides it; "YTD" for the inventory catalog) and existing only virtually until first saved or renamed. The holder behaves as a Saved View in every way except deletion, is pinned while it holds the role, and occupies no fixed position in the tab row. The role can be transferred to any other saved view of the same table, demoting the previous holder to an ordinary Saved View.
 - **View Configuration**: The serializable payload describing a table state — filter conditions, sorting, column visibility, column ordering, per-column pinning, and page size. Exists inline (in a URL or an unsaved tab) or as the content of a Saved View; a saved reference may carry overrides layered on top.
-- **View Tab**: A session-level element in the view row representing either an opened Saved View (clean or with unsaved changes) or an anonymous unsaved configuration. Each tab carries its own menu of per-tab actions and can be dragged to reorder the row. Pinned Saved Views produce tabs in every session; other tabs live only for the session that opened them.
+- **View Tab**: A session-level element in the view row representing either an opened Saved View (clean or with unsaved changes) or an unsaved configuration that has no stored view yet (auto-labelled "New view" until renamed or saved). Each tab carries its own menu of per-tab actions and can be dragged to reorder the row. Pinned Saved Views produce tabs in every session; other tabs live only for the session that opened them.
 
 ## Success Criteria *(mandatory)*
 
@@ -183,11 +193,12 @@ Over time a user accumulates views and needs to manage them: rename, pin or unpi
 - **SC-004**: For a recurring task requiring 3 filter conditions, 2 sort rules, and a custom column set, total setup time drops from over a minute of manual configuration to under 5 seconds via a pinned tab.
 - **SC-005**: Users can always tell at a glance which open views have unsaved changes: 100% of dirty views show an indicator on their tab, and none show it when clean.
 - **SC-006**: On a narrow (mobile-width) screen with 6+ open tabs, every tab and the kebab menu remain reachable without any layout breakage, and the kebab stays fully visible at the row's right edge without scrolling the tab strip.
-- **SC-007**: A person reading a shared view URL can identify the table and every configuration facet as a named query parameter, with zero opaque encoded values to decode.
+- **SC-007**: A person reading a shared view URL can identify the table and every configuration facet as a named query parameter, with no encoded blobs to decode. The only non-prose value permitted is the saved-view reference, which carries the view's identifier so that duplicate names cannot make a link ambiguous (FR-016/FR-022).
 - **SC-008**: After a sync round trip (publish then checkout, or export then import), 100% of saved views are restored with identical names, target tables, configurations, pin states, ordering, and default-role assignment.
 - **SC-009**: With the tab strip overflowing, no horizontal scrollbar is rendered at any scroll position, and an edge shadow is present on exactly the sides that have tabs scrolled out of view — both edges mid-scroll, one edge at each end.
-- **SC-010**: A tab dragged to a new position stays in that position after a page reload and in a new session (saved views), and the view-management modal lists the same order.
-- **SC-011**: Setting a view as default leaves the table with exactly one default view at all times — never zero, never two — and neither the promoted nor the demoted view moves position or changes configuration.
+- **SC-010**: A tab dragged to a new position stays in that position after a page reload and in a new session (saved views), and the dragged tab's width stays within 2px of its resting width for the whole drag.
+- **SC-011**: Setting a view as default leaves the table with exactly one default view at all times — never zero, never two — and neither the promoted nor the demoted view moves position, changes configuration, or acquires an unsaved-changes indicator.
+- **SC-012**: Saving any tab — stored or brand-new — completes in exactly one interaction (the Save menu item) with no dialog in the path; naming is a separate, optional Rename action.
 
 ## Assumptions
 
@@ -196,6 +207,7 @@ Over time a user accumulates views and needs to manage them: rename, pin or unpi
 - Views are personal: saved views, pin state, and ordering belong to the signed-in user account. Inline-serialized URLs reproduce a configuration for any account with access to the page; URLs referencing a saved view resolve only for the view's owner.
 - Page size is part of a saved view's configuration; the current page position travels only in inline URL serialization (so shared links land on the exact page) and is not persisted when saving a view.
 - "Current session" means the browser session for the signed-in account: unsaved and unpinned tabs do not survive past it.
-- The generic default-view name is "Table"; entity table pages may provide a more meaningful default name (the inventory catalog uses "YTD"). Alternative view types (charts, boards, etc.) remain out of scope for this feature.
+- The generic default-view name is "Table"; entity table pages may provide a more meaningful default name (the inventory catalog uses "YTD"). A brand-new scratch tab is auto-labelled "New view" until renamed. Alternative view types (charts, boards, etc.) remain out of scope for this feature.
+- View names are labels, not identifiers: nothing in the system keys off a name (URLs, sync, and every stored reference use the view's identifier), which is what makes duplicate names safe.
 - Cross-account sharing or transfer of saved views is out of scope; the sharing mechanisms are inline-serialized URLs and the account's own git-remote data sync (a same-account backup/transfer channel, not cross-account sharing).
 - Each unihub deployment is effectively single-user; on data import, saved views attach to the importing account regardless of which account exported them.

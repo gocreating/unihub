@@ -208,8 +208,9 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     fireEvent.click(screen.getByLabelText('Show views'));
     const tab = screen.getByRole('tab', { name: /ytd/i });
     expect(tab.getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByLabelText('New view tab')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^view/i })).toBeInTheDocument();
+    // Round 3: one kebab at the row's right edge replaces "+" and "View ▾".
+    expect(screen.getByLabelText('View menu')).toBeInTheDocument();
+    expect(screen.queryByLabelText('New view tab')).toBeNull();
   });
 
   // CAT13-01 (a): default visible columns & order.

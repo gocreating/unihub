@@ -1,12 +1,13 @@
 /**
- * E2E — Entity Views (016, round 2): the view tab row, auto-hide, and URL
+ * E2E — Entity Views (016, round 3): the view tab row, auto-hide, and URL
  * deep-linking.
  *
- * US2 — tab-row geometry (FR-009/FR-020): the tab strip scrolls horizontally
- * when it overflows, the "+" button sits immediately after the rightmost tab
- * and stays visible under overflow, and the View control stays fixed at the
- * right edge — verified at a narrow viewport with real geometry (project rule:
- * layout claims need real-browser assertions, not JSDOM).
+ * US2 — tab-row geometry (FR-009/FR-020, SC-006/SC-009/SC-010): the tab strip
+ * scrolls horizontally with NO visible scrollbar (edge shadows hint instead),
+ * the kebab stays fixed and fully visible at the row's right edge, and tabs
+ * drag into a new order that survives a reload — verified at a narrow viewport
+ * with real geometry (project rule: layout claims need real-browser
+ * assertions, not JSDOM).
  *
  * FR-025 — the view row auto-hides when only the default view exists; a
  * compact affordance reveals it on demand.
@@ -39,6 +40,38 @@ async function revealRow(page: Page) {
   }
 }
 
+/** Add N scratch tabs through the kebab's "Add empty view" action. */
+async function addScratchTabs(page: Page, count: number) {
+  const row = page.getByTestId('view-tabs-row');
+  for (let i = 0; i < count; i += 1) {
+    await row.getByLabel('View menu').click();
+    await page.getByRole('menuitem', { name: 'Add empty view' }).click();
+  }
+}
+
+/** The tab labels currently rendered in the strip, left to right. */
+async function tabLabels(page: Page): Promise<string[]> {
+  return page
+    .getByTestId('view-tabs-strip')
+    .getByRole('tab')
+    .allTextContents()
+    .then((labels) => labels.map((label) => label.trim()));
+}
+
+/** Create a saved view from a fresh scratch tab and return its name. */
+async function createSavedView(page: Page, name: string): Promise<string> {
+  const row = page.getByTestId('view-tabs-row');
+  await row.getByLabel('View menu').click();
+  await page.getByRole('menuitem', { name: 'Add empty view' }).click();
+  // The new tab is active: left-click opens its menu.
+  await row.getByRole('tab').last().click();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  await page.getByLabel('View name').fill(name);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(row.getByRole('tab', { name })).toBeVisible();
+  return name;
+}
+
 test.describe('entity-views auto-hide (FR-025)', () => {
   test('the row is hidden by default and the affordance reveals it', async ({ page }) => {
     await login(page);
@@ -57,61 +90,143 @@ test.describe('entity-views auto-hide (FR-025)', () => {
 });
 
 test.describe('entity-views tab row (US2)', () => {
-  test('renders the strip, then "+", then the View control', async ({ page }) => {
+  test('renders the strip, then the kebab at the row edge', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
     await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
     await expect(row.getByRole('tab', { name: 'YTD' })).toBeVisible();
-    await expect(row.getByLabel('New view tab')).toBeVisible();
-    await expect(row.getByRole('button', { name: /^View/ })).toBeVisible();
+    await expect(row.getByLabel('View menu')).toBeVisible();
+    // Round 3 removed the "+" button and the "View ▾" control.
+    await expect(row.getByLabel('New view tab')).toHaveCount(0);
   });
 
-  test('"+" stays visible right after the last tab while the strip scrolls', async ({ page }) => {
+  test('the kebab stays docked at the right edge while the strip scrolls (SC-006)', async ({
+    page,
+  }) => {
     await login(page);
     await page.goto('/inventory/catalog');
     await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
-    // Overflow the strip with scratch tabs, then narrow the viewport.
-    const addButton = row.getByLabel('New view tab');
-    for (let i = 0; i < 8; i += 1) {
-      await addButton.click();
-    }
-    await page.setViewportSize({ width: 700, height: 800 });
+    await addScratchTabs(page, 8);
+    await page.setViewportSize({ width: 375, height: 800 });
 
     const strip = page.getByTestId('view-tabs-strip');
     const overflows = await strip.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
     expect(overflows).toBe(true);
 
-    // The "+" button is NOT inside the scrolling strip and stays visible.
-    await expect(addButton).toBeVisible();
+    // The kebab is NOT inside the scrolling strip and stays fully visible.
+    const kebab = row.getByLabel('View menu');
+    await expect(kebab).toBeVisible();
     const insideStrip = await strip.evaluate(
-      (el) => !!el.querySelector('[aria-label="New view tab"]'),
+      (el) => !!el.querySelector('[aria-label="View menu"]'),
     );
     expect(insideStrip).toBe(false);
 
-    // Geometry: "+" sits to the right of the strip; View hugs the row's right edge.
     const rowBox = (await row.boundingBox())!;
-    const stripBox = (await strip.boundingBox())!;
-    const addBox = (await addButton.boundingBox())!;
-    const viewBox = (await row.getByRole('button', { name: /^View/ }).boundingBox())!;
-    expect(addBox.x).toBeGreaterThanOrEqual(stripBox.x + stripBox.width - 4);
-    expect(Math.abs(viewBox.x + viewBox.width - (rowBox.x + rowBox.width))).toBeLessThanOrEqual(4);
+    const kebabBox = (await kebab.boundingBox())!;
+    expect(Math.abs(kebabBox.x + kebabBox.width - (rowBox.x + rowBox.width))).toBeLessThanOrEqual(4);
 
-    // The strip itself scrolls horizontally.
+    // The strip itself scrolls horizontally; the page body does not.
     await strip.evaluate((el) => {
       el.scrollLeft = 150;
     });
     expect(await strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
-
-    // The page body must NOT scroll horizontally (overflow stays inside the strip).
     const bodyOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     );
     expect(bodyOverflow).toBe(false);
+  });
+
+  test('the strip renders no scrollbar and hints overflow with edge shadows (SC-009)', async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    await addScratchTabs(page, 8);
+    await page.setViewportSize({ width: 500, height: 800 });
+
+    const strip = page.getByTestId('view-tabs-strip');
+    await expect
+      .poll(async () => strip.evaluate((el) => el.scrollWidth > el.clientWidth + 1))
+      .toBe(true);
+
+    // No scrollbar occupies any space, at any scroll position.
+    const scrollbarHeight = await strip.evaluate((el) => el.offsetHeight - el.clientHeight);
+    expect(scrollbarHeight).toBe(0);
+
+    // At scroll 0: right shadow only.
+    await strip.evaluate((el) => {
+      el.scrollLeft = 0;
+      el.dispatchEvent(new Event('scroll'));
+    });
+    await expect(page.getByTestId('view-tabs-shadow-right')).toBeVisible();
+    await expect(page.getByTestId('view-tabs-shadow-left')).toHaveCount(0);
+
+    // Mid-scroll: both edges.
+    await strip.evaluate((el) => {
+      el.scrollLeft = Math.floor((el.scrollWidth - el.clientWidth) / 2);
+      el.dispatchEvent(new Event('scroll'));
+    });
+    await expect(page.getByTestId('view-tabs-shadow-left')).toBeVisible();
+    await expect(page.getByTestId('view-tabs-shadow-right')).toBeVisible();
+
+    // At the end: left shadow only.
+    await strip.evaluate((el) => {
+      el.scrollLeft = el.scrollWidth;
+      el.dispatchEvent(new Event('scroll'));
+    });
+    await expect(page.getByTestId('view-tabs-shadow-left')).toBeVisible();
+    await expect(page.getByTestId('view-tabs-shadow-right')).toHaveCount(0);
+  });
+
+  test('dragging a tab reorders the strip and the order survives a reload (SC-010)', async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    const row = page.getByTestId('view-tabs-row');
+    await expect(row).toBeVisible();
+
+    // Two SAVED views are needed for the order to persist server-side.
+    const first = await createSavedView(page, `E2E drag A ${Date.now()}`);
+    const second = await createSavedView(page, `E2E drag B ${Date.now()}`);
+
+    const before = await tabLabels(page);
+    expect(before).toContain(first);
+    expect(before).toContain(second);
+
+    // Drag the LAST saved tab before the first one with real mouse moves.
+    const source = row.getByRole('tab', { name: second });
+    const target = row.getByRole('tab', { name: first });
+    const sourceBox = (await source.boundingBox())!;
+    const targetBox = (await target.boundingBox())!;
+    await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(targetBox.x + 4, targetBox.y + targetBox.height / 2, { steps: 20 });
+    await page.mouse.up();
+
+    await expect
+      .poll(async () => {
+        const labels = await tabLabels(page);
+        return labels.indexOf(second) < labels.indexOf(first);
+      })
+      .toBe(true);
+
+    // The persisted order comes back after a reload.
+    await page.reload();
+    await revealRow(page);
+    await expect
+      .poll(async () => {
+        const labels = await tabLabels(page);
+        return labels.indexOf(second) < labels.indexOf(first);
+      })
+      .toBe(true);
   });
 });
 

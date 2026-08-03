@@ -423,6 +423,17 @@ export default {
   'common.entityViews.saved': 'View saved',
   'common.entityViews.saveError': 'Failed to save view',
   'common.entityViews.loadError': 'Failed to load views',
+
+  // Entity views — round 3 (tab menu + kebab)
+  'common.entityViews.tabMenu': 'View actions',
+  'common.entityViews.setDefault': 'Set as default',
+  'common.entityViews.setDefaultError': 'Failed to set the default view',
+  'common.entityViews.addEmptyView': 'Add empty view',
+  'common.entityViews.open': 'Open',
+  'common.entityViews.noViewsToOpen': 'All views are open',
+  'common.entityViews.manageViews': 'Manage views…',
+  'common.entityViews.viewMenu': 'View menu',
+  'common.entityViews.rename': 'Rename',
   'common.entityViews.manageSaveError': 'Failed to update views',
   'common.entityViews.unresolvedView':
     'The view referenced by this link no longer exists — showing the default view',

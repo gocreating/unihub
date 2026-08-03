@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 
 from core.models import AttributeDefinition, AttributeValue, EntityView
@@ -98,9 +99,16 @@ class EntityViewSerializer(serializers.ModelSerializer):
         return value
 
     def validate_is_default(self, value: bool) -> bool:
-        """``is_default`` is create-only: any change on an existing view is rejected."""
-        if self.instance is not None and value != self.instance.is_default:
-            raise serializers.ValidationError("is_default cannot be changed after creation.")
+        """The default role is transferable (round 3); it can never be unset.
+
+        Promotion (``false → true``) is allowed and demotes the incumbent in
+        :meth:`update`. Clearing the flag on the current holder would leave the
+        table with no fallback view, so it is rejected (FR-026).
+        """
+        if self.instance is not None and self.instance.is_default and not value:
+            raise serializers.ValidationError(
+                "The default view cannot be unset; set another view as default instead."
+            )
         return value
 
     def validate(self, attrs: dict) -> dict:
@@ -125,6 +133,26 @@ class EntityViewSerializer(serializers.ModelSerializer):
                     {"is_default": "This table already has a default view."}
                 )
         return attrs
+
+    def update(self, instance: EntityView, validated_data: dict) -> EntityView:
+        """Transfer the default role atomically when this view is promoted.
+
+        The partial ``UniqueConstraint(owner, table_key, WHERE is_default)`` is
+        checked per statement, so the incumbent MUST be cleared before this row
+        is saved; the transaction makes the two-statement window invisible to
+        readers. Promotion also pins the view — the fallback must stay reachable
+        as a tab (FR-003) — while the demoted row keeps its pin, position, name,
+        and config verbatim (FR-026).
+        """
+        if not validated_data.get("is_default"):
+            return super().update(instance, validated_data)
+
+        with transaction.atomic():
+            EntityView.objects.filter(
+                owner=instance.owner, table_key=instance.table_key, is_default=True
+            ).exclude(pk=instance.pk).update(is_default=False)
+            validated_data["pinned"] = True
+            return super().update(instance, validated_data)
 
 
 class AttributeValueUpsertSerializer(serializers.Serializer):

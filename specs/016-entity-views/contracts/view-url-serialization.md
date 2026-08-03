@@ -1,4 +1,4 @@
-# Contract: View URL Serialization — v2 (readable grammar, round 2)
+# Contract: View URL Serialization — v2.1 (readable grammar; id-based view reference, round 4)
 
 **Module**: `apps/unihub/frontend/src/components/EntityViews/serialization.ts`
 **Consumers**: `useEntityViews` (read/write), deep links, e2e tests.
@@ -6,7 +6,7 @@
 
 ## Design goal (FR-022 / SC-007)
 
-A person reading the URL can identify the table and every configuration facet by name and edit them by hand. No opaque encoded blobs; minimal percent-encoding on emit.
+A person reading the URL can identify the table and every configuration facet by name and edit them by hand. No opaque encoded blobs; minimal percent-encoding on emit. **One exception (round 4)**: the saved-view reference carries the view's id, because names are no longer unique and a name could not identify a view (FR-016/FR-022, SC-007 amended accordingly).
 
 ## Grammar
 
@@ -16,7 +16,7 @@ param        = table-key "." facet "=" value          ; view params; other app p
 table-key    = 1*( ALPHA / DIGIT / "-" )              ; e.g. inventory-catalog
 facet        = "view" / "f" / "sort" / "cols" / "size" / "page"
 
-view-value   = saved-view-name                        ; reference BY NAME (readable)
+view-value   = saved-view-id                          ; reference BY ID (12-char nanoid) — round 4
 f-value      = logic "(" cond *( ";" cond ) ")"       ; ONE filter group per f param;
 logic        = "and" / "or"                           ;   repeat <tableKey>.f for more groups (order kept)
 cond         = attr SP op [ SP val ]                  ; val = remainder of segment (may contain spaces)
@@ -28,7 +28,7 @@ page-value   = 1*DIGIT                                ; 1-based page (transport 
 ```
 
 - **No `.view` param** → inline state: absent facets mean the table default for that facet.
-- **`.view` present** → reference to a saved view by name; other facets are **overrides** applied facet-whole on top of the stored config (an `.sort` override replaces the entire stored sort list). While the default view is virtual (unmaterialized), `.view` also matches the page-provided default name (e.g. `YTD`).
+- **`.view` present** → reference to a saved view by id; other facets are **overrides** applied facet-whole on top of the stored config (an `.sort` override replaces the entire stored sort list). A tab with no stored view — a scratch tab, or the page default while still virtual — emits NO `.view` and serializes its configuration inline (round 4 removed the name-matching special case for the virtual default).
 - **Clean default tab active** → NO view params emitted at all (clean URL).
 - `column-key` may itself contain `:` (dynamic `attr:<definitionId>` columns) — `~` was chosen as the pin delimiter because it never appears in column keys and is a URL-unreserved character.
 
@@ -36,7 +36,7 @@ page-value   = 1*DIGIT                                ; 1-based page (transport 
 
 | Facet | Maps to | Notes |
 |-------|---------|-------|
-| `view` | saved `EntityView` looked up by (`table_key`, `name`) | Names are unique per table per account (FR-016). Rename invalidates old links → FR-008 fallback + notice |
+| `view` | saved `EntityView` looked up by `id` | Round 4: id-based, so renaming a view NEVER breaks an existing link; a deleted/foreign id → FR-008 fallback + notice |
 | `f` | one `ViewConfig.filters` group per param | `attr` and `op` are the existing filter vocabulary; `is_empty`/`not_empty` conditions omit `val`; `val` runs to the segment end (internal spaces legal) |
 | `sort` | `ViewConfig.sort` via `orderingToRules` | unchanged from round 1 |
 | `cols` | visible subset of `ViewConfig.columns` + per-column `pin` | hidden columns (order + pins) reconstructed from stored config / page defaults |
@@ -49,7 +49,7 @@ page-value   = 1*DIGIT                                ; 1-based page (transport 
 2. **Inbound navigation**: on mount and on every query-string change, facet params under the table's namespace are parsed; if they describe a state different from the current active tab, the described view opens/activates (FR-006). Params of other namespaces (and non-view params) are untouched.
 3. **Saved + overrides**: produces a tab for the referenced view with overrides applied and the dirty marker on (config ≠ stored) — US3-AC2.
 4. **Fallbacks (FR-008)** — never break the page:
-   - unknown/foreign/renamed `view` name → default view + non-blocking `message.warning` (`common.entityViews.unresolvedView`);
+   - unknown/foreign `view` id → default view + non-blocking `message.warning` (`common.entityViews.unresolvedView`);
    - malformed `f` group / non-numeric `size`/`page` → default view + warning;
    - unknown individual column keys or filter/sort fields → dropped silently (partial apply, FR-021 / R10).
 5. **Round-trip guarantee** (unit-tested): for any valid `ViewConfig` C and page defaults D, `parse(serialize(C, D), D)` normalizes equal to C on the visible facets — **per-column pins included** (hidden-column order/pins excepted, documented in data-model §3).
@@ -60,13 +60,13 @@ page-value   = 1*DIGIT                                ; 1-based page (transport 
 Saved view by name (catalog "YTD"), no overrides:
 
 ```
-/inventory/catalog?inventory-catalog.view=YTD
+/inventory/catalog?inventory-catalog.view=Vx3kQ9aB7mNp
 ```
 
 Saved view with one override (force 100/page):
 
 ```
-/inventory/catalog?inventory-catalog.view=YTD&inventory-catalog.size=100
+/inventory/catalog?inventory-catalog.view=Vx3kQ9aB7mNp&inventory-catalog.size=100
 ```
 
 Inline (2026 items OR empty date, sorted by obtained-at desc nulls-first, 4 visible columns with two pins, 50/page, page 2):

@@ -240,3 +240,75 @@ Round 2 decisions per the spec's Clarifications Session 2026-07-23. Backend regi
 **Rationale**: The clarified answers make the default role orthogonal to ordering: "the default is draggable" and "set as default doesn't move the view". Keeping any always-first special case would contradict both and would make the strip and the modal disagree the moment a user dragged the default row.
 
 **Consequence checked**: the FR-025 auto-hide heuristic is unaffected — it counts views/tabs and URL state, never positions.
+
+---
+
+# Round 4 (Clarifications Session 2026-08-04)
+
+## R29. Dropping the name unique constraint
+
+**Decision**: Migration `core/0007` removes `UniqueConstraint(owner, table_key, name)` from `EntityView.Meta.constraints`; the partial `is_default` constraint is untouched. `EntityViewSerializer.validate()` loses its name-collision branch; `validate_name` keeps `strip()` + reject-blank. The frontend's duplicate-name error path (`common.entityViews.duplicateName`, the `status === 400 && body.name` handling in the rename/save flows) is deleted with it.
+
+**Rationale**: The user's model is that a name is a LABEL. Nothing in the system keys off it once the URL grammar stops doing so (R30): stored references, sync, and data_io are all id-based, so duplicates cannot corrupt anything. Trimming is kept because trailing spaces produce labels that look identical but are not, which is the one way duplicate names could genuinely confuse.
+
+**Alternatives considered**: keeping uniqueness and auto-suffixing on collision (rejected: the user explicitly asked for repeatable names, and round 3's suffix machinery is what they asked to remove); case-insensitive uniqueness (rejected: still a constraint, still surprises); a UI-only warning on duplicates (rejected: noise for an intended state).
+
+**Migration safety**: removing a constraint is non-destructive and instant; no data rewrite. Existing rows already satisfy the weaker rule.
+
+## R30. URL saved-view reference by id
+
+**Decision**: `<tableKey>.view=<id>` carries the `EntityView` nanoid instead of the name. Resolution is `savedViews.find(v => v.id === id)`; an unresolvable id falls back to the default view with the existing `unresolvedView` notice (FR-008). A tab with no stored view (scratch tab, or the still-virtual page default) emits **no** `.view` param and serializes its configuration inline — the round-2/3 special case that matched `.view=<page default name>` against the virtual default disappears.
+
+**Rationale**: FR-016 makes names non-identifying, so a name-based reference would silently resolve to whichever duplicate came first — the worst failure mode for a shared link. Ids are 12-char nanoids from a URL-safe alphabet, so no encoding changes are needed. Every other facet stays prose, which is why SC-007 could be amended narrowly rather than abandoned.
+
+**Alternatives considered**: name + positional index (`YTD~2`) (rejected: the index shifts when views are reordered or deleted, so links rot silently); keeping names and resolving to the first match (rejected by the user in favour of exactness); name + id belt-and-braces (rejected: two sources of truth, and the name half would go stale on rename).
+
+**Consequence**: renaming a view no longer breaks existing deep links — a real improvement over the round-2 grammar.
+
+## R31. No-prompt save + the Rename dialog
+
+**Decision**: `SaveViewModal` is deleted. `saveTab(tabId)` on a tab with no `viewId` POSTs a new view whose `name` is the tab's current label (auto-labelled `New view` at creation), so Save is always a single interaction (SC-012) and never returns `'needs-name'` — that outcome and `ViewTabMenu`'s `onNeedsName` prop are removed. A new `RenameViewModal` (AntD `Modal`, input pre-filled and auto-focused, Enter submits, Cancel left / primary right, `maskClosable` off while the field differs from the original) handles naming: on a stored view it PATCHes `name`; on an unsaved tab it only relabels local state, and the next Save persists that label.
+
+**Rationale**: The user asked for Save to "just save" and for Rename to be an explicit, discoverable dialog. Splitting the two means the common action (Save) has zero friction while naming stays deliberate. Auto-labelling makes the no-prompt path well-defined — there is always a name to store — and duplicate names (R29) make the auto-label safe to reuse for every scratch tab.
+
+**Alternatives considered**: keep a prompt only for unnamed tabs (rejected: that IS the modal the user removed); generate `New view (1)`, `(2)`… per scratch tab (rejected: the user removed the suffix convention in the same round); block Save until renamed (rejected: makes the primary action conditional on a secondary one).
+
+## R32. "Set as default" must not reorder or dirty — two defects
+
+**Decision**: (a) **Order**: the pinned-view merge effect keeps the CURRENT strip order for tabs that are already open and only inserts genuinely new pinned tabs (by `position`). Today it rebuilds `[...pinnedTabs in position order, ...others]`, so a session tab that promotion pins jumps out of the "others" bucket into position order. (b) **Dirty**: `setDefaultTab` snapshots the active tab's live config into tab state BEFORE swapping identities, so the demoted tab compares against its own stored config rather than a stale snapshot.
+
+**Rationale**: Both symptoms the user reported ("don't move tab to first", "previous default should not become dirty") trace to state the swap doesn't own: pin-driven re-sorting and the active tab's config living in the table hooks rather than in `tab.config`. Fixing the merge effect to be order-preserving also removes a general class of tab-jumping on any refetch that changes pin state.
+
+**Alternatives considered**: skipping the forced `pinned=True` on promotion (rejected: FR-003 requires the fallback to stay reachable as a tab); recomputing dirty from the server response only (rejected: the local snapshot is the source of truth for the active tab by design — the fix belongs at the swap, not in the comparison).
+
+## R33. Dragged tab stretches horizontally — `CSS.Transform` vs `CSS.Translate`
+
+**Decision**: `SortableList`'s item transform uses `CSS.Translate.toString(transform)` when `orientation === 'horizontal'`, keeping `CSS.Transform.toString(transform)` for the vertical default.
+
+**Rationale**: `CSS.Transform.toString()` emits `translate3d(…) scaleX(…) scaleY(…)`. `horizontalListSortingStrategy` populates `scaleX` with the ratio between the dragged item's width and the item it is passing — intended for uniform-width lists, but view tabs are text-sized and therefore all different, so the dragged tab visibly stretches and squeezes. Dropping the scale components (translate only) preserves the drag position while leaving the element at its natural width — exactly FR-027's "keeps its own rendered width". Vertical callers (filter/sort/column panels, all uniform-height rows) keep the existing behaviour, so nothing else changes.
+
+**Alternatives considered**: `scaleX(1)` override via CSS (rejected: fights the library every frame and leaves the layout shifted); a `DragOverlay` clone like the inventory organize tree (rejected: far heavier than the bug warrants and would double-render every tab); fixed-width tabs (rejected: truncates names the OverflowTooltip rule exists to preserve).
+
+## R34. Removing "Manage views" and its modal
+
+**Decision**: Delete `ManageViewsModal.tsx` + test, drop the kebab entry, and remove `commitManageChanges`/`ManageChanges` from the hook. Every capability it held is already tab-addressed: rename → `renameTab`, pin → `pinTab`, delete → `deleteTab`, reorder → `reorderTabs` (drag). A view that is not open is reached through the kebab's "Open" submenu first.
+
+**Rationale**: With round 3's tab menus the modal became a second, staged path to the same operations — two code paths, two test suites, and two chances to diverge on the FR-019 convert-on-delete rule. Removing it makes the tab the single management surface.
+
+**Cost accepted**: bulk operations (delete several views at once) are no longer possible, and managing a closed view costs one extra click. Both were explicitly accepted in the clarification.
+
+## R35. Blank configuration for "Add empty view"
+
+**Decision**: New exported helper `blankConfig(defaults: ViewConfig): ViewConfig` → `{ filters: [], sort: [], columns: <every column of `defaults.columns`, sorted by its declared order, `visible: true`, `pin` omitted>, pageSize: defaults.pageSize }`. `addAnonymousTab` (renamed `addBlankTab`) uses it instead of `defaultConfig`, and the new tab is labelled `New view`.
+
+**Rationale**: "Natural order" is the page's declared column order, which is exactly the order `defaultConfig.columns` carries (pages build it from their `columnDefs`). Page size is not a filtering/sorting/column concern and has no meaningful "empty" value, so it inherits the page default — recorded as an assumption in the spec. The distinction matters most on the inventory catalog, whose default view carries the seeded YTD filter: "empty" must mean empty, not "the default view again".
+
+**Alternatives considered**: reusing `defaultConfig` (rejected: that is the current, wrong behaviour); a hardcoded 25/page (rejected: contradicts pages that deliberately default to 50).
+
+## R36. Closing the tab menu on outside click and Esc
+
+**Decision**: `ViewTabs` registers a document-level `mousedown` + `keydown` listener while a tab menu is open: a `mousedown` whose target is inside neither the open menu's portal (`.ant-dropdown`) nor the owning tab closes it; `Escape` closes it too. The Dropdown stays controlled with `trigger={[]}`.
+
+**Rationale**: rc-trigger only wires outside-click dismissal for triggers it manages; with `trigger={[]}` (required so a left-click on an INACTIVE tab switches instead of opening, per FR-023) nothing dismisses the menu today. An explicit listener keeps the open/close decision in the one place that already owns `menuTabId`, and is directly assertable in RTL.
+
+**Alternatives considered**: `trigger={['click']}` plus suppression logic (rejected: rc-trigger would open the menu on the very click meant to switch tabs, re-creating the bug round 3 fixed); `onBlur` on the tab button (rejected: focus leaves the tab for many reasons, including opening the menu itself).

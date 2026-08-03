@@ -273,34 +273,6 @@ def test_create_default_view(owner_client, other_client):
     assert plain["is_default"] is False
 
 
-def test_patch_cannot_change_is_default(owner_client):
-    default = create_view(owner_client, name="YTD", is_default=True)
-    plain = create_view(owner_client, name="Extra")
-
-    down = owner_client.patch(
-        f"{VIEWS}{default['id']}/",
-        json.dumps({"is_default": False}),
-        content_type="application/json",
-    )
-    assert down.status_code == 400
-
-    up = owner_client.patch(
-        f"{VIEWS}{plain['id']}/",
-        json.dumps({"is_default": True}),
-        content_type="application/json",
-    )
-    assert up.status_code == 400
-
-    # Same-value PATCH is an idempotent no-op; other fields still editable.
-    same = owner_client.patch(
-        f"{VIEWS}{default['id']}/",
-        json.dumps({"is_default": True, "name": "My YTD"}),
-        content_type="application/json",
-    )
-    assert same.status_code == 200
-    assert same.json()["name"] == "My YTD"
-
-
 def test_delete_default_view_rejected(owner_client):
     default = create_view(owner_client, name="YTD", is_default=True)
     plain = create_view(owner_client, name="Extra")
@@ -350,3 +322,132 @@ def test_config_migration_sticky_to_pins():
 
     # Foreign shapes are left alone rather than corrupted.
     assert migration.migrate_config({"anything": {"goes": True}}) == {"anything": {"goes": True}}
+
+
+# ---------------------------------------------------------------------------
+# Round 3 (2026-08-03): the default role is TRANSFERABLE (FR-026, R25).
+# Contract: specs/016-entity-views/contracts/entity-views-api.md tests 20-28.
+# ---------------------------------------------------------------------------
+
+
+def _set_default(client, view_id: str, value: bool = True):
+    return client.patch(
+        f"{VIEWS}{view_id}/",
+        json.dumps({"is_default": value}),
+        content_type="application/json",
+    )
+
+
+def _defaults(client, table_key: str = "inventory-catalog") -> list[dict]:
+    resp = client.get(VIEWS, {"table_key": table_key})
+    assert resp.status_code == 200
+    return [v for v in resp.json() if v["is_default"]]
+
+
+class TestDefaultTransfer:
+    """PATCH {is_default: true} moves the role atomically to the target view."""
+
+    def test_promote_transfers_role(self, owner_client):
+        holder = create_view(owner_client, name="YTD", is_default=True, pinned=True)
+        other = create_view(owner_client, name="Everything")
+
+        resp = _set_default(owner_client, other["id"])
+        assert resp.status_code == 200, resp.content
+        assert resp.json()["is_default"] is True
+
+        defaults = _defaults(owner_client)
+        assert [v["id"] for v in defaults] == [other["id"]]
+        assert owner_client.get(f"{VIEWS}{holder['id']}/").json()["is_default"] is False
+
+    def test_promote_forces_pinned(self, owner_client):
+        create_view(owner_client, name="YTD", is_default=True, pinned=True)
+        other = create_view(owner_client, name="Everything", pinned=False)
+
+        resp = _set_default(owner_client, other["id"])
+        assert resp.status_code == 200, resp.content
+        assert resp.json()["pinned"] is True
+
+    def test_demoted_view_keeps_pin_position_and_config(self, owner_client):
+        holder = create_view(owner_client, name="YTD", is_default=True, pinned=True)
+        other = create_view(owner_client, name="Everything")
+
+        assert _set_default(owner_client, other["id"]).status_code == 200
+
+        demoted = owner_client.get(f"{VIEWS}{holder['id']}/").json()
+        assert demoted["pinned"] == holder["pinned"]
+        assert demoted["position"] == holder["position"]
+        assert demoted["name"] == holder["name"]
+        assert demoted["config"] == holder["config"]
+
+    def test_promote_does_not_reorder(self, owner_client):
+        holder = create_view(owner_client, name="YTD", is_default=True, position=0)
+        other = create_view(owner_client, name="Everything", position=5)
+
+        assert _set_default(owner_client, other["id"]).status_code == 200
+
+        assert owner_client.get(f"{VIEWS}{holder['id']}/").json()["position"] == 0
+        assert owner_client.get(f"{VIEWS}{other['id']}/").json()["position"] == 5
+
+    def test_cannot_unset_default(self, owner_client):
+        holder = create_view(owner_client, name="YTD", is_default=True)
+
+        resp = _set_default(owner_client, holder["id"], value=False)
+        assert resp.status_code == 400
+        assert "is_default" in resp.json()
+        assert [v["id"] for v in _defaults(owner_client)] == [holder["id"]]
+
+    def test_promote_when_no_default_exists(self, owner_client):
+        """The page default may still be virtual — nothing to demote."""
+        plain = create_view(owner_client, name="Everything")
+
+        resp = _set_default(owner_client, plain["id"])
+        assert resp.status_code == 200, resp.content
+        assert [v["id"] for v in _defaults(owner_client)] == [plain["id"]]
+
+    def test_promote_is_idempotent(self, owner_client):
+        holder = create_view(owner_client, name="YTD", is_default=True)
+
+        resp = owner_client.patch(
+            f"{VIEWS}{holder['id']}/",
+            json.dumps({"is_default": True, "name": "My YTD"}),
+            content_type="application/json",
+        )
+        assert resp.status_code == 200, resp.content
+        assert resp.json()["name"] == "My YTD"
+        assert [v["id"] for v in _defaults(owner_client)] == [holder["id"]]
+
+    def test_delete_guard_follows_the_role(self, owner_client):
+        holder = create_view(owner_client, name="YTD", is_default=True)
+        other = create_view(owner_client, name="Everything")
+
+        assert _set_default(owner_client, other["id"]).status_code == 200
+
+        # The demoted view is deletable; the promoted one is not.
+        assert owner_client.delete(f"{VIEWS}{other['id']}/").status_code == 400
+        assert owner_client.delete(f"{VIEWS}{holder['id']}/").status_code == 204
+
+    def test_transfer_never_violates_the_unique_constraint(self, owner_client):
+        """Clear-then-set inside one transaction — no IntegrityError leaks out."""
+        first = create_view(owner_client, name="YTD", is_default=True)
+        second = create_view(owner_client, name="Everything")
+        third = create_view(owner_client, name="Missing prices")
+
+        for target in (second, third, first):
+            resp = _set_default(owner_client, target["id"])
+            assert resp.status_code == 200, resp.content
+            assert len(_defaults(owner_client)) == 1
+
+    def test_transfer_is_scoped_per_table_and_owner(self, owner_client, other_client):
+        catalog_default = create_view(owner_client, name="YTD", is_default=True)
+        accounts_default = create_view(
+            owner_client, table_key="finance-accounts", name="Table", is_default=True
+        )
+        foreign_default = create_view(other_client, name="YTD", is_default=True)
+        promote_me = create_view(owner_client, name="Everything")
+
+        assert _set_default(owner_client, promote_me["id"]).status_code == 200
+
+        # Only the same (owner, table_key) incumbent is demoted.
+        assert owner_client.get(f"{VIEWS}{catalog_default['id']}/").json()["is_default"] is False
+        assert owner_client.get(f"{VIEWS}{accounts_default['id']}/").json()["is_default"] is True
+        assert other_client.get(f"{VIEWS}{foreign_default['id']}/").json()["is_default"] is True

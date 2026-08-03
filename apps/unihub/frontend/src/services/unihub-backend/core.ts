@@ -93,7 +93,12 @@ export interface EntityViewCreatePayload {
   is_default?: boolean;
 }
 
-export type EntityViewPatch = Partial<Pick<EntityView, 'name' | 'config' | 'pinned' | 'position'>>;
+/** `is_default` is writable to TRANSFER the default role (round 3): sending
+ *  `true` promotes this view and demotes the incumbent server-side; sending
+ *  `false` is rejected with 400 (a table always has exactly one default). */
+export type EntityViewPatch = Partial<
+  Pick<EntityView, 'name' | 'config' | 'pinned' | 'position' | 'is_default'>
+>;
 
 export function listEntityViews(tableKey: string): Promise<EntityView[]> {
   return fetchJson<EntityView[]>(

@@ -186,3 +186,49 @@ def test_sync_round_trip_preserves_views(sync_configured: dict) -> None:
     # Owner is never serialized, so a fresh publish preview shows ZERO diffs —
     # the phantom-diff class from the 015 sync incident cannot occur.
     assert seeder.publish_preview() is None
+
+
+def test_sync_round_trip_preserves_default_role(sync_configured: dict) -> None:
+    """Round 3 (SC-008): a TRANSFERRED default role survives publish → checkout."""
+    import json
+
+    user = User.objects.create_user(username="sync_default_owner", password="testpass")
+    client = Client()
+    client.force_login(user)
+
+    holder = _make_view(user)
+    other = _make_view(user, name="Extra", is_default=False, pinned=False, position=1)
+
+    # Move the role to "Extra" through the API (round-3 transfer contract).
+    resp = client.patch(
+        f"/api/v1/core/entity-views/{other.pk}/",
+        json.dumps({"is_default": True}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200, resp.content
+
+    seeder = sync_configured["seeder"]
+    seeder.publish()
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=str(seeder.clone_dir),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    EntityView.objects.all().delete()
+
+    preview = client.get("/api/v1/sync/checkout/preview/", {"commit": commit}).json()
+    confirm = client.post(
+        "/api/v1/sync/checkout/confirm/",
+        {"commit": commit, "diff_digest": preview["diff_digest"], "excluded": []},
+        content_type="application/json",
+    )
+    assert confirm.status_code == 200, confirm.content
+
+    restored = {v.name: v for v in EntityView.objects.all()}
+    assert restored["Extra"].is_default is True
+    assert restored["Extra"].pinned is True  # promotion pinned it before the publish
+    assert restored["YTD"].is_default is False
+    assert restored[holder.name].pk == holder.pk

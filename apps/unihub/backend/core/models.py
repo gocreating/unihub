@@ -95,8 +95,9 @@ class EntityView(models.Model):
     config = models.JSONField(default=dict)
     pinned = models.BooleanField(default=False)
     position = models.IntegerField(default=0)
-    # Round 2: the table's materialized default view — at most one per
-    # (owner, table_key); create-only and undeletable (guaranteed fallback).
+    # The table's materialized default view — at most one per (owner,
+    # table_key) and undeletable (guaranteed fallback). Round 3: the role is
+    # transferable, swapped atomically by EntityViewSerializer.update().
     is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

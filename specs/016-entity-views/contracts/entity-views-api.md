@@ -28,7 +28,7 @@
 
 `owner` is never serialized in or out.
 
-**Round 2 (2026-07-23)**: `config` is ViewConfig **v2** (per-column `pin`, no `stickyLeft`/`stickyRight` — migration 0006 rewrites stored rows). New `is_default` field: write-once on create (the frontend materializes the virtual default tab with `is_default: true, pinned: true`); at most one per (owner, table_key) (partial unique constraint → 400 on a second); PATCH attempting to change it → 400; DELETE on an `is_default` row → 400 (guaranteed-fallback invariant, FR-003).
+**Round 2 (2026-07-23)**: `config` is ViewConfig **v2** (per-column `pin`, no `stickyLeft`/`stickyRight` — migration 0006 rewrites stored rows). `is_default`: the frontend materializes the virtual default tab with `is_default: true, pinned: true`; at most one per (owner, table_key) (partial unique constraint); DELETE on the holder → 400 (guaranteed-fallback invariant, FR-003). **Round 3**: the role is transferable via PATCH (below). **Round 4**: `name` is a non-unique label, trimmed on write (migration 0007).
 
 ## Endpoints
 
@@ -44,7 +44,7 @@ List the caller's views. `table_key` filter optional (omitted → all tables, us
 Create. Body: `{table_key, name, config, pinned?, position?}`. `owner` stamped server-side. Omitted `position` → appended after the caller's current max for that `table_key`.
 
 - **201** → created resource
-- **400** → missing/blank `name` or `table_key`; `config` not a JSON object; duplicate `(owner, table_key, name)` → `{"name": ["A view with this name already exists."]}` (message key stable for frontend mapping)
+- **400** → missing/blank `name` (after trimming) or `table_key`; `config` not a JSON object. **Round 4: duplicate names are ACCEPTED** — the `(owner, table_key, name)` unique constraint is gone (migration 0007), so a repeated name returns 201 like any other create. Names are stored trimmed of leading/trailing whitespace.
 
 ### `PATCH /api/v1/core/entity-views/{id}/`
 
@@ -53,7 +53,7 @@ Partial update: `name`, `config`, `pinned`, `position`, `is_default`. `table_key
 **`is_default` (round 3 — transferable role, FR-026)**: `{"is_default": true}` promotes this view to the table's default. The server performs the swap in one `transaction.atomic()`: the incumbent default for the same `(owner, table_key)` is cleared **first**, then this row is saved with `is_default=true` **and `pinned=true`**. The demoted row keeps its `pinned`, `position`, `name`, and `config` unchanged. `{"is_default": false}` on the current holder is rejected — a table must always have exactly one default. Promoting a view that already holds the role is a no-op 200.
 
 - **200** → updated resource (re-fetch the table's list to observe the demotion)
-- **400** → validation (rename collision; `{"is_default": ["The default view cannot be unset; set another view as default instead."]}`)
+- **400** → validation (`{"is_default": ["The default view cannot be unset; set another view as default instead."]}`; blank-after-trim `name`). **A rename to an existing name is NOT an error** (round 4).
 - **404** → not found / not owner
 
 ### `DELETE /api/v1/core/entity-views/{id}/`
@@ -64,7 +64,7 @@ Partial update: `name`, `config`, `pinned`, `position`, `is_default`. `table_key
 
 ### `POST /api/v1/core/entity-views/reorder/`
 
-Bulk position rewrite for one table. Two callers as of round 3: the manage-modal Save **and** a tab drag-and-drop in the view row (FR-027). Body:
+Bulk position rewrite for one table. Single caller as of round 4: tab drag-and-drop in the view row (FR-027) — the manage modal is gone. Body:
 
 ```json
 { "table_key": "inventory-catalog", "ids": ["idA", "idB", "idC"] }
@@ -72,7 +72,7 @@ Bulk position rewrite for one table. Two callers as of round 3: the manage-modal
 
 Sets `position = index` for each id, in order. All ids MUST exist, belong to the caller, and have the given `table_key`.
 
-Callers MUST send the table's **complete** id order — for a tab drag that means the strip's saved views in their new left-to-right order followed by the table's remaining views in their current relative order. Sending a partial list leaves the omitted views at stale positions and desynchronizes the strip from the manage modal. Anonymous (unsaved) tabs contribute no id.
+Callers MUST send the table's **complete** id order — for a tab drag that means the strip's saved views in their new left-to-right order followed by the table's remaining views in their current relative order. Sending a partial list leaves the omitted views at stale positions. Unsaved tabs contribute no id.
 
 The view holding the default role carries no positional privilege: it may appear at any index.
 
@@ -87,6 +87,14 @@ The view holding the default role carries no positional privilege: it may appear
 - **Import / checkout**: `owner` is stamped with the **acting user**, threaded as `acting_user` through `apply_diff` / `import_from_clone` / `apply_selected` from `ImportConfirmView`, `ImportZipConfirmView`, `ImportBatchPreviewView` (confirm path), and `SyncCheckoutConfirmView` (`request.user`). Importing an `owner_field` table without an acting user is an explicit error.
 - **Round trip** (SC-008): publish → checkout (or export → import) preserves id, name, table_key, config, pinned, position, is_default for every view; owner integer PKs can never produce phantom diffs because they are never serialized.
 
+## Migration history
+
+| Migration | Round | Change |
+|-----------|-------|--------|
+| `core/0005` | 1 | `EntityView` model + `UniqueConstraint(owner, table_key, name)` |
+| `core/0006` | 2 | `is_default` + partial `UniqueConstraint(owner, table_key, WHERE is_default)` + ViewConfig v1→v2 pin data migration |
+| `core/0007` | 4 | **RemoveConstraint** `(owner, table_key, name)` — names become non-identifying labels (FR-016). Constraint-only: no field changes, so the data_io descriptor, CSV headers, and OpenAPI schema are unaffected |
+
 ## Test contract (pytest-django, TDD — write first)
 
 `backend/tests/test_entity_views.py`, fixtures per existing `auth_client` recipe (`force_login`):
@@ -95,9 +103,9 @@ The view holding the default role carries no positional privilege: it may appear
 2. `test_create_and_list_scoped_by_table_key` — create 2 keys, list filters correctly.
 3. `test_owner_scoping` — user B cannot list/GET/PATCH/DELETE user A's view (404 / empty list).
 4. `test_create_missing_name` — 400.
-5. `test_create_duplicate_name_same_table` — 400; same name on a DIFFERENT table_key → 201.
+5. ~~`test_create_duplicate_name_same_table`~~ — **superseded in round 4 by `TestNonUniqueNames`** (duplicates are legal).
 6. `test_config_must_be_object` — `config: "str"` / `[]` → 400; arbitrary nested object → 201 (forgiving deep shape).
-7. `test_patch_rename_pin_position` — 200; rename collision → 400; `table_key` change attempt → 400.
+7. `test_patch_rename_pin_position` — 200; `table_key` change attempt → 400 (the rename-collision case moved to `TestNonUniqueNames`, round 4).
 8. `test_delete` — 204, then 404.
 9. `test_reorder_happy_path` — positions rewritten to list order.
 10. `test_reorder_rejects_foreign_or_mixed_ids` — 400.
@@ -129,3 +137,11 @@ Round 3 additions — `TestDefaultTransfer` (write first, red before green):
 17. `test_import_stamps_acting_user` — imported rows land with `owner == acting user`.
 18. `test_import_without_acting_user_errors` — `owner_field` table + no acting user → explicit error.
 19. `test_sync_round_trip_preserves_views` — publish → wipe → checkout on the `bare_repo` fixture restores views verbatim for the acting user (SC-008); second publish after checkout shows ZERO diffs (no phantom owner diffs).
+
+Round 4 additions — `TestNonUniqueNames` (write first, red before green):
+
+30. `test_duplicate_name_same_table_allowed` — two views with the same `(owner, table_key, name)` → both 201; the list returns both with distinct ids.
+31. `test_rename_to_existing_name_allowed` — PATCH `name` onto a name another view already uses → 200.
+32. `test_name_is_trimmed` — `"  Sales  "` → stored `"Sales"` on create AND on rename.
+33. `test_blank_name_rejected` — `"   "` → 400 on create and on rename.
+34. `test_duplicate_names_survive_sync_round_trip` (in `test_entity_views_io.py`) — two same-named views publish → wipe → checkout back as two distinct rows (ids preserved), proving nothing keys off the name.

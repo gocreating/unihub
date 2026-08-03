@@ -86,3 +86,16 @@ On the inventory catalog (`/inventory/catalog`), with the row revealed and at le
 5. **Set as default**: choose it on an ordinary saved view — it becomes pinned and its Delete/Close grey out; the previous default becomes deletable and closable; **neither tab moves** (SC-011). Reload: exactly one default.
 6. **Kebab**: the row's right edge holds a single kebab — *Add empty view* opens an anonymous tab; *Open ▸* lists only views not already open (and shows a disabled empty-state entry when everything is open); *Manage views…* opens the modal. At 375px width with six tabs, the kebab stays fully visible without scrolling the strip (SC-006).
 7. **Sync**: publish → checkout still restores which view holds the default role (SC-008).
+
+## Round 4 manual walk-through (2026-08-04)
+
+On the inventory catalog (`/inventory/catalog`), after `uv run python manage.py migrate` (adds 0007):
+
+1. **Save never prompts**: kebab → *Add empty view* → a tab named **"New view"** opens with NO filters, NO sorting, every column visible in natural order, nothing pinned. Change a filter, open its menu → *Save* — the view is stored immediately, no dialog, dirty dot clears (SC-012).
+2. **Rename dialog**: tab menu → *Rename* opens a modal pre-filled with the current name; edit and confirm to rename in place. Rename a second view to the SAME name — accepted (FR-016). Type `"  spaced  "` → stored trimmed; clear the field → the dialog refuses to submit.
+3. **Duplicate**: tab menu → *Duplicate* produces a tab with the identical name (no "(1)" suffix); saving it creates a second stored view sharing that name, distinguishable by tab order.
+4. **Set as default**: promote a view sitting third in the strip — it stays third, no tab jumps to the front, and neither it nor the previous default shows a dirty dot (SC-011). Reload: exactly one default.
+5. **Drag**: drag a wide tab past a narrow one — the dragged tab keeps its own width the whole way (no stretching, SC-010); drop and reload to confirm the order persisted.
+6. **Menus dismiss**: open a tab menu, click on the table body → the menu closes and nothing else happens; re-open and press Esc → closes.
+7. **No Manage views**: the kebab shows only *Add empty view* and *Open ▸*. Manage a closed view by opening it from *Open ▸* first, then using its tab menu.
+8. **URL by id**: activate a saved view → the URL reads `?inventory-catalog.view=<12-char id>`; rename that view and reload the same URL — it still resolves (renames no longer break links).

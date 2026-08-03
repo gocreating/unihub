@@ -58,6 +58,32 @@ describe('SortableList — rendering', () => {
     expect(document.querySelector('[data-sortable-id="b"]')).toBeInTheDocument();
     expect(document.querySelector('[data-sortable-id="c"]')).toBeInTheDocument();
   });
+
+  // SL-04 (016 round 3): the default orientation stays vertical — wrappers get
+  // no flex sizing, so every existing caller renders exactly as before.
+  it('leaves item wrappers unstyled in the default vertical orientation', () => {
+    renderList(ITEMS, vi.fn());
+    const wrapper = document.querySelector('[data-sortable-id="a"]') as HTMLElement;
+    expect(wrapper.style.flex).toBe('');
+    expect(wrapper.style.display).toBe('');
+  });
+
+  // SL-05 (016 round 3): horizontal lists pin their wrappers to their content
+  // width so a flex strip never stretches or shrinks the dragged items.
+  it('renders horizontal items as non-shrinking flex children', () => {
+    render(
+      <SortableList
+        items={ITEMS}
+        orientation="horizontal"
+        onReorder={vi.fn()}
+        renderItem={(item) => <div data-testid={`row-${item.id}`}>{item.label}</div>}
+      />,
+    );
+    const wrapper = document.querySelector('[data-sortable-id="b"]') as HTMLElement;
+    expect(wrapper.style.flex).toBe('0 0 auto'); // jsdom expands the `none` shorthand
+    expect(wrapper.style.display).toBe('flex');
+    expect(screen.getByText('Gamma')).toBeInTheDocument();
+  });
 });
 
 // ── Pure reorder logic (reorderById) ─────────────────────────────────────────

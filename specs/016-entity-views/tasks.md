@@ -1,12 +1,12 @@
-# Tasks: Entity Views — Round 3
+# Tasks: Entity Views — Round 4
 
-**Input**: Design documents from `/specs/016-entity-views/` (spec.md Clarifications Session 2026-08-03, plan.md round 3, research.md R22–R28, data-model.md §7 menu matrix, contracts/entity-views-api.md)
+**Input**: Design documents from `/specs/016-entity-views/` (spec.md Clarifications Session 2026-08-04, plan.md round 4, research.md R29–R36, data-model.md, contracts/)
 
-**Prerequisites**: Rounds 1–2 are SHIPPED (their task lists are in git history at 467beff / 8e1f169). This list covers round 3 only. TDD is mandatory (constitution V): backend tests red before implementation; hook/component tests written against the new API before the rewrite.
+**Prerequisites**: Rounds 1–3 are implemented (round 3's 26-task list completed in the working tree; its ship note lands with this round's commit). This list covers round 4 only. TDD is mandatory (constitution V): backend tests red before implementation; component/hook tests written against the new API before the rewrite.
 
-**Organization**: Tasks are grouped by user story. Round-3 directives map: per-tab Save targeting a non-active tab → US1; hidden scrollbar + edge shadows, drag reorder, kebab replacing "+" and "View ▾" → US2; URL grammar untouched (regression only) → US3; per-tab dropdown menu (incl. close/rename relocation, Set as default) + manage-modal default row → US4; the transferable `is_default` backend contract is story-independent → Foundational.
+**Organization**: Tasks are grouped by user story. Round-4 directives map: no-prompt Save + "New view" auto-label → US1; blank "Add empty view", drag-stretch fix, kebab cleanup → US2; id-based URL reference → US3; Rename dialog, duplicate naming, promotion fixes, menu dismissal, manage-modal removal → US4; the non-unique-name backend contract is story-independent → Foundational.
 
-**No migration this round** — `is_default`, `pinned`, `position` all exist since migration 0006; only their write rules change.
+**Migration**: this round adds **core/0007** (constraint removal only). Together with the still-unapplied 0006, a deploy now carries two pending migrations.
 
 ## Phase 1: Setup
 
@@ -14,87 +14,94 @@
 
 ## Phase 2: Foundational (blocking prerequisites)
 
-**Backend — transferable default role (TDD: T002/T003 red before T004 turns them green)**
+**Backend — names become non-unique labels (TDD: T002/T003 red before T004–T005)**
 
-- [ ] T002 [P] Write failing `TestDefaultTransfer` (contract tests 20–28: promote transfers the role, promotion forces `pinned=True`, demoted view keeps pin/position/name/config, promotion changes no `position`, `{is_default: false}` → 400, promote with no existing default → 200, promoting the current holder is an idempotent 200, delete guard follows the role, no `IntegrityError` mid-swap) in `apps/unihub/backend/tests/test_entity_views.py`; delete the superseded `test_patch_cannot_change_is_default`
-- [ ] T003 [P] Write failing `test_sync_round_trip_preserves_default_role` (contract test 29 — publish → wipe → checkout on the `bare_repo` fixture restores which view holds `is_default`) in `apps/unihub/backend/tests/test_entity_views_io.py`
-- [ ] T004 Make `is_default` transferable in `apps/unihub/backend/core/serializers.py`: `validate_is_default` rejects only an explicit `false` on the current holder (message `"The default view cannot be unset; set another view as default instead."`); override `update()` to run inside `transaction.atomic()`, clearing the incumbent FIRST (`filter(owner, table_key, is_default=True).exclude(pk=instance.pk).update(is_default=False)`) then saving with `is_default=True` and `pinned=True` — per-statement constraint, so order matters (R25) — T002/T003 green; confirm the `destroy` guard in `apps/unihub/backend/core/views.py` needs no change (it reads the flag, not a fixed row)
-- [ ] T005 Regenerate the OpenAPI schema (spectacular file route per the 018 precedent) + `pnpm generate-types` in `apps/unihub/frontend/`; confirm `is_default` is writable on PATCH in `apps/unihub/frontend/src/services/unihub-backend/core.ts`
+- [ ] T002 [P] Write failing `TestNonUniqueNames` (contract tests 30–33: two views with the same `(owner, table_key, name)` both 201 with distinct ids; PATCH renaming onto an existing name → 200; `"  Sales  "` stored as `"Sales"` on create AND rename; `"   "` → 400 on create and rename) in `apps/unihub/backend/tests/test_entity_views.py`; delete the superseded `test_create_duplicate_name_same_table` and drop the rename-collision assertion from `test_patch_rename_pin_position`
+- [ ] T003 [P] Write failing `test_duplicate_names_survive_sync_round_trip` (contract test 34 — two same-named views publish → wipe → checkout back as two distinct rows with ids preserved) in `apps/unihub/backend/tests/test_entity_views_io.py`
+- [ ] T004 Remove `UniqueConstraint(owner, table_key, name)` from `EntityView.Meta.constraints` in `apps/unihub/backend/core/models.py` and generate `apps/unihub/backend/core/migrations/0007_*.py` (`RemoveConstraint` only — no field changes, so the data_io descriptor and CSV headers are untouched)
+- [ ] T005 Drop the name-collision branch from `EntityViewSerializer.validate()` in `apps/unihub/backend/core/serializers.py`, keeping `validate_name`'s strip + reject-blank — T002/T003 green; run the full backend suite so the round-3 `TestDefaultTransfer` stays green
+- [ ] T006 Regenerate the OpenAPI schema (spectacular file route) + `pnpm generate-types` in `apps/unihub/frontend/`; confirm the schema diff is EMPTY (a constraint change must not alter the contract)
 
-**Frontend — shared capabilities the tab row needs**
+**Frontend — shared strings**
 
-- [ ] T006 [P] Add an additive `orientation?: 'vertical' | 'horizontal'` prop (default `'vertical'`) to `apps/unihub/frontend/src/components/EntityToolbar/SortableList.tsx` swapping `verticalListSortingStrategy` → `horizontalListSortingStrategy`, and configure `PointerSensor` with `activationConstraint: { distance: 5 }` so a click never starts a drag (R22); extend `apps/unihub/frontend/src/components/EntityToolbar/SortableList.test.tsx` (existing vertical callers unchanged, horizontal reorder works)
-- [ ] T007 [P] Add round-3 i18n keys to `apps/unihub/frontend/src/locales/en-US/pages.ts` and `apps/unihub/frontend/src/locales/zh-TW/pages.ts` in the same commit — tab menu (`tabMenu.save/close/duplicate/pin/unpin/setDefault/rename/delete`), kebab (`kebab.addEmptyView/open/noViewsToOpen/manageViews`, aria-label `kebab.label`), and the set-as-default failure toast; re-purpose or remove the now-unused `common.entityViews.view` control label and the standalone `close` button label
-- [ ] T008 [P] Write failing RTL tests for tab-addressed hook actions (`saveTab`/`duplicateTab`/`pinTab`/`setDefaultTab`/`deleteTab`/`reorderTabs` each act on the GIVEN tabId, never on the active one; `deleteTab` on a saved view converts that tab to anonymous per FR-019; `setDefaultTab` PATCHes `{is_default: true}` and refreshes the list so the demotion shows; `reorderTabs` POSTs the table's COMPLETE id order per R26; promoting while the default is still virtual converts the virtual tab to anonymous) in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`
-- [ ] T009 Generalize `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` from active-tab actions to tab-addressed ones (`saveTab(tabId)`, `duplicateTab(tabId, baseName)`, `pinTab(tabId, pinned)`, `setDefaultTab(tabId)`, `deleteTab(tabId)`, `reorderTabs(orderedTabIds)`; keep thin active-tab wrappers where modals need them), and DROP the round-2 "default tab is always first" invariant so tab order comes purely from `position` (R27/R28) — T008 green
+- [ ] T007 [P] Update `apps/unihub/frontend/src/locales/en-US/pages.ts` and `apps/unihub/frontend/src/locales/zh-TW/pages.ts` in the same commit: ADD the rename-dialog keys (`renameViewTitle`, reusing `viewName`/`viewNameRequired`); REMOVE the keys orphaned by this round (`saveViewTitle`, `duplicateName`, `manageTitle`, `manageViews`, `manageSaveError`, `savedList`, `noSaved`, `edit`)
 
-**Checkpoint**: backend suite green with a transferable default role; hook exposes per-tab actions; shared drag supports a horizontal strip; all stories unblocked.
+**Checkpoint**: backend accepts duplicate/trimmed names with the default-transfer suite still green; the API contract is provably unchanged; strings are ready.
 
 ## Phase 3: User Story 1 — Save a table configuration and reopen it later (P1)
 
-**Goal (round-3 delta)**: Save is no longer a single row-level action — it targets whichever tab asked for it, including a tab that is not active.
+**Goal (round-4 delta)**: Save is a single interaction with no dialog anywhere — a tab that has no stored view is created under its current label, and a fresh scratch tab is auto-labelled "New view".
 
-**Independent test**: right-click an inactive dirty saved tab → Save → that view's stored config updates and its dirty dot clears while the active tab is untouched; right-click an inactive anonymous tab → Save → the name modal opens and saves THAT tab.
+**Independent test**: open a scratch tab (labelled "New view"), adjust a filter, choose Save from its menu → the view is stored under "New view" with no prompt and the dirty dot clears; a second scratch tab saves under the same label without error.
 
-- [ ] T010 [P] [US1] Write failing RTL tests (Save on a non-active dirty tab persists that tab's config and clears only its dirty dot; `SaveViewModal` opened from a non-active anonymous tab creates the view from that tab's config and binds the resulting id to it) in `apps/unihub/frontend/src/components/EntityViews/ViewTabs.test.tsx`
-- [ ] T011 [US1] Make the name-and-save flow tab-addressed in `apps/unihub/frontend/src/components/EntityViews/ViewTabs.tsx` and `SaveViewModal.tsx`: track the requesting `tabId` in state and pass it to `saveTabAs(tabId, name)`, replacing the implicit active-tab assumption — T010 green
+- [ ] T008 [P] [US1] Write failing RTL tests (`saveTab` on a tab with no `viewId` POSTs `{name: <tab label>, config}` and binds the created id to that tab; `saveTab` never returns `'needs-name'`; saving two scratch tabs under the identical auto-label succeeds) in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`
+- [ ] T009 [US1] Implement the no-prompt save in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts`: `saveTab` creates the view when the tab has none (using its current label), the `'needs-name'` outcome and `saveTabAs` are removed from `UseEntityViewsReturn`, and `saveTab` resolves to `'saved'` in every path — T008 green
+- [ ] T010 [US1] Auto-label new scratch tabs "New view" at creation in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` (localized via the existing `newViewName` key, stored on the tab so the label survives a reload), and DELETE `apps/unihub/frontend/src/components/EntityViews/SaveViewModal.tsx` + `SaveViewModal.test.tsx`, removing the `onNeedsName` prop from `ViewTabMenu.tsx` and its modal state from `ViewTabs.tsx`
 
-**Checkpoint**: US1 delta done — saving is unambiguous for any tab.
+**Checkpoint**: US1 delta done — saving is one click, always.
 
 ## Phase 4: User Story 2 — Work across multiple views with tabs (P2)
 
-**Goal (round-3 delta)**: the strip scrolls with no scrollbar and edge shadows instead; tabs drag to reorder and the order persists; one kebab at the row's right edge replaces both the "+" button and the "View ▾" control.
+**Goal (round-4 delta)**: "Add empty view" yields a genuinely blank configuration; a dragged tab keeps its own width; the kebab carries only Add and Open.
 
-**Independent test**: overflow the strip → no scrollbar, shadow on the overflowing side(s); drag a tab past a neighbour → order changes, survives reload, matches the manage modal; the kebab offers Add empty view / Open ▸ (only non-open views, disabled empty state) / Manage views…; a left-click on an inactive tab still just switches.
+**Independent test**: on the inventory catalog (whose default view carries the seeded YTD filter), Add empty view → the new tab shows NO filter conditions, no sort, every column visible in natural order, nothing pinned; dragging a wide tab past a narrow one shows no width distortion; the kebab has exactly two entries.
 
-- [ ] T012 [P] [US2] Write failing RTL tests (strip has hidden-scrollbar styles; shadow elements toggle from `scrollLeft`/`clientWidth`/`scrollWidth` — none at width ≥ content, right-only at 0, both mid-scroll, left-only at end; drag end calls `reorderTabs` with the new order; row renders `[strip][kebab]` with no "+" and no "View ▾") in `apps/unihub/frontend/src/components/EntityViews/ViewTabs.test.tsx`
-- [ ] T013 [P] [US2] Write failing RTL tests for the kebab (Add empty view → `addAnonymousTab`; Open submenu lists ONLY saved views not currently open, in position order; disabled empty-state entry when all are open or none exist; Manage views… opens the modal; menu body constrains to `maxHeight: 60vh`) in NEW `apps/unihub/frontend/src/components/EntityViews/ViewKebab.test.tsx`
-- [ ] T014 [US2] Create `apps/unihub/frontend/src/components/EntityViews/ViewKebab.tsx` (AntD `Dropdown` + `MoreOutlined`, right-aligned `placement="bottomRight"`, `maxHeight: 60vh` internal scroll, nested `Open ▸` submenu) and DELETE `ViewDropdown.tsx` + its test — T013 green
-- [ ] T015 [US2] Rebuild the strip in `apps/unihub/frontend/src/components/EntityViews/ViewTabs.tsx`: render tabs through the horizontal `SortableList` (T006), hide the scrollbar (`scrollbarWidth: 'none'`, `msOverflowStyle: 'none'`, `&::-webkit-scrollbar { display: none }`), add absolutely-positioned `data-testid="view-tabs-shadow-left|right"` gradient overlays (`pointer-events: none`) driven by a scroll/`ResizeObserver`-fed metric hook, and lay the row out as `[strip][kebab]` with the kebab fixed at the right edge (R22/R24) — T012 green
-- [ ] T016 [US2] Persist the dragged order in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts`: `reorderTabs` composes the table's COMPLETE id order (strip saved views in new order, then the remaining views in current relative order), POSTs `reorder/`, and updates the cached list optimistically; anonymous tabs contribute no id (R26)
+- [ ] T011 [P] [US2] Write failing tests for `blankConfig` (empty filters/sort, every page column visible in declared order with sequential `order` and no `pin`, page default `pageSize`) and for the add-tab action using it, in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`
+- [ ] T012 [US2] Export `blankConfig(defaults: ViewConfig): ViewConfig` from `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` per data-model §2 and use it in the add-tab action (renamed `addBlankTab`, replacing `addAnonymousTab`'s use of `defaultConfig`); update the `ViewKebab.tsx` call site — T011 green
+- [ ] T013 [P] [US2] Write a failing test asserting a horizontal `SortableList` item's inline transform contains NO `scale` component (only `translate`), in `apps/unihub/frontend/src/components/EntityToolbar/SortableList.test.tsx`
+- [ ] T014 [US2] Use `CSS.Translate.toString(transform)` for `orientation === 'horizontal'` (keeping `CSS.Transform.toString` for the vertical default) in `apps/unihub/frontend/src/components/EntityToolbar/SortableList.tsx` — T013 green, and the dragged tab stops stretching (R33/FR-027)
+- [ ] T015 [US2] Remove the "Manage views…" entry from `apps/unihub/frontend/src/components/EntityViews/ViewKebab.tsx` and its `onOpenManage` prop; update `ViewKebab.test.tsx` to assert exactly two entries (Add empty view · Open ▸)
 
-**Checkpoint**: US2 delta done — scrollbar-free strip with shadows, persisted drag order, single kebab control.
+**Checkpoint**: US2 delta done — blank means blank, drags look right, the kebab is minimal.
 
 ## Phase 5: User Story 3 — Share and deep-link a view via URL (P3)
 
-**Goal (round-3 delta)**: none — the round-2 readable grammar stands. This phase is a regression guard for the hook refactor (T009) and the dropped always-first invariant (T028).
+**Goal (round-4 delta)**: `<tableKey>.view=` carries the view id, so duplicate names cannot make a link ambiguous and renames never break links.
 
-- [ ] T017 [US3] Re-run and, where the always-first assumption leaked in, update `apps/unihub/frontend/src/components/EntityViews/serialization.test.ts` and the URL sections of `useEntityViews.test.tsx`; confirm the `lastProcessedRef`/`lastParamRef` separation still holds after the refactor (round-1 ping-pong guard) and that a clean default tab still emits NO params
+**Independent test**: activate a saved view → the URL shows `?<tableKey>.view=<12-char id>`; rename that view and reload the same URL → it still resolves to that view; a bogus id falls back to the default view with a notice.
 
-**Checkpoint**: URL behavior unchanged and locked.
+- [ ] T016 [P] [US3] Update the serialization suite in `apps/unihub/frontend/src/components/EntityViews/serialization.test.ts` for id-based references (emit `view=<id>`, parse an id, no name lookup, unresolvable id → fallback) and drop the round-2 "matches the page default name while virtual" cases
+- [ ] T017 [US3] Change the `view` facet to carry the saved-view id in `apps/unihub/frontend/src/components/EntityViews/serialization.ts` (`serializeSavedEntries` takes an id; the parser returns `viewId` instead of `viewName`) per contracts/view-url-serialization.md v2.1 — T016 green
+- [ ] T018 [US3] Resolve inbound references by id and emit ids outbound in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts`; a tab with no stored view (scratch tab or still-virtual page default) emits NO `.view` and serializes inline — PRESERVE the `lastProcessedRef`/`lastParamRef` separation (round-1 ping-pong guard)
+
+**Checkpoint**: US3 delta done — links are exact and rename-proof.
 
 ## Phase 6: User Story 4 — Organize saved views (P4)
 
-**Goal (round-3 delta)**: every tab carries its own menu (left-click when active, right-click always) with Save · Close · Duplicate · Pin/Unpin · Set as default · Rename · Delete, inapplicable items disabled not hidden; the per-tab `×` and the double-click rename gesture are removed; the default role is transferable and the manage modal's default row becomes draggable.
+**Goal (round-4 delta)**: Rename is a prefilled dialog; a duplicate keeps its source's name; promoting a view disturbs nothing; menus dismiss on outside click and Esc; the management modal is gone.
 
-**Independent test**: right-click an inactive tab → its menu opens (no browser context menu) with the matrix from data-model §7; Set as default on an ordinary view → it pins and its Delete/Close grey out while the previous default becomes deletable, and neither tab moves; Delete from the menu keeps the tab open as anonymous.
+**Independent test**: tab menu → Rename opens a modal prefilled with the current name (trims on commit, refuses blank); Duplicate produces an identically-named tab; promoting the third tab leaves it third with no dirty dot on either tab; clicking the table body closes an open menu; the kebab offers no Manage entry.
 
-- [ ] T018 [P] [US4] Write failing RTL tests for the menu (left-click inactive = switch only, no menu; left-click active = menu; right-click any tab = menu with `preventDefault`; exactly one menu open at a time; the full enablement matrix from data-model.md §7; Delete goes through `Modal.confirm` with `okType: 'danger'`; Rename opens the inline input for saved/default and `SaveViewModal` for anonymous) in NEW `apps/unihub/frontend/src/components/EntityViews/ViewTabMenu.test.tsx`
-- [ ] T019 [US4] Create `apps/unihub/frontend/src/components/EntityViews/ViewTabMenu.tsx` — controlled AntD `Dropdown` (open state owned by `ViewTabs`, keyed by `tabId`), items Save/Close/Duplicate/Pin-Unpin/Set as default/Rename/Delete wired to the tab-addressed hook actions, disabled flags per the matrix, `maxHeight: 60vh` body (R23) — T018 green
-- [ ] T020 [US4] Wire the menu into `apps/unihub/frontend/src/components/EntityViews/ViewTabs.tsx`: `onClick` opens the menu only when the tab is already active (otherwise `switchTab`), `onContextMenu` opens it for any tab with `preventDefault()`; REMOVE the per-tab close `×` and the `onDoubleClick` rename trigger (the inline rename input stays, now started by the menu's Rename)
-- [ ] T021 [US4] Implement `setDefaultTab` in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts`: PATCH `{is_default: true}`, invalidate/refetch the table's view list so the demotion is visible, convert an open VIRTUAL default tab to anonymous when another view is promoted (R25), surface failures with a translated `message.error`; never touch positions (SC-011)
-- [ ] T022 [US4] Allow dragging the default row in `apps/unihub/frontend/src/components/EntityViews/ManageViewsModal.tsx` (delete stays blocked, rename/pin stay enabled) and route its staged reorder through the same complete-order composition as the strip; update `ManageViewsModal.test.tsx` (default row draggable, still undeletable, order matches the strip)
+- [ ] T019 [P] [US4] Write failing RTL tests for the rename dialog (opens prefilled from the tab menu; commits a trimmed name via `renameTab`; refuses a blank/whitespace-only name; Cancel and Esc leave the name unchanged; on a tab with no stored view it relabels locally without any API call) in NEW `apps/unihub/frontend/src/components/EntityViews/RenameViewModal.test.tsx`
+- [ ] T020 [US4] Create `apps/unihub/frontend/src/components/EntityViews/RenameViewModal.tsx` (AntD `Modal`, auto-focused prefilled input, Enter submits, Cancel left / primary right, no `maskClosable` while the value differs) and wire it into `apps/unihub/frontend/src/components/EntityViews/ViewTabs.tsx`, REMOVING the round-3 inline rename input — T019 green
+- [ ] T021 [P] [US4] Write a failing test asserting `duplicateTab` names the copy exactly like its source (no "(1)" suffix) in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`, and update `ViewTabMenu.test.tsx`'s duplicate expectation
+- [ ] T022 [US4] Drop the first-unused-suffix logic from `duplicateTab` in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` — T021 green (FR-015)
+- [ ] T023 [P] [US4] Write failing tests for the promotion defects (promoting a currently-unpinned session tab does NOT move it in the strip; neither the promoted nor the demoted tab is dirty afterwards, including when the demoted one was the ACTIVE tab with live config) in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`
+- [ ] T024 [US4] Fix both defects in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` per R32: the pinned-merge effect preserves the current strip order for already-open tabs and only inserts genuinely new pinned tabs (by `position`); `setDefaultTab` snapshots the active tab's live config into tab state BEFORE swapping identities — T023 green (FR-026/SC-011)
+- [ ] T025 [P] [US4] Write failing tests (a `mousedown` outside the menu and its tab closes it; `Escape` closes it; a click INSIDE the menu does not close it before the action runs) in `apps/unihub/frontend/src/components/EntityViews/ViewTabs.test.tsx`
+- [ ] T026 [US4] Add the document-level `mousedown`/`keydown` dismissal in `apps/unihub/frontend/src/components/EntityViews/ViewTabs.tsx` while a tab menu is open (ignore targets inside `.ant-dropdown` or the owning tab), per R36 — T025 green
+- [ ] T027 [US4] DELETE `apps/unihub/frontend/src/components/EntityViews/ManageViewsModal.tsx` + `ManageViewsModal.test.tsx`, remove its render and state from `ViewTabs.tsx`, and remove `commitManageChanges` + the `ManageChanges` type from `useEntityViews.ts` and its tests (every capability is tab-addressed — R34/FR-017)
 
-**Checkpoint**: US4 delta done — one menu per tab, transferable default, consistent ordering across strip and modal.
+**Checkpoint**: US4 delta done — one dialog, one management surface, no side effects.
 
 ## Phase 7: Polish & Cross-Cutting
 
-- [ ] T023 [P] Extend e2e `apps/unihub/frontend/e2e/entity-views.spec.ts` with real-browser geometry locks (memory rule: visual-geometry work is locked in a browser, not JSDOM): (a) SC-009 — overflow the strip, assert `clientWidth < scrollWidth`, zero rendered scrollbar height, and shadow presence at scroll 0 / mid / end; (b) SC-010 — drag a tab with real mouse moves, assert the new left-to-right order, reload, assert it persists; (c) SC-006 — at 375px with 6+ tabs the kebab box stays fully inside the row's right edge while the strip scrolls
-- [ ] T024 [P] Sweep for stale references: `grep -rn "ViewDropdown\|entityViews.view'\|newTab" apps/unihub/frontend/src apps/unihub/frontend/e2e` — no orphaned imports, i18n keys, or aria-label selectors (round-1 gotcha: AntD icon aria-labels join accessible names, so `/^view/i` anchoring may need updating where the "View" control label disappears)
-- [ ] T025 Full quality loops: backend `uv run ruff format . && uv run ruff check . --fix && uv run pytest`; frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck — user rule); run `pnpm exec playwright test e2e/entity-views.spec.ts` against the dev stack
-- [ ] T026 Update `CLAUDE.md` (round-3 SHIPPED note: what landed, test counts, gotchas — replacing the IN PROGRESS paragraph) and note that quickstart.md §Round-3 manual walk-through awaits a human session; re-confirm migration 0006 still needs applying on the running docker stack
+- [ ] T028 [P] Update e2e `apps/unihub/frontend/e2e/entity-views.spec.ts`: add the SC-010 width lock (measure the dragged tab's `boundingBox().width` mid-drag and assert it stays within 2px of its resting width — a real-browser assertion per the visual-geometry rule), and update the helper flows that used the Save-view modal (`createSavedView` now uses Rename + Save) and the removed kebab entry
+- [ ] T029 [P] Sweep for stale references: `grep -rn "SaveViewModal\|ManageViewsModal\|commitManageChanges\|duplicateName\|manageTitle\|savedList\|needs-name" apps/unihub/frontend/src apps/unihub/frontend/e2e` returns nothing outside git history
+- [ ] T030 Full quality loops: backend `uv run ruff format . && uv run ruff check . --fix && uv run pytest`; frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck — user rule). The e2e suite is NOT run here (the live stack serves real data and these specs write saved views); it awaits a human run
+- [ ] T031 Update `CLAUDE.md` (round-4 SHIPPED note replacing the IN PROGRESS paragraph: what landed, test counts, gotchas) and note that BOTH migrations 0006 and 0007 are pending on the running docker stack
 
 ## Dependencies
 
-- Phase 2 blocks everything: T004 needs T002/T003 red first; T005 needs T004; T009 needs T008 red first; T006/T007 are independent [P].
-- US1 (T010–T011) needs T009 (tab-addressed save). US2 (T012–T016) needs T006 (horizontal drag) + T009 (reorder action). US3 (T017) needs T009. US4 (T018–T022) needs T009 + T005 (writable `is_default`) and lands after US2's strip rebuild (T015) because the menu mounts on the rebuilt tab element.
-- T022 shares the complete-order composition written in T016 — implement it once in the hook, consume it in both.
-- Polish (T023–T026) last; T023 ∥ T024.
+- Phase 2 blocks everything: T004/T005 need T002/T003 red first; T006 needs T005; T007 is independent [P].
+- US1 (T008–T010) needs T005 (duplicate names must be accepted before two scratch tabs can share the auto-label). US2 (T011–T015) and US3 (T016–T018) are independent of US1 and of each other. US4's T019–T022 need T007 (strings) and T010 (the inline input is removed alongside the modal cleanup); T023–T024 are independent of the rest of US4; T027 must follow T015 (kebab entry first, then the component).
+- Polish (T028–T031) last; T028 ∥ T029.
 
 ## Parallel opportunities
 
-- T002 ∥ T003 (different test files); T006 ∥ T007 ∥ T008 (different files, no shared state); T010 ∥ T012 ∥ T013 ∥ T018 (test files, after Phase 2); T023 ∥ T024.
+- T002 ∥ T003 (different test files); T007 ∥ the whole backend chain; T008 ∥ T011 ∥ T013 ∥ T016 ∥ T019 ∥ T021 ∥ T023 ∥ T025 (all test-authoring in distinct files, after Phase 2); T028 ∥ T029.
+- US1, US2 and US3 have no interdependencies once Phase 2 lands — they can proceed in any order.
 
 ## Implementation strategy
 
-Backend chain first (it unblocks the writable `is_default` the tab menu needs), then the hook generalization — every later phase depends on tab-addressed actions. US2 before US4 because the menu mounts on the rebuilt tab element. MVP scope if interrupted: Phase 2 + US2 (the row's new shape is the most visible directive); the tab menu (US4) is the largest single increment and is self-contained once the hook is generalized.
+Backend first (it unblocks duplicate names, which US1's auto-label depends on), then US1 → US2 → US3 → US4. The two defects the user called out (drag stretch T013–T014, promotion side effects T023–T024) are self-contained and can be pulled forward if they need to ship first. MVP scope if interrupted: Phase 2 + US1 + those two fix pairs — that covers every directive the user framed as broken rather than missing.

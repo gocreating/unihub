@@ -1,10 +1,11 @@
-// 016 ViewTabs row (round 2): tabs, "+"-after-last-tab placement, dirty dot,
-// double-click rename, collapsed reveal affordance, View dropdown.
+// 016 ViewTabs row (round 3): scrollbar-free strip with edge shadows, drag
+// reorder, per-tab menus (left-click active / right-click any), kebab at the
+// right edge, collapsed reveal affordance.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { IntlProvider } from 'react-intl';
 import enUS from '@/locales/en-US';
-import { ViewTabs } from './ViewTabs';
+import { ViewTabs, overflowSides } from './ViewTabs';
 import type { UseEntityViewsReturn, ViewTabState } from './useEntityViews';
 import type { EntityView } from '@/services/unihub-backend/core';
 
@@ -16,8 +17,22 @@ function makeTab(overrides: Partial<ViewTabState> = {}): ViewTabState {
     dirty: false,
     pinned: true,
     closable: false,
+    isDefault: true,
     ...overrides,
   };
+}
+
+function makeSavedTab(overrides: Partial<ViewTabState> = {}): ViewTabState {
+  return makeTab({
+    tabId: 'tab-b',
+    kind: 'saved',
+    viewId: 'v1',
+    name: 'Mine',
+    pinned: false,
+    closable: true,
+    isDefault: false,
+    ...overrides,
+  });
 }
 
 function makeSavedView(overrides: Partial<EntityView> = {}): EntityView {
@@ -49,13 +64,17 @@ function makeViews(overrides: Partial<UseEntityViewsReturn> = {}): UseEntityView
     addAnonymousTab: vi.fn(),
     closeTab: vi.fn(),
     openView: vi.fn(),
-    saveActiveTab: vi.fn().mockResolvedValue('saved'),
-    saveActiveTabAs: vi.fn().mockResolvedValue(undefined),
+    saveTab: vi.fn().mockResolvedValue('saved'),
+    saveTabAs: vi.fn().mockResolvedValue(undefined),
     renameTab: vi.fn().mockResolvedValue(undefined),
-    duplicateActiveTab: vi.fn(),
+    duplicateTab: vi.fn(),
+    pinTab: vi.fn().mockResolvedValue(undefined),
+    setDefaultTab: vi.fn().mockResolvedValue(undefined),
+    deleteTab: vi.fn().mockResolvedValue(undefined),
+    reorderTabs: vi.fn().mockResolvedValue(undefined),
     commitManageChanges: vi.fn().mockResolvedValue(undefined),
     ...overrides,
-  } as UseEntityViewsReturn;
+  } as unknown as UseEntityViewsReturn;
 }
 
 function renderTabs(views: UseEntityViewsReturn) {
@@ -64,6 +83,16 @@ function renderTabs(views: UseEntityViewsReturn) {
       <ViewTabs views={views} />
     </IntlProvider>,
   );
+}
+
+/** jsdom has no layout — fake the strip metrics an overflowing row would have. */
+function mockStripMetrics(scrollLeft: number, clientWidth: number, scrollWidth: number) {
+  const strip = screen.getByTestId('view-tabs-strip');
+  Object.defineProperty(strip, 'clientWidth', { value: clientWidth, configurable: true });
+  Object.defineProperty(strip, 'scrollWidth', { value: scrollWidth, configurable: true });
+  strip.scrollLeft = scrollLeft;
+  fireEvent.scroll(strip);
+  return strip;
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -92,90 +121,247 @@ describe('ViewTabs', () => {
     renderTabs(makeViews());
     expect(screen.queryByLabelText('Unsaved changes')).toBeNull();
   });
+});
 
-  it('the "+" button opens a new anonymous tab', () => {
-    const views = makeViews();
-    renderTabs(views);
-    fireEvent.click(screen.getByLabelText('New view tab'));
-    expect(views.addAnonymousTab).toHaveBeenCalledTimes(1);
+describe('ViewTabs — round 3 layout (FR-009/FR-020)', () => {
+  it('renders the strip then the kebab — no "+" and no "View" control', () => {
+    const { container } = renderTabs(makeViews());
+    const row = container.firstElementChild!;
+    expect(row.querySelector('[role="tablist"]')).not.toBeNull();
+    expect(screen.getByLabelText('View menu')).toBeInTheDocument();
+    expect(screen.queryByLabelText('New view tab')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^view$/i })).toBeNull();
+    // The kebab is the row's last control.
+    expect(row.lastElementChild!.contains(screen.getByLabelText('View menu'))).toBe(true);
   });
 
-  it('clicking an inactive tab switches to it', () => {
-    const a = makeTab();
-    const b = makeTab({
-      tabId: 'tab-b',
-      kind: 'saved',
-      viewId: 'v1',
-      name: 'Mine',
-      pinned: false,
-      closable: true,
+  it('keeps the kebab OUTSIDE the scrolling strip', () => {
+    renderTabs(makeViews());
+    const strip = screen.getByTestId('view-tabs-strip');
+    expect(strip.querySelector('[aria-label="View menu"]')).toBeNull();
+  });
+
+  it('hides the strip scrollbar', () => {
+    renderTabs(makeViews());
+    const strip = screen.getByTestId('view-tabs-strip');
+    const style = getComputedStyle(strip);
+    expect(style.overflowX).toBe('auto');
+    expect(style.scrollbarWidth).toBe('none');
+  });
+
+  it('derives the edge shadows from the strip scroll metrics', () => {
+    // Pure helper — the same arithmetic the component runs on scroll/resize.
+    expect(overflowSides({ scrollLeft: 0, clientWidth: 300, scrollWidth: 300 })).toEqual({
+      left: false,
+      right: false,
     });
-    const views = makeViews({ tabs: [a, b], activeTabId: a.tabId, activeTab: a });
-    renderTabs(views);
-    fireEvent.click(screen.getByRole('tab', { name: /mine/i }));
-    expect(views.switchTab).toHaveBeenCalledWith('tab-b');
+    expect(overflowSides({ scrollLeft: 0, clientWidth: 300, scrollWidth: 900 })).toEqual({
+      left: false,
+      right: true,
+    });
+    expect(overflowSides({ scrollLeft: 200, clientWidth: 300, scrollWidth: 900 })).toEqual({
+      left: true,
+      right: true,
+    });
+    expect(overflowSides({ scrollLeft: 600, clientWidth: 300, scrollWidth: 900 })).toEqual({
+      left: true,
+      right: false,
+    });
   });
 
-  it('View dropdown lists saved views and opens one on click', async () => {
-    const views = makeViews({ savedViews: [makeSavedView()] });
-    renderTabs(views);
-    fireEvent.click(screen.getByRole('button', { name: /^view/i }));
-    const item = await screen.findByText('Amount desc');
-    fireEvent.click(item);
-    expect(views.openView).toHaveBeenCalledWith('v1');
+  it('paints a right shadow while tabs overflow and both shadows mid-scroll', async () => {
+    renderTabs(makeViews({ tabs: [makeTab(), makeSavedTab()] }));
+
+    mockStripMetrics(0, 300, 900);
+    await waitFor(() => expect(screen.getByTestId('view-tabs-shadow-right')).toBeInTheDocument());
+    expect(screen.queryByTestId('view-tabs-shadow-left')).toBeNull();
+
+    mockStripMetrics(200, 300, 900);
+    await waitFor(() => expect(screen.getByTestId('view-tabs-shadow-left')).toBeInTheDocument());
+    expect(screen.getByTestId('view-tabs-shadow-right')).toBeInTheDocument();
+
+    mockStripMetrics(600, 300, 900);
+    await waitFor(() => expect(screen.queryByTestId('view-tabs-shadow-right')).toBeNull());
+    expect(screen.getByTestId('view-tabs-shadow-left')).toBeInTheDocument();
   });
 
-  it('Save menu item is disabled when nothing is dirty and enabled when dirty', async () => {
-    const { unmount } = renderTabs(makeViews({ isAnyDirty: false }));
-    fireEvent.click(screen.getByRole('button', { name: /^view/i }));
-    const saveItem = await screen.findByText('Save');
-    expect(saveItem.closest('li')?.getAttribute('aria-disabled')).toBe('true');
-    unmount();
+  it('renders no shadow when the tabs fit', () => {
+    renderTabs(makeViews());
+    mockStripMetrics(0, 300, 300);
+    expect(screen.queryByTestId('view-tabs-shadow-left')).toBeNull();
+    expect(screen.queryByTestId('view-tabs-shadow-right')).toBeNull();
+  });
 
-    const dirtyViews = makeViews({ isAnyDirty: true });
-    renderTabs(dirtyViews);
-    fireEvent.click(screen.getByRole('button', { name: /^view/i }));
-    const enabled = await screen.findByText('Save');
-    expect(enabled.closest('li')?.getAttribute('aria-disabled')).not.toBe('true');
-    fireEvent.click(enabled);
-    expect(dirtyViews.saveActiveTab).toHaveBeenCalled();
+  it('renders tabs as sortable items so they can be dragged into a new order', () => {
+    renderTabs(makeViews({ tabs: [makeTab(), makeSavedTab()] }));
+    const strip = screen.getByTestId('view-tabs-strip');
+    expect(strip.querySelector('[data-sortable-id="tab-default"]')).not.toBeNull();
+    expect(strip.querySelector('[data-sortable-id="tab-b"]')).not.toBeNull();
   });
 });
 
-describe('ViewTabs — US2 layout & closing', () => {
-  it('arranges the tab strip first, then "+", then the View control', () => {
-    const { container } = renderTabs(makeViews());
-    const row = container.firstElementChild!;
-    const children = Array.from(row.children);
-    // [ tablist strip ] [ + button ] [ spacer ] [ view control ]
-    expect(children[0]!.getAttribute('role')).toBe('tablist');
-    expect(children[1]!.getAttribute('aria-label')).toBe('New view tab');
-    expect(children[children.length - 1]!.textContent).toContain('View');
-  });
-
-  it('keeps the "+" button OUTSIDE the scrollable tab strip', () => {
-    renderTabs(makeViews());
-    const strip = screen.getByTestId('view-tabs-strip');
-    expect(strip.querySelector('[aria-label="New view tab"]')).toBeNull();
-  });
-
-  it('renders a close affordance only on closable tabs and calls closeTab', () => {
+describe('ViewTabs — round 3 click grammar (FR-023)', () => {
+  it('left-clicking an INACTIVE tab switches to it without opening a menu', () => {
     const a = makeTab();
-    const b = makeTab({
-      tabId: 'tab-b',
-      kind: 'saved',
-      viewId: 'v1',
-      name: 'Mine',
-      pinned: false,
-      closable: true,
-    });
+    const b = makeSavedTab();
     const views = makeViews({ tabs: [a, b], activeTabId: a.tabId, activeTab: a });
     renderTabs(views);
-    const closeButtons = screen.getAllByLabelText('Close tab');
-    expect(closeButtons).toHaveLength(1);
-    fireEvent.click(closeButtons[0]!);
-    expect(views.closeTab).toHaveBeenCalledWith('tab-b');
-    expect(views.switchTab).not.toHaveBeenCalled(); // close must not switch tabs
+
+    fireEvent.click(screen.getByRole('tab', { name: /mine/i }));
+    expect(views.switchTab).toHaveBeenCalledWith('tab-b');
+    expect(screen.queryByText('Set as default')).toBeNull();
+  });
+
+  it('left-clicking the ACTIVE tab opens its menu', async () => {
+    const a = makeSavedTab();
+    const views = makeViews({ tabs: [a], activeTabId: a.tabId, activeTab: a });
+    renderTabs(views);
+
+    fireEvent.click(screen.getByRole('tab', { name: /mine/i }));
+    expect(await screen.findByText('Set as default')).toBeInTheDocument();
+    expect(views.switchTab).not.toHaveBeenCalled();
+  });
+
+  it('right-clicking any tab opens its menu and suppresses the browser one', async () => {
+    const a = makeTab();
+    const b = makeSavedTab();
+    const views = makeViews({ tabs: [a, b], activeTabId: a.tabId, activeTab: a });
+    renderTabs(views);
+
+    const inactive = screen.getByRole('tab', { name: /mine/i });
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    fireEvent(inactive, event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(await screen.findByText('Set as default')).toBeInTheDocument();
+    expect(views.switchTab).not.toHaveBeenCalled();
+  });
+
+  it('no longer renders a per-tab close button (it moved into the menu)', () => {
+    renderTabs(makeViews({ tabs: [makeTab(), makeSavedTab()] }));
+    expect(screen.queryByLabelText('Close tab')).toBeNull();
+  });
+
+  it('double-clicking a tab does NOT start a rename any more', () => {
+    const a = makeSavedTab();
+    const views = makeViews({ tabs: [a], activeTabId: a.tabId, activeTab: a });
+    renderTabs(views);
+
+    fireEvent.doubleClick(screen.getByRole('tab', { name: /mine/i }));
+    expect(screen.queryByLabelText('View name')).toBeNull();
+    expect(views.renameTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('ViewTabs — rename through the menu (FR-023)', () => {
+  it('Rename opens an inline input on a saved tab and commits on Enter', async () => {
+    const saved = makeSavedTab();
+    const views = makeViews({ tabs: [saved], activeTabId: saved.tabId, activeTab: saved });
+    renderTabs(views);
+
+    fireEvent.click(screen.getByRole('tab', { name: /mine/i }));
+    fireEvent.click(await screen.findByText('Rename'));
+
+    const input = screen.getByLabelText('View name') as HTMLInputElement;
+    expect(input.value).toBe('Mine');
+    fireEvent.change(input, { target: { value: 'Renamed' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(views.renameTab).toHaveBeenCalledWith('tab-b', 'Renamed'));
+  });
+
+  it('Escape cancels the rename without calling renameTab', async () => {
+    const saved = makeSavedTab();
+    const views = makeViews({ tabs: [saved], activeTabId: saved.tabId, activeTab: saved });
+    renderTabs(views);
+
+    fireEvent.click(screen.getByRole('tab', { name: /mine/i }));
+    fireEvent.click(await screen.findByText('Rename'));
+    const input = screen.getByLabelText('View name');
+    fireEvent.change(input, { target: { value: 'Nope' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(views.renameTab).not.toHaveBeenCalled();
+  });
+
+  it('Rename on an anonymous tab opens the name-and-save modal instead', async () => {
+    const anon = makeSavedTab({
+      tabId: 'tab-anon',
+      kind: 'anonymous',
+      viewId: undefined,
+      name: 'Draft',
+    });
+    const views = makeViews({ tabs: [anon], activeTabId: anon.tabId, activeTab: anon });
+    renderTabs(views);
+
+    fireEvent.click(screen.getByRole('tab', { name: /draft/i }));
+    fireEvent.click(await screen.findByText('Rename'));
+    expect(screen.getByText('Save view')).toBeInTheDocument();
+    expect(views.renameTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('ViewTabs — US1 round 3: saving addresses the requesting tab', () => {
+  it('Save on an INACTIVE dirty tab persists that tab', async () => {
+    const active = makeTab();
+    const inactive = makeSavedTab({ dirty: true });
+    const views = makeViews({
+      tabs: [active, inactive],
+      activeTabId: active.tabId,
+      activeTab: active,
+      isAnyDirty: true,
+    });
+    renderTabs(views);
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    fireEvent(screen.getByRole('tab', { name: /mine/i }), event);
+    fireEvent.click(await screen.findByText('Save'));
+
+    await waitFor(() => expect(views.saveTab).toHaveBeenCalledWith('tab-b'));
+  });
+
+  it('the name-and-save modal saves the REQUESTING tab, not the active one', async () => {
+    const active = makeTab();
+    const anon = makeSavedTab({
+      tabId: 'tab-anon',
+      kind: 'anonymous',
+      viewId: undefined,
+      name: 'Draft',
+      dirty: true,
+    });
+    const views = makeViews({
+      tabs: [active, anon],
+      activeTabId: active.tabId,
+      activeTab: active,
+      isAnyDirty: true,
+      saveTab: vi.fn().mockResolvedValue('needs-name'),
+    });
+    renderTabs(views);
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    fireEvent(screen.getByRole('tab', { name: /draft/i }), event);
+    fireEvent.click(await screen.findByText('Save'));
+
+    const input = await screen.findByLabelText('View name');
+    fireEvent.change(input, { target: { value: 'From draft' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(views.saveTabAs).toHaveBeenCalledWith('tab-anon', 'From draft'));
+  });
+});
+
+describe('ViewTabs — kebab wiring', () => {
+  it('opens a saved view from the kebab', async () => {
+    const views = makeViews({ savedViews: [makeSavedView()] });
+    renderTabs(views);
+    fireEvent.click(screen.getByLabelText('View menu'));
+    fireEvent.mouseEnter(await screen.findByText('Open'));
+    fireEvent.click(await screen.findByText('Amount desc'));
+    expect(views.openView).toHaveBeenCalledWith('v1');
+  });
+
+  it('opens the manage-views modal from the kebab', async () => {
+    renderTabs(makeViews({ savedViews: [makeSavedView()] }));
+    fireEvent.click(screen.getByLabelText('View menu'));
+    fireEvent.click(await screen.findByText('Manage views…'));
+    expect(await screen.findByText('Manage views')).toBeInTheDocument();
   });
 });
 
@@ -194,67 +380,6 @@ describe('ViewTabs — US2 round 2: collapsed reveal affordance (FR-025)', () =>
     const { container } = renderTabs(
       makeViews({ collapsed: true, tabs: [dirtyTab], activeTab: dirtyTab }),
     );
-    // AntD Badge renders a dot element when dot + active.
     expect(container.querySelector('.ant-badge-dot')).not.toBeNull();
-  });
-});
-
-describe('ViewTabs — US4 round 2: double-click rename (FR-023)', () => {
-  it('double-clicking a saved tab opens an inline input and commits on Enter', async () => {
-    const saved = makeTab({
-      tabId: 'tab-b',
-      kind: 'saved',
-      viewId: 'v1',
-      name: 'Mine',
-      pinned: false,
-      closable: true,
-    });
-    const views = makeViews({ tabs: [saved], activeTabId: saved.tabId, activeTab: saved });
-    renderTabs(views);
-
-    fireEvent.doubleClick(screen.getByRole('tab', { name: /mine/i }));
-    const input = screen.getByLabelText('View name') as HTMLInputElement;
-    expect(input.value).toBe('Mine');
-    fireEvent.change(input, { target: { value: 'Renamed' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    fireEvent.keyDown(input, { key: 'Enter' }); // onPressEnter path
-
-    await waitFor(() => expect(views.renameTab).toHaveBeenCalledWith('tab-b', 'Renamed'));
-  });
-
-  it('Escape cancels the rename without calling renameTab', () => {
-    const saved = makeTab({
-      tabId: 'tab-b',
-      kind: 'saved',
-      viewId: 'v1',
-      name: 'Mine',
-      pinned: false,
-      closable: true,
-    });
-    const views = makeViews({ tabs: [saved], activeTabId: saved.tabId, activeTab: saved });
-    renderTabs(views);
-
-    fireEvent.doubleClick(screen.getByRole('tab', { name: /mine/i }));
-    const input = screen.getByLabelText('View name');
-    fireEvent.change(input, { target: { value: 'Nope' } });
-    fireEvent.keyDown(input, { key: 'Escape' });
-    expect(views.renameTab).not.toHaveBeenCalled();
-  });
-
-  it('double-clicking an anonymous tab opens the name-and-save modal instead', () => {
-    const anon = makeTab({
-      tabId: 'tab-anon',
-      kind: 'anonymous',
-      name: 'Draft',
-      pinned: false,
-      closable: true,
-    });
-    const views = makeViews({ tabs: [anon], activeTabId: anon.tabId, activeTab: anon });
-    renderTabs(views);
-
-    fireEvent.doubleClick(screen.getByRole('tab', { name: /draft/i }));
-    // The name-and-save modal opens (title "Save view"); no in-place rename.
-    expect(screen.getByText('Save view')).toBeInTheDocument();
-    expect(views.renameTab).not.toHaveBeenCalled();
   });
 });

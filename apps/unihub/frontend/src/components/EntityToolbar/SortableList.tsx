@@ -24,6 +24,7 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
+  horizontalListSortingStrategy,
   verticalListSortingStrategy,
   arrayMove,
 } from '@dnd-kit/sortable';
@@ -58,6 +59,9 @@ export interface SortableListProps<T extends { id: string }> {
     isDragging: boolean,
   ) => React.ReactNode;
   disabled?: boolean;
+  /** Layout axis of the list. `'horizontal'` is used by the entity-views tab
+   *  strip (016 round 3); every other caller keeps the vertical default. */
+  orientation?: 'vertical' | 'horizontal';
 }
 
 // ── Internal per-item component ───────────────────────────────────────────────
@@ -65,9 +69,14 @@ export interface SortableListProps<T extends { id: string }> {
 interface SortableItemProps<T extends { id: string }> {
   item: T;
   renderItem: SortableListProps<T>['renderItem'];
+  orientation: 'vertical' | 'horizontal';
 }
 
-function SortableItem<T extends { id: string }>({ item, renderItem }: SortableItemProps<T>) {
+function SortableItem<T extends { id: string }>({
+  item,
+  renderItem,
+  orientation,
+}: SortableItemProps<T>) {
   const {
     attributes,
     listeners,
@@ -81,6 +90,9 @@ function SortableItem<T extends { id: string }>({ item, renderItem }: SortableIt
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
+    // In a flex row the wrapper must not stretch or shrink — the rendered item
+    // owns its own width (tab labels stay legible under overflow).
+    ...(orientation === 'horizontal' ? { flex: 'none', display: 'flex' } : null),
   };
 
   return (
@@ -97,6 +109,7 @@ export function SortableList<T extends { id: string }>({
   onReorder,
   renderItem,
   disabled = false,
+  orientation = 'vertical',
 }: SortableListProps<T>) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -129,9 +142,19 @@ export function SortableList<T extends { id: string }>({
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext
+        items={items.map((i) => i.id)}
+        strategy={
+          orientation === 'horizontal' ? horizontalListSortingStrategy : verticalListSortingStrategy
+        }
+      >
         {items.map((item) => (
-          <SortableItem key={item.id} item={item} renderItem={renderItem} />
+          <SortableItem
+            key={item.id}
+            item={item}
+            renderItem={renderItem}
+            orientation={orientation}
+          />
         ))}
       </SortableContext>
     </DndContext>

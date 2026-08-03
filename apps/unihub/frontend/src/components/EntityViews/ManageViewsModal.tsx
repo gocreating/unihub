@@ -2,7 +2,9 @@
  * ManageViewsModal — organize saved views (016, US4).
  *
  * All edits are STAGED locally: rename (inline input), pin/unpin, drag
- * reorder (shared SortableList), delete (row leaves the list). NOTHING hits
+ * reorder (shared SortableList), delete (row leaves the list). Round 3: the
+ * default holder sits in the SAME list — draggable and renamable — with its
+ * pin and delete disabled (the guaranteed fallback). NOTHING hits
  * the API until Save; Save with staged deletions confirms first via
  * Modal.confirm (okType danger, ICU-plural count — constitution delete gate).
  * Footer: Cancel flushed left, primary Save right; no outside-click close.
@@ -45,6 +47,9 @@ interface StagedItem {
   id: string;
   name: string;
   pinned: boolean;
+  /** The view holding the default role: draggable and renamable like any
+   *  other (round 3), but never unpinnable and never deletable (FR-003). */
+  isDefault: boolean;
 }
 
 export interface ManageViewsModalProps {
@@ -56,9 +61,6 @@ export interface ManageViewsModalProps {
 export function ManageViewsModal({ open, views, onClose }: ManageViewsModalProps) {
   const { styles } = useStyles();
   const { formatMessage: t } = useIntl();
-  // The materialized default view is staged separately: rename/pin only —
-  // never deletable, never part of the drag reorder (round 2, FR-003).
-  const [defaultItem, setDefaultItem] = useState<StagedItem | null>(null);
   const [items, setItems] = useState<StagedItem[]>([]);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -66,16 +68,15 @@ export function ManageViewsModal({ open, views, onClose }: ManageViewsModalProps
   // (Re)stage from the live saved-view list each time the modal opens.
   useEffect(() => {
     if (!open) return;
-    const defaultView = views.savedViews.find((v) => v.is_default);
-    setDefaultItem(
-      defaultView
-        ? { id: defaultView.id, name: defaultView.name, pinned: defaultView.pinned }
-        : null,
-    );
+    // Round 3: ONE list in position order — the default view is ordered and
+    // dragged like any other view (R28).
     setItems(
-      views.savedViews
-        .filter((v) => !v.is_default)
-        .map(({ id, name, pinned }) => ({ id, name, pinned })),
+      views.savedViews.map(({ id, name, pinned, is_default }) => ({
+        id,
+        name,
+        pinned,
+        isDefault: is_default,
+      })),
     );
     setDeletedIds([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -85,7 +86,7 @@ export function ManageViewsModal({ open, views, onClose }: ManageViewsModalProps
     setSaving(true);
     try {
       const changes: ManageChanges = {
-        items: defaultItem ? [defaultItem, ...items] : items,
+        items: items.map(({ id, name, pinned }) => ({ id, name, pinned })),
         deletedIds,
       };
       await views.commitManageChanges(changes);
@@ -130,42 +131,17 @@ export function ManageViewsModal({ open, views, onClose }: ManageViewsModalProps
       }
     >
       <div className={styles.list}>
-        {defaultItem && (
-          <div className={styles.row} data-testid="manage-default-row">
-            <span className={styles.handle} style={{ visibility: 'hidden' }}>
-              <HolderOutlined />
-            </span>
-            <Input
-              className={styles.name}
-              value={defaultItem.name}
-              maxLength={100}
-              onChange={(e) =>
-                setDefaultItem((prev) => (prev ? { ...prev, name: e.target.value } : prev))
-              }
-            />
-            <Button
-              type="text"
-              size="small"
-              aria-label={t({
-                id: defaultItem.pinned ? 'common.entityViews.unpin' : 'common.entityViews.pin',
-              })}
-              icon={defaultItem.pinned ? <PushpinFilled /> : <PushpinOutlined />}
-              onClick={() =>
-                setDefaultItem((prev) => (prev ? { ...prev, pinned: !prev.pinned } : prev))
-              }
-            />
-            {/* No delete button — the default view is the guaranteed fallback. */}
-            <Button type="text" size="small" disabled style={{ visibility: 'hidden' }} />
-          </div>
-        )}
-        {items.length === 0 && !defaultItem ? (
+        {items.length === 0 ? (
           <div className={styles.empty}>{t({ id: 'common.entityViews.noSaved' })}</div>
         ) : (
           <SortableList
             items={items}
             onReorder={setItems}
             renderItem={(item, handleProps) => (
-              <div className={styles.row}>
+              <div
+                className={styles.row}
+                data-testid={item.isDefault ? 'manage-default-row' : undefined}
+              >
                 <span {...handleProps} className={styles.handle}>
                   <HolderOutlined />
                 </span>
@@ -178,6 +154,7 @@ export function ManageViewsModal({ open, views, onClose }: ManageViewsModalProps
                 <Button
                   type="text"
                   size="small"
+                  disabled={item.isDefault}
                   aria-label={t({
                     id: item.pinned ? 'common.entityViews.unpin' : 'common.entityViews.pin',
                   })}
@@ -187,7 +164,8 @@ export function ManageViewsModal({ open, views, onClose }: ManageViewsModalProps
                 <Button
                   type="text"
                   size="small"
-                  danger
+                  danger={!item.isDefault}
+                  disabled={item.isDefault}
                   aria-label={t({ id: 'common.entityViews.delete' })}
                   icon={<DeleteOutlined />}
                   onClick={() => {

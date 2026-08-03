@@ -29,6 +29,7 @@ const defaultTab: ViewTabState = {
   dirty: false,
   pinned: true,
   closable: false,
+  isDefault: true,
 };
 
 function makeViews(savedViews: EntityView[]): UseEntityViewsReturn {
@@ -44,12 +45,16 @@ function makeViews(savedViews: EntityView[]): UseEntityViewsReturn {
     openView: vi.fn(),
     collapsed: false,
     reveal: vi.fn(),
-    saveActiveTab: vi.fn().mockResolvedValue('saved'),
-    saveActiveTabAs: vi.fn().mockResolvedValue(undefined),
+    saveTab: vi.fn().mockResolvedValue('saved'),
+    saveTabAs: vi.fn().mockResolvedValue(undefined),
     renameTab: vi.fn().mockResolvedValue(undefined),
-    duplicateActiveTab: vi.fn(),
+    duplicateTab: vi.fn(),
+    pinTab: vi.fn().mockResolvedValue(undefined),
+    setDefaultTab: vi.fn().mockResolvedValue(undefined),
+    deleteTab: vi.fn().mockResolvedValue(undefined),
+    reorderTabs: vi.fn().mockResolvedValue(undefined),
     commitManageChanges: vi.fn().mockResolvedValue(undefined),
-  } as UseEntityViewsReturn;
+  } as unknown as UseEntityViewsReturn;
 }
 
 function renderModal(views: UseEntityViewsReturn, onClose = vi.fn()) {
@@ -140,7 +145,7 @@ describe('ManageViewsModal', () => {
     });
   });
 
-  it('the default view row allows rename/pin but offers no delete and no drag handle (FR-003)', () => {
+  it('the default row is draggable and renamable but never unpinned or deleted (round 3)', () => {
     const views = makeViews([
       makeView({ id: 'd1', name: 'YTD', is_default: true, pinned: true }),
       makeView({ id: 'v2', name: 'Second' }),
@@ -148,14 +153,16 @@ describe('ManageViewsModal', () => {
     renderModal(views);
 
     const defaultRow = screen.getByTestId('manage-default-row');
-    // Rename + pin present on the default row…
+    // Rename stays available…
     expect(defaultRow.querySelector('input')).not.toBeNull();
     expect(screen.getByDisplayValue('YTD')).toBeInTheDocument();
-    // …but the default row carries no Delete control (only the plain view does).
-    expect(screen.getAllByLabelText('Delete')).toHaveLength(1);
-    // The default's drag handle is hidden (not part of the reorder list).
-    const handle = defaultRow.querySelector('span[style*="hidden"]');
-    expect(handle).not.toBeNull();
+    // …the row joins the drag list (R28)…
+    expect(document.querySelector('[data-sortable-id="d1"]')).not.toBeNull();
+    // …and its pin + delete are disabled, not hidden (the guaranteed fallback).
+    const unpin = defaultRow.querySelector('button[aria-label="Unpin"]') as HTMLButtonElement;
+    const del = defaultRow.querySelector('button[aria-label="Delete"]') as HTMLButtonElement;
+    expect(unpin.disabled).toBe(true);
+    expect(del.disabled).toBe(true);
   });
 
   it('Save includes the staged default view first, then the reorderable rest', async () => {

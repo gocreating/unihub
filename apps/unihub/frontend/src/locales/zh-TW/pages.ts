@@ -418,6 +418,17 @@ export default {
   'common.entityViews.saved': '檢視已儲存',
   'common.entityViews.saveError': '儲存檢視失敗',
   'common.entityViews.loadError': '載入檢視失敗',
+
+  // Entity views — round 3 (tab menu + kebab)
+  'common.entityViews.tabMenu': '檢視操作',
+  'common.entityViews.setDefault': '設為預設',
+  'common.entityViews.setDefaultError': '設定預設檢視失敗',
+  'common.entityViews.addEmptyView': '新增空白檢視',
+  'common.entityViews.open': '開啟',
+  'common.entityViews.noViewsToOpen': '所有檢視都已開啟',
+  'common.entityViews.manageViews': '管理檢視…',
+  'common.entityViews.viewMenu': '檢視選單',
+  'common.entityViews.rename': '重新命名',
   'common.entityViews.manageSaveError': '更新檢視失敗',
   'common.entityViews.unresolvedView': '此連結所指的檢視已不存在，改為顯示預設檢視',
   'common.entityViews.invalidView': '此連結包含無效的檢視設定，改為顯示預設檢視',

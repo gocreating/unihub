@@ -48,27 +48,33 @@ Create. Body: `{table_key, name, config, pinned?, position?}`. `owner` stamped s
 
 ### `PATCH /api/v1/core/entity-views/{id}/`
 
-Partial update: `name`, `config`, `pinned`, `position`. `table_key` immutable → **400** if present with a different value.
+Partial update: `name`, `config`, `pinned`, `position`, `is_default`. `table_key` immutable → **400** if present with a different value.
 
-- **200** → updated resource
-- **400** → validation (incl. rename collision)
+**`is_default` (round 3 — transferable role, FR-026)**: `{"is_default": true}` promotes this view to the table's default. The server performs the swap in one `transaction.atomic()`: the incumbent default for the same `(owner, table_key)` is cleared **first**, then this row is saved with `is_default=true` **and `pinned=true`**. The demoted row keeps its `pinned`, `position`, `name`, and `config` unchanged. `{"is_default": false}` on the current holder is rejected — a table must always have exactly one default. Promoting a view that already holds the role is a no-op 200.
+
+- **200** → updated resource (re-fetch the table's list to observe the demotion)
+- **400** → validation (rename collision; `{"is_default": ["The default view cannot be unset; set another view as default instead."]}`)
 - **404** → not found / not owner
 
 ### `DELETE /api/v1/core/entity-views/{id}/`
 
 - **204** → deleted
-- **400** → `is_default` view (undeletable — round 2)
+- **400** → the view currently holding the default role (undeletable — the guard follows the role, so a demoted view becomes deletable immediately)
 - **404** → not found / not owner
 
 ### `POST /api/v1/core/entity-views/reorder/`
 
-Bulk position rewrite for one table (manage-modal Save). Body:
+Bulk position rewrite for one table. Two callers as of round 3: the manage-modal Save **and** a tab drag-and-drop in the view row (FR-027). Body:
 
 ```json
 { "table_key": "inventory-catalog", "ids": ["idA", "idB", "idC"] }
 ```
 
 Sets `position = index` for each id, in order. All ids MUST exist, belong to the caller, and have the given `table_key`.
+
+Callers MUST send the table's **complete** id order — for a tab drag that means the strip's saved views in their new left-to-right order followed by the table's remaining views in their current relative order. Sending a partial list leaves the omitted views at stale positions and desynchronizes the strip from the manage modal. Anonymous (unsaved) tabs contribute no id.
+
+The view holding the default role carries no positional privilege: it may appear at any index.
 
 - **200** → `[EntityView, …]` (the table's views, new order)
 - **400** → unknown/foreign id in list, id of another table, duplicate ids, or missing fields
@@ -100,9 +106,22 @@ Sets `position = index` for each id, in order. All ids MUST exist, belong to the
 Round 2 additions (write first, red before green):
 
 12. `test_create_default_view` — `is_default: true` → 201; second default same (owner, table_key) → 400; different table → 201.
-13. `test_patch_cannot_change_is_default` — flipping either way → 400.
+13. ~~`test_patch_cannot_change_is_default`~~ — **superseded in round 3 by `TestDefaultTransfer` below**.
 14. `test_delete_default_view_rejected` — 400; non-default sibling still deletes → 204.
 15. `test_config_migration_sticky_to_pins` — migration 0006 rewrites `stickyLeft/Right` into per-column `pin` (first/last visible), removes the old keys.
+
+Round 3 additions — `TestDefaultTransfer` (write first, red before green):
+
+20. `test_promote_transfers_role` — PATCH `{is_default: true}` on view B while A holds it → 200; re-list shows exactly one default (B), A demoted.
+21. `test_promote_forces_pinned` — B unpinned before promotion → pinned `true` after.
+22. `test_demoted_view_keeps_pin_position_and_config` — A's `pinned`, `position`, `name`, `config` byte-identical after being demoted.
+23. `test_promote_does_not_reorder` — `position` of A and B unchanged by the transfer (SC-011).
+24. `test_cannot_unset_default` — PATCH `{is_default: false}` on the holder → 400, still exactly one default.
+25. `test_promote_when_no_default_exists` — no materialized default (virtual page default) → PATCH `{is_default: true}` → 200, nothing demoted.
+26. `test_promote_is_idempotent` — PATCH `{is_default: true}` on the current holder → 200, still exactly one default.
+27. `test_delete_guard_follows_the_role` — after transfer, the demoted view DELETEs 204 and the promoted one 400s.
+28. `test_transfer_is_atomic_under_constraint` — the partial unique constraint is never violated mid-swap (single request, wrapped assertion on `IntegrityError` absence).
+29. `test_sync_round_trip_preserves_default_role` (in `test_entity_views_io.py`) — publish → wipe → checkout restores which view holds `is_default` (SC-008).
 
 `backend/tests/test_entity_views_io.py` (NEW):
 

@@ -174,3 +174,69 @@ Round 2 decisions per the spec's Clarifications Session 2026-07-23. Backend regi
 **Rationale**: Keeping both modes inside `viewBar` preserves Principle VII (PageTable owns structure; zero per-page markup). sessionStorage matches the spec's "manual reveal persists for the rest of the session" exactly. The dirty dot on the affordance preserves SC-005 while hidden.
 
 **Alternatives considered**: a toolbar button next to Filter/Sort (rejected: toolbar content is page-owned — five pages would each wire it; the slot already exists); localStorage persistence (rejected: spec says session lifetime); auto-expanding on dirty (rejected: config edits are constant during normal browsing — noisy; the dot on the affordance covers visibility).
+
+---
+
+# Round 3 (Clarifications Session 2026-08-03)
+
+## R22. Drag-to-reorder tabs — horizontal `SortableList` vs a second drag mechanism
+
+**Decision**: Extend the shared `components/EntityToolbar/SortableList.tsx` with an additive `orientation?: 'vertical' | 'horizontal'` prop (default `'vertical'`, so every existing caller is untouched) that swaps `verticalListSortingStrategy` → `horizontalListSortingStrategy`, and render the tab strip through it. The whole tab is its own drag handle (`handleProps` spread on the tab element), with `PointerSensor` configured `activationConstraint: { distance: 5 }` so a plain click never starts a drag.
+
+**Rationale**: dnd-kit is already the project's single drag mechanism (filter/sort/column panels, manage modal, inventory organize tree); a bespoke tab-drag would be a second one to maintain and would drift. `horizontalListSortingStrategy` is the library's supported answer for a row. The 5px activation distance is what makes directive 2 (drag) and directive 3 (click opens a menu) coexist: below the threshold dnd-kit never activates, so `onClick` fires normally; above it, dnd-kit suppresses the click that terminates a drag (behaviour already relied on in the inventory organize e2e).
+
+**Alternatives considered**: HTML5 drag events (rejected: the inventory organize page migrated *away* from them in iteration 18 — no keyboard support, jumpy previews); a dedicated `<Tabs>` from AntD with `items` + drag wrapper (rejected: AntD Tabs owns its own overflow/more-menu behaviour, which fights FR-020's hidden-scrollbar-with-shadows requirement and the docked kebab); duplicating dnd-kit setup inside `ViewTabs` (rejected: the shared component already encapsulates sensors, keyboard coordinates, and no-op-drop suppression).
+
+**Right-click safety**: dnd-kit's pointer sensor ignores non-primary buttons, so a right-click (menu trigger) can never begin a drag.
+
+## R23. Tab menu — controlled AntD `Dropdown` with asymmetric triggers
+
+**Decision**: One `ViewTabMenu` component per tab, rendering a **controlled** AntD `Dropdown` (`open` + `onOpenChange` held in `ViewTabs`, one open menu at a time keyed by `tabId`). The tab element's own handlers decide when to open: `onClick` opens the menu **only when the tab is already active** (otherwise it calls `switchTab`), and `onContextMenu` (with `preventDefault()`) opens it for **any** tab, active or not. Menu body carries `maxHeight: '60vh', overflowY: 'auto'` (Principle VI) and `placement="bottomLeft"`.
+
+**Rationale**: A controlled dropdown keeps the decision logic in one readable place and is directly testable in RTL (no reliance on rc-trigger's handler-merging when a sortable listener, an onClick, and a trigger all live on the same node). Asymmetric triggers are exactly the clarified grammar: a first left-click on an inactive tab must *switch* — opening its menu instead would make switching a two-step action.
+
+**Enablement (disabled, never hidden — 015 kebab precedent)**: see the matrix in [data-model.md](data-model.md) §7. Rules: `Save` disabled while the tab is clean; `Close`/`Delete` disabled for the tab holding the default role; `Pin`/`Set as default`/`Delete` disabled for anonymous tabs (nothing stored yet); `Set as default` disabled for the tab that already holds the role; `Pin` disabled for the default holder (it is pinned as long as it holds the role, FR-003). `Delete` keeps its `Modal.confirm` danger gate.
+
+**Alternatives considered**: uncontrolled `trigger={active ? ['click','contextMenu'] : ['contextMenu']}` (rejected: works, but re-mounting the trigger array on activation churns rc-trigger state and made "switch then immediately open" flaky in practice — the controlled form is deterministic); hiding inapplicable items (rejected: menu height would jump per tab kind, and the 015 review established that a disabled item communicates *why an action exists but is unavailable* better than an absent one).
+
+## R24. Hidden scrollbar + edge shadows on the tab strip
+
+**Decision**: The strip keeps `overflow-x: auto` but hides the bar cross-browser (`scrollbarWidth: 'none'`, `msOverflowStyle: 'none'`, `&::-webkit-scrollbar { display: none }`). Shadow state is derived from the strip's own metrics — `scrollLeft > 0` → left shadow, `scrollLeft + clientWidth < scrollWidth - 1` → right shadow — recomputed on `scroll`, on `ResizeObserver` of the strip, and whenever the tab list changes. The shadows are absolutely-positioned overlay elements (`data-testid="view-tabs-shadow-left|right"`, `pointer-events: none`, ~16px wide `linear-gradient` from `token.colorSplit`-derived rgba to transparent) inside a `position: relative` wrapper — **not** `background-attachment: local` gradients on the strip itself.
+
+**Rationale**: Overlay elements are inspectable and assertable (a Playwright pixel probe can read their box + opacity; an RTL test can assert presence), whereas the `background-attachment: local` trick is invisible to both and cannot express AntD token colors cleanly. Deriving from `scrollLeft/clientWidth/scrollWidth` means the "both edges mid-scroll, one edge at each end" acceptance in SC-009 falls out of the arithmetic. Per the visual-geometry rule (memory), the shipped behaviour is locked with a real-browser probe, not a JSDOM style assertion.
+
+**Alternatives considered**: `mask-image` fade on the strip (rejected: fades the tab text itself, not just a hint); AntD `Tabs` built-in overflow arrows (rejected with R22); keeping a thin styled scrollbar (rejected: the user explicitly asked for it hidden).
+
+## R25. Transferable default role — atomic swap in the serializer
+
+**Decision**: `is_default` becomes writable on update. `validate_is_default` now rejects only an explicit **`false`** on the current holder (that would leave the table with zero defaults — FR-026); promotion (`false → true`) is allowed. `EntityViewSerializer.update()` wraps the write in `transaction.atomic()` and, **before** saving, clears the incumbent: `EntityView.objects.filter(owner, table_key, is_default=True).exclude(pk=instance.pk).update(is_default=False)`. Promotion also forces `pinned=True` on the receiving row; the demoted row keeps its `pinned`/`position`/`config` verbatim.
+
+**Rationale**: Clear-then-set is required because the partial `UniqueConstraint(owner, table_key, WHERE is_default)` is checked per statement (it is not `DEFERRABLE`); the transaction makes the two-statement window invisible to any reader. Doing it in `update()` rather than a bespoke `@action` keeps the contract to endpoints that already exist and are already in the generated schema (Principle IV) — the frontend just PATCHes `{is_default: true}`. Forcing `pinned=True` on promotion is what makes FR-003's "pinned as long as it holds the role" true without a second request; leaving the demoted row's pin alone matches the clarified answer (it *becomes* unpinnable, it is not auto-unpinned).
+
+**Virtual-default edge**: when no materialized `is_default` row exists yet (the page default is still virtual) and the user promotes some other saved view, there is nothing to demote — the PATCH simply sets the flag. The open virtual-default tab then converts to an **anonymous** tab holding the same config, mirroring FR-019's convert-on-delete behaviour, because the page-default configuration no longer has a stored identity. Recorded as a spec edge case.
+
+**Alternatives considered**: a dedicated `POST {id}/set-default/` action (rejected: a new endpoint for a single boolean the resource already exposes; PATCH keeps one write path); making the constraint `DEFERRABLE INITIALLY DEFERRED` and swapping in either order (rejected: needs a migration and hides ordering bugs behind commit-time checks); enforcing the swap in `Model.save()` (rejected: the ORM layer would silently mutate sibling rows on any import/data-migration write — including `data_io` restores, which must stay verbatim).
+
+## R26. Persisting the dragged tab order
+
+**Decision**: On drop, the frontend composes the table's **complete** id order — the saved views visible in the strip, in their new left-to-right order, followed by every other saved view of that table in its current relative order — and POSTs it to the existing `reorder/` action (`{table_key, ids}`). Anonymous tabs hold no id and are simply skipped when composing (their strip position is session state). No new endpoint, no schema change.
+
+**Rationale**: `reorder/` rewrites `position` only for the ids it is given, so sending a partial list would leave non-open views interleaved at stale positions and break FR-017's "manage modal shows the same order". Sending the full list makes the persisted order a total order and keeps modal and strip in lockstep. The action already validates ownership, table membership, and duplicates.
+
+**Alternatives considered**: sending only the visible ids (rejected: the interleaving bug above); a `position` PATCH per moved view (rejected: N requests and a non-atomic intermediate order); persisting the whole tab order including anonymous placeholders (rejected: anonymous tabs are explicitly session-scoped by spec).
+
+## R27. Per-tab actions — generalizing the hook from "active" to "by tabId"
+
+**Decision**: `useEntityViews` exposes tab-addressed actions: `saveTab(tabId)`, `duplicateTab(tabId, baseName)`, `pinTab(tabId, pinned)`, `setDefaultTab(tabId)`, `deleteTab(tabId)`, `renameTab(tabId, name)` (already tab-addressed), `closeTab(tabId)` (already), and `reorderTabs(orderedTabIds)`. The former `saveActiveTab`/`saveActiveTabAs`/`duplicateActiveTab` become thin wrappers over the active id where the modals still need them (`SaveViewModal` saves whichever tab requested a name).
+
+**Rationale**: A right-click menu can target a tab that is not active, so every action must accept an explicit target; keeping "active" variants only would silently apply an action to the wrong tab — the worst possible failure for Delete. Each tab already carries its own `config`/baseline in state, so the generalization is mechanical.
+
+**Deletion semantics**: `deleteTab` on a saved view runs the FR-019 path (tab stays open, converts to anonymous) whether it is invoked from the tab menu or the manage modal, so the two surfaces cannot diverge.
+
+## R28. Default view is no longer first — ordering and manage-modal consequences
+
+**Decision**: Drop the round-2 "default tab is ALWAYS first" invariant. Tab order for saved views comes purely from `position` (pinned merge in position order, session-opened views appended); the default holder sits wherever its `position` puts it. `ManageViewsModal` enables dragging the default row (delete stays blocked, rename/pin stay enabled), and the modal's staged reorder and the strip's drag both write through the same `reorder/` composition (R26). Setting a view as default changes no position (SC-011).
+
+**Rationale**: The clarified answers make the default role orthogonal to ordering: "the default is draggable" and "set as default doesn't move the view". Keeping any always-first special case would contradict both and would make the strip and the modal disagree the moment a user dragged the default row.
+
+**Consequence checked**: the FR-025 auto-hide heuristic is unaffected — it counts views/tabs and URL state, never positions.

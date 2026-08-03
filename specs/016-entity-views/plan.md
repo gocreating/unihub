@@ -1,32 +1,42 @@
-# Implementation Plan: Entity Views — Round 2
+# Implementation Plan: Entity Views — Round 3 (tab menus, drag reorder, kebab)
 
-**Branch**: `016-entity-views` | **Date**: 2026-07-23 | **Spec**: [spec.md](spec.md)
+**Branch**: `016-entity-views` | **Date**: 2026-08-03 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-07-23 (round 2 on top of the shipped round-1 implementation; round-1 plan is in git history at commit 467beff)
+**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-03 (round 3 on top of the shipped round-2 implementation; round-1 plan at commit 467beff, round-2 plan at commit 8e1f169)
 
 ## Summary
 
-Round 2 refines the shipped Entity Views feature along eight clarified directives: (1) the standard view is renamed "Tabular" → **"Table"**; (2) the **default view becomes a plain view** — renamable, modifiable, savable (never deletable), with a page-provided initial name (catalog: **"YTD"**), materializing as a stored `EntityView` row (`is_default=True`) on first save/rename; (3) the **"+" button moves to the right of the rightmost tab** and stays always visible under overflow; (4) **double-click on a tab starts the edit-name flow**; (5) the packed `view[<tableKey>]` URL mini-format is replaced by a **human-readable per-facet query grammar** (`<tableKey>.view/f/sort/cols/size/page`), which also switches pin capture to **per-column pins** (resolving the round-1 boolean-pair projection); (6) saved views join **data_io export/import and git sync** by generalizing the registry with an owner-stamping mechanism (owner column excluded from CSV; `request.user` stamped at import — resolving the recorded Principle-I deferral); (7) the view row **auto-hides** when only the default view exists, with a compact reveal affordance that carries the dirty indicator.
+Round 3 reworks the view row's interaction model along seven clarified directives, plus one backend contract change:
+
+1. **Hidden scrollbar + edge shadows** — the tab strip keeps scrolling horizontally but renders no scrollbar; a gradient shadow appears on each side that has tabs scrolled out of view (FR-020, SC-009).
+2. **Drag to reorder tabs** — horizontal dnd-kit sorting in the strip; the resulting order persists for saved views through the existing bulk `reorder/` endpoint and matches the manage modal (FR-027, SC-010).
+3. **Per-tab dropdown menu** — left-click the active tab (or right-click any tab) opens a menu with Save · Close · Duplicate · Pin/Unpin · Set as default · Rename · Delete; inapplicable actions render **disabled, not hidden**. Left-clicking an inactive tab still just switches to it (FR-023).
+4. **Close button folds into that menu** — the per-tab `×` disappears from the tab body.
+5. **Double-click rename is removed** — Rename is a menu action running the same edit-name flow (inline input for saved/default, `SaveViewModal` for anonymous).
+6. **Kebab replaces both "+" and "View ▾"** — one control fixed at the row's right edge: *Add empty view* · *Open ▸* (only views not currently open) · *Manage views…* (FR-009/FR-011/FR-012).
+7. **Transferable default role** — `is_default` stops being create-only: a PATCH promoting a view atomically demotes the previous default (pinned/undeletable status moves with the role; configs, dirty state, and tab positions do not). The default view is no longer locked to the first tab and becomes draggable everywhere, including the manage modal (FR-003/FR-026, SC-011).
+
+The frontend work is concentrated in `components/EntityViews/` (one new `ViewTabMenu`, `ViewTabs` rebuilt around a sortable strip, `ViewDropdown` → `ViewKebab`, hook actions generalized from "active tab" to "by tabId"). The backend work is one serializer/viewset change plus its migration-free contract update.
 
 ## Technical Context
 
 **Language/Version**: TypeScript 5.7 (frontend), Python 3.12 (backend)
 
-**Primary Dependencies**: React 18.3, Ant Design 5.24 + Pro Components 2.8, TanStack React Query 5, React Router 7 (library mode), react-intl; Django 5.x, DRF 3.x, drf-spectacular
+**Primary Dependencies**: React 18.3, Ant Design 5.24 (`Dropdown` with `click`/`contextMenu` triggers, `Menu` submenus), @dnd-kit/core 6.3 + @dnd-kit/sortable 10 (already used by `SortableList` and the inventory organize tree), TanStack React Query 5, React Router 7, react-intl; Django 5.x, DRF 3.x, drf-spectacular
 
-**Storage**: PostgreSQL 16 — `core.EntityView` gains `is_default` (migration 0006, incl. config data-migration to per-column pins); `sessionStorage` (`unihub.views.<tableKey>`) gains the `revealed` flag; URL query string carries the new readable per-facet params
+**Storage**: PostgreSQL 16 — **no migration this round** (`is_default`, `pinned`, `position` all exist since 0006; only their write rules change). `sessionStorage` `unihub.views.<tableKey>` keeps the same shape; the persisted tab order rides on `EntityView.position` via the existing `reorder/` action
 
-**Testing**: Vitest + RTL (serialization rewrite, useEntityViews default/rename/auto-hide behavior, ViewTabs layout), Playwright e2e (`entity-views.spec.ts` — "+" geometry, readable deep-links, reveal flow), pytest-django (is_default lifecycle, delete guard, data_io/sync round trip — TDD red-green)
+**Testing**: Vitest + RTL (tab-menu enablement matrix, per-tab actions, kebab open-submenu filtering, reorder→persist call, default-transfer optimistic state), Playwright e2e (`entity-views.spec.ts` — scrollbar-hidden + shadow pixel probe, drag reorder geometry + persistence, kebab docking at narrow width), pytest-django (`is_default` transfer: atomic swap, promotion pins, demotion keeps `pinned`, explicit `false` rejected, delete guard follows the role, sync round trip preserves the role)
 
-**Target Platform**: Desktop/tablet web browsers (mobile out of scope per constitution)
+**Target Platform**: Desktop/tablet web browsers
 
 **Project Type**: Web application — Django backend + React SPA frontend under `apps/unihub/`
 
-**Performance Goals**: No change from round 1 — tab switch without extra round-trips; saved-view list ≤ 1 query per table per load; sync publish/checkout adds one small CSV table
+**Performance Goals**: Unchanged — tab switch stays local; a drop issues at most one `reorder/` POST; a default transfer is one PATCH; shadow state updates from `scroll`/`ResizeObserver` handlers only (no per-frame work)
 
-**Constraints**: URL must stay the single source of truth for active view state; readable serialization must round-trip every facet (per-column pins included); data_io registration must produce ZERO phantom diffs across deployments (owner never serialized); staged mutations rule (manage modal commits on Save only); `strict: true` TS, zero ESLint warnings
+**Constraints**: URL stays the source of truth for active view state; drag must not swallow the click that opens a tab menu or switches tabs (activation distance); every menu constrains to the viewport (Principle VI); all new strings in both locales; `strict: true` TS, zero ESLint warnings; the running docker stack still needs migration 0006 applied on deploy (unchanged from round 2)
 
-**Scale/Scope**: Single-user hub; same 5 adopted pages (tableKeys unchanged); tens of views per table; round-1 stored configs must migrate losslessly
+**Scale/Scope**: Single-user hub; same 5 adopted pages (tableKeys unchanged); tens of views per table
 
 ## Constitution Check
 
@@ -34,19 +44,21 @@ Round 2 refines the shipped Entity Views feature along eight clarified directive
 
 | # | Principle | Status | Notes |
 |---|-----------|--------|-------|
-| I | Entity-centric + data_io | ✅ PASS — **deferral RESOLVED** | This round registers `core.entityview` with data_io via a new registry capability (`owner_field` stamping — R20): the owner column is excluded from CSV and stamped from the acting user on import, exactly matching FR-024. The deferral comment in `core/apps.py` is replaced by the registration in the same change. `is_default` field addition updates the descriptor in the same change (Principle I schema-sync rule). |
-| II | Domain independence | ✅ PASS | All changes in `core/`, `data_io/`, `sync/` (shared infra) and the shared frontend `components/EntityViews/`. No domain-to-domain imports; the registry extension is generic (any future per-user model can use `owner_field`). |
-| III | Reference alignment | ✅ PASS | Standard DRF patterns (partial unique constraint, serializer guards); AntD components throughout; no new libraries. |
-| IV | API contract-driven | ✅ PASS (pre-existing deviation unchanged) | `is_default` lands in serializer → schema regenerated (spectacular file route, established in 018) → `pnpm generate-types`. Service types stay hand-written per repo-wide precedent (not widened). |
-| V | Quality loop + TDD | ✅ PASS | Backend first: extend `test_entity_views.py` (is_default lifecycle, delete guard) + new data_io/sync round-trip tests on the `bare_repo` fixture — written red first. Frontend: serialization unit suite rewritten against the new grammar before the module; RTL for rename/auto-hide/default materialization. |
-| VI | UI/UX (ov-fleet) | ✅ PASS | Double-click inline rename commits on Enter/blur, cancels on Esc; collision surfaces a translated error. Reveal affordance is truncation/tooltip-compliant and shows the dirty dot (SC-005 preserved while hidden). Delete confirmations unchanged (`Modal.confirm`, `okType: 'danger'`). All new strings in BOTH locales (ICU plurals where counted). |
-| VII | PageTable layout | ✅ PASS | The `viewBar` slot is reused; collapsed (auto-hidden) mode renders the compact affordance inside the same slot — `PageTable` still owns the structure; no page re-implements the row. |
-| VIII | i18n | ✅ PASS | "Table" default-tab key updated in en-US + zh-TW same commit; new keys for rename errors, reveal tooltip. Page-provided default names ("YTD") are view data, not UI chrome — stored verbatim once materialized. |
+| I | Entity-centric + data_io | ✅ PASS | No schema change — `core.entityview` stays registered with `owner_field="owner"`; `is_default`/`pinned`/`position` are already exported columns, so the transferable role round-trips through export/import and sync with no descriptor edit (FR-024 extended by SC-008 assertion only). |
+| II | Domain independence | ✅ PASS | Backend change confined to `core/`; frontend change confined to `components/EntityViews/` + a shared `SortableList` capability (orientation), which stays generic. No domain imports. |
+| III | Reference alignment | ✅ PASS | AntD `Dropdown`/`Menu` for both menus (no custom popover); dnd-kit reused via the existing shared `SortableList` rather than a second drag mechanism. |
+| IV | API contract-driven | ✅ PASS | The `is_default` write rule changes in the serializer → schema regenerated (spectacular file route) → `pnpm generate-types`. No new endpoint; `PATCH` and `reorder/` already exist in the contract. |
+| V | Quality loop + TDD | ✅ PASS | Backend first: `test_entity_views.py` gains a red `TestDefaultTransfer` before the serializer change. Frontend: the tab-menu enablement matrix and reorder-persistence tests are written against the hook/component API before the rewrite. Full `pnpm lint`/`typecheck`/`test`/`build` + `ruff`/`pytest` at the end. |
+| VI | UI/UX (ov-fleet) | ✅ PASS | Both menus are AntD `Dropdown`s with `maxHeight: 60vh` internal scrolling (dropdown-fits-viewport rule); the kebab is the right-most control with a right-aligned, leftward-opening dropdown — exactly the panel-header kebab pattern generalized to this row. Disabled-not-hidden matches the 015 commit-node kebab precedent. Destructive Delete keeps its `Modal.confirm` (`okType: 'danger'`) gate. Tab labels keep `OverflowTooltip` (truncation-gated). |
+| VII | PageTable layout | ✅ PASS | Still one `viewBar` slot rendering either the collapsed affordance or the row; no page re-implements anything. The strip's hidden scrollbar is local to the view row and does not touch PageTable's own sticky horizontal scrollbar. |
+| VIII | i18n | ✅ PASS | New keys (7 tab-menu actions, 3 kebab actions, empty-state, aria-labels) land in en-US **and** zh-TW in the same commit; obsolete keys (`close` as a button label, `view` as the control label) are re-purposed or removed in both. |
 | IX–XI | Currency / charts | N/A | Not touched. |
-| XII | Entity toolbar patterns | ✅ PASS | Apply-gate, remount keys (`panelApplyCount` + `pinFingerprint` + active tab id) unchanged. Per-column pins in `ViewConfig` now mirror `ColumnDef.pin` 1:1 — the round-1 projection (and its multi-pin loss) is removed, aligning views with constitution v1.23.0's per-column pin model. |
+| XII | Entity toolbar patterns | ✅ PASS | Apply-gate and remount keys unchanged; per-column pins unchanged. Tab order is presentation state and never feeds a remount key. |
 | — | Dev constraints | ✅ PASS | pnpm/uv only; session auth; delete gates honored; desktop-first. |
 
 **Initial gate result**: PASS — no violations to justify. Re-checked after Phase 1 design: still PASS.
+
+**Visual-geometry rule (memory, feedback_visual_geometry_bugs)**: the scrollbar/shadow and kebab-docking directives are visual-geometry work — they must be locked by real-browser Playwright geometry/pixel assertions, not JSDOM style checks. Planned in `entity-views.spec.ts` (SC-006, SC-009, SC-010).
 
 ## Project Structure
 
@@ -54,14 +66,14 @@ Round 2 refines the shipped Entity Views feature along eight clarified directive
 
 ```text
 specs/016-entity-views/
-├── spec.md              # + Clarifications Session 2026-07-23 (round 2)
-├── plan.md              # This file (round 2; round-1 plan in git history)
-├── research.md          # + R14–R21 (round-2 decisions)
-├── data-model.md        # Updated: ViewConfig v2, is_default, revealed flag, URL grammar v2
-├── quickstart.md        # + round-2 manual walk-through
+├── spec.md              # + Clarifications Session 2026-08-03 (round 3), FR-026/FR-027, SC-009–SC-011
+├── plan.md              # This file (round 3; rounds 1–2 in git history)
+├── research.md          # + R22–R28 (round-3 decisions)
+├── data-model.md        # Updated: is_default transfer rules, tab order persistence, menu enablement matrix
+├── quickstart.md        # + round-3 manual walk-through
 ├── contracts/
-│   ├── entity-views-api.md       # Updated: is_default, delete guard, data_io/sync contract
-│   └── view-url-serialization.md # REWRITTEN: readable per-facet grammar
+│   ├── entity-views-api.md       # Updated: PATCH is_default transfer semantics, reorder scope
+│   └── view-url-serialization.md # Unchanged (round-2 grammar stands)
 └── tasks.md             # Phase 2 output (/speckit-tasks)
 ```
 
@@ -70,43 +82,30 @@ specs/016-entity-views/
 ```text
 apps/unihub/backend/
 ├── core/
-│   ├── models.py                # EntityView + is_default (partial unique constraint)
-│   ├── serializers.py           # + is_default (create-only), guards
-│   ├── views.py                 # + destroy guard for is_default
-│   ├── apps.py                  # deferral comment REPLACED by data_io registration
-│   └── migrations/0006_*.py     # is_default + config data-migration (sticky pair → per-column pins)
-├── data_io/
-│   ├── registry.py              # + TableDescriptor.owner_field
-│   ├── services/csv_exporter.py # skip owner_field column on export
-│   ├── services/csv_importer.py # owner_field column not expected/validated
-│   └── services/change_preview.py # stamp acting_user into owner_field on materialize
-├── sync/
-│   ├── views.py                 # thread request.user into apply calls
-│   └── services/apply_helper.py # import_from_clone/apply_selected accept acting_user
+│   ├── serializers.py           # validate_is_default: allow promotion (reject explicit false); atomic demote in update()
+│   ├── views.py                 # destroy guard unchanged (follows whichever row holds the role)
+│   └── (no migration — 0006 already provides is_default + the partial unique constraint)
 └── tests/
-    ├── test_entity_views.py     # + is_default lifecycle, delete guard (TDD)
-    └── test_entity_views_io.py  # NEW — data_io export shape + sync round-trip owner stamping
+    └── test_entity_views.py     # + TestDefaultTransfer (TDD red first)
 
 apps/unihub/frontend/src/
 ├── components/EntityViews/
-│   ├── serialization.ts         # REWRITTEN — readable grammar (parse/serialize per facet)
-│   ├── useEntityViews.ts        # default materialization, name-ref resolution, auto-hide state
-│   ├── useViewTabsState.ts      # + revealed flag
-│   ├── ViewTabs.tsx             # "+" right of last tab (always visible); collapsed affordance; dbl-click inline rename
-│   ├── ManageViewsModal.tsx     # default row: rename/pin enabled, delete/drag disabled
-│   ├── SaveViewModal.tsx        # reused for anonymous dbl-click name-and-save
-│   └── *.test.ts(x)             # suites updated/rewritten
-├── components/EntityToolbar/hooks/useEntityTable.ts  # + defaultViewName pass-through
-├── services/unihub-backend/core.ts  # + is_default on EntityView type
-├── locales/en-US/pages.ts       # "Table", rename/reveal keys
-├── locales/zh-TW/pages.ts       # 「表格」+ same keys
-└── pages/inventory/catalog/index.tsx # defaultViewName="YTD"
+│   ├── ViewTabs.tsx             # REBUILT — sortable strip (no scrollbar + edge shadows), no per-tab ×, no dbl-click
+│   ├── ViewTabMenu.tsx          # NEW — per-tab Dropdown (click-on-active / contextMenu-on-any) + enablement matrix
+│   ├── ViewKebab.tsx            # NEW (replaces ViewDropdown.tsx) — Add empty view / Open ▸ / Manage views…
+│   ├── useEntityViews.ts        # per-tabId actions: saveTab/duplicateTab/pinTab/setDefaultTab/deleteTab/reorderTabs
+│   ├── ManageViewsModal.tsx     # default row becomes draggable (delete still blocked); order stays in sync
+│   └── *.test.ts(x)             # suites updated + new ViewTabMenu/ViewKebab suites
+├── components/EntityToolbar/SortableList.tsx  # + orientation: 'vertical' | 'horizontal' (shared, generic)
+├── locales/en-US/pages.ts       # new menu keys; obsolete control labels removed
+├── locales/zh-TW/pages.ts       # same keys, zh-TW copy
+└── generated/                   # regenerated types (is_default write rule)
 
 apps/unihub/frontend/e2e/
-└── entity-views.spec.ts         # + "+"-placement geometry, readable deep-link, reveal flow
+└── entity-views.spec.ts         # + no-scrollbar/shadow probe, drag-reorder persistence, kebab docking at 375px
 ```
 
-**Structure Decision**: Same layered structure as round 1 — backend `core/` owns the model, `data_io`/`sync` gain one generic capability each (no EntityView-specific code outside `core/`), frontend changes stay inside `components/EntityViews/` plus one-line page wiring (`defaultViewName`).
+**Structure Decision**: Same layered structure as rounds 1–2. The only shared-component change outside `EntityViews/` is an additive `orientation` prop on the existing `SortableList` — chosen over a second drag implementation so the row, the filter/sort/column panels, and the manage modal keep one drag mechanism.
 
 ## Complexity Tracking
 

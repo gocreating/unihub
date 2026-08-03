@@ -1,6 +1,6 @@
 # Data Model: Entity Views
 
-**Feature**: 016-entity-views | **Date**: 2026-07-20 | **Updated**: 2026-07-23 (round 2)
+**Feature**: 016-entity-views | **Date**: 2026-07-20 | **Updated**: 2026-08-03 (round 3)
 
 ## 1. `EntityView` (backend, `core/models.py`)
 
@@ -15,7 +15,7 @@ Persisted saved view. One row per (owner, table, name).
 | `config` | JSONField | must be a JSON object | `ViewConfig` payload (below); deep shape owned by frontend |
 | `pinned` | BooleanField | default `False` | Pinned views appear as tabs every session |
 | `position` | IntegerField | default `0` | Display order among the owner's views for this table |
-| `is_default` | BooleanField | default `False` — **round 2 (migration 0006)** | The materialized default view; ≤ 1 per (owner, table_key); create-only; undeletable |
+| `is_default` | BooleanField | default `False` — **round 2 (migration 0006)** | The materialized default view; exactly ≤ 1 per (owner, table_key); undeletable. **Round 3**: no longer create-only — the role is transferable (see validation rules) |
 | `created_at` | DateTimeField | `auto_now_add` | |
 | `updated_at` | DateTimeField | `auto_now` | |
 
@@ -33,7 +33,8 @@ Persisted saved view. One row per (owner, table, name).
 - `table_key`: required, 1–100 chars; immutable after create (PATCH may not change it).
 - `config`: required, must deserialize to a JSON **object** (dict). Deep validation is client-side by design (forgiving contract, mirrors `EntityFilterBackend`'s silent-skip of unknown attrs).
 - `owner`: never client-writable; stamped from `request.user` on create; queryset always owner-filtered (cross-account access → 404).
-- `is_default` (round 2): writable on create only; PATCH attempting to change it → 400. DELETE on an `is_default` row → 400 (guaranteed-fallback invariant).
+- `is_default` (round 3 — **transferable role**, FR-026): writable on create **and** update. `PATCH {is_default: true}` promotes: inside one `transaction.atomic()` the incumbent default for the same (owner, table_key) is cleared **first** (`.exclude(pk=instance.pk).update(is_default=False)`), then the row is saved with `is_default=True` **and `pinned=True`** — clear-before-set is required because the partial unique constraint is checked per statement. The demoted row keeps its `pinned`, `position`, `name`, and `config` untouched (it becomes *unpinnable*, not unpinned). `PATCH {is_default: false}` on the current holder → 400 (would leave zero defaults). DELETE on the current holder → 400 (guaranteed-fallback invariant, unchanged — the guard follows the role, not a fixed row).
+- `position` (round 3): also written by the tab strip's drag-reorder, through the same bulk `reorder/` action the manage modal uses. The client always sends the table's **complete** id order (visible tabs first in strip order, then the remaining views in their current relative order) so strip and modal never disagree. The default holder has no positional privilege — it is ordered by `position` like every other view.
 
 ## 2. `ViewConfig` (shared JSON payload — DB `config` column, frontend type) — **v2 (round 2)**
 
@@ -88,13 +89,15 @@ interface ViewTab {
 }
 
 interface ViewTabsState {
-  tabs: ViewTab[];                 // open order; default tab ALWAYS first; pinned saved views merge in at load
+  tabs: ViewTab[];                 // strip order (round 3: NO always-first default); pinned saved views merge in by `position`
   activeTabId: string;
   revealed: boolean;               // round 2 — manual view-row reveal (FR-025), session-scoped
 }
 ```
 
-**Derived, never stored**: `dirty` (normalized compare of `config` vs baseline — stored config for `saved`/materialized `default`, page defaults for virtual `default`; `anonymous` always renders unsaved marker); `collapsed` (view-row auto-hide: no non-default saved views AND 1 open tab AND no non-default URL state AND not `revealed`).
+**Derived, never stored**: `dirty` (normalized compare of `config` vs baseline — stored config for `saved`/materialized `default`, page defaults for virtual `default`; `anonymous` always renders unsaved marker); `collapsed` (view-row auto-hide: no non-default saved views AND 1 open tab AND no non-default URL state AND not `revealed` — unaffected by ordering).
+
+**Round 3 ordering**: the strip order is the source of truth for a drag; on drop it is projected onto `position` for saved views (R26) and left as session state for anonymous tabs. The tab holding the default role sits wherever its `position` puts it and is freely draggable — in the strip and in the manage modal.
 
 ## 5. State transitions
 
@@ -107,11 +110,31 @@ interface ViewTabsState {
        │  Save (persist config)                                          │
        └─────────────────────────────────────────────────────────────────┘
 
-  saved (open in tab) ── view deleted in manage modal ──► anonymous (same config, FR-019)
+  saved (open in tab) ── view deleted (tab menu or manage modal) ──► anonymous (same config, FR-019)
   default (virtual) ── edits make it dirty-vs-page-defaults; Save or rename ──► default (materialized,
-       is_default=True row: renamable, savable, pinnable — NEVER deletable; baseline = stored config)
+       is_default=True row: renamable, savable — NEVER deletable; baseline = stored config)
+  default (virtual) ── another saved view promoted ──► anonymous (same config; nothing to demote, R25)
+  default (materialized) ── another saved view promoted ──► saved (ordinary: closable, deletable,
+       unpinnable; keeps its pinned flag, position, name, and config)
+  saved ── "Set as default" ──► default (materialized; forced pinned=True; position UNCHANGED)
   session end ── anonymous & unpinned tabs discarded; pinned views reappear next session; revealed flag resets
 ```
+
+## 7. Tab menu enablement matrix (round 3, FR-023 — disabled, never hidden)
+
+Rows are tab kinds; ✅ = enabled, ⛔ = rendered disabled.
+
+| Action | anonymous | saved (clean) | saved (dirty) | default holder (virtual) | default holder (materialized) |
+|--------|-----------|---------------|---------------|--------------------------|-------------------------------|
+| Save | ✅ (opens name modal) | ⛔ | ✅ | ✅ (materializes) | ✅ only when dirty |
+| Close | ✅ | ✅ | ✅ | ⛔ | ⛔ |
+| Duplicate | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Pin / Unpin | ⛔ | ✅ | ✅ | ⛔ | ⛔ (pinned while it holds the role) |
+| Set as default | ⛔ (save first) | ✅ | ✅ | ⛔ (already default) | ⛔ (already default) |
+| Rename | ✅ (name-and-save) | ✅ | ✅ | ✅ (materializes) | ✅ |
+| Delete | ⛔ | ✅ (danger confirm) | ✅ (danger confirm) | ⛔ | ⛔ |
+
+Kebab menu (row right edge, FR-011/FR-012): *Add empty view* (always ✅) · *Open ▸* listing saved views **not currently open as tabs** (⛔ single empty-state entry when none) · *Manage views…* (always ✅).
 
 ## 6. Relationships
 

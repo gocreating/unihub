@@ -58,7 +58,8 @@ cd apps/unihub/frontend && pnpm generate-types
 | Backend tests | `apps/unihub/backend/tests/test_entity_views.py` |
 | Serialization | `apps/unihub/frontend/src/components/EntityViews/serialization.ts` |
 | Hook | `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` |
-| UI | `apps/unihub/frontend/src/components/EntityViews/{ViewTabs,ViewDropdown,ManageViewsModal,SaveViewModal}.tsx` |
+| UI | `apps/unihub/frontend/src/components/EntityViews/{ViewTabs,ViewTabMenu,ViewKebab,ManageViewsModal,SaveViewModal}.tsx` |
+| Shared drag | `apps/unihub/frontend/src/components/EntityToolbar/SortableList.tsx` (`orientation` prop) |
 | PageTable slot | `apps/unihub/frontend/src/components/PageTable/index.tsx` (`viewBar` prop) |
 | Service | `apps/unihub/frontend/src/services/unihub-backend/core.ts` |
 | i18n | `apps/unihub/frontend/src/locales/{en-US,zh-TW}/pages.ts` (`common.entityViews.*`) |
@@ -73,3 +74,15 @@ On the inventory catalog (`/inventory/catalog`), after migrations (`uv run pytho
 4. **Double-click rename**: double-click a saved tab → inline input (Enter/blur commits, Esc cancels, duplicate name shows an error); double-click an anonymous tab → name-and-save modal.
 5. **Readable URLs**: with YTD clean and revealed-only state, the URL has NO view params; switch to a saved view → `?inventory-catalog.view=<name>`; edit filters → readable `inventory-catalog.f=…` facets appear; paste a hand-edited `…size=100` and the table follows.
 6. **Git sync**: publish from the Sync tab → the views CSV appears in the commit (no owner column); wipe/checkout → views come back owned by the signed-in account, and a fresh publish preview shows zero view diffs.
+
+## Round 3 manual walk-through (2026-08-03)
+
+On the inventory catalog (`/inventory/catalog`), with the row revealed and at least three saved views:
+
+1. **Hidden scrollbar + shadows**: open enough tabs to overflow the strip — no scrollbar renders at any scroll position; a shadow sits on the right edge at scroll 0, on both edges mid-scroll, and only on the left edge at the end (SC-009).
+2. **Drag to reorder**: drag a tab past its neighbour — the strip reorders; reload the page and the order holds; open *Manage views…* and confirm the modal lists the same order (SC-010). Drag the default view too — it is no longer pinned to the first slot.
+3. **Tab menu grammar**: left-click an inactive tab → it just switches. Left-click the now-active tab → its menu opens. Right-click any tab (active or not) → the same menu, no browser context menu.
+4. **Menu contents**: the menu shows Save · Close · Duplicate · Pin/Unpin · Set as default · Rename · Delete, with inapplicable actions greyed out (Close/Delete on the default holder; Pin/Set as default/Delete on an anonymous tab; Save while clean). No `×` remains on the tab body, and double-clicking a tab does nothing.
+5. **Set as default**: choose it on an ordinary saved view — it becomes pinned and its Delete/Close grey out; the previous default becomes deletable and closable; **neither tab moves** (SC-011). Reload: exactly one default.
+6. **Kebab**: the row's right edge holds a single kebab — *Add empty view* opens an anonymous tab; *Open ▸* lists only views not already open (and shows a disabled empty-state entry when everything is open); *Manage views…* opens the modal. At 375px width with six tabs, the kebab stays fully visible without scrolling the strip (SC-006).
+7. **Sync**: publish → checkout still restores which view holds the default role (SC-008).

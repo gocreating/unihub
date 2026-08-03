@@ -94,7 +94,7 @@ describe('serializeInlineEntries', () => {
 });
 
 describe('serializeSavedEntries', () => {
-  it('references the view BY NAME with no overrides', () => {
+  it('references the view BY ID with no overrides', () => {
     expect(serializeSavedEntries(TK, 'YTD')).toEqual([[`${TK}.view`, 'YTD']]);
   });
 
@@ -139,14 +139,14 @@ describe('parseViewParams', () => {
     expect(hasViewParams(params, TK)).toBe(false);
   });
 
-  it('parses a saved-by-name reference with overrides', () => {
+  it('parses a saved-by-id reference with overrides', () => {
     const params = paramsOf([
       [`${TK}.view`, 'YTD'],
       [`${TK}.size`, '100'],
     ]);
     const result = parseViewParams(params, TK);
     if (!result.ok || !result.present) throw new Error('expected present parse');
-    expect(result.view.viewName).toBe('YTD');
+    expect(result.view.viewId).toBe('YTD');
     expect(result.view.config.pageSize).toBe(100);
   });
 
@@ -158,7 +158,7 @@ describe('parseViewParams', () => {
     for (const params of [minimal, full]) {
       const result = parseViewParams(params, TK);
       if (!result.ok || !result.present) throw new Error('expected present parse');
-      expect(result.view.viewName).toBeUndefined();
+      expect(result.view.viewId).toBeUndefined();
       expect(result.view.config.filters).toEqual(CONFIG.filters);
       expect(result.view.config.sort).toEqual(CONFIG.sort);
       expect(result.view.config.pageSize).toBe(100);
@@ -208,9 +208,9 @@ describe('parseViewParams', () => {
     const a = parseViewParams(params, TK);
     const b = parseViewParams(params, 'finance-accounts');
     if (!a.ok || !a.present || !b.ok || !b.present) throw new Error('expected present parses');
-    expect(a.view.viewName).toBe('YTD');
+    expect(a.view.viewId).toBe('YTD');
     expect(a.view.config.pageSize).toBeUndefined();
-    expect(b.view.viewName).toBeUndefined();
+    expect(b.view.viewId).toBeUndefined();
     expect(b.view.config.pageSize).toBe(25);
   });
 

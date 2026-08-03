@@ -26,8 +26,9 @@ export function facetParam(tableKey: string, facet: (typeof FACETS)[number]): st
 }
 
 export interface ParsedViewState {
-  /** Saved-view reference by NAME (unique per table per account). */
-  viewName?: string;
+  /** Saved-view reference by ID. Round 4: names are non-unique labels, so only
+   *  the id identifies a view — and a rename never breaks an existing link. */
+  viewId?: string;
   /** Facets present in the URL — absent facets fall back to defaults/stored. */
   config: Partial<ViewConfig>;
   /** The cols facet: visible columns in display order, pins included. */
@@ -127,11 +128,11 @@ export function serializeInlineEntries(
 /** Saved-view reference by name, with override facets layered after it. */
 export function serializeSavedEntries(
   tableKey: string,
-  name: string,
+  viewId: string,
   overrides: Partial<ViewConfig> = {},
   page?: number,
 ): [string, string][] {
-  const entries: [string, string][] = [[facetParam(tableKey, 'view'), name]];
+  const entries: [string, string][] = [[facetParam(tableKey, 'view'), viewId]];
   if (overrides.filters !== undefined) entries.push(...filterEntries(tableKey, overrides.filters));
   if (overrides.sort !== undefined) {
     entries.push([facetParam(tableKey, 'sort'), rulesToOrdering(overrides.sort) ?? '']);
@@ -222,7 +223,7 @@ export function parseViewParams(params: URLSearchParams, tableKey: string): View
 
   const viewRaw = params.get(facetParam(tableKey, 'view'));
   if (viewRaw === '') return malformed;
-  const viewName = viewRaw ?? undefined;
+  const viewId = viewRaw ?? undefined;
 
   const fRaws = params.getAll(facetParam(tableKey, 'f'));
   if (fRaws.length > 0) {
@@ -257,7 +258,7 @@ export function parseViewParams(params: URLSearchParams, tableKey: string): View
     page = Number(pageRaw);
   }
 
-  return { ok: true, present: true, view: { viewName, config, visibleColumns, page } };
+  return { ok: true, present: true, view: { viewId, config, visibleColumns, page } };
 }
 
 /** Rebuild a full column list from URL-transported visible columns: listed

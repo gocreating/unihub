@@ -109,23 +109,6 @@ def test_create_missing_name(owner_client):
     assert blank.status_code == 400
 
 
-def test_create_duplicate_name_same_table(owner_client, other_client):
-    create_view(owner_client, name="Dup")
-
-    resp = owner_client.post(
-        VIEWS,
-        json.dumps({"table_key": "inventory-catalog", "name": "Dup", "config": SAMPLE_CONFIG}),
-        content_type="application/json",
-    )
-    assert resp.status_code == 400
-    assert "name" in resp.json()
-
-    # Same name on a DIFFERENT table is fine.
-    create_view(owner_client, table_key="finance-accounts", name="Dup")
-    # Same name for a DIFFERENT user is fine.
-    create_view(other_client, name="Dup")
-
-
 def test_config_must_be_object(owner_client):
     for bad in ["a string", ["list"], 42]:
         resp = owner_client.post(
@@ -154,13 +137,6 @@ def test_patch_rename_pin_position(owner_client):
     assert body["name"] == "Renamed"
     assert body["pinned"] is True
     assert body["position"] == 5
-
-    collision = owner_client.patch(
-        f"{VIEWS}{view['id']}/",
-        json.dumps({"name": "Taken"}),
-        content_type="application/json",
-    )
-    assert collision.status_code == 400
 
     moved = owner_client.patch(
         f"{VIEWS}{view['id']}/",
@@ -451,3 +427,80 @@ class TestDefaultTransfer:
         assert owner_client.get(f"{VIEWS}{catalog_default['id']}/").json()["is_default"] is False
         assert owner_client.get(f"{VIEWS}{accounts_default['id']}/").json()["is_default"] is True
         assert other_client.get(f"{VIEWS}{foreign_default['id']}/").json()["is_default"] is True
+
+
+# ---------------------------------------------------------------------------
+# Round 4 (2026-08-04): names are non-unique, trimmed LABELS (FR-016, R29).
+# Contract: specs/016-entity-views/contracts/entity-views-api.md tests 30-33.
+# ---------------------------------------------------------------------------
+
+
+class TestNonUniqueNames:
+    """A name identifies nothing — only the id does."""
+
+    def test_duplicate_name_same_table_allowed(self, owner_client):
+        first = create_view(owner_client, name="Sales")
+        second = create_view(owner_client, name="Sales")
+
+        assert first["id"] != second["id"]
+        listed = owner_client.get(VIEWS, {"table_key": "inventory-catalog"}).json()
+        assert [v["name"] for v in listed] == ["Sales", "Sales"]
+
+    def test_rename_to_existing_name_allowed(self, owner_client):
+        create_view(owner_client, name="Taken")
+        view = create_view(owner_client, name="Original")
+
+        resp = owner_client.patch(
+            f"{VIEWS}{view['id']}/",
+            json.dumps({"name": "Taken"}),
+            content_type="application/json",
+        )
+        assert resp.status_code == 200, resp.content
+        assert resp.json()["name"] == "Taken"
+
+    def test_name_is_trimmed(self, owner_client):
+        created = create_view(owner_client, name="  Sales  ")
+        assert created["name"] == "Sales"
+
+        renamed = owner_client.patch(
+            f"{VIEWS}{created['id']}/",
+            json.dumps({"name": "\tYear to date \n"}),
+            content_type="application/json",
+        )
+        assert renamed.status_code == 200, renamed.content
+        assert renamed.json()["name"] == "Year to date"
+
+    def test_blank_name_rejected(self, owner_client):
+        blank_create = owner_client.post(
+            VIEWS,
+            json.dumps({"table_key": "inventory-catalog", "name": "   ", "config": SAMPLE_CONFIG}),
+            content_type="application/json",
+        )
+        assert blank_create.status_code == 400
+        assert "name" in blank_create.json()
+
+        view = create_view(owner_client, name="Real")
+        blank_rename = owner_client.patch(
+            f"{VIEWS}{view['id']}/",
+            json.dumps({"name": "  "}),
+            content_type="application/json",
+        )
+        assert blank_rename.status_code == 400
+        assert "name" in blank_rename.json()
+
+    def test_duplicate_names_do_not_confuse_the_default_role(self, owner_client):
+        """Two views sharing a name: promoting one leaves exactly one default."""
+        first = create_view(owner_client, name="Sales", is_default=True)
+        second = create_view(owner_client, name="Sales")
+
+        resp = owner_client.patch(
+            f"{VIEWS}{second['id']}/",
+            json.dumps({"is_default": True}),
+            content_type="application/json",
+        )
+        assert resp.status_code == 200, resp.content
+
+        listed = owner_client.get(VIEWS, {"table_key": "inventory-catalog"}).json()
+        defaults = [v["id"] for v in listed if v["is_default"]]
+        assert defaults == [second["id"]]
+        assert owner_client.get(f"{VIEWS}{first['id']}/").json()["is_default"] is False

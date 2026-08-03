@@ -232,3 +232,39 @@ def test_sync_round_trip_preserves_default_role(sync_configured: dict) -> None:
     assert restored["Extra"].pinned is True  # promotion pinned it before the publish
     assert restored["YTD"].is_default is False
     assert restored[holder.name].pk == holder.pk
+
+
+def test_duplicate_names_survive_sync_round_trip(sync_configured: dict) -> None:
+    """Round 4: two views may share a name — nothing keys off it (FR-016/R29)."""
+    user = User.objects.create_user(username="sync_dupe_owner", password="testpass")
+    client = Client()
+    client.force_login(user)
+
+    first = _make_view(user, name="Sales", is_default=False, pinned=False, position=0)
+    second = _make_view(user, name="Sales", is_default=False, pinned=True, position=1)
+    assert first.pk != second.pk
+
+    seeder = sync_configured["seeder"]
+    seeder.publish()
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=str(seeder.clone_dir),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    EntityView.objects.all().delete()
+
+    preview = client.get("/api/v1/sync/checkout/preview/", {"commit": commit}).json()
+    confirm = client.post(
+        "/api/v1/sync/checkout/confirm/",
+        {"commit": commit, "diff_digest": preview["diff_digest"], "excluded": []},
+        content_type="application/json",
+    )
+    assert confirm.status_code == 200, confirm.content
+
+    restored = EntityView.objects.filter(name="Sales").order_by("position")
+    assert restored.count() == 2
+    assert [v.pk for v in restored] == [first.pk, second.pk]
+    assert [v.pinned for v in restored] == [False, True]

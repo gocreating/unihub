@@ -7,9 +7,9 @@
  * keeps a stable shape and communicates why an action is unavailable
  * (data-model.md §7 carries the full matrix).
  *
- * Rename delegates back to the caller — the inline input lives on the tab —
- * and Save reports "needs a name" so the caller can open SaveViewModal for
- * THIS tab (never the active one).
+ * Rename delegates back to the caller, which opens the Rename dialog for THIS
+ * tab (never the active one). Save never prompts — round 4 stores an unnamed
+ * tab under its current label (FR-014).
  */
 import { useMemo } from 'react';
 import { Dropdown, Modal, message } from 'antd';
@@ -24,10 +24,8 @@ export interface ViewTabMenuProps {
   onOpenChange: (open: boolean) => void;
   /** The tab's rendered label (used for duplicate suffixing + confirmations). */
   displayName: string;
-  /** Start the edit-name flow for this tab (inline input / name-and-save). */
+  /** Open the Rename dialog for this tab. */
   onRename: (tab: ViewTabState) => void;
-  /** Save needs a name first — open SaveViewModal bound to this tab. */
-  onNeedsName: (tabId: string) => void;
   children: React.ReactNode;
 }
 
@@ -38,7 +36,6 @@ export function ViewTabMenu({
   onOpenChange,
   displayName,
   onRename,
-  onNeedsName,
   children,
 }: ViewTabMenuProps) {
   const { formatMessage: t } = useIntl();
@@ -91,9 +88,7 @@ export function ViewTabMenu({
     onOpenChange(false);
     switch (key) {
       case 'save':
-        void views.saveTab(tab.tabId).then((outcome) => {
-          if (outcome === 'needs-name') onNeedsName(tab.tabId);
-        });
+        void views.saveTab(tab.tabId);
         return;
       case 'close':
         views.closeTab(tab.tabId);

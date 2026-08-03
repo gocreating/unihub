@@ -28,7 +28,7 @@ import {
   reorderEntityViews,
   updateEntityView,
 } from '@/services/unihub-backend/core';
-import type { EntityView, EntityViewPatch } from '@/services/unihub-backend/core';
+import type { EntityView } from '@/services/unihub-backend/core';
 import type { UseEntityTableReturn } from '../EntityToolbar/useEntityTable';
 import type { ViewConfig } from '../EntityToolbar/types';
 import {
@@ -69,13 +69,6 @@ export interface ViewTabState {
   isDefault: boolean;
 }
 
-/** Staged output of the manage-views modal, committed in one call. */
-export interface ManageChanges {
-  /** Desired remaining views in final display order with staged name/pin. */
-  items: { id: string; name: string; pinned: boolean }[];
-  deletedIds: string[];
-}
-
 export interface UseEntityViewsOptions {
   tableKey: string;
   table: UseEntityTableReturn;
@@ -98,16 +91,15 @@ export interface UseEntityViewsReturn {
   /** Reveal the auto-hidden view row for the rest of the session. */
   reveal: () => void;
   switchTab: (tabId: string) => void;
-  addAnonymousTab: () => void;
+  /** Open a scratch tab holding a BLANK config, labelled "New view" (FR-011). */
+  addBlankTab: () => void;
   closeTab: (tabId: string) => void;
   openView: (viewId: string) => void;
-  /** Persist ONE tab (round 3 — a right-click menu can target an inactive tab):
-   *  saved views PATCH in place; the default tab materializes (or PATCHes) its
-   *  `is_default` row; anonymous tabs need a name first (`'needs-name'` → open
-   *  the SaveViewModal for THAT tab). */
-  saveTab: (tabId: string) => Promise<'saved' | 'needs-name'>;
-  /** Create a new saved view from the given tab's config under `name`. */
-  saveTabAs: (tabId: string, name: string) => Promise<void>;
+  /** Persist ONE tab — a right-click menu can target an inactive tab. Saved
+   *  views PATCH in place; the default tab materializes (or PATCHes) its
+   *  `is_default` row; a tab with no stored view is CREATED under its current
+   *  label (round 4: Save never prompts — FR-014). */
+  saveTab: (tabId: string) => Promise<'saved'>;
   /** Rename a saved or default tab in place (menu Rename, FR-023).
    *  Renaming the virtual default materializes it. Rejections rethrow. */
   renameTab: (tabId: string, name: string) => Promise<void>;
@@ -122,7 +114,6 @@ export interface UseEntityViewsReturn {
   deleteTab: (tabId: string) => Promise<void>;
   /** Apply a dragged tab order and persist it for saved views (FR-027). */
   reorderTabs: (orderedTabIds: string[]) => Promise<void>;
-  commitManageChanges: (changes: ManageChanges) => Promise<void>;
 }
 
 /** Coerce a server-stored (unknown-shaped) config into a full v2 ViewConfig,
@@ -159,6 +150,20 @@ export function reconcileConfig(config: ViewConfig, defaults: ViewConfig): ViewC
         pin: c.pin,
       })),
     ],
+  };
+}
+
+/** A genuinely EMPTY configuration (round 4, FR-011): no filters, no sorting,
+ *  every column visible in the page's natural (declared) order, nothing pinned.
+ *  Deliberately NOT the table's default view, which may seed a filter. */
+export function blankConfig(defaults: ViewConfig): ViewConfig {
+  return {
+    filters: [],
+    sort: [],
+    columns: [...defaults.columns]
+      .sort((a, b) => a.order - b.order)
+      .map((column, index) => ({ key: column.key, visible: true, order: index })),
+    pageSize: defaults.pageSize,
   };
 }
 
@@ -293,47 +298,54 @@ export function useEntityViews({
   // refetch (round 3: every tab except the default holder is closable).
   const closedPinnedRef = useRef<Set<string>>(new Set());
 
-  // Merge pinned views into the tab row (US2) in POSITION order — round 3
-  // dropped the always-first default, so the default holder is ordered like
-  // any other view; a still-virtual default keeps the leading slot.
-  // Identity-stable when nothing changed so refetches don't churn renders.
+  // Merge pinned views into the tab row (US2). Round 4: the merge is
+  // ORDER-PRESERVING — tabs that are already open keep their current strip
+  // position, and only genuinely NEW pinned views are inserted, each slotted
+  // by `position` relative to the tabs already present. Rebuilding the whole
+  // strip from `position` made a session tab jump the moment something pinned
+  // it — e.g. "Set as default", which pins its target (R32/SC-011).
   useEffect(() => {
     setTabs((prev) => {
-      const virtualDefaultTab = savedViews.some((view) => view.is_default)
-        ? undefined
-        : prev.find((tab) => tab.kind === 'default');
-      const byViewId = new Map(prev.filter((tab) => tab.viewId).map((tab) => [tab.viewId!, tab]));
-      const defaultTabId =
-        prev.find((tab) => tab.kind === 'default')?.tabId ?? DEFAULT_TAB_ID;
-      const pinned = savedViews.filter(
-        (view) => view.pinned && !closedPinnedRef.current.has(view.id),
+      const openViewIds = new Set(
+        prev.map((tab) => tab.viewId).filter((id): id is string => !!id),
       );
-      const pinnedTabs = pinned.map((view) => {
-        const existing = byViewId.get(view.id);
-        if (existing) return existing;
-        if (view.is_default) {
-          // The materialized default binds to the default tab (round-2 identity).
-          const current = prev.find((tab) => tab.tabId === defaultTabId);
-          if (current) return current;
-        }
-        return {
+      const defaultTab = prev.find((tab) => tab.kind === 'default');
+      const boundToDefault = savedViews.find((view) => view.is_default);
+      const missing = savedViews
+        .filter(
+          (view) =>
+            view.pinned &&
+            !closedPinnedRef.current.has(view.id) &&
+            !openViewIds.has(view.id) &&
+            // The materialized default binds to the existing default tab.
+            !(view.is_default && defaultTab && !defaultTab.viewId),
+        )
+        .sort((a, b) => a.position - b.position);
+      if (missing.length === 0) return prev;
+
+      /** A tab's stored position, when it maps to a saved view. */
+      const positionOf = (tab: InternalTab): number | undefined => {
+        const viewId = tab.viewId ?? (tab.kind === 'default' ? boundToDefault?.id : undefined);
+        return viewId ? savedViews.find((view) => view.id === viewId)?.position : undefined;
+      };
+
+      const next = [...prev];
+      for (const view of missing) {
+        const tab: InternalTab = {
           tabId: uid(),
-          kind: 'saved' as const,
+          kind: 'saved',
           viewId: view.id,
           name: view.name,
           config: reconcileConfig(coerceConfig(view.config, defaultConfig), defaultConfig),
         };
-      });
-      const placedIds = new Set(pinnedTabs.map((tab) => tab.tabId));
-      const others = prev.filter(
-        (tab) => !placedIds.has(tab.tabId) && tab.tabId !== virtualDefaultTab?.tabId,
-      );
-      const next = virtualDefaultTab
-        ? [virtualDefaultTab, ...pinnedTabs, ...others]
-        : [...pinnedTabs, ...others];
-      if (next.length === 0) return prev;
-      const unchanged = next.length === prev.length && next.every((tab, i) => tab === prev[i]);
-      return unchanged ? prev : next;
+        const at = next.findIndex((item) => {
+          const position = positionOf(item);
+          return position !== undefined && position > view.position;
+        });
+        if (at === -1) next.push(tab);
+        else next.splice(at, 0, tab);
+      }
+      return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedViews, defaultConfig]);
@@ -459,14 +471,20 @@ export function useEntityViews({
     [tabs, viewById, defaultView, defaultConfig, activeTabId, table.snapshotConfig, table.loadConfig, switchTab],
   );
 
-  const addAnonymousTab = useCallback(() => {
+  const addBlankTab = useCallback(() => {
     const snapshot = table.snapshotConfig();
-    const tab: InternalTab = { tabId: uid(), kind: 'anonymous', name: '', config: defaultConfig };
+    const blank = blankConfig(defaultConfig);
+    const tab: InternalTab = {
+      tabId: uid(),
+      kind: 'anonymous',
+      name: t({ id: 'common.entityViews.newViewName' }),
+      config: blank,
+    };
     setTabs((prev) => [...snapshotOutgoing(prev, snapshot), tab]);
     setActiveTabId(tab.tabId);
-    table.loadConfig(defaultConfig);
+    table.loadConfig(blank);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultConfig, activeTabId, table.snapshotConfig, table.loadConfig]);
+  }, [defaultConfig, activeTabId, table.snapshotConfig, table.loadConfig, t]);
 
   const closeTab = useCallback(
     (tabId: string) => {
@@ -502,18 +520,14 @@ export function useEntityViews({
       const source = tabs.find((tab) => tab.tabId === tabId);
       if (!source) return;
       const sourceState = tabStates.find((tab) => tab.tabId === tabId);
-      const base = baseName || sourceState?.name || 'View';
-      const taken = new Set<string>([
-        ...savedViews.map((v) => v.name),
-        ...tabStates.map((tab) => tab.name),
-      ]);
-      let n = 1;
-      while (taken.has(`${base} (${n})`)) n += 1;
+      // Round 4: names are labels, so the copy keeps its source's name verbatim
+      // (no "(n)" suffix — FR-015).
+      const name = baseName || sourceState?.name || t({ id: 'common.entityViews.newViewName' });
       const snapshot = table.snapshotConfig();
       const tab: InternalTab = {
         tabId: uid(),
         kind: 'anonymous',
-        name: `${base} (${n})`,
+        name,
         config: configOfTab(source),
       };
       setTabs((prev) => [...snapshotOutgoing(prev, snapshot), tab]);
@@ -521,7 +535,7 @@ export function useEntityViews({
       table.loadConfig(tab.config);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tabs, tabStates, activeTabId, savedViews, configOfTab, table.snapshotConfig, table.loadConfig],
+    [tabs, tabStates, activeTabId, configOfTab, table.snapshotConfig, table.loadConfig, t],
   );
 
   // ── Persistence (the ONLY API writes) ──────────────────────────────────────
@@ -544,9 +558,9 @@ export function useEntityViews({
     [tableKey, queryClient],
   );
 
-  const saveTab = useCallback(async (tabId: string): Promise<'saved' | 'needs-name'> => {
+  const saveTab = useCallback(async (tabId: string): Promise<'saved'> => {
     const active = tabs.find((tab) => tab.tabId === tabId);
-    if (!active) return 'needs-name';
+    if (!active) return 'saved';
     const snapshot = configOfTab(active);
     try {
       if (active.kind === 'default') {
@@ -567,7 +581,24 @@ export function useEntityViews({
         message.success(t({ id: 'common.entityViews.saved' }));
         return 'saved';
       }
-      if (active.kind !== 'saved' || !active.viewId) return 'needs-name';
+      if (!active.viewId) {
+        // Round 4: no naming prompt — the tab's current label IS the name.
+        const created = await createEntityView({
+          table_key: tableKey,
+          name: active.name || t({ id: 'common.entityViews.newViewName' }),
+          config: snapshot as unknown as Record<string, unknown>,
+        });
+        queryClient.setQueryData<EntityView[]>(queryKey, (old = []) => [...old, created]);
+        setTabs((prev) =>
+          prev.map((tab) =>
+            tab.tabId === active.tabId
+              ? { ...tab, kind: 'saved', viewId: created.id, name: created.name, config: snapshot }
+              : tab,
+          ),
+        );
+        message.success(t({ id: 'common.entityViews.saved' }));
+        return 'saved';
+      }
       const updated = await updateEntityView(active.viewId, {
         config: snapshot as unknown as Record<string, unknown>,
       });
@@ -584,52 +615,7 @@ export function useEntityViews({
       throw err;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs, activeTabId, defaultView, defaultDisplayName, materializeDefault, configOfTab, queryClient, t]);
-
-  const saveTabAs = useCallback(
-    async (tabId: string, name: string) => {
-      const active = tabs.find((tab) => tab.tabId === tabId);
-      if (!active) return;
-      const snapshot = configOfTab(active);
-      const created = await createEntityView({
-        table_key: tableKey,
-        name,
-        config: snapshot as unknown as Record<string, unknown>,
-      });
-      queryClient.setQueryData<EntityView[]>(queryKey, (old = []) => [...old, created]);
-      if (active.kind === 'anonymous') {
-        setTabs((prev) =>
-          prev.map((tab) =>
-            tab.tabId === active.tabId
-              ? { ...tab, kind: 'saved', viewId: created.id, name: created.name, config: snapshot }
-              : tab,
-          ),
-        );
-      } else {
-        // Saving-as from the default (or a saved) tab opens the new view as
-        // its own tab; the default tab reverts to its baseline.
-        const tab: InternalTab = {
-          tabId: uid(),
-          kind: 'saved',
-          viewId: created.id,
-          name: created.name,
-          config: snapshot,
-        };
-        setTabs((prev) => [
-          ...prev.map((item) =>
-            item.tabId === active.tabId && item.kind === 'default'
-              ? { ...item, config: defaultBaseline }
-              : item,
-          ),
-          tab,
-        ]);
-        setActiveTabId(tab.tabId);
-      }
-      message.success(t({ id: 'common.entityViews.saved' }));
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tabs, activeTabId, tableKey, defaultBaseline, configOfTab, queryClient, t],
-  );
+  }, [tabs, activeTabId, tableKey, defaultView, defaultDisplayName, materializeDefault, configOfTab, queryClient, t]);
 
   const renameTab = useCallback(
     async (tabId: string, name: string) => {
@@ -705,17 +691,32 @@ export function useEntityViews({
         message.error(t({ id: 'common.entityViews.setDefaultError' }));
         throw err;
       }
+      // A VIRTUAL page default has no row to demote. Converting it to a
+      // scratch tab would leave it permanently marked unsaved, so store it as
+      // an ordinary view instead: the tab keeps its name and stays CLEAN
+      // (round 4 — R32).
+      let demotedView: EntityView | undefined = previousView;
+      if (!previousView && previous) {
+        const config = configOfTab(previous);
+        demotedView = await createEntityView({
+          table_key: tableKey,
+          name: defaultDisplayName,
+          config: config as unknown as Record<string, unknown>,
+        });
+        queryClient.setQueryData<EntityView[]>(queryKey, (old = []) => [...old, demotedView!]);
+      }
       const demotedTabId = uid();
       setTabs((prev) =>
         prev.map((item) => {
           if (previous && item.tabId === previous.tabId) {
-            return previousView
+            return demotedView
               ? {
                   ...item,
                   tabId: demotedTabId,
                   kind: 'saved' as const,
-                  viewId: previousView.id,
-                  name: previousView.name,
+                  viewId: demotedView.id,
+                  name: demotedView.name,
+                  config: configOfTab(item),
                 }
               : {
                   ...item,
@@ -739,7 +740,7 @@ export function useEntityViews({
       await queryClient.invalidateQueries({ queryKey });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tabs, defaultView, defaultDisplayName, viewById, queryClient, t],
+    [tabs, tableKey, defaultView, defaultDisplayName, viewById, configOfTab, queryClient, t],
   );
 
   const deleteTab = useCallback(
@@ -810,51 +811,6 @@ export function useEntityViews({
     [tabs, savedViews, defaultView, tableKey, queryClient],
   );
 
-  const commitManageChanges = useCallback(
-    async ({ items, deletedIds }: ManageChanges) => {
-      try {
-        for (const id of deletedIds) {
-          await deleteEntityView(id);
-        }
-        for (const item of items) {
-          const original = savedViews.find((view) => view.id === item.id);
-          if (!original) continue;
-          const patch: EntityViewPatch = {};
-          if (original.name !== item.name) patch.name = item.name;
-          if (original.pinned !== item.pinned) patch.pinned = item.pinned;
-          if (Object.keys(patch).length > 0) await updateEntityView(item.id, patch);
-        }
-        const originalOrder = savedViews
-          .filter((view) => !deletedIds.includes(view.id))
-          .map((view) => view.id);
-        const newOrder = items.map((item) => item.id);
-        if (newOrder.length > 0 && JSON.stringify(originalOrder) !== JSON.stringify(newOrder)) {
-          await reorderEntityViews(tableKey, newOrder);
-        }
-        // FR-019: a deleted view's open tab lives on as an anonymous tab.
-        setTabs((prev) =>
-          prev.map((tab) =>
-            tab.viewId && deletedIds.includes(tab.viewId)
-              ? {
-                  ...tab,
-                  kind: 'anonymous',
-                  viewId: undefined,
-                  name: savedViews.find((v) => v.id === tab.viewId)?.name ?? tab.name,
-                }
-              : tab,
-          ),
-        );
-      } catch (err) {
-        message.error(t({ id: 'common.entityViews.manageSaveError' }));
-        throw err;
-      } finally {
-        await queryClient.invalidateQueries({ queryKey });
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [savedViews, tableKey, queryClient, t],
-  );
-
   // ── URL sync (US3, readable per-facet params) ──────────────────────────────
 
   // INBOUND: apply the table's view params — on mount, on back/forward, and on
@@ -891,15 +847,12 @@ export function useEntityViews({
     }
 
     const applyParsed = (view: ParsedViewState) => {
-      const target = view.viewName !== undefined
-        ? savedViews.find((sv) => sv.name === view.viewName)
-        : undefined;
-      const isDefaultTarget =
-        view.viewName !== undefined &&
-        (target ? target.is_default : view.viewName === defaultDisplayName);
+      const target =
+        view.viewId !== undefined ? savedViews.find((sv) => sv.id === view.viewId) : undefined;
+      const isDefaultTarget = view.viewId !== undefined && !!target?.is_default;
 
       const baseConfig =
-        view.viewName === undefined
+        view.viewId === undefined
           ? defaultConfig
           : isDefaultTarget
             ? defaultBaseline
@@ -914,7 +867,7 @@ export function useEntityViews({
       const offset = view.page ? (view.page - 1) * config.pageSize : 0;
       const snapshot = table.snapshotConfig();
 
-      if (view.viewName === undefined) {
+      if (view.viewId === undefined) {
         // Inline state belongs to a non-saved tab: the active default/anonymous
         // tab, or the default tab when a saved view is currently active.
         const activeInternal = tabs.find((tab) => tab.tabId === activeTabId);
@@ -968,9 +921,9 @@ export function useEntityViews({
       inboundSettledRef.current = true;
     };
 
-    if (parsed.view.viewName !== undefined) {
-      const target = savedViews.find((sv) => sv.name === parsed.view.viewName);
-      if (!target && parsed.view.viewName !== defaultDisplayName) {
+    if (parsed.view.viewId !== undefined) {
+      const target = savedViews.find((sv) => sv.id === parsed.view.viewId);
+      if (!target) {
         if (!isFetched) return; // wait for the saved-view list, then re-run
         fallbackToDefault('common.entityViews.unresolvedView');
         return;
@@ -998,7 +951,7 @@ export function useEntityViews({
       const baseline = reconcileConfig(coerceConfig(view.config, defaultConfig), defaultConfig);
       desired = serializeSavedEntries(
         tableKey,
-        view.name,
+        view.id,
         facetOverrides(reconciled, baseline),
         pageOut,
       );
@@ -1010,7 +963,7 @@ export function useEntityViews({
       } else if (defaultView) {
         desired = serializeSavedEntries(
           tableKey,
-          defaultView.name,
+          defaultView.id,
           facetOverrides(reconciled, baseline),
           pageOut,
         );
@@ -1045,17 +998,15 @@ export function useEntityViews({
     collapsed,
     reveal,
     switchTab,
-    addAnonymousTab,
+    addBlankTab,
     closeTab,
     openView,
     saveTab,
-    saveTabAs,
     renameTab,
     duplicateTab,
     pinTab,
     setDefaultTab,
     deleteTab,
     reorderTabs,
-    commitManageChanges,
   };
 }

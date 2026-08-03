@@ -4,12 +4,12 @@
  *
  *   Add empty view
  *   Open              ▸  (saved views not currently open as tabs)
- *   ─────────────────
- *   Manage views…
  *
- * Per-view actions (save, pin, set as default, rename, delete) live on each
- * tab's own menu — see ViewTabMenu. The dropdown right-aligns to the trigger
- * and scrolls internally so it never overflows the viewport (constitution VI).
+ * EVERY per-view action (save, pin, set as default, rename, delete, reorder)
+ * lives on the view's own tab — see ViewTabMenu. A view that is not open is
+ * managed by opening it from "Open" first; round 4 removed the separate
+ * management modal (FR-017). The dropdown right-aligns to the trigger and
+ * scrolls internally so it never overflows the viewport (constitution VI).
  */
 import { useMemo } from 'react';
 import { Button, Dropdown } from 'antd';
@@ -20,10 +20,9 @@ import type { UseEntityViewsReturn } from './useEntityViews';
 
 export interface ViewKebabProps {
   views: UseEntityViewsReturn;
-  onOpenManage: () => void;
 }
 
-export function ViewKebab({ views, onOpenManage }: ViewKebabProps) {
+export function ViewKebab({ views }: ViewKebabProps) {
   const { formatMessage: t } = useIntl();
 
   const items = useMemo<NonNullable<MenuProps['items']>>(() => {
@@ -44,8 +43,6 @@ export function ViewKebab({ views, onOpenManage }: ViewKebabProps) {
     return [
       { key: 'add', label: t({ id: 'common.entityViews.addEmptyView' }) },
       { key: 'open', label: t({ id: 'common.entityViews.open' }), children },
-      { type: 'divider' as const },
-      { key: 'manage', label: t({ id: 'common.entityViews.manageViews' }) },
     ];
   }, [views.tabs, views.savedViews, t]);
 
@@ -54,11 +51,7 @@ export function ViewKebab({ views, onOpenManage }: ViewKebabProps) {
       views.openView(key.slice('open:'.length));
       return;
     }
-    if (key === 'add') {
-      views.addAnonymousTab();
-      return;
-    }
-    if (key === 'manage') onOpenManage();
+    if (key === 'add') views.addBlankTab();
   };
 
   return (

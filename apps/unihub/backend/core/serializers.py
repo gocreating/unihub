@@ -112,19 +112,16 @@ class EntityViewSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs: dict) -> dict:
-        """Enforce per-owner uniqueness of (table_key, name) and of the default view as 400s."""
+        """Enforce the single-default-view rule as a 400.
+
+        Round 4: names are non-identifying labels — duplicates are legal, so
+        no name-collision check remains here (FR-016).
+        """
         request = self.context.get("request")
         owner = getattr(request, "user", None)
         if owner is None or not owner.is_authenticated:
             return attrs
         table_key = attrs.get("table_key", getattr(self.instance, "table_key", None))
-        name = attrs.get("name", getattr(self.instance, "name", None))
-        if table_key and name:
-            qs = EntityView.objects.filter(owner=owner, table_key=table_key, name=name)
-            if self.instance is not None:
-                qs = qs.exclude(pk=self.instance.pk)
-            if qs.exists():
-                raise serializers.ValidationError({"name": "A view with this name already exists."})
         if self.instance is None and attrs.get("is_default") and table_key:
             if EntityView.objects.filter(
                 owner=owner, table_key=table_key, is_default=True

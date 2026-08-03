@@ -1,5 +1,5 @@
-// 016 round 3 — the kebab at the row's right edge (FR-009/FR-011/FR-012):
-// Add empty view · Open ▸ (only views not already open) · Manage views…
+// 016 round 4 — the kebab at the row's right edge (FR-009/FR-011/FR-012):
+// exactly two entries — Add empty view · Open ▸ (only views not already open).
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { IntlProvider } from 'react-intl';
@@ -45,30 +45,27 @@ function makeViews(overrides: Partial<UseEntityViewsReturn> = {}): UseEntityView
     collapsed: false,
     reveal: vi.fn(),
     switchTab: vi.fn(),
-    addAnonymousTab: vi.fn(),
+    addBlankTab: vi.fn(),
     closeTab: vi.fn(),
     openView: vi.fn(),
     saveTab: vi.fn().mockResolvedValue('saved'),
-    saveTabAs: vi.fn().mockResolvedValue(undefined),
     renameTab: vi.fn().mockResolvedValue(undefined),
     duplicateTab: vi.fn(),
     pinTab: vi.fn().mockResolvedValue(undefined),
     setDefaultTab: vi.fn().mockResolvedValue(undefined),
     deleteTab: vi.fn().mockResolvedValue(undefined),
     reorderTabs: vi.fn().mockResolvedValue(undefined),
-    commitManageChanges: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as UseEntityViewsReturn;
 }
 
-function renderKebab(views: UseEntityViewsReturn, onOpenManage = vi.fn()) {
+function renderKebab(views: UseEntityViewsReturn) {
   render(
     <IntlProvider locale="en" messages={enUS}>
-      <ViewKebab views={views} onOpenManage={onOpenManage} />
+      <ViewKebab views={views} />
     </IntlProvider>,
   );
   fireEvent.click(screen.getByLabelText('View menu'));
-  return { onOpenManage };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -78,14 +75,15 @@ describe('ViewKebab', () => {
     const views = makeViews();
     renderKebab(views);
     fireEvent.click(await screen.findByText('Add empty view'));
-    expect(views.addAnonymousTab).toHaveBeenCalledTimes(1);
+    expect(views.addBlankTab).toHaveBeenCalledTimes(1);
   });
 
-  it('opens the manage-views modal', async () => {
-    const views = makeViews();
-    const { onOpenManage } = renderKebab(views);
-    fireEvent.click(await screen.findByText('Manage views…'));
-    expect(onOpenManage).toHaveBeenCalledTimes(1);
+  it('offers exactly two entries — no management action (round 4)', async () => {
+    renderKebab(makeViews());
+    await screen.findByText('Add empty view');
+    const items = document.querySelectorAll('.ant-dropdown-menu > li');
+    expect(items).toHaveLength(2);
+    expect(screen.queryByText('Manage views…')).toBeNull();
   });
 
   it('lists ONLY views that are not currently open, and opens one', async () => {

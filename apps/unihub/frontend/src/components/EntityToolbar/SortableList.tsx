@@ -87,7 +87,15 @@ function SortableItem<T extends { id: string }>({
   } = useSortable({ id: item.id });
 
   const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
+    // Horizontal lists use TRANSLATE only: `CSS.Transform` also emits the
+    // scaleX/scaleY that `horizontalListSortingStrategy` computes from the
+    // passed item's width, which stretches variable-width items such as view
+    // tabs mid-drag (016 round 4, FR-027). Vertical rows keep the full
+    // transform — their heights are uniform, so the scale is a no-op there.
+    transform:
+      orientation === 'horizontal'
+        ? CSS.Translate.toString(transform)
+        : CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
     // In a flex row the wrapper must not stretch or shrink — the rendered item

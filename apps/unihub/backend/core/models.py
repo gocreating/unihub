@@ -103,10 +103,10 @@ class EntityView(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        # Round 4: names are non-identifying labels, so no uniqueness on them
+        # (migration 0007 dropped `unique_view_name_per_table`). The default
+        # role stays unique per table.
         constraints = [
-            models.UniqueConstraint(
-                fields=["owner", "table_key", "name"], name="unique_view_name_per_table"
-            ),
             models.UniqueConstraint(
                 fields=["owner", "table_key"],
                 condition=models.Q(is_default=True),

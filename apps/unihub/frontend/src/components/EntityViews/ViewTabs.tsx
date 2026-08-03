@@ -14,18 +14,22 @@
  * When the table has only its default view the row auto-hides behind a compact
  * reveal affordance carrying the dirty dot (FR-025). Rendered inside
  * PageTable's `viewBar` slot.
+ *
+ * Round 4: naming happens ONLY in the Rename dialog (the round-3 inline input
+ * and the "Save view" prompt are gone), and an open tab menu dismisses on an
+ * outside click or Esc — the Dropdown is controlled with `trigger={[]}` so
+ * rc-trigger wires no dismissal of its own (R36).
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Badge, Button, Input, Tooltip, message } from 'antd';
+import { Badge, Button, Tooltip, message } from 'antd';
 import { TableOutlined } from '@ant-design/icons';
 import { createStyles } from 'antd-style';
 import { useIntl } from 'react-intl';
 import { OverflowTooltip } from '../OverflowTooltip';
 import { SortableList } from '../EntityToolbar/SortableList';
-import { SaveViewModal } from './SaveViewModal';
+import { RenameViewModal } from './RenameViewModal';
 import { ViewKebab } from './ViewKebab';
 import { ViewTabMenu } from './ViewTabMenu';
-import { ManageViewsModal } from './ManageViewsModal';
 import type { UseEntityViewsReturn, ViewTabState } from './useEntityViews';
 
 const useStyles = createStyles(({ token }) => ({
@@ -97,9 +101,6 @@ const useStyles = createStyles(({ token }) => ({
     borderRadius: '50%',
     background: token.colorPrimary,
   },
-  renameInput: {
-    width: 140,
-  },
   kebab: {
     flex: 'none',
   },
@@ -125,12 +126,9 @@ export interface ViewTabsProps {
 export function ViewTabs({ views }: ViewTabsProps) {
   const { styles, cx } = useStyles();
   const { formatMessage: t } = useIntl();
-  /** The tab whose name-and-save modal is open (never assume the active one). */
-  const [saveModalTabId, setSaveModalTabId] = useState<string | null>(null);
-  const [manageOpen, setManageOpen] = useState(false);
+  /** The tab the Rename dialog targets (never assume the active one). */
+  const [renameTabId, setRenameTabId] = useState<string | null>(null);
   const [menuTabId, setMenuTabId] = useState<string | null>(null);
-  const [editingTabId, setEditingTabId] = useState<string | null>(null);
-  const [editingValue, setEditingValue] = useState('');
   const [shadows, setShadows] = useState({ left: false, right: false });
   const stripRef = useRef<HTMLDivElement | null>(null);
 
@@ -163,38 +161,37 @@ export function ViewTabs({ views }: ViewTabsProps) {
     return () => observer.disconnect();
   }, [syncShadows, views.collapsed]);
 
-  const startRename = (tab: ViewTabState) => {
-    if (tab.kind === 'anonymous') {
-      // Naming an anonymous tab IS saving it (FR-014/FR-023).
-      setSaveModalTabId(tab.tabId);
-      return;
+  const renameTarget = views.tabs.find((tab) => tab.tabId === renameTabId);
+
+  const commitRename = async (name: string) => {
+    if (!renameTabId) return;
+    try {
+      await views.renameTab(renameTabId, name);
+      setRenameTabId(null);
+    } catch (err) {
+      message.error(t({ id: 'common.entityViews.renameError' }));
+      throw err; // keep the dialog open so the user can retry
     }
-    setEditingTabId(tab.tabId);
-    setEditingValue(displayName(tab));
   };
 
-  const commitRename = async (tab: ViewTabState) => {
-    const name = editingValue.trim();
-    if (!name || name === displayName(tab)) {
-      setEditingTabId(null);
-      return;
-    }
-    try {
-      await views.renameTab(tab.tabId, name);
-      setEditingTabId(null);
-    } catch (err) {
-      const e = err as { status?: number; body?: { name?: unknown } };
-      message.error(
-        t({
-          id:
-            e.status === 400 && e.body?.name
-              ? 'common.entityViews.duplicateName'
-              : 'common.entityViews.renameError',
-        }),
-      );
-      // Keep the input open so the user can adjust the name.
-    }
-  };
+  // Dismiss an open tab menu on an outside click or Esc (FR-023/R36).
+  useEffect(() => {
+    if (!menuTabId) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('.ant-dropdown') || target?.closest('[role="tab"]')) return;
+      setMenuTabId(null);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuTabId(null);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuTabId]);
 
   const sortableItems = useMemo(
     () => views.tabs.map((tab) => ({ id: tab.tabId, tab })),
@@ -237,16 +234,14 @@ export function ViewTabs({ views }: ViewTabsProps) {
             }}
             renderItem={({ tab }, handleProps) => {
               const active = tab.tabId === views.activeTabId;
-              const editing = tab.tabId === editingTabId;
               return (
                 <ViewTabMenu
                   tab={tab}
                   views={views}
-                  open={menuTabId === tab.tabId && !editing}
+                  open={menuTabId === tab.tabId}
                   onOpenChange={(open) => setMenuTabId(open ? tab.tabId : null)}
                   displayName={displayName(tab)}
-                  onRename={startRename}
-                  onNeedsName={setSaveModalTabId}
+                  onRename={(target) => setRenameTabId(target.tabId)}
                 >
                   <button
                     type="button"
@@ -257,7 +252,6 @@ export function ViewTabs({ views }: ViewTabsProps) {
                     aria-selected={active}
                     className={cx(styles.tab, active && styles.tabActive)}
                     onClick={() => {
-                      if (editing) return;
                       // Left-click switches to an inactive tab; on the active
                       // tab it opens that tab's menu (FR-023).
                       if (active) setMenuTabId((prev) => (prev === tab.tabId ? null : tab.tabId));
@@ -265,33 +259,13 @@ export function ViewTabs({ views }: ViewTabsProps) {
                     }}
                     onContextMenu={(e) => {
                       e.preventDefault();
-                      if (!editing) setMenuTabId(tab.tabId);
+                      setMenuTabId(tab.tabId);
                     }}
                   >
-                    {editing ? (
-                      <Input
-                        className={styles.renameInput}
-                        size="small"
-                        autoFocus
-                        value={editingValue}
-                        aria-label={t({ id: 'common.entityViews.viewName' })}
-                        onChange={(e) => setEditingValue(e.target.value)}
-                        onPressEnter={() => void commitRename(tab)}
-                        onBlur={() => void commitRename(tab)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
-                            e.stopPropagation();
-                            setEditingTabId(null);
-                          }
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    ) : (
-                      <OverflowTooltip title={displayName(tab)} style={{ maxWidth: 160 }}>
-                        {displayName(tab)}
-                      </OverflowTooltip>
-                    )}
-                    {!editing && tab.dirty && (
+                    <OverflowTooltip title={displayName(tab)} style={{ maxWidth: 160 }}>
+                      {displayName(tab)}
+                    </OverflowTooltip>
+                    {tab.dirty && (
                       <span
                         className={styles.dirtyDot}
                         aria-label={t({ id: 'common.entityViews.unsaved' })}
@@ -320,28 +294,15 @@ export function ViewTabs({ views }: ViewTabsProps) {
       <div className={styles.spacer} />
 
       <div className={styles.kebab}>
-        <ViewKebab views={views} onOpenManage={() => setManageOpen(true)} />
+        <ViewKebab views={views} />
       </div>
 
-      <SaveViewModal
-        open={saveModalTabId !== null}
-        onCancel={() => setSaveModalTabId(null)}
-        onSave={async (name) => {
-          if (!saveModalTabId) return;
-          try {
-            await views.saveTabAs(saveModalTabId, name);
-          } catch (err) {
-            const e = err as { status?: number; body?: { name?: unknown } };
-            if (!(e.status === 400 && e.body?.name)) {
-              message.error(t({ id: 'common.entityViews.saveError' }));
-            }
-            throw err;
-          }
-          setSaveModalTabId(null);
-        }}
+      <RenameViewModal
+        open={renameTabId !== null}
+        currentName={renameTarget ? displayName(renameTarget) : ''}
+        onCancel={() => setRenameTabId(null)}
+        onRename={commitRename}
       />
-
-      <ManageViewsModal open={manageOpen} views={views} onClose={() => setManageOpen(false)} />
     </div>
   );
 }

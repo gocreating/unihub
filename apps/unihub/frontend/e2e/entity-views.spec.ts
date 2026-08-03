@@ -58,17 +58,24 @@ async function tabLabels(page: Page): Promise<string[]> {
     .then((labels) => labels.map((label) => label.trim()));
 }
 
-/** Create a saved view from a fresh scratch tab and return its name. */
+/** Create a saved view from a fresh scratch tab and return its name.
+ *  Round 4: naming happens in the Rename DIALOG, and Save never prompts. */
 async function createSavedView(page: Page, name: string): Promise<string> {
   const row = page.getByTestId('view-tabs-row');
   await row.getByLabel('View menu').click();
   await page.getByRole('menuitem', { name: 'Add empty view' }).click();
+
   // The new tab is active: left-click opens its menu.
   await row.getByRole('tab').last().click();
   await page.getByRole('menuitem', { name: 'Rename' }).click();
   await page.getByLabel('View name').fill(name);
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Rename', exact: true }).click();
   await expect(row.getByRole('tab', { name })).toBeVisible();
+
+  // Save stores it under that label with no further dialog (SC-012).
+  await row.getByRole('tab', { name }).click();
+  await page.getByRole('menuitem', { name: 'Save' }).click();
+  await expect(page.getByLabel('View name')).toHaveCount(0);
   return name;
 }
 
@@ -98,8 +105,13 @@ test.describe('entity-views tab row (US2)', () => {
     await expect(row).toBeVisible();
     await expect(row.getByRole('tab', { name: 'YTD' })).toBeVisible();
     await expect(row.getByLabel('View menu')).toBeVisible();
-    // Round 3 removed the "+" button and the "View ▾" control.
+    // Round 3 removed the "+" button and the "View ▾" control; round 4 removed
+    // the "Manage views…" entry, leaving exactly two.
     await expect(row.getByLabel('New view tab')).toHaveCount(0);
+    await row.getByLabel('View menu').click();
+    await expect(page.getByRole('menuitem', { name: 'Manage views…' })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Add empty view' })).toBeVisible();
+    await page.keyboard.press('Escape');
   });
 
   test('the kebab stays docked at the right edge while the strip scrolls (SC-006)', async ({
@@ -182,6 +194,37 @@ test.describe('entity-views tab row (US2)', () => {
     });
     await expect(page.getByTestId('view-tabs-shadow-left')).toBeVisible();
     await expect(page.getByTestId('view-tabs-shadow-right')).toHaveCount(0);
+  });
+
+  test('a dragged tab keeps its own width — no horizontal stretching (SC-010)', async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    const row = page.getByTestId('view-tabs-row');
+    await expect(row).toBeVisible();
+
+    // A deliberately WIDE tab next to the narrow default: dnd-kit's default
+    // transform would scale the dragged item to the width of the one it
+    // passes, which is the reported stretching bug (R33).
+    const wide = await createSavedView(page, `E2E a very wide view name ${Date.now()}`);
+    const wideTab = row.getByRole('tab', { name: wide });
+    const resting = (await wideTab.boundingBox())!;
+
+    const target = row.getByRole('tab').first();
+    const targetBox = (await target.boundingBox())!;
+    await page.mouse.move(resting.x + resting.width / 2, resting.y + resting.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(targetBox.x + 6, targetBox.y + targetBox.height / 2, { steps: 12 });
+
+    // Mid-drag: the tab must still be its own width (±2px).
+    const dragging = (await wideTab.boundingBox())!;
+    expect(Math.abs(dragging.width - resting.width)).toBeLessThanOrEqual(2);
+
+    await page.mouse.up();
+    const settled = (await wideTab.boundingBox())!;
+    expect(Math.abs(settled.width - resting.width)).toBeLessThanOrEqual(2);
   });
 
   test('dragging a tab reorders the strip and the order survives a reload (SC-010)', async ({

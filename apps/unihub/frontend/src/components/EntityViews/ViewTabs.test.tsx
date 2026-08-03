@@ -61,18 +61,16 @@ function makeViews(overrides: Partial<UseEntityViewsReturn> = {}): UseEntityView
     collapsed: false,
     reveal: vi.fn(),
     switchTab: vi.fn(),
-    addAnonymousTab: vi.fn(),
+    addBlankTab: vi.fn(),
     closeTab: vi.fn(),
     openView: vi.fn(),
     saveTab: vi.fn().mockResolvedValue('saved'),
-    saveTabAs: vi.fn().mockResolvedValue(undefined),
     renameTab: vi.fn().mockResolvedValue(undefined),
     duplicateTab: vi.fn(),
     pinTab: vi.fn().mockResolvedValue(undefined),
     setDefaultTab: vi.fn().mockResolvedValue(undefined),
     deleteTab: vi.fn().mockResolvedValue(undefined),
     reorderTabs: vi.fn().mockResolvedValue(undefined),
-    commitManageChanges: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as UseEntityViewsReturn;
 }
@@ -253,7 +251,7 @@ describe('ViewTabs — round 3 click grammar (FR-023)', () => {
 });
 
 describe('ViewTabs — rename through the menu (FR-023)', () => {
-  it('Rename opens an inline input on a saved tab and commits on Enter', async () => {
+  it('Rename opens the dialog on a saved tab and commits on Enter', async () => {
     const saved = makeSavedTab();
     const views = makeViews({ tabs: [saved], activeTabId: saved.tabId, activeTab: saved });
     renderTabs(views);
@@ -268,7 +266,7 @@ describe('ViewTabs — rename through the menu (FR-023)', () => {
     await waitFor(() => expect(views.renameTab).toHaveBeenCalledWith('tab-b', 'Renamed'));
   });
 
-  it('Escape cancels the rename without calling renameTab', async () => {
+  it('Escape leaves the name unchanged', async () => {
     const saved = makeSavedTab();
     const views = makeViews({ tabs: [saved], activeTabId: saved.tabId, activeTab: saved });
     renderTabs(views);
@@ -281,7 +279,7 @@ describe('ViewTabs — rename through the menu (FR-023)', () => {
     expect(views.renameTab).not.toHaveBeenCalled();
   });
 
-  it('Rename on an anonymous tab opens the name-and-save modal instead', async () => {
+  it('Rename on an unsaved tab opens the same dialog, prefilled', async () => {
     const anon = makeSavedTab({
       tabId: 'tab-anon',
       kind: 'anonymous',
@@ -293,8 +291,8 @@ describe('ViewTabs — rename through the menu (FR-023)', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /draft/i }));
     fireEvent.click(await screen.findByText('Rename'));
-    expect(screen.getByText('Save view')).toBeInTheDocument();
-    expect(views.renameTab).not.toHaveBeenCalled();
+    expect(screen.getByText('Rename view')).toBeInTheDocument();
+    expect((screen.getByLabelText('View name') as HTMLInputElement).value).toBe('Draft');
   });
 });
 
@@ -317,13 +315,13 @@ describe('ViewTabs — US1 round 3: saving addresses the requesting tab', () => 
     await waitFor(() => expect(views.saveTab).toHaveBeenCalledWith('tab-b'));
   });
 
-  it('the name-and-save modal saves the REQUESTING tab, not the active one', async () => {
+  it('Save on an unsaved tab stores it with NO dialog (round 4)', async () => {
     const active = makeTab();
     const anon = makeSavedTab({
       tabId: 'tab-anon',
       kind: 'anonymous',
       viewId: undefined,
-      name: 'Draft',
+      name: 'New view',
       dirty: true,
     });
     const views = makeViews({
@@ -331,19 +329,15 @@ describe('ViewTabs — US1 round 3: saving addresses the requesting tab', () => 
       activeTabId: active.tabId,
       activeTab: active,
       isAnyDirty: true,
-      saveTab: vi.fn().mockResolvedValue('needs-name'),
     });
     renderTabs(views);
 
     const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
-    fireEvent(screen.getByRole('tab', { name: /draft/i }), event);
+    fireEvent(screen.getByRole('tab', { name: /new view/i }), event);
     fireEvent.click(await screen.findByText('Save'));
 
-    const input = await screen.findByLabelText('View name');
-    fireEvent.change(input, { target: { value: 'From draft' } });
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
-
-    await waitFor(() => expect(views.saveTabAs).toHaveBeenCalledWith('tab-anon', 'From draft'));
+    await waitFor(() => expect(views.saveTab).toHaveBeenCalledWith('tab-anon'));
+    expect(screen.queryByLabelText('View name')).toBeNull();
   });
 });
 
@@ -357,11 +351,11 @@ describe('ViewTabs — kebab wiring', () => {
     expect(views.openView).toHaveBeenCalledWith('v1');
   });
 
-  it('opens the manage-views modal from the kebab', async () => {
+  it('offers no management action (round 4)', async () => {
     renderTabs(makeViews({ savedViews: [makeSavedView()] }));
     fireEvent.click(screen.getByLabelText('View menu'));
-    fireEvent.click(await screen.findByText('Manage views…'));
-    expect(await screen.findByText('Manage views')).toBeInTheDocument();
+    await screen.findByText('Add empty view');
+    expect(screen.queryByText('Manage views…')).toBeNull();
   });
 });
 
@@ -381,5 +375,49 @@ describe('ViewTabs — US2 round 2: collapsed reveal affordance (FR-025)', () =>
       makeViews({ collapsed: true, tabs: [dirtyTab], activeTab: dirtyTab }),
     );
     expect(container.querySelector('.ant-badge-dot')).not.toBeNull();
+  });
+});
+
+describe('ViewTabs — round 4: the tab menu dismisses (FR-023)', () => {
+  function openMenu() {
+    const tab = makeSavedTab();
+    const views = makeViews({ tabs: [tab], activeTabId: tab.tabId, activeTab: tab });
+    renderTabs(views);
+    fireEvent.click(screen.getByRole('tab', { name: /mine/i }));
+    return views;
+  }
+
+  /** AntD keeps a closed dropdown mounted — assert the hidden class instead. */
+  const menuHidden = () =>
+    screen
+      .getByText('Set as default')
+      .closest('.ant-dropdown')!
+      .className.includes('ant-dropdown-hidden');
+
+  it('closes on a mousedown outside the menu and its tab', async () => {
+    openMenu();
+    expect(await screen.findByText('Set as default')).toBeInTheDocument();
+    expect(menuHidden()).toBe(false);
+
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(menuHidden()).toBe(true));
+  });
+
+  it('closes on Escape', async () => {
+    openMenu();
+    expect(await screen.findByText('Set as default')).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(menuHidden()).toBe(true));
+  });
+
+  it('a mousedown INSIDE the menu does not close it before the action runs', async () => {
+    const views = openMenu();
+    const item = await screen.findByText('Duplicate');
+
+    fireEvent.mouseDown(item);
+    expect(screen.getByText('Duplicate')).toBeInTheDocument();
+    fireEvent.click(item);
+    expect(views.duplicateTab).toHaveBeenCalledWith('tab-b', 'Mine');
   });
 });

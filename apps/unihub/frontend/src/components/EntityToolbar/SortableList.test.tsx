@@ -68,6 +68,24 @@ describe('SortableList — rendering', () => {
     expect(wrapper.style.display).toBe('');
   });
 
+  // SL-06 (016 round 4): a horizontal item's transform carries NO scale —
+  // dnd-kit's CSS.Transform emits scaleX for horizontalListSortingStrategy,
+  // which visibly stretches variable-width items (view tabs) mid-drag.
+  it('never applies a scale transform to horizontal items', () => {
+    render(
+      <SortableList
+        items={ITEMS}
+        orientation="horizontal"
+        onReorder={vi.fn()}
+        renderItem={(item) => <div data-testid={`row-${item.id}`}>{item.label}</div>}
+      />,
+    );
+    for (const id of ['a', 'b', 'c']) {
+      const wrapper = document.querySelector(`[data-sortable-id="${id}"]`) as HTMLElement;
+      expect(wrapper.style.transform ?? '').not.toMatch(/scale/i);
+    }
+  });
+
   // SL-05 (016 round 3): horizontal lists pin their wrappers to their content
   // width so a flex strip never stretches or shrinks the dragged items.
   it('renders horizontal items as non-shrinking flex children', () => {

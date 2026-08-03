@@ -30,18 +30,16 @@ function makeViews(overrides: Partial<UseEntityViewsReturn> = {}): UseEntityView
     collapsed: false,
     reveal: vi.fn(),
     switchTab: vi.fn(),
-    addAnonymousTab: vi.fn(),
+    addBlankTab: vi.fn(),
     closeTab: vi.fn(),
     openView: vi.fn(),
     saveTab: vi.fn().mockResolvedValue('saved'),
-    saveTabAs: vi.fn().mockResolvedValue(undefined),
     renameTab: vi.fn().mockResolvedValue(undefined),
     duplicateTab: vi.fn(),
     pinTab: vi.fn().mockResolvedValue(undefined),
     setDefaultTab: vi.fn().mockResolvedValue(undefined),
     deleteTab: vi.fn().mockResolvedValue(undefined),
     reorderTabs: vi.fn().mockResolvedValue(undefined),
-    commitManageChanges: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as UseEntityViewsReturn;
 }
@@ -60,7 +58,6 @@ function renderMenu(
         onOpenChange={vi.fn()}
         displayName={tab.name}
         onRename={vi.fn()}
-        onNeedsName={vi.fn()}
         {...props}
       >
         <button type="button">tab body</button>
@@ -163,13 +160,13 @@ describe('ViewTabMenu — enablement matrix (data-model §7)', () => {
 });
 
 describe('ViewTabMenu — actions', () => {
-  it('Save saves THIS tab and asks for a name when it has none', async () => {
-    const views = makeViews({ saveTab: vi.fn().mockResolvedValue('needs-name') });
-    const onNeedsName = vi.fn();
-    renderMenu(makeTab({ tabId: 'tab-x', dirty: true }), views, { onNeedsName });
+  it('Save saves THIS tab without any prompt (round 4)', async () => {
+    const views = makeViews();
+    renderMenu(makeTab({ tabId: 'tab-x', dirty: true }), views);
     fireEvent.click(await screen.findByText('Save'));
     await waitFor(() => expect(views.saveTab).toHaveBeenCalledWith('tab-x'));
-    await waitFor(() => expect(onNeedsName).toHaveBeenCalledWith('tab-x'));
+    // No naming dialog anywhere in the save path (SC-012).
+    expect(screen.queryByLabelText('View name')).toBeNull();
   });
 
   it('Close, Duplicate and Pin address this tab', async () => {

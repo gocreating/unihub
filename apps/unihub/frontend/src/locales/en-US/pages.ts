@@ -413,7 +413,7 @@ export default {
     '{n, plural, one {Delete # view?} other {Delete # views?}}',
   'common.entityViews.deleteConfirmBody':
     '{n, plural, one {This will permanently delete # saved view.} other {This will permanently delete # saved views.}}',
-  'common.entityViews.close': 'Close tab',
+  'common.entityViews.close': 'Close',
   'common.entityViews.saved': 'View saved',
   'common.entityViews.saveError': 'Failed to save view',
   'common.entityViews.loadError': 'Failed to load views',

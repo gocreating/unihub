@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyValue } from '@/components/EmptyValue';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Modal, Select, Space, Spin, Typography, message } from 'antd';
+import { Button, Card, Select, Space, Spin, Typography, message } from 'antd';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, MinusOutlined, PlusOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
@@ -486,10 +487,10 @@ export function BalanceSheetsPage() {
                 danger
                 icon={<DeleteOutlined />}
                 onClick={() => {
-                  Modal.confirm({
+                  confirmDialog({
                     title: t({ id: 'pages.finance.balanceSheets.delete.title' }),
                     content: t({ id: 'pages.finance.balanceSheets.delete.confirm' }),
-                    okType: 'danger',
+                    danger: true,
                     onOk: () => deleteMutation.mutate(record.id),
                   });
                 }}

@@ -1,6 +1,18 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
+import {
+  Button,
+  Form,
+  Input,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from 'antd';
+import { confirmDialog } from '../ConfirmDialog';
 import { DeleteOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons';
 import type { AttributeDefinition } from '@/services/unihub-backend/core';
 import {
@@ -55,11 +67,11 @@ export function AttributeManagementPanel({ contentType }: Props) {
       const e = err as { body?: { affected_entity_count?: number } };
       if (e?.body?.affected_entity_count !== undefined) {
         const count = e.body.affected_entity_count;
-        Modal.confirm({
+        confirmDialog({
           title: 'Delete Attribute',
           content: `This will remove values from ${count} record(s). Continue?`,
           okText: 'Delete',
-          okType: 'danger',
+          danger: true,
           onOk: async () => {
             await deleteAttributeDefinition(attr.id, true);
             queryClient.invalidateQueries({ queryKey: ['core', 'attribute-definitions', contentType] });

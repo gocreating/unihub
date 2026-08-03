@@ -80,7 +80,7 @@ describe('ViewTabMenu — items', () => {
     await screen.findByText('Save');
     for (const label of [
       'Save',
-      'Close tab',
+      'Close',
       'Duplicate',
       'Pin',
       'Set as default',
@@ -105,7 +105,7 @@ describe('ViewTabMenu — enablement matrix (data-model §7)', () => {
     renderMenu(makeTab({ dirty: false }), makeViews());
     await screen.findByText('Save');
     expect(itemDisabled('Save')).toBe(true);
-    expect(itemDisabled('Close tab')).toBe(false);
+    expect(itemDisabled('Close')).toBe(false);
     expect(itemDisabled('Duplicate')).toBe(false);
     expect(itemDisabled('Pin')).toBe(false);
     expect(itemDisabled('Set as default')).toBe(false);
@@ -126,7 +126,7 @@ describe('ViewTabMenu — enablement matrix (data-model §7)', () => {
     );
     await screen.findByText('Save');
     expect(itemDisabled('Save')).toBe(false); // opens the name modal
-    expect(itemDisabled('Close tab')).toBe(false);
+    expect(itemDisabled('Close')).toBe(false);
     expect(itemDisabled('Duplicate')).toBe(false);
     expect(itemDisabled('Rename')).toBe(false); // name-and-save
     expect(itemDisabled('Pin')).toBe(true);
@@ -143,7 +143,7 @@ describe('ViewTabMenu — enablement matrix (data-model §7)', () => {
     expect(itemDisabled('Save')).toBe(false);
     expect(itemDisabled('Rename')).toBe(false);
     expect(itemDisabled('Duplicate')).toBe(false);
-    expect(itemDisabled('Close tab')).toBe(true);
+    expect(itemDisabled('Close')).toBe(true);
     // It is pinned for as long as it holds the role, so the item reads Unpin
     // and stays disabled (FR-003).
     expect(itemDisabled('Unpin')).toBe(true);
@@ -172,7 +172,7 @@ describe('ViewTabMenu — actions', () => {
   it('Close, Duplicate and Pin address this tab', async () => {
     const views = makeViews();
     renderMenu(makeTab({ tabId: 'tab-x', name: 'Mine' }), views);
-    fireEvent.click(await screen.findByText('Close tab'));
+    fireEvent.click(await screen.findByText('Close'));
     expect(views.closeTab).toHaveBeenCalledWith('tab-x');
     fireEvent.click(screen.getByText('Duplicate'));
     expect(views.duplicateTab).toHaveBeenCalledWith('tab-x', 'Mine');
@@ -200,11 +200,31 @@ describe('ViewTabMenu — actions', () => {
     renderMenu(makeTab({ tabId: 'tab-x', name: 'Mine' }), views);
     fireEvent.click(await screen.findByText('Delete'));
 
-    // Modal.confirm gate (constitution VI) — nothing deleted until confirmed.
+    // Confirmation gate (constitution VI) — nothing deleted until confirmed,
+    // and the shared dialog puts Cancel LEFT of the danger action (round 5).
     const confirmButton = await screen.findByRole('button', { name: /^delete$/i });
     expect(views.deleteTab).not.toHaveBeenCalled();
     expect(confirmButton.className).toContain('ant-btn-dangerous');
+
+    const footer = document.querySelector('[data-testid="confirm-dialog-footer"]')!;
+    const buttons = Array.from(footer.querySelectorAll('button'));
+    expect(buttons[0]!.textContent).toContain('Cancel');
+    expect(buttons[buttons.length - 1]!.textContent).toContain('Delete');
+
     fireEvent.click(confirmButton);
     await waitFor(() => expect(views.deleteTab).toHaveBeenCalledWith('tab-x'));
+  });
+
+  it('cancelling the delete dialog deletes nothing', async () => {
+    const views = makeViews();
+    renderMenu(makeTab({ tabId: 'tab-x', name: 'Mine' }), views);
+    fireEvent.click(await screen.findByText('Delete'));
+    await screen.findByRole('button', { name: /^delete$/i });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() =>
+      expect(document.querySelector('.ant-modal-wrap')).toHaveStyle({ display: 'none' }),
+    );
+    expect(views.deleteTab).not.toHaveBeenCalled();
   });
 });

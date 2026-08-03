@@ -191,7 +191,7 @@ test.describe('Screenshots — 011-ui-fixes-enhancements', () => {
     // Click the first Delete button
     await page.getByRole('button', { name: 'Delete' }).first().click();
     // Wait for the visible confirmation dialog (not the pre-rendered hidden modal)
-    await expect(page.locator('.ant-modal-confirm-body-wrapper').filter({ hasText: 'Delete Balance Sheet' })).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('.ant-modal-content').filter({ hasText: 'Delete Balance Sheet' })).toBeVisible({ timeout: 5_000 });
     await page.waitForTimeout(300);
     await page.screenshot({ path: ss('08-delete-confirmation-dialog.png') });
   });

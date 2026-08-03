@@ -183,7 +183,7 @@ test('detail actions, modal-add, unified drag (nested drop, rearrange, send back
   // Cleanup: kebab Delete → confirm → back on the list.
   await page.getByLabel('scenario-actions').click();
   await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
-  await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();
+  await page.locator('[data-testid="confirm-dialog-footer"] .ant-btn-dangerous').click();
   await page.waitForURL(/\/inventory\/scenarios$/, { timeout: 10_000 });
   await expect(page.locator('.ant-table-tbody tr', { hasText: renamed })).toHaveCount(0);
 });
@@ -281,7 +281,7 @@ test('iteration 19: caret collapse, modal add-button tooltip, narrow panel fold'
   await page.waitForTimeout(400);
   await page.getByLabel('scenario-actions').click();
   await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
-  await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();
+  await page.locator('[data-testid="confirm-dialog-footer"] .ant-btn-dangerous').click();
   await page.waitForURL(/\/inventory\/scenarios$/, { timeout: 10_000 });
 });
 
@@ -358,7 +358,7 @@ test('iteration 20: tree drag keeps rows in place (no reflow jitter)', async ({ 
   await page.keyboard.press('Escape');
   await page.getByLabel('scenario-actions').click();
   await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
-  await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();
+  await page.locator('[data-testid="confirm-dialog-footer"] .ant-btn-dangerous').click();
   await page.waitForURL(/\/inventory\/scenarios$/, { timeout: 10_000 });
 });
 
@@ -421,7 +421,7 @@ test('iteration 22: modal rows are geometrically flush (pixel lock)', async ({ p
   await expect(modal).toBeHidden();
   await page.getByLabel('scenario-actions').click();
   await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
-  await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();
+  await page.locator('[data-testid="confirm-dialog-footer"] .ant-btn-dangerous').click();
   await page.waitForURL(/\/inventory\/scenarios$/, { timeout: 10_000 });
 });
 
@@ -471,7 +471,7 @@ test('iteration 27: Add-items modal is wide and viewport-anchored', async ({ pag
   await page.waitForTimeout(300);
   await page.locator('.ant-dropdown-menu-item', { hasText: /Delete/ }).first().click();
   await page.waitForTimeout(300);
-  await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();
+  await page.locator('[data-testid="confirm-dialog-footer"] button', { hasText: /Delete/ }).click();
   await page.waitForTimeout(500);
 });
 
@@ -531,7 +531,7 @@ test('iteration 29: drag overlay mirrors the grabbed row', async ({ page }) => {
   // Cleanup: kebab Delete → confirm (established scenario-actions pattern).
   await page.getByLabel('scenario-actions').click();
   await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
-  await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();
+  await page.locator('[data-testid="confirm-dialog-footer"] button', { hasText: /Delete/ }).click();
   await page.waitForTimeout(500);
 });
 
@@ -598,7 +598,7 @@ test('iteration 31: drop indicator paints above the semi-transparent preview', a
     ).toBeVisible({ timeout: 1_000 });
   }).toPass({ timeout: 10_000 });
   await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
-  await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();
+  await page.locator('[data-testid="confirm-dialog-footer"] button', { hasText: /Delete/ }).click();
   await page.waitForTimeout(500);
 });
 
@@ -669,6 +669,6 @@ test('iteration 43: nest-drop highlights the prospective container', async ({ pa
     await expect(page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' })).toBeVisible({ timeout: 1_000 });
   }).toPass({ timeout: 10_000 });
   await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
-  await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();
+  await page.locator('[data-testid="confirm-dialog-footer"] button', { hasText: /Delete/ }).click();
   await page.waitForTimeout(500);
 });

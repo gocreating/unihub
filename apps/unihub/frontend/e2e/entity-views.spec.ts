@@ -273,6 +273,56 @@ test.describe('entity-views tab row (US2)', () => {
   });
 });
 
+test.describe('entity-views per-visit tabs (US2, round 5)', () => {
+  test('a refresh keeps only pinned views and the URL\'s view (SC-013)', async ({ page }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    const row = page.getByTestId('view-tabs-row');
+    await expect(row).toBeVisible();
+
+    // Two scratch tabs — neither is saved, so neither may survive a reload.
+    await addScratchTabs(page, 2);
+    const beforeCount = (await tabLabels(page)).length;
+    expect(beforeCount).toBeGreaterThanOrEqual(3);
+
+    await page.reload();
+    await revealRow(page);
+    await expect(row).toBeVisible();
+
+    const after = await tabLabels(page);
+    // Only the default/pinned views remain — every scratch tab is gone.
+    expect(after.length).toBeLessThan(beforeCount);
+    expect(after.some((label) => label.includes('New view'))).toBe(false);
+  });
+
+  test('the URL keeps an unpinned view open across a refresh', async ({ page }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    const row = page.getByTestId('view-tabs-row');
+
+    const name = await createSavedView(page, `E2E visit ${Date.now()}`);
+    await expect(row.getByRole('tab', { name })).toBeVisible();
+    // The saved view is unpinned, but it IS what the URL addresses.
+    await expect.poll(async () => page.url()).toContain('inventory-catalog.view=');
+
+    await page.reload();
+    await expect(row.getByRole('tab', { name })).toBeVisible();
+  });
+
+  test('a revealed row stays revealed across a refresh (FR-025)', async ({ page }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    await expect(page.getByTestId('view-tabs-row')).toBeVisible();
+
+    await page.reload();
+    // No manual reveal this time — the display preference persisted.
+    await expect(page.getByTestId('view-tabs-row')).toBeVisible();
+  });
+});
+
 test.describe('entity-views URL deep-linking (US3, readable params)', () => {
   test('a readable inline URL applies its config on load and marks the tab dirty', async ({
     page,

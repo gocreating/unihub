@@ -255,7 +255,7 @@ test('edit page: Acquisition panel kebab holds Delete and returns to the catalog
   // Kebab on the Acquisition panel → Delete → confirm → back on the catalog.
   await page.getByLabel('acquisition-actions').click();
   await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
-  await page.locator('.ant-modal-confirm .ant-btn-dangerous').click();
+  await page.locator('[data-testid="confirm-dialog-footer"] .ant-btn-dangerous').click();
   await page.waitForURL(/\/inventory\/catalog/, { timeout: 10_000 });
   await expect(page.locator('tr', { hasText: src })).toHaveCount(0);
 });

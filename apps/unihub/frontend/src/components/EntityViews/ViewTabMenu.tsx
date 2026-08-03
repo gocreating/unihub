@@ -12,9 +12,10 @@
  * tab under its current label (FR-014).
  */
 import { useMemo } from 'react';
-import { Dropdown, Modal, message } from 'antd';
+import { Dropdown, message } from 'antd';
 import type { MenuProps } from 'antd';
 import { useIntl } from 'react-intl';
+import { confirmDialog } from '../ConfirmDialog';
 import type { UseEntityViewsReturn, ViewTabState } from './useEntityViews';
 
 export interface ViewTabMenuProps {
@@ -39,7 +40,6 @@ export function ViewTabMenu({
   children,
 }: ViewTabMenuProps) {
   const { formatMessage: t } = useIntl();
-  const [modal, modalHolder] = Modal.useModal();
 
   const isSaved = tab.kind === 'saved' && !!tab.viewId;
   const canPin = isSaved && !tab.isDefault;
@@ -74,11 +74,12 @@ export function ViewTabMenu({
   );
 
   const confirmDelete = () => {
-    modal.confirm({
+    confirmDialog({
       title: t({ id: 'common.entityViews.deleteConfirmTitle' }, { n: 1 }),
       content: t({ id: 'common.entityViews.deleteConfirmBody' }, { n: 1 }),
       okText: t({ id: 'common.entityViews.delete' }),
-      okType: 'danger',
+      cancelText: t({ id: 'common.cancel' }),
+      danger: true,
       onOk: () => views.deleteTab(tab.tabId),
     });
   };
@@ -116,17 +117,14 @@ export function ViewTabMenu({
   };
 
   return (
-    <>
-      <Dropdown
-        open={open}
-        onOpenChange={onOpenChange}
-        trigger={[]} // opening is driven by the tab's own click/contextmenu
-        menu={{ items, onClick, style: { maxHeight: '60vh', overflowY: 'auto' } }}
-        placement="bottomLeft"
-      >
-        {children}
-      </Dropdown>
-      {modalHolder}
-    </>
+    <Dropdown
+      open={open}
+      onOpenChange={onOpenChange}
+      trigger={[]} // opening is driven by the tab's own click/contextmenu
+      menu={{ items, onClick, style: { maxHeight: '60vh', overflowY: 'auto' } }}
+      placement="bottomLeft"
+    >
+      {children}
+    </Dropdown>
   );
 }

@@ -255,6 +255,6 @@ test('caret and holder center on the tree row middle (FR-011)', async ({ page })
     await expect(page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' })).toBeVisible({ timeout: 1_000 });
   }).toPass({ timeout: 10_000 });
   await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click();
-  await page.locator('.ant-modal-confirm button', { hasText: /Delete/ }).click();
+  await page.locator('[data-testid="confirm-dialog-footer"] button', { hasText: /Delete/ }).click();
   await page.waitForTimeout(500);
 });

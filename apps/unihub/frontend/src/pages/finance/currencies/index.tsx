@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Modal, Space, Switch, Typography, message } from 'antd';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { EmptyValue } from '@/components/EmptyValue';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
@@ -186,10 +187,10 @@ export function CurrenciesPage() {
               <Button
                 size="small" danger icon={<DeleteOutlined />}
                 onClick={() =>
-                  Modal.confirm({
+                  confirmDialog({
                     title: t({ id: 'pages.finance.currencies.delete.title' }),
                     content: t({ id: 'pages.finance.currencies.delete.confirm' }, { code: record.code, name: record.name }),
-                    okType: 'danger',
+                    danger: true,
                     onOk: () => deleteMutation.mutate(record.code),
                   })
                 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Col, Input, Modal, Row, Select, Space, Typography, message } from 'antd';
+import { Button, Card, Col, Input, Row, Select, Space, Typography, message } from 'antd';
+import { confirmDialog } from '../ConfirmDialog';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useIntl } from 'react-intl';
 import type { IntlShape } from 'react-intl';
@@ -158,14 +159,14 @@ export function ParameterRowsEditor({ value, onChange }: ParameterRowsEditorProp
       }
       count = e.body.affected_entity_count;
     }
-    Modal.confirm({
+    confirmDialog({
       title: t(
         { id: 'pages.inventory.params.deleteTitle' },
         { name: parameterKeyLabel(intl, definition.name) },
       ),
       content: t({ id: 'pages.inventory.params.deleteBody' }, { count }),
       okText: t({ id: 'common.delete' }),
-      okButtonProps: { danger: true },
+      danger: true,
       cancelText: t({ id: 'common.cancel' }),
       onOk: async () => {
         await deleteAttributeDefinition(definition.id, true);

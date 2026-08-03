@@ -408,7 +408,7 @@ export default {
   'common.entityViews.delete': '刪除',
   'common.entityViews.deleteConfirmTitle': '刪除 {n} 個檢視？',
   'common.entityViews.deleteConfirmBody': '將永久刪除 {n} 個已儲存的檢視。',
-  'common.entityViews.close': '關閉分頁',
+  'common.entityViews.close': '關閉',
   'common.entityViews.saved': '檢視已儲存',
   'common.entityViews.saveError': '儲存檢視失敗',
   'common.entityViews.loadError': '載入檢視失敗',

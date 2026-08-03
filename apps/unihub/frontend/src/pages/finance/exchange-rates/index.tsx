@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, DatePicker, Form, Input, Modal, Select, Space, Tag, message } from 'antd';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -201,10 +202,10 @@ export function ExchangeRatesPage() {
               <Button
                 size="small" danger icon={<DeleteOutlined />}
                 onClick={() => {
-                  Modal.confirm({
+                  confirmDialog({
                     title: t({ id: 'pages.finance.exchangeRates.delete.title' }),
                     content: t({ id: 'pages.finance.exchangeRates.delete.confirm' }),
-                    okType: 'danger',
+                    danger: true,
                     onOk: () => deleteMutation.mutate(record.id),
                   });
                 }}

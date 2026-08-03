@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, ColorPicker, DatePicker, Form, Input, Modal, Select, Space, Tag, message } from 'antd';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { EmptyValue } from '@/components/EmptyValue';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
@@ -163,11 +164,11 @@ export function AccountsPage() {
       const e = err as { body?: { affected_balance_count?: number } };
       if (e?.body?.affected_balance_count !== undefined) {
         const count = e.body.affected_balance_count;
-        Modal.confirm({
+        confirmDialog({
           title: t({ id: 'pages.finance.accounts.delete.title' }),
           content: t({ id: 'pages.finance.accounts.delete.confirm' }, { count }),
           okText: t({ id: 'pages.finance.accounts.delete.ok' }),
-          okType: 'danger',
+          danger: true,
           onOk: () => deleteMutation.mutate({ id: account.id, confirm: true }),
         });
       } else {

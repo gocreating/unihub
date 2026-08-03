@@ -887,34 +887,39 @@ export function useEntityViews({
         );
         setActiveTabId(DEFAULT_TAB_ID);
       } else {
-        const existing = tabs.find((tab) => tab.viewId === target!.id);
-        if (existing) {
-          setTabs((prev) =>
-            prev.map((tab) =>
+        // Round 5: the pinned-view merge may have opened this view already in
+        // the same commit, so the check MUST happen inside the updater — a
+        // stale `tabs` closure here produced a duplicate tab (FR-018).
+        const newTabId = uid();
+        let targetTabId: string = newTabId;
+        setTabs((prev) => {
+          const existing = prev.find((tab) => tab.viewId === target!.id);
+          if (existing) {
+            targetTabId = existing.tabId;
+            return prev.map((tab) =>
               tab.tabId === existing.tabId
                 ? { ...tab, config }
                 : tab.tabId === activeTabId
                   ? { ...tab, config: snapshot }
                   : tab,
-            ),
-          );
-          setActiveTabId(existing.tabId);
-        } else {
-          const tab: InternalTab = {
-            tabId: uid(),
-            kind: 'saved',
-            viewId: target!.id,
-            name: target!.name,
-            config,
-          };
-          setTabs((prev) => [
+            );
+          }
+          return [
             ...prev.map((item) =>
               item.tabId === activeTabId ? { ...item, config: snapshot } : item,
             ),
-            tab,
-          ]);
-          setActiveTabId(tab.tabId);
-        }
+            {
+              tabId: newTabId,
+              kind: 'saved' as const,
+              viewId: target!.id,
+              name: target!.name,
+              config,
+            },
+          ];
+        });
+        // The updater form is required, not stylistic: React runs it AFTER the
+        // setTabs updater above, which is what assigns `targetTabId`.
+        setActiveTabId(() => targetTabId);
       }
       table.loadConfig(config, { offset });
       lastProcessedRef.current = raw;

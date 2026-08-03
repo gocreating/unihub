@@ -461,25 +461,25 @@ describe('useEntityViews — US2 tabs', () => {
     expect(result.current.table.queryParams.ordering).toBeUndefined();
   });
 
-  it('open tabs and the active tab survive a remount within the session', async () => {
+  it('does NOT resurrect tabs on a remount — every visit rebuilds the row (FR-018)', async () => {
     const wrapper = makeWrapper();
     const first = renderHook(useHarness, { wrapper });
     await waitFor(() => expect(first.result.current.views.savedViews).toHaveLength(1));
 
     act(() => {
-      first.result.current.views.openView(SAVED_VIEW.id);
+      first.result.current.views.openView(SAVED_VIEW.id); // unpinned saved view
     });
-    const activeName = first.result.current.views.activeTab.name;
+    act(() => first.result.current.views.addBlankTab()); // scratch tab
+    expect(first.result.current.views.tabs).toHaveLength(3);
     first.unmount();
 
+    // A new visit with no view state in the URL: only the default tab remains.
     const second = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(second.result.current.views.savedViews).toHaveLength(1));
-    expect(second.result.current.views.tabs).toHaveLength(2);
-    expect(second.result.current.views.activeTab.name).toBe(activeName);
-    // The restored active tab's config drives the table again.
-    expect(second.result.current.table.queryParams.ordering).toBe('-amount');
+    expect(second.result.current.views.tabs).toHaveLength(1);
+    expect(second.result.current.views.tabs[0]!.kind).toBe('default');
+    expect(second.result.current.table.queryParams.ordering).toBeFalsy();
   });
-
   it('a cleared session drops anonymous/unpinned tabs (fresh-session behavior)', async () => {
     const first = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(first.result.current.views.savedViews).toHaveLength(1));
@@ -1204,5 +1204,74 @@ describe('useEntityViews — round 4: promotion disturbs nothing (SC-011)', () =
     expect(demoted.dirty).toBe(false);
     expect(createMock).toHaveBeenCalledTimes(1);
     expect((createMock.mock.calls[0]![0] as { is_default?: boolean }).is_default).toBeFalsy();
+  });
+});
+
+// ── Round 5: the row is rebuilt on every visit (FR-018/R37) ──────────────────
+
+describe('useEntityViews — round 5: per-visit tab row', () => {
+  const PINNED: EntityView = {
+    ...SAVED_VIEW,
+    id: 'pinned000001',
+    name: 'Pinned',
+    pinned: true,
+    position: 1,
+  };
+  const UNPINNED: EntityView = {
+    ...SAVED_VIEW,
+    id: 'unpinned0001',
+    name: 'Unpinned',
+    pinned: false,
+    position: 2,
+  };
+
+  it('opens only the pinned views (plus the default holder) with no URL state', async () => {
+    listMock.mockResolvedValue([DEFAULT_VIEW, PINNED, UNPINNED]);
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(3));
+
+    await waitFor(() => {
+      const names = result.current.views.tabs.map((t) => t.name);
+      expect(names).toEqual([DEFAULT_VIEW.name, PINNED.name]);
+    });
+    expect(result.current.views.activeTab.isDefault).toBe(true);
+  });
+
+  it('also opens the view the URL addresses, even when it is unpinned', async () => {
+    listMock.mockResolvedValue([DEFAULT_VIEW, PINNED, UNPINNED]);
+    const { result } = renderHook(useHarness, {
+      wrapper: makeWrapper([`/?tbl.view=${UNPINNED.id}`]),
+    });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(3));
+
+    await waitFor(() => {
+      expect(result.current.views.tabs.some((t) => t.viewId === UNPINNED.id)).toBe(true);
+    });
+    // …and it is the active tab, so a refresh lands the user back where they were.
+    expect(result.current.views.activeTab.viewId).toBe(UNPINNED.id);
+    const names = result.current.views.tabs.map((t) => t.name);
+    expect(names).toEqual([DEFAULT_VIEW.name, PINNED.name, UNPINNED.name]);
+  });
+
+  it('does not duplicate a pinned view that the URL also addresses', async () => {
+    listMock.mockResolvedValue([DEFAULT_VIEW, PINNED]);
+    const { result } = renderHook(useHarness, {
+      wrapper: makeWrapper([`/?tbl.view=${PINNED.id}`]),
+    });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(2));
+
+    await waitFor(() => expect(result.current.views.activeTab.viewId).toBe(PINNED.id));
+    expect(result.current.views.tabs.filter((t) => t.viewId === PINNED.id)).toHaveLength(1);
+  });
+
+  it('keeps an inline URL configuration as an unsaved tab on load', async () => {
+    listMock.mockResolvedValue([DEFAULT_VIEW]);
+    const { result } = renderHook(useHarness, {
+      wrapper: makeWrapper(['/?tbl.sort=name&tbl.size=100']),
+    });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+
+    await waitFor(() => expect(result.current.table.limit).toBe(100));
+    expect(result.current.views.activeTab.dirty).toBe(true);
   });
 });

@@ -1,8 +1,14 @@
 /**
- * useViewTabsState — the raw open-tab state for one entity table, persisted
- * in sessionStorage (`unihub.views.<tableKey>`) so tabs survive in-app
- * navigation and reloads WITHIN the browser session but die with it
- * (spec: unpinned/anonymous tabs are session-scoped).
+ * useViewTabsState — the raw open-tab state for one entity table.
+ *
+ * Round 5: tabs are PER-VISIT state (FR-018). Nothing about the tab list is
+ * persisted — every page load starts from a single default tab, and
+ * `useEntityViews` rebuilds the row from the account's pinned views plus the
+ * view the URL addresses. The only thing that survives a reload is the FR-025
+ * "row revealed" display preference, which is a property of the row, not a tab.
+ *
+ * A stale payload from an earlier round (carrying `tabs`/`activeTabId`) is read
+ * tolerantly: its `revealed` flag is honoured, everything else ignored.
  */
 import { useEffect, useState } from 'react';
 import type { ViewConfig } from '../EntityToolbar/types';
@@ -21,10 +27,8 @@ export interface InternalTab {
   config: ViewConfig;
 }
 
-interface PersistedState {
-  tabs: InternalTab[];
-  activeTabId: string;
-  /** Manual view-row reveal (FR-025) — survives reloads within the session. */
+/** The whole persisted footprint of the view row — one display preference. */
+interface PersistedViewRowState {
   revealed: boolean;
 }
 
@@ -36,25 +40,16 @@ function defaultTab(defaultConfig: ViewConfig): InternalTab {
   return { tabId: DEFAULT_TAB_ID, kind: 'default', name: '', config: defaultConfig };
 }
 
-function restore(tableKey: string, defaultConfig: ViewConfig): PersistedState {
-  const fallback: PersistedState = {
-    tabs: [defaultTab(defaultConfig)],
-    activeTabId: DEFAULT_TAB_ID,
-    revealed: false,
-  };
+/** Pick `revealed` out of whatever shape the key holds (round-4 payloads
+ *  included); anything unreadable means "not revealed". */
+function restoreRevealed(tableKey: string): boolean {
   try {
     const raw = window.sessionStorage.getItem(storageKey(tableKey));
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as PersistedState;
-    if (!Array.isArray(parsed.tabs) || parsed.tabs.length === 0) return fallback;
-    const tabs = parsed.tabs.filter((tab) => tab && tab.tabId && tab.config);
-    if (!tabs.some((tab) => tab.kind === 'default')) tabs.unshift(defaultTab(defaultConfig));
-    const activeTabId = tabs.some((tab) => tab.tabId === parsed.activeTabId)
-      ? parsed.activeTabId
-      : tabs[0]!.tabId;
-    return { tabs, activeTabId, revealed: parsed.revealed === true };
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as { revealed?: unknown };
+    return parsed?.revealed === true;
   } catch {
-    return fallback;
+    return false;
   }
 }
 
@@ -71,21 +66,19 @@ export function useViewTabsState(
   tableKey: string,
   defaultConfig: ViewConfig,
 ): UseViewTabsStateReturn {
-  const [state] = useState(() => restore(tableKey, defaultConfig));
-  const [tabs, setTabs] = useState<InternalTab[]>(state.tabs);
-  const [activeTabId, setActiveTabId] = useState<string>(state.activeTabId);
-  const [revealed, setRevealed] = useState<boolean>(state.revealed);
+  // Tabs live for this visit only — no restore, no persist.
+  const [tabs, setTabs] = useState<InternalTab[]>(() => [defaultTab(defaultConfig)]);
+  const [activeTabId, setActiveTabId] = useState<string>(DEFAULT_TAB_ID);
+  const [revealed, setRevealed] = useState<boolean>(() => restoreRevealed(tableKey));
 
   useEffect(() => {
     try {
-      window.sessionStorage.setItem(
-        storageKey(tableKey),
-        JSON.stringify({ tabs, activeTabId, revealed }),
-      );
+      const payload: PersistedViewRowState = { revealed };
+      window.sessionStorage.setItem(storageKey(tableKey), JSON.stringify(payload));
     } catch {
-      // Storage full/unavailable — tabs simply won't survive a reload.
+      // Storage full/unavailable — the row simply re-collapses next visit.
     }
-  }, [tableKey, tabs, activeTabId, revealed]);
+  }, [tableKey, revealed]);
 
   return { tabs, setTabs, activeTabId, setActiveTabId, revealed, setRevealed };
 }

@@ -15,6 +15,7 @@ import {
   Typography,
   message,
 } from 'antd';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import {
   CaretDownOutlined,
   CaretRightOutlined,
@@ -371,11 +372,11 @@ export function ScenarioDetailPage() {
   });
 
   const confirmDeleteScenario = () => {
-    Modal.confirm({
+    confirmDialog({
       title: t({ id: 'pages.inventory.scenarios.delete.title' }),
       content: t({ id: 'pages.inventory.scenarios.delete.confirm' }),
       okText: t({ id: 'common.delete' }),
-      okType: 'danger',
+      danger: true,
       cancelText: t({ id: 'common.cancel' }),
       onOk: async () => {
         await deleteScenario(id);

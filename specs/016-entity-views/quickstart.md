@@ -99,3 +99,13 @@ On the inventory catalog (`/inventory/catalog`), after `uv run python manage.py 
 6. **Menus dismiss**: open a tab menu, click on the table body → the menu closes and nothing else happens; re-open and press Esc → closes.
 7. **No Manage views**: the kebab shows only *Add empty view* and *Open ▸*. Manage a closed view by opening it from *Open ▸* first, then using its tab menu.
 8. **URL by id**: activate a saved view → the URL reads `?inventory-catalog.view=<12-char id>`; rename that view and reload the same URL — it still resolves (renames no longer break links).
+
+## Round 5 manual walk-through (2026-08-04)
+
+1. **Refresh discards scratch work**: with a pinned view open, add two empty views and open an unpinned saved view; refresh. The row shows only the pinned views (plus the default holder) and the view the URL addresses — the scratch tabs are gone (SC-013).
+2. **The URL keeps your place**: activate an unpinned saved view (URL shows `?<tableKey>.view=<id>`) and refresh — that view is still open and active even though it is not pinned.
+3. **Unsaved changes travel only via the URL**: dirty a pinned view, switch to another tab, refresh — the pinned view comes back clean; dirty a view and refresh WITHOUT switching, and its overrides return from the URL with the dirty dot intact.
+4. **Navigate away and back**: go to another page and return to the table — the row rebuilds exactly as in step 1 (no leftover tabs).
+5. **The reveal preference survives**: on a table with only its default view, reveal the row, then refresh — the row stays revealed (FR-025).
+6. **Confirmation footers**: trigger a destructive confirm anywhere in the app — delete a view from its tab menu, delete a finance account, delete a parameter definition — and check Cancel sits flush at the footer's LEFT edge with the danger action on the right (SC-014).
+7. **Close label**: open any tab's menu — the item reads "Close", not "Close tab".

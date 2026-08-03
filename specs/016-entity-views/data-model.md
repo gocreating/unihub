@@ -1,6 +1,6 @@
 # Data Model: Entity Views
 
-**Feature**: 016-entity-views | **Date**: 2026-07-20 | **Updated**: 2026-08-04 (round 4)
+**Feature**: 016-entity-views | **Date**: 2026-07-20 | **Updated**: 2026-08-04 (round 5)
 
 ## 1. `EntityView` (backend, `core/models.py`)
 
@@ -89,7 +89,7 @@ The packed `view[<tableKey>]` mini-format is REPLACED by discrete namespaced par
 
 Note: `cols` transports visible keys only (compact URLs); hidden-column ordering/pins are preserved only in stored `ViewConfig.columns`. Inline round-trip therefore reconstructs hidden columns from page defaults — acceptable per spec (URLs capture what the user sees).
 
-## 4. `ViewTab` (frontend-only, sessionStorage `unihub.views.<tableKey>`)
+## 4. `ViewTab` (frontend-only, DERIVED — round 5)
 
 ```ts
 interface ViewTab {
@@ -106,9 +106,32 @@ interface ViewTab {
 interface ViewTabsState {
   tabs: ViewTab[];                 // strip order (round 3: NO always-first default); pinned saved views merge in by `position`
   activeTabId: string;
-  revealed: boolean;               // round 2 — manual view-row reveal (FR-025), session-scoped
 }
 ```
+
+**Round 5 — nothing about the tab list is persisted (FR-018/R37).** `tabs` and
+`activeTabId` live in React state for the duration of a visit only. Every page
+load rebuilds the row:
+
+```
+tabs(on load) = [pinned views incl. the default holder, by `position`]
+              + [the view the URL addresses, if it is not already among them]
+active(on load) = the URL's view, else the default holder
+```
+
+so a refresh or a navigation discards every scratch tab, every opened-but-
+unpinned view, and every unsaved change — except the one the URL carries.
+
+The sessionStorage key `unihub.views.<tableKey>` survives with a SINGLE field:
+
+```ts
+interface PersistedViewRowState {
+  revealed: boolean;               // FR-025 display preference — a row, not a tab
+}
+```
+
+A stale round-4 payload (carrying `tabs`/`activeTabId`) MUST be read
+tolerantly: `revealed` is picked out, the rest ignored.
 
 **Derived, never stored**: `dirty` (normalized compare of `config` vs baseline — stored config for `saved`/materialized `default`, page defaults for virtual `default`; `anonymous` always renders unsaved marker); `collapsed` (view-row auto-hide: no non-default saved views AND 1 open tab AND no non-default URL state AND not `revealed` — unaffected by ordering).
 
@@ -133,7 +156,9 @@ interface ViewTabsState {
   default (materialized) ── another saved view promoted ──► saved (ordinary: closable, deletable,
        unpinnable; keeps its pinned flag, position, name, and config)
   saved ── "Set as default" ──► default (materialized; forced pinned=True; position UNCHANGED)
-  session end ── unsaved & unpinned tabs discarded; pinned views reappear next session; revealed flag resets
+  page load (refresh / navigate / new session) ── the row is REBUILT: unsaved and
+       unpinned tabs are discarded, pinned views reappear, the URL's view opens; the
+       revealed flag survives
 ```
 
 ## 7. Tab menu enablement matrix (round 3, FR-023 — disabled, never hidden)

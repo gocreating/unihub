@@ -312,3 +312,33 @@ Round 2 decisions per the spec's Clarifications Session 2026-07-23. Backend regi
 **Rationale**: rc-trigger only wires outside-click dismissal for triggers it manages; with `trigger={[]}` (required so a left-click on an INACTIVE tab switches instead of opening, per FR-023) nothing dismisses the menu today. An explicit listener keeps the open/close decision in the one place that already owns `menuTabId`, and is directly assertable in RTL.
 
 **Alternatives considered**: `trigger={['click']}` plus suppression logic (rejected: rc-trigger would open the menu on the very click meant to switch tabs, re-creating the bug round 3 fixed); `onBlur` on the tab button (rejected: focus leaves the tab for many reasons, including opening the menu itself).
+
+---
+
+# Round 5 (Clarifications Session 2026-08-04b)
+
+## R37. Tabs become derived state — the store shrinks to one flag
+
+**Decision**: `useViewTabsState` stops persisting `tabs` and `activeTabId`. Its sessionStorage payload becomes `{ revealed: boolean }`, and `restore()` reads a legacy round-4 payload tolerantly — it picks `revealed` out and ignores `tabs`/`activeTabId` rather than failing or resurrecting them. The initial tab list is built fresh on every mount from the pinned views (once the saved-view query resolves) plus whatever the URL addresses; the mount-time rehydrate effect that replayed a restored tab's config is deleted with the data it replayed.
+
+**Rationale**: The user's rule — a refresh shows only pinned/default tabs plus the URL's view — makes the tab list a pure function of (saved views, URL). Persisting it therefore stores a value that must then be corrected on every load, which is exactly the class of bug that produced stale tabs. Keeping `revealed` is not an exception to the rule: it is a display preference about the ROW, not a tab, and FR-025 explicitly requires a manual reveal to outlive a reload.
+
+**Ordering consequence**: with no stored order to restore, the strip's initial order comes entirely from `position` (the pinned merge) plus the URL's view appended — which is what the round-4 order-preserving merge already produces on a cold mount. The merge's "preserve current order, insert only new" behaviour still matters for refetches DURING a visit (R32).
+
+**Alternatives considered**: keep the store and prune on restore (rejected: two sources of truth for the same list, and the pruning rule would have to re-implement the URL precedence); drop sessionStorage entirely including `revealed` (rejected: silently breaks FR-025's "a manual reveal persists for the rest of the session"); move the tab list to localStorage (rejected outright — it would make the problem worse by surviving even a browser restart).
+
+## R38. A shared confirmation helper with a constitution-compliant footer
+
+**Decision**: New `components/ConfirmDialog/` exporting `confirmDialog({ title, content, okText, cancelText, danger, onOk })`, implemented over AntD's `Modal` with an explicit footer — `<div style={{display:'flex', justifyContent:'space-between'}}>` holding Cancel on the left and the confirming button on the right, mirroring the footer `ManageViewsModal` used before it was deleted. It returns a promise-friendly handle so `onOk` may be async (the button shows a loading state while it settles), and it is called imperatively exactly like `Modal.confirm` so migration is a one-line swap at each site. All nine call sites adopt it: `ViewTabMenu` (016), `AttributeManagementPanel`, `ParameterRowsEditor`, finance `accounts` / `currencies` / `exchange-rates` / `balance-sheets`, inventory `scenarios/detail`, `acquisitions/AcquisitionForm`.
+
+**Rationale**: AntD's `Modal.confirm` hard-codes a right-aligned `[Cancel][OK]` pair in `.ant-modal-confirm-btns`; there is no prop to flush Cancel left, so compliance requires owning the footer. Centralising it is what makes the rule enforceable — a per-site fix would drift back the moment someone reaches for `Modal.confirm` again. Keeping the imperative call shape means no call site restructures its logic, only its import.
+
+**Test impact (accepted)**: several existing suites assert on `.ant-modal-confirm-btns .ant-btn-dangerous`. Those selectors move to the helper's own markup; each migrated suite keeps its behavioural assertions (confirm runs the action, cancel does not) and updates only the DOM reach-in. The helper's own suite owns the footer-geometry assertion so the other eight do not have to repeat it.
+
+**Alternatives considered**: a global `ConfigProvider`/CSS override on `.ant-modal-confirm-btns` (rejected: styling around a component's structure is fragile across AntD upgrades, and `justify-content: space-between` on that container also spreads any third button unpredictably); a codemod leaving `Modal.confirm` in place (rejected: no single place left to enforce the rule).
+
+## R39. "Close tab" → "Close"
+
+**Decision**: `common.entityViews.close` changes value only — `"Close tab"` → `"Close"`, zh-TW `"關閉分頁"` → `"關閉"`. The key name stays so no call site or test selector churns beyond the label text.
+
+**Rationale**: The action lives inside that tab's own menu, so its object is already unambiguous; every sibling item (Save, Duplicate, Rename, Delete) is likewise a bare verb. Note the aria-label on the round-3 close button used the same key, but that button no longer exists — the string is now menu-only.

@@ -1,107 +1,86 @@
-# Tasks: Entity Views — Round 4
+# Tasks: Entity Views — Round 5
 
-**Input**: Design documents from `/specs/016-entity-views/` (spec.md Clarifications Session 2026-08-04, plan.md round 4, research.md R29–R36, data-model.md, contracts/)
+**Input**: Design documents from `/specs/016-entity-views/` (spec.md Clarifications Session 2026-08-04b, plan.md round 5, research.md R37–R39, data-model.md §4)
 
-**Prerequisites**: Rounds 1–3 are implemented (round 3's 26-task list completed in the working tree; its ship note lands with this round's commit). This list covers round 4 only. TDD is mandatory (constitution V): backend tests red before implementation; component/hook tests written against the new API before the rewrite.
+**Prerequisites**: Rounds 1–4 are shipped (round 4 at commit bb3f310). This list covers round 5 only. TDD is mandatory (constitution V): tests written against the new behavior before the code.
 
-**Organization**: Tasks are grouped by user story. Round-4 directives map: no-prompt Save + "New view" auto-label → US1; blank "Add empty view", drag-stretch fix, kebab cleanup → US2; id-based URL reference → US3; Rename dialog, duplicate naming, promotion fixes, menu dismissal, manage-modal removal → US4; the non-unique-name backend contract is story-independent → Foundational.
+**Organization**: Tasks are grouped by user story. Round-5 directives map: per-visit tabs (the row rebuilds on every page load) → US2; the shared confirmation footer + the "Close" label → US4 (they live on the tab menu); the shared helper itself and the app-wide sweep are cross-cutting infrastructure → Foundational + a dedicated phase.
 
-**Migration**: this round adds **core/0007** (constraint removal only). Together with the still-unapplied 0006, a deploy now carries two pending migrations.
+**Scope note**: no backend, no migration, no API or URL-grammar change this round. Eight of the nine confirm-dialog adoptions are OUTSIDE feature 016 — their suites assert on AntD's `.ant-modal-confirm-btns` DOM and must be updated in lockstep.
 
 ## Phase 1: Setup
 
-- [X] T001 Confirm green baseline: `uv run ruff check . && uv run pytest` from `apps/unihub/backend/` and `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/`; record counts for the ship report
+- [X] T001 Confirm green baseline: `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/`; record counts for the ship report (the backend is untouched this round, so its suite only needs a final confirmation run)
 
 ## Phase 2: Foundational (blocking prerequisites)
 
-**Backend — names become non-unique labels (TDD: T002/T003 red before T004–T005)**
+**The shared confirmation helper — every delete gate in the app depends on it**
 
-- [X] T002 [P] Write failing `TestNonUniqueNames` (contract tests 30–33: two views with the same `(owner, table_key, name)` both 201 with distinct ids; PATCH renaming onto an existing name → 200; `"  Sales  "` stored as `"Sales"` on create AND rename; `"   "` → 400 on create and rename) in `apps/unihub/backend/tests/test_entity_views.py`; delete the superseded `test_create_duplicate_name_same_table` and drop the rename-collision assertion from `test_patch_rename_pin_position`
-- [X] T003 [P] Write failing `test_duplicate_names_survive_sync_round_trip` (contract test 34 — two same-named views publish → wipe → checkout back as two distinct rows with ids preserved) in `apps/unihub/backend/tests/test_entity_views_io.py`
-- [X] T004 Remove `UniqueConstraint(owner, table_key, name)` from `EntityView.Meta.constraints` in `apps/unihub/backend/core/models.py` and generate `apps/unihub/backend/core/migrations/0007_*.py` (`RemoveConstraint` only — no field changes, so the data_io descriptor and CSV headers are untouched)
-- [X] T005 Drop the name-collision branch from `EntityViewSerializer.validate()` in `apps/unihub/backend/core/serializers.py`, keeping `validate_name`'s strip + reject-blank — T002/T003 green; run the full backend suite so the round-3 `TestDefaultTransfer` stays green
-- [X] T006 Regenerate the OpenAPI schema (spectacular file route) + `pnpm generate-types` in `apps/unihub/frontend/`; confirm the schema diff is EMPTY (a constraint change must not alter the contract)
+- [X] T002 [P] Write failing tests for the shared helper in NEW `apps/unihub/frontend/src/components/ConfirmDialog/index.test.tsx`: renders title/content/okText; the footer's FIRST child is Cancel and its LAST is the confirming button (constitution VI — assert DOM order and `justify-content: space-between`, not AntD's confirm markup); `danger: true` renders `ant-btn-dangerous`; confirming runs `onOk` and closes; cancelling runs nothing; an async `onOk` shows a loading state until it settles and keeps the dialog open if it rejects
+- [X] T003 Create `apps/unihub/frontend/src/components/ConfirmDialog/index.tsx` exporting `confirmDialog({ title, content, okText, cancelText, danger, onOk })` over AntD `Modal` with an explicit `space-between` footer (Cancel left, primary right), called imperatively so migration is a one-line swap per site (R38) — T002 green
+- [X] T004 [P] Change the `common.entityViews.close` VALUE only — `"Close tab"` → `"Close"`, zh-TW `「關閉分頁」` → `「關閉」` — in `apps/unihub/frontend/src/locales/en-US/pages.ts` and `apps/unihub/frontend/src/locales/zh-TW/pages.ts` (same commit; the key name stays so no selector churns beyond the label text)
 
-**Frontend — shared strings**
+**Checkpoint**: the helper exists and is proven compliant on its own; the label is updated.
 
-- [X] T007 [P] Update `apps/unihub/frontend/src/locales/en-US/pages.ts` and `apps/unihub/frontend/src/locales/zh-TW/pages.ts` in the same commit: ADD the rename-dialog keys (`renameViewTitle`, reusing `viewName`/`viewNameRequired`); REMOVE the keys orphaned by this round (`saveViewTitle`, `duplicateName`, `manageTitle`, `manageViews`, `manageSaveError`, `savedList`, `noSaved`, `edit`)
+## Phase 3: User Story 2 — Work across multiple views with tabs (P2)
 
-**Checkpoint**: backend accepts duplicate/trimmed names with the default-transfer suite still green; the API contract is provably unchanged; strings are ready.
+**Goal (round-5 delta)**: the tab row is per-visit state. Every page load rebuilds it from the account's pinned views plus the single view the URL addresses; everything else — scratch tabs, opened-but-unpinned views, and their unsaved changes — is discarded.
 
-## Phase 3: User Story 1 — Save a table configuration and reopen it later (P1)
+**Independent test**: open a pinned view, two scratch tabs and an unpinned saved view, then refresh. The row shows exactly the pinned views (including the default holder) plus the URL's view; the scratch tabs are gone. Reveal the row on a single-default table and refresh — it stays revealed.
 
-**Goal (round-4 delta)**: Save is a single interaction with no dialog anywhere — a tab that has no stored view is created under its current label, and a fresh scratch tab is auto-labelled "New view".
+- [X] T005 [P] [US2] Write failing tests for the reduced store in NEW `apps/unihub/frontend/src/components/EntityViews/useViewTabsState.test.ts`: only `revealed` is written to `unihub.views.<tableKey>`; a STALE round-4 payload carrying `tabs`/`activeTabId` is read tolerantly (its `revealed` survives, its tabs are ignored, nothing throws); a corrupt payload falls back to `revealed: false`
+- [X] T006 [US2] Reduce the store in `apps/unihub/frontend/src/components/EntityViews/useViewTabsState.ts`: persist `{ revealed }` only, keep `tabs`/`activeTabId` as plain React state seeded from the page defaults, and make `restore()` pick `revealed` out of any shape (R37) — T005 green
+- [X] T007 [P] [US2] Write failing RTL tests in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`: a fresh mount with pinned + unpinned saved views opens ONLY the pinned ones (plus the default holder); a mount whose URL addresses an unpinned saved view opens that view too and makes it active; a mount with no URL view state activates the default holder; a remount does NOT resurrect scratch tabs or unsaved changes from the previous visit (replacing the round-1 "tabs survive a remount within the session" expectation)
+- [X] T008 [US2] Build the tab list from pinned views + the URL on mount in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` and DELETE the mount-time rehydrate effect that replayed a restored tab's config; keep the round-4 order-preserving merge for refetches DURING a visit, and PRESERVE the `lastProcessedRef`/`lastParamRef` separation — with no stored tab list the URL is the only carrier of "where you were", so the ping-pong guard and the outbound effect must stay exactly right (R37) — T007 green
 
-**Independent test**: open a scratch tab (labelled "New view"), adjust a filter, choose Save from its menu → the view is stored under "New view" with no prompt and the dirty dot clears; a second scratch tab saves under the same label without error.
+**Checkpoint**: US2 delta done — refreshing is a clean rebuild, and the URL keeps the user's place.
 
-- [X] T008 [P] [US1] Write failing RTL tests (`saveTab` on a tab with no `viewId` POSTs `{name: <tab label>, config}` and binds the created id to that tab; `saveTab` never returns `'needs-name'`; saving two scratch tabs under the identical auto-label succeeds) in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`
-- [X] T009 [US1] Implement the no-prompt save in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts`: `saveTab` creates the view when the tab has none (using its current label), the `'needs-name'` outcome and `saveTabAs` are removed from `UseEntityViewsReturn`, and `saveTab` resolves to `'saved'` in every path — T008 green
-- [X] T010 [US1] Auto-label new scratch tabs "New view" at creation in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` (localized via the existing `newViewName` key, stored on the tab so the label survives a reload), and DELETE `apps/unihub/frontend/src/components/EntityViews/SaveViewModal.tsx` + `SaveViewModal.test.tsx`, removing the `onNeedsName` prop from `ViewTabMenu.tsx` and its modal state from `ViewTabs.tsx`
+## Phase 4: User Story 4 — Organize saved views (P4)
 
-**Checkpoint**: US1 delta done — saving is one click, always.
+**Goal (round-5 delta)**: the view-delete confirmation obeys the constitution's footer rule, and the tab menu's close action reads "Close".
 
-## Phase 4: User Story 2 — Work across multiple views with tabs (P2)
+**Independent test**: tab menu → Delete opens a dialog with Cancel flush left and a danger Delete on the right; cancelling deletes nothing, confirming deletes the view. The menu's close item reads "Close".
 
-**Goal (round-4 delta)**: "Add empty view" yields a genuinely blank configuration; a dragged tab keeps its own width; the kebab carries only Add and Open.
+- [X] T009 [P] [US4] Update `apps/unihub/frontend/src/components/EntityViews/ViewTabMenu.test.tsx` for the new confirm surface (Cancel is the footer's left-most control, the danger button right-most) and for the `"Close"` label
+- [X] T010 [US4] Adopt `confirmDialog` in `apps/unihub/frontend/src/components/EntityViews/ViewTabMenu.tsx`, replacing `Modal.useModal()`/`modal.confirm` and its holder — T009 green
 
-**Independent test**: on the inventory catalog (whose default view carries the seeded YTD filter), Add empty view → the new tab shows NO filter conditions, no sort, every column visible in natural order, nothing pinned; dragging a wide tab past a narrow one shows no width distortion; the kebab has exactly two entries.
+**Checkpoint**: US4 delta done inside the feature.
 
-- [X] T011 [P] [US2] Write failing tests for `blankConfig` (empty filters/sort, every page column visible in declared order with sequential `order` and no `pin`, page default `pageSize`) and for the add-tab action using it, in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`
-- [X] T012 [US2] Export `blankConfig(defaults: ViewConfig): ViewConfig` from `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` per data-model §2 and use it in the add-tab action (renamed `addBlankTab`, replacing `addAnonymousTab`'s use of `defaultConfig`); update the `ViewKebab.tsx` call site — T011 green
-- [X] T013 [P] [US2] Write a failing test asserting a horizontal `SortableList` item's inline transform contains NO `scale` component (only `translate`), in `apps/unihub/frontend/src/components/EntityToolbar/SortableList.test.tsx`
-- [X] T014 [US2] Use `CSS.Translate.toString(transform)` for `orientation === 'horizontal'` (keeping `CSS.Transform.toString` for the vertical default) in `apps/unihub/frontend/src/components/EntityToolbar/SortableList.tsx` — T013 green, and the dragged tab stops stretching (R33/FR-027)
-- [X] T015 [US2] Remove the "Manage views…" entry from `apps/unihub/frontend/src/components/EntityViews/ViewKebab.tsx` and its `onOpenManage` prop; update `ViewKebab.test.tsx` to assert exactly two entries (Add empty view · Open ▸)
+## Phase 5: App-wide confirmation adoption (cross-cutting, FR-031/SC-014)
 
-**Checkpoint**: US2 delta done — blank means blank, drags look right, the kebab is minimal.
+**Goal**: no `Modal.confirm` remains anywhere — every confirmation renders the compliant footer from the one helper. Each task migrates one call site AND updates that file's suite where it reaches into AntD's confirm DOM; behavioural assertions (confirm runs the action, cancel does not) stay as they are.
 
-## Phase 5: User Story 3 — Share and deep-link a view via URL (P3)
+- [X] T011 [P] Migrate `apps/unihub/frontend/src/components/AttributeManagementPanel/index.tsx` to `confirmDialog` and update that component's test selectors
+- [X] T012 [P] Migrate `apps/unihub/frontend/src/components/ParameterRowsEditor/index.tsx` (it passes `okButtonProps: { danger: true }` — map to the helper's `danger` flag) and update its tests
+- [X] T013 [P] Migrate `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` (the affected-balance-count confirm) and update the accounts tests
+- [X] T014 [P] Migrate `apps/unihub/frontend/src/pages/finance/currencies/index.tsx` and update the currencies tests
+- [X] T015 [P] Migrate `apps/unihub/frontend/src/pages/finance/exchange-rates/index.tsx` and update the exchange-rates tests
+- [X] T016 [P] Migrate `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` and update the balance-sheets tests
+- [X] T017 [P] Migrate `apps/unihub/frontend/src/pages/inventory/scenarios/detail.tsx` and update the scenarios tests
+- [X] T018 [P] Migrate `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionForm.tsx` and update its tests (that suite already waits on `.ant-modal-wrap` display state — keep the pattern)
+- [X] T019 Verify the sweep: `grep -rn "Modal.confirm\|modal.confirm" apps/unihub/frontend/src --include=*.tsx | grep -v test` returns nothing, and every migrated suite is green
 
-**Goal (round-4 delta)**: `<tableKey>.view=` carries the view id, so duplicate names cannot make a link ambiguous and renames never break links.
+**Checkpoint**: SC-014 holds app-wide — 9/9 confirmations use the shared footer.
 
-**Independent test**: activate a saved view → the URL shows `?<tableKey>.view=<12-char id>`; rename that view and reload the same URL → it still resolves to that view; a bogus id falls back to the default view with a notice.
+## Phase 6: Polish & Cross-Cutting
 
-- [X] T016 [P] [US3] Update the serialization suite in `apps/unihub/frontend/src/components/EntityViews/serialization.test.ts` for id-based references (emit `view=<id>`, parse an id, no name lookup, unresolvable id → fallback) and drop the round-2 "matches the page default name while virtual" cases
-- [X] T017 [US3] Change the `view` facet to carry the saved-view id in `apps/unihub/frontend/src/components/EntityViews/serialization.ts` (`serializeSavedEntries` takes an id; the parser returns `viewId` instead of `viewName`) per contracts/view-url-serialization.md v2.1 — T016 green
-- [X] T018 [US3] Resolve inbound references by id and emit ids outbound in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts`; a tab with no stored view (scratch tab or still-virtual page default) emits NO `.view` and serializes inline — PRESERVE the `lastProcessedRef`/`lastParamRef` separation (round-1 ping-pong guard)
-
-**Checkpoint**: US3 delta done — links are exact and rename-proof.
-
-## Phase 6: User Story 4 — Organize saved views (P4)
-
-**Goal (round-4 delta)**: Rename is a prefilled dialog; a duplicate keeps its source's name; promoting a view disturbs nothing; menus dismiss on outside click and Esc; the management modal is gone.
-
-**Independent test**: tab menu → Rename opens a modal prefilled with the current name (trims on commit, refuses blank); Duplicate produces an identically-named tab; promoting the third tab leaves it third with no dirty dot on either tab; clicking the table body closes an open menu; the kebab offers no Manage entry.
-
-- [X] T019 [P] [US4] Write failing RTL tests for the rename dialog (opens prefilled from the tab menu; commits a trimmed name via `renameTab`; refuses a blank/whitespace-only name; Cancel and Esc leave the name unchanged; on a tab with no stored view it relabels locally without any API call) in NEW `apps/unihub/frontend/src/components/EntityViews/RenameViewModal.test.tsx`
-- [X] T020 [US4] Create `apps/unihub/frontend/src/components/EntityViews/RenameViewModal.tsx` (AntD `Modal`, auto-focused prefilled input, Enter submits, Cancel left / primary right, no `maskClosable` while the value differs) and wire it into `apps/unihub/frontend/src/components/EntityViews/ViewTabs.tsx`, REMOVING the round-3 inline rename input — T019 green
-- [X] T021 [P] [US4] Write a failing test asserting `duplicateTab` names the copy exactly like its source (no "(1)" suffix) in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`, and update `ViewTabMenu.test.tsx`'s duplicate expectation
-- [X] T022 [US4] Drop the first-unused-suffix logic from `duplicateTab` in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` — T021 green (FR-015)
-- [X] T023 [P] [US4] Write failing tests for the promotion defects (promoting a currently-unpinned session tab does NOT move it in the strip; neither the promoted nor the demoted tab is dirty afterwards, including when the demoted one was the ACTIVE tab with live config) in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`
-- [X] T024 [US4] Fix both defects in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` per R32: the pinned-merge effect preserves the current strip order for already-open tabs and only inserts genuinely new pinned tabs (by `position`); `setDefaultTab` snapshots the active tab's live config into tab state BEFORE swapping identities — T023 green (FR-026/SC-011)
-- [X] T025 [P] [US4] Write failing tests (a `mousedown` outside the menu and its tab closes it; `Escape` closes it; a click INSIDE the menu does not close it before the action runs) in `apps/unihub/frontend/src/components/EntityViews/ViewTabs.test.tsx`
-- [X] T026 [US4] Add the document-level `mousedown`/`keydown` dismissal in `apps/unihub/frontend/src/components/EntityViews/ViewTabs.tsx` while a tab menu is open (ignore targets inside `.ant-dropdown` or the owning tab), per R36 — T025 green
-- [X] T027 [US4] DELETE `apps/unihub/frontend/src/components/EntityViews/ManageViewsModal.tsx` + `ManageViewsModal.test.tsx`, remove its render and state from `ViewTabs.tsx`, and remove `commitManageChanges` + the `ManageChanges` type from `useEntityViews.ts` and its tests (every capability is tab-addressed — R34/FR-017)
-
-**Checkpoint**: US4 delta done — one dialog, one management surface, no side effects.
-
-## Phase 7: Polish & Cross-Cutting
-
-- [X] T028 [P] Update e2e `apps/unihub/frontend/e2e/entity-views.spec.ts`: add the SC-010 width lock (measure the dragged tab's `boundingBox().width` mid-drag and assert it stays within 2px of its resting width — a real-browser assertion per the visual-geometry rule), and update the helper flows that used the Save-view modal (`createSavedView` now uses Rename + Save) and the removed kebab entry
-- [X] T029 [P] Sweep for stale references: `grep -rn "SaveViewModal\|ManageViewsModal\|commitManageChanges\|duplicateName\|manageTitle\|savedList\|needs-name" apps/unihub/frontend/src apps/unihub/frontend/e2e` returns nothing outside git history
-- [X] T030 Full quality loops: backend `uv run ruff format . && uv run ruff check . --fix && uv run pytest`; frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck — user rule). The e2e suite is NOT run here (the live stack serves real data and these specs write saved views); it awaits a human run
-- [X] T031 Update `CLAUDE.md` (round-4 SHIPPED note replacing the IN PROGRESS paragraph: what landed, test counts, gotchas) and note that BOTH migrations 0006 and 0007 are pending on the running docker stack
+- [X] T020 [P] Extend e2e `apps/unihub/frontend/e2e/entity-views.spec.ts`: with a pinned view, two "Add empty view" tabs and an unpinned saved view open, reload and assert the row contains exactly the pinned views plus the URL's view (SC-013); and that a revealed row stays revealed across a reload (FR-025)
+- [X] T021 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck — user rule); backend `uv run ruff check . && uv run pytest` as an untouched-baseline confirmation. The e2e suite is NOT run here (the live stack serves real data and these specs write saved views); it awaits a human run
+- [X] T022 Update `CLAUDE.md` (round-5 SHIPPED note replacing the IN PROGRESS paragraph: what landed, test counts, gotchas) and re-confirm that migrations 0006 and 0007 are still pending on the running docker stack
 
 ## Dependencies
 
-- Phase 2 blocks everything: T004/T005 need T002/T003 red first; T006 needs T005; T007 is independent [P].
-- US1 (T008–T010) needs T005 (duplicate names must be accepted before two scratch tabs can share the auto-label). US2 (T011–T015) and US3 (T016–T018) are independent of US1 and of each other. US4's T019–T022 need T007 (strings) and T010 (the inline input is removed alongside the modal cleanup); T023–T024 are independent of the rest of US4; T027 must follow T015 (kebab entry first, then the component).
-- Polish (T028–T031) last; T028 ∥ T029.
+- Phase 2 blocks everything: T003 needs T002 red first; every Phase 4/5 migration needs T003. T004 is independent [P].
+- US2 (T005–T008) is independent of the confirm work: T006 needs T005 red first; T008 needs T006 (the store must stop returning tabs before the hook stops consuming them) and T007 red first.
+- US4 (T009–T010) needs T003; Phase 5 (T011–T018) needs T003 and is fully parallel across files; T019 gates on all of them.
+- Polish (T020–T022) last.
 
 ## Parallel opportunities
 
-- T002 ∥ T003 (different test files); T007 ∥ the whole backend chain; T008 ∥ T011 ∥ T013 ∥ T016 ∥ T019 ∥ T021 ∥ T023 ∥ T025 (all test-authoring in distinct files, after Phase 2); T028 ∥ T029.
-- US1, US2 and US3 have no interdependencies once Phase 2 lands — they can proceed in any order.
+- T002 ∥ T004 ∥ T005 ∥ T007 (distinct files, before any implementation).
+- T011–T018 are eight independent single-file migrations — the widest parallel batch in this round.
+- The whole US2 chain (T005→T006→T008) runs in parallel with the entire confirm-dialog effort; they share no files.
 
 ## Implementation strategy
 
-Backend first (it unblocks duplicate names, which US1's auto-label depends on), then US1 → US2 → US3 → US4. The two defects the user called out (drag stretch T013–T014, promotion side effects T023–T024) are self-contained and can be pulled forward if they need to ship first. MVP scope if interrupted: Phase 2 + US1 + those two fix pairs — that covers every directive the user framed as broken rather than missing.
+The helper first (it unblocks nine call sites), then the two efforts in parallel: US2's derived-tab refactor and the app-wide confirm migration. MVP scope if interrupted: Phase 2 + US2 — the per-visit tab rule is the behaviour the user reported, while the footer sweep is a compliance fix that degrades gracefully if only partly applied (each migrated site is independently correct).

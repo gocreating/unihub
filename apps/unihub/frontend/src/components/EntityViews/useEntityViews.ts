@@ -207,6 +207,26 @@ export function useEntityViews({
     [isViewParamKey],
   );
 
+  // ── The four navigation guards of this hook ────────────────────────────────
+  // Each prevents a DIFFERENT failure; none is redundant with another, and
+  // removing any one of them reintroduces a shipped bug:
+  //
+  //   lastParamRef      — skip the echo of our OWN outbound write, so the
+  //                       inbound effect does not re-apply what we just wrote.
+  //   lastProcessedRef  — remember the last inbound value we fully handled
+  //                       (applied OR rejected). Never reset by an outbound
+  //                       write: doing so re-arms the inbound effect for the
+  //                       same stale value and the two ping-pong forever
+  //                       (round 1).
+  //   inboundSettledRef — stay quiet outbound until an inbound param, if any,
+  //                       has been applied, so we never overwrite a deep link
+  //                       before honouring it.
+  //   pendingLoadRef    — the config we last handed to `loadIntoTable()`.
+  //                       That call lands in a LATER render, so publishing
+  //                       before it does wrote the PRE-adoption state out as
+  //                       "overrides"; the next load replayed them and the view
+  //                       showed the unsaved dot on arrival (round 6, FR-032).
+  //
   // The entries last written by us — used to skip the echo of our own
   // outbound writes.
   const lastParamRef = useRef<string | null>(null);
@@ -216,6 +236,12 @@ export function useEntityViews({
   const lastProcessedRef = useRef<string | null>(null);
   // Outbound stays quiet until an inbound param (if any) has been applied.
   const inboundSettledRef = useRef(false);
+  // The config most recently requested via `loadIntoTable()`; cleared once
+  // the table's live state matches it. A comparison rather than a boolean
+  // because `loadConfig` has no completion signal AND a load that requests what
+  // the table already holds produces no state change — a flag would never
+  // clear, silencing the URL forever (R40).
+  const pendingLoadRef = useRef<ViewConfig | null>(null);
 
   const { tabs, setTabs, activeTabId, setActiveTabId, revealed, setRevealed } = useViewTabsState(
     tableKey,
@@ -234,6 +260,17 @@ export function useEntityViews({
   useEffect(() => {
     if (isError) message.error(t({ id: 'common.entityViews.loadError' }));
   }, [isError, t]);
+
+  /** Hand a config to the table AND arm the outbound gate: `loadConfig` lands
+   *  in a later render, so the URL writer must wait for it (R40/FR-032). */
+  const loadIntoTable = useCallback(
+    (config: ViewConfig, options?: { offset?: number }) => {
+      pendingLoadRef.current = config;
+      table.loadConfig(config, options);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [table.loadConfig],
+  );
 
   const viewById = useCallback(
     (viewId: string | undefined): EntityView | undefined =>
@@ -269,7 +306,7 @@ export function useEntityViews({
       active.tabId !== DEFAULT_TAB_ID ||
       !configsEqual(reconcileConfig(active.config, defaultConfig), defaultConfig)
     ) {
-      table.loadConfig(active.config);
+      loadIntoTable(active.config);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -290,7 +327,7 @@ export function useEntityViews({
     setTabs((prev) =>
       prev.map((tab) => (tab.tabId === DEFAULT_TAB_ID ? { ...tab, config: defaultBaseline } : tab)),
     );
-    table.loadConfig(defaultBaseline);
+    loadIntoTable(defaultBaseline);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFetched, defaultView]);
 
@@ -441,10 +478,10 @@ export function useEntityViews({
         prev.map((tab) => (tab.tabId === activeTabId ? { ...tab, config: snapshot } : tab)),
       );
       setActiveTabId(tabId);
-      table.loadConfig(target.config);
+      loadIntoTable(target.config);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeTabId, tabs, table.snapshotConfig, table.loadConfig, setTabs, setActiveTabId],
+    [activeTabId, tabs, table.snapshotConfig, loadIntoTable, setTabs, setActiveTabId],
   );
 
   const openView = useCallback(
@@ -465,10 +502,10 @@ export function useEntityViews({
       const tab: InternalTab = { tabId: uid(), kind: 'saved', viewId, name: view.name, config };
       setTabs((prev) => [...snapshotOutgoing(prev, snapshot), tab]);
       setActiveTabId(tab.tabId);
-      table.loadConfig(config);
+      loadIntoTable(config);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tabs, viewById, defaultView, defaultConfig, activeTabId, table.snapshotConfig, table.loadConfig, switchTab],
+    [tabs, viewById, defaultView, defaultConfig, activeTabId, table.snapshotConfig, loadIntoTable, switchTab],
   );
 
   const addBlankTab = useCallback(() => {
@@ -482,9 +519,9 @@ export function useEntityViews({
     };
     setTabs((prev) => [...snapshotOutgoing(prev, snapshot), tab]);
     setActiveTabId(tab.tabId);
-    table.loadConfig(blank);
+    loadIntoTable(blank);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultConfig, activeTabId, table.snapshotConfig, table.loadConfig, t]);
+  }, [defaultConfig, activeTabId, table.snapshotConfig, loadIntoTable, t]);
 
   const closeTab = useCallback(
     (tabId: string) => {
@@ -500,11 +537,11 @@ export function useEntityViews({
       if (activeTabId === tabId) {
         const fallback = tabs[index - 1] ?? tabs.find((item) => item.kind === 'default')!;
         setActiveTabId(fallback.tabId);
-        table.loadConfig(fallback.config);
+        loadIntoTable(fallback.config);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tabs, activeTabId, viewById, table.loadConfig],
+    [tabs, activeTabId, viewById, loadIntoTable],
   );
 
   /** The tab's effective config — live table state when it is the active tab. */
@@ -532,10 +569,10 @@ export function useEntityViews({
       };
       setTabs((prev) => [...snapshotOutgoing(prev, snapshot), tab]);
       setActiveTabId(tab.tabId);
-      table.loadConfig(tab.config);
+      loadIntoTable(tab.config);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tabs, tabStates, activeTabId, configOfTab, table.snapshotConfig, table.loadConfig, t],
+    [tabs, tabStates, activeTabId, configOfTab, table.snapshotConfig, loadIntoTable, t],
   );
 
   // ── Persistence (the ONLY API writes) ──────────────────────────────────────
@@ -833,7 +870,7 @@ export function useEntityViews({
       lastProcessedRef.current = raw; // don't re-process the same bad value
       inboundSettledRef.current = true;
       setActiveTabId(DEFAULT_TAB_ID);
-      table.loadConfig(defaultBaseline);
+      loadIntoTable(defaultBaseline);
     };
 
     const parsed = parseViewParams(searchParams, tableKey);
@@ -921,7 +958,7 @@ export function useEntityViews({
         // setTabs updater above, which is what assigns `targetTabId`.
         setActiveTabId(() => targetTabId);
       }
-      table.loadConfig(config, { offset });
+      loadIntoTable(config, { offset });
       lastProcessedRef.current = raw;
       inboundSettledRef.current = true;
     };
@@ -947,6 +984,17 @@ export function useEntityViews({
     if (!activeInternal) return;
     const snapshot = table.snapshotConfig();
     const reconciled = reconcileConfig(snapshot, defaultConfig);
+
+    // Never publish a HALF-LOADED tab (FR-032/R40). `loadIntoTable` records
+    // what it asked the table for; until the table actually holds it, anything
+    // we wrote would describe the pre-load state — and the next visit would
+    // replay it as genuine overrides, showing the unsaved dot on arrival.
+    if (pendingLoadRef.current) {
+      const pending = reconcileConfig(pendingLoadRef.current, defaultConfig);
+      if (!configsEqual(reconciled, pending)) return;
+      pendingLoadRef.current = null; // landed — resume publishing
+    }
+
     const page = table.limit > 0 ? Math.floor(table.offset / table.limit) + 1 : 1;
     const pageOut = page > 1 ? page : undefined;
 

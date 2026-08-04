@@ -1275,3 +1275,104 @@ describe('useEntityViews — round 5: per-visit tab row', () => {
     expect(result.current.views.activeTab.dirty).toBe(true);
   });
 });
+
+// ── Round 6: the load never publishes a half-loaded tab (FR-032/SC-015) ──────
+//
+// The defect: `table.loadConfig()` lands in a LATER render, but the outbound
+// URL effect re-runs in the SAME commit that resolved `savedViews` — so it read
+// the PRE-adoption snapshot and wrote it out as "overrides". The next load
+// replayed them on top of the stored config, so the view really did differ from
+// its baseline and showed the unsaved dot on arrival, with no user change.
+//
+// These assert on the EMITTED PARAMS, not just the dot: a dot-only assertion
+// passes while the URL is being poisoned for the next visit (R41).
+
+describe('useEntityViews — round 6: the load never publishes a half-loaded tab', () => {
+  /** A materialized default whose STORED config differs from the page defaults. */
+  const STORED_DEFAULT: EntityView = {
+    ...DEFAULT_VIEW,
+    id: 'storeddefault',
+    name: 'YTD',
+    config: {
+      filters: [],
+      sort: [{ field: 'amount', direction: 'desc' }],
+      columns: [
+        { key: 'name', visible: true, order: 0 },
+        { key: 'amount', visible: true, order: 1 },
+      ],
+      pageSize: 50, // page default is 25
+    },
+    pinned: true,
+    position: 0,
+    is_default: true,
+  };
+
+  /** Override facets present in the URL (the view reference itself is fine). */
+  function overrideParams(params: URLSearchParams): string[] {
+    return [...params.keys()].filter((key) => key.startsWith('tbl.') && key !== 'tbl.view');
+  }
+
+  it('an untouched load is clean AND writes no override params', async () => {
+    listMock.mockResolvedValue([STORED_DEFAULT]);
+    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+    // The stored config is adopted…
+    await waitFor(() => expect(result.current.table.limit).toBe(50));
+
+    // …and nothing about that load looks like a user edit.
+    expect(result.current.views.activeTab.dirty).toBe(false);
+    expect(overrideParams(result.current.searchParams)).toEqual([]);
+  });
+
+  it('the view-reference URL we now leave behind loads clean (loop broken)', async () => {
+    listMock.mockResolvedValue([STORED_DEFAULT]);
+    // Exactly what the pre-fix code emitted: the PAGE DEFAULTS dressed up as
+    // overrides on top of the stored view.
+    const { result } = renderHook(useNamedHarness, {
+      wrapper: makeWrapper([`/?tbl.view=${STORED_DEFAULT.id}`]),
+    });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+    await waitFor(() => expect(result.current.table.limit).toBe(50));
+
+    expect(result.current.views.activeTab.dirty).toBe(false);
+    expect(overrideParams(result.current.searchParams)).toEqual([]);
+  });
+
+  it('a genuine hand-edited override still marks the tab dirty (FR-013)', async () => {
+    listMock.mockResolvedValue([STORED_DEFAULT]);
+    const { result } = renderHook(useNamedHarness, {
+      wrapper: makeWrapper([`/?tbl.view=${STORED_DEFAULT.id}&tbl.size=100`]),
+    });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+
+    await waitFor(() => expect(result.current.table.limit).toBe(100));
+    expect(result.current.views.activeTab.dirty).toBe(true);
+  });
+
+  it('switching between open views publishes no override params', async () => {
+    const OTHER: EntityView = {
+      ...SAVED_VIEW,
+      id: 'otherview001',
+      name: 'Other',
+      pinned: true,
+      position: 1,
+    };
+    listMock.mockResolvedValue([STORED_DEFAULT, OTHER]);
+    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(2));
+    await waitFor(() =>
+      expect(result.current.views.tabs.some((t) => t.viewId === OTHER.id)).toBe(true),
+    );
+
+    const otherTabId = result.current.views.tabs.find((t) => t.viewId === OTHER.id)!.tabId;
+    act(() => result.current.views.switchTab(otherTabId));
+    await waitFor(() => expect(result.current.views.activeTab.viewId).toBe(OTHER.id));
+    expect(result.current.views.activeTab.dirty).toBe(false);
+    expect(overrideParams(result.current.searchParams)).toEqual([]);
+
+    act(() => result.current.views.switchTab('__default__'));
+    await waitFor(() => expect(result.current.views.activeTab.isDefault).toBe(true));
+    expect(result.current.views.activeTab.dirty).toBe(false);
+    expect(overrideParams(result.current.searchParams)).toEqual([]);
+  });
+});

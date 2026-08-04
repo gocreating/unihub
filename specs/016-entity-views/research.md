@@ -342,3 +342,33 @@ Round 2 decisions per the spec's Clarifications Session 2026-07-23. Backend regi
 **Decision**: `common.entityViews.close` changes value only — `"Close tab"` → `"Close"`, zh-TW `"關閉分頁"` → `"關閉"`. The key name stays so no call site or test selector churns beyond the label text.
 
 **Rationale**: The action lives inside that tab's own menu, so its object is already unambiguous; every sibling item (Save, Duplicate, Rename, Delete) is likewise a bare verb. Note the aria-label on the round-3 close button used the same key, but that button no longer exists — the string is now menu-only.
+
+---
+
+# Round 6 (Clarifications Session 2026-08-04c)
+
+## R40. The spurious unsaved indicator — a write-then-replay loop
+
+**Reproduced first** (constitution V, and the same reproduction-first discipline the 015 phantom-diff bug used). Harness: a materialized default view whose stored config differs from the page defaults (`pageSize: 50`, a sort rule) mounted with a clean URL.
+
+- Observed: the tab settles CLEAN, but the address bar ends up holding
+  `?tbl.view=<id>&tbl.sort=&tbl.size=25` — override parameters that describe the PAGE DEFAULTS, not the stored view.
+- Feeding that exact URL back into a fresh mount: `dirty === true` on arrival, with no user interaction. The loop is self-sustaining.
+
+**Root cause**: `table.loadConfig(...)` is asynchronous with respect to the effect that calls it — the table's state lands in a later render. The outbound URL effect re-runs in the SAME commit (its dependency list includes `savedViews`, which is what just resolved), reads `table.snapshotConfig()` while the table still holds its pre-adoption boot state, and serializes the difference against the now-known stored baseline as "overrides".
+
+**Decision**: gate the outbound writer on load completion. A `pendingLoadRef` records the config most recently handed to `table.loadConfig(...)` — by the default-adoption effect, the inbound URL effect, `switchTab`, `openView`, `addBlankTab`, and `duplicateTab`. The outbound effect returns early while a request is pending and the table's reconciled snapshot does not yet equal it; once they match (or the ref is empty) it clears the gate and publishes normally.
+
+**Why comparison rather than a flag**: a bare "loading" boolean cannot tell when to clear itself — `loadConfig` produces no completion signal, and if the requested config happens to equal what the table already holds, no state change ever arrives. Comparing against the requested value is self-clearing in both cases: it matches immediately when there was nothing to change (fail-open, per the plan's constraint) and matches one render later when there was.
+
+**Explicitly preserved**: the round-1 `lastProcessedRef` / `lastParamRef` separation. It guards a DIFFERENT race — re-processing the echo of our own outbound write — and removing it restarts the infinite navigation loop recorded in round 1. The new gate is additive; after this round the effect carries four named guards, each commented with the failure it prevents.
+
+**Alternatives considered**: making `loadConfig` synchronous (rejected — it fans out to three independent toolbar hooks' state, none of which can be set synchronously from an effect); deriving the URL from `tab.config` instead of the live snapshot (rejected — the active tab's `config` field is deliberately stale by design; the live table IS the truth for the active tab, and reading the stale copy would break the "copy the URL at any moment" guarantee, SC-003); debouncing the outbound write (rejected — a timing hack that turns a deterministic ordering bug into a flaky one).
+
+## R41. The URL-emission invariant
+
+**Decision**: state the rule the fix enforces, and test it directly rather than only testing the symptom: **the URL must never carry an override parameter whose value merely restates the referenced view's stored configuration.** `facetOverrides()` already returns an empty set for facets that match; the defect was never in that comparison but in *when* it ran. The regression suite therefore asserts on the emitted parameters (no `.sort`/`.size`/`.f`/`.cols` after an untouched load), not just on the absence of the dot — a dot-only assertion would pass even while the URL was being poisoned for the next visit, which is exactly how this shipped undetected through rounds 2–5.
+
+**Rationale**: the dot is a symptom; the poisoned URL is the defect. SC-015 is written against both so a future regression cannot hide in the gap.
+
+**Coverage note**: the same assertion is applied to a saved tab and to a tab switch, because the pre-adoption window exists on every path that calls `loadConfig`, not only on mount.

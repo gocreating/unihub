@@ -1,86 +1,53 @@
-# Tasks: Entity Views — Round 5
+# Tasks: Entity Views — Round 6
 
-**Input**: Design documents from `/specs/016-entity-views/` (spec.md Clarifications Session 2026-08-04b, plan.md round 5, research.md R37–R39, data-model.md §4)
+**Input**: Design documents from `/specs/016-entity-views/` (spec.md Clarifications Session 2026-08-04c, plan.md round 6, research.md R40–R41, data-model.md §3)
 
-**Prerequisites**: Rounds 1–4 are shipped (round 4 at commit bb3f310). This list covers round 5 only. TDD is mandatory (constitution V): tests written against the new behavior before the code.
+**Prerequisites**: Rounds 1–5 are shipped (round 5 at commit c2c256e). This list covers round 6 only — a single reproduced defect. TDD is not optional here: the reproduction lands RED before the fix (constitution V; same reproduction-first discipline as the 015 phantom-diff bug).
 
-**Organization**: Tasks are grouped by user story. Round-5 directives map: per-visit tabs (the row rebuilds on every page load) → US2; the shared confirmation footer + the "Close" label → US4 (they live on the tab menu); the shared helper itself and the app-wide sweep are cross-cutting infrastructure → Foundational + a dedicated phase.
+**Organization**: One user story is affected. The spurious unsaved indicator is a URL/state-sync defect on the deep-linking path → **US3**, with regression coverage that also protects US1's Save affordance (a permanently dirty tab makes Save look perpetually needed).
 
-**Scope note**: no backend, no migration, no API or URL-grammar change this round. Eight of the nine confirm-dialog adoptions are OUTSIDE feature 016 — their suites assert on AntD's `.ant-modal-confirm-btns` DOM and must be updated in lockstep.
+**Scope note**: frontend only — one hook file, its suite, and one e2e spec. No backend, no migration, no API or URL-grammar change (the grammar is fine; *when* we emit is the bug).
 
 ## Phase 1: Setup
 
-- [X] T001 Confirm green baseline: `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/`; record counts for the ship report (the backend is untouched this round, so its suite only needs a final confirmation run)
+- [X] T001 Confirm green baseline: `pnpm lint && pnpm typecheck && pnpm test` from `apps/unihub/frontend/`; record counts for the ship report (backend untouched — one confirmation run at the end)
 
-## Phase 2: Foundational (blocking prerequisites)
+## Phase 2: Foundational (blocking prerequisite)
 
-**The shared confirmation helper — every delete gate in the app depends on it**
+**The reproduction — it must FAIL before anything is fixed**
 
-- [X] T002 [P] Write failing tests for the shared helper in NEW `apps/unihub/frontend/src/components/ConfirmDialog/index.test.tsx`: renders title/content/okText; the footer's FIRST child is Cancel and its LAST is the confirming button (constitution VI — assert DOM order and `justify-content: space-between`, not AntD's confirm markup); `danger: true` renders `ant-btn-dangerous`; confirming runs `onOk` and closes; cancelling runs nothing; an async `onOk` shows a loading state until it settles and keeps the dialog open if it rejects
-- [X] T003 Create `apps/unihub/frontend/src/components/ConfirmDialog/index.tsx` exporting `confirmDialog({ title, content, okText, cancelText, danger, onOk })` over AntD `Modal` with an explicit `space-between` footer (Cancel left, primary right), called imperatively so migration is a one-line swap per site (R38) — T002 green
-- [X] T004 [P] Change the `common.entityViews.close` VALUE only — `"Close tab"` → `"Close"`, zh-TW `「關閉分頁」` → `「關閉」` — in `apps/unihub/frontend/src/locales/en-US/pages.ts` and `apps/unihub/frontend/src/locales/zh-TW/pages.ts` (same commit; the key name stays so no selector churns beyond the label text)
+- [X] T002 Add the failing regression to `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx` in a new `describe('round 6: the load never publishes a half-loaded tab')`, using a materialized default view whose stored config differs from the page defaults (e.g. `pageSize: 50` plus a sort rule): (a) mount with a CLEAN url → once `savedViews` resolves and the stored config is adopted, `activeTab.dirty === false` **and** the search params contain NO `.sort`/`.size`/`.f`/`.cols` (at most `.view`); (b) mount with the URL that today's code emits (`?tbl.view=<id>&tbl.sort=&tbl.size=25`) → `dirty === false` after settling, proving the replay loop is broken. Confirm BOTH assertions fail (or the second one does) against the current implementation before proceeding — a passing test here means the reproduction is wrong, not that the bug is absent
 
-**Checkpoint**: the helper exists and is proven compliant on its own; the label is updated.
+**Checkpoint**: the defect is captured in the committed suite and demonstrably red.
 
-## Phase 3: User Story 2 — Work across multiple views with tabs (P2)
+## Phase 3: User Story 3 — Share and deep-link a view via URL (P3)
 
-**Goal (round-5 delta)**: the tab row is per-visit state. Every page load rebuilds it from the account's pinned views plus the single view the URL addresses; everything else — scratch tabs, opened-but-unpinned views, and their unsaved changes — is discarded.
+**Goal (round-6 delta)**: the URL never describes a tab that has not finished loading, so an untouched load stays clean and cannot poison the next one — while a genuine override still loads dirty (FR-013 unchanged).
 
-**Independent test**: open a pinned view, two scratch tabs and an unpinned saved view, then refresh. The row shows exactly the pinned views (including the default holder) plus the URL's view; the scratch tabs are gone. Reveal the row on a single-default table and refresh — it stays revealed.
+**Independent test**: load a table whose saved default differs from the page defaults, touch nothing, and confirm no indicator and no override params; reload and confirm the same; then hand-edit `.size=100` into the URL and confirm the view loads at 100/page WITH the indicator.
 
-- [X] T005 [P] [US2] Write failing tests for the reduced store in NEW `apps/unihub/frontend/src/components/EntityViews/useViewTabsState.test.ts`: only `revealed` is written to `unihub.views.<tableKey>`; a STALE round-4 payload carrying `tabs`/`activeTabId` is read tolerantly (its `revealed` survives, its tabs are ignored, nothing throws); a corrupt payload falls back to `revealed: false`
-- [X] T006 [US2] Reduce the store in `apps/unihub/frontend/src/components/EntityViews/useViewTabsState.ts`: persist `{ revealed }` only, keep `tabs`/`activeTabId` as plain React state seeded from the page defaults, and make `restore()` pick `revealed` out of any shape (R37) — T005 green
-- [X] T007 [P] [US2] Write failing RTL tests in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`: a fresh mount with pinned + unpinned saved views opens ONLY the pinned ones (plus the default holder); a mount whose URL addresses an unpinned saved view opens that view too and makes it active; a mount with no URL view state activates the default holder; a remount does NOT resurrect scratch tabs or unsaved changes from the previous visit (replacing the round-1 "tabs survive a remount within the session" expectation)
-- [X] T008 [US2] Build the tab list from pinned views + the URL on mount in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` and DELETE the mount-time rehydrate effect that replayed a restored tab's config; keep the round-4 order-preserving merge for refetches DURING a visit, and PRESERVE the `lastProcessedRef`/`lastParamRef` separation — with no stored tab list the URL is the only carrier of "where you were", so the ping-pong guard and the outbound effect must stay exactly right (R37) — T007 green
+- [X] T003 [US3] Add the load gate to `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts`: a `pendingLoadRef` holding the config most recently handed to `table.loadConfig(...)`, set by EVERY caller — the default-adoption effect, the inbound URL effect, `switchTab`, `openView`, `addBlankTab`, `duplicateTab`. The outbound URL effect returns early while the ref is set and `reconcileConfig(table.snapshotConfig(), defaultConfig)` does not yet equal the pending value; when they match (or the ref is empty) it clears the ref and publishes as before (R40) — T002 green
+- [X] T004 [US3] Document the guards where they live in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts`: a short comment block naming all FOUR navigation guards (`inboundSettledRef`, `lastParamRef`, `lastProcessedRef`, `pendingLoadRef`) and the distinct failure each prevents, so the next change to this effect does not delete one as redundant — the round-1 ping-pong guard in particular MUST survive
+- [X] T005 [P] [US3] Extend the regression coverage in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx`: a genuine hand-edited override (`?tbl.view=<id>&tbl.size=100`) still yields `dirty === true` with the override applied (FR-013/US3-AC2 intact); switching between two open views publishes no override params for either (the pre-adoption window exists on every `loadConfig` path, not just mount); opening a saved view from the kebab likewise emits only its `.view` reference
 
-**Checkpoint**: US2 delta done — refreshing is a clean rebuild, and the URL keeps the user's place.
+**Checkpoint**: US3 delta done — SC-015 holds for load, reload, and tab switching.
 
-## Phase 4: User Story 4 — Organize saved views (P4)
+## Phase 4: Polish & Cross-Cutting
 
-**Goal (round-5 delta)**: the view-delete confirmation obeys the constitution's footer rule, and the tab menu's close action reads "Close".
-
-**Independent test**: tab menu → Delete opens a dialog with Cancel flush left and a danger Delete on the right; cancelling deletes nothing, confirming deletes the view. The menu's close item reads "Close".
-
-- [X] T009 [P] [US4] Update `apps/unihub/frontend/src/components/EntityViews/ViewTabMenu.test.tsx` for the new confirm surface (Cancel is the footer's left-most control, the danger button right-most) and for the `"Close"` label
-- [X] T010 [US4] Adopt `confirmDialog` in `apps/unihub/frontend/src/components/EntityViews/ViewTabMenu.tsx`, replacing `Modal.useModal()`/`modal.confirm` and its holder — T009 green
-
-**Checkpoint**: US4 delta done inside the feature.
-
-## Phase 5: App-wide confirmation adoption (cross-cutting, FR-031/SC-014)
-
-**Goal**: no `Modal.confirm` remains anywhere — every confirmation renders the compliant footer from the one helper. Each task migrates one call site AND updates that file's suite where it reaches into AntD's confirm DOM; behavioural assertions (confirm runs the action, cancel does not) stay as they are.
-
-- [X] T011 [P] Migrate `apps/unihub/frontend/src/components/AttributeManagementPanel/index.tsx` to `confirmDialog` and update that component's test selectors
-- [X] T012 [P] Migrate `apps/unihub/frontend/src/components/ParameterRowsEditor/index.tsx` (it passes `okButtonProps: { danger: true }` — map to the helper's `danger` flag) and update its tests
-- [X] T013 [P] Migrate `apps/unihub/frontend/src/pages/finance/accounts/index.tsx` (the affected-balance-count confirm) and update the accounts tests
-- [X] T014 [P] Migrate `apps/unihub/frontend/src/pages/finance/currencies/index.tsx` and update the currencies tests
-- [X] T015 [P] Migrate `apps/unihub/frontend/src/pages/finance/exchange-rates/index.tsx` and update the exchange-rates tests
-- [X] T016 [P] Migrate `apps/unihub/frontend/src/pages/finance/balance-sheets/index.tsx` and update the balance-sheets tests
-- [X] T017 [P] Migrate `apps/unihub/frontend/src/pages/inventory/scenarios/detail.tsx` and update the scenarios tests
-- [X] T018 [P] Migrate `apps/unihub/frontend/src/pages/inventory/acquisitions/AcquisitionForm.tsx` and update its tests (that suite already waits on `.ant-modal-wrap` display state — keep the pattern)
-- [X] T019 Verify the sweep: `grep -rn "Modal.confirm\|modal.confirm" apps/unihub/frontend/src --include=*.tsx | grep -v test` returns nothing, and every migrated suite is green
-
-**Checkpoint**: SC-014 holds app-wide — 9/9 confirmations use the shared footer.
-
-## Phase 6: Polish & Cross-Cutting
-
-- [X] T020 [P] Extend e2e `apps/unihub/frontend/e2e/entity-views.spec.ts`: with a pinned view, two "Add empty view" tabs and an unpinned saved view open, reload and assert the row contains exactly the pinned views plus the URL's view (SC-013); and that a revealed row stays revealed across a reload (FR-025)
-- [X] T021 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck — user rule); backend `uv run ruff check . && uv run pytest` as an untouched-baseline confirmation. The e2e suite is NOT run here (the live stack serves real data and these specs write saved views); it awaits a human run
-- [X] T022 Update `CLAUDE.md` (round-5 SHIPPED note replacing the IN PROGRESS paragraph: what landed, test counts, gotchas) and re-confirm that migrations 0006 and 0007 are still pending on the running docker stack
+- [X] T006 [P] Extend e2e `apps/unihub/frontend/e2e/entity-views.spec.ts`: load the catalog, save the default view with a changed page size so its stored config differs from the page defaults, then reload TWICE without touching anything and assert zero `[aria-label="Unsaved changes"]` elements and a URL carrying no `inventory-catalog.size`/`.sort` params (SC-015)
+- [X] T007 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck — user rule); backend `uv run ruff check . && uv run pytest` as an untouched-baseline confirmation. The e2e suite is NOT run here (the live stack serves real data and these specs write saved views); it awaits a human run
+- [X] T008 Update `CLAUDE.md` (round-6 SHIPPED note replacing the IN PROGRESS paragraph: the loop, the gate, why a boolean flag would not clear, the four-guard rule, and the known poisoned-bookmark residue) and re-confirm that migrations 0006 and 0007 remain pending on the running docker stack
 
 ## Dependencies
 
-- Phase 2 blocks everything: T003 needs T002 red first; every Phase 4/5 migration needs T003. T004 is independent [P].
-- US2 (T005–T008) is independent of the confirm work: T006 needs T005 red first; T008 needs T006 (the store must stop returning tabs before the hook stops consuming them) and T007 red first.
-- US4 (T009–T010) needs T003; Phase 5 (T011–T018) needs T003 and is fully parallel across files; T019 gates on all of them.
-- Polish (T020–T022) last.
+- T002 blocks T003 (red before green — the whole point of this round).
+- T004 and T005 follow T003; T005 is [P] with T004 (different concerns in the same file — sequence them if edits collide).
+- Polish (T006–T008) last; T006 is [P] with nothing outstanding.
 
 ## Parallel opportunities
 
-- T002 ∥ T004 ∥ T005 ∥ T007 (distinct files, before any implementation).
-- T011–T018 are eight independent single-file migrations — the widest parallel batch in this round.
-- The whole US2 chain (T005→T006→T008) runs in parallel with the entire confirm-dialog effort; they share no files.
+- Little to parallelise: this is one defect in one file. T005's extra cases can be written while T004's comment block is added, and T006 can be drafted any time after T003.
 
 ## Implementation strategy
 
-The helper first (it unblocks nine call sites), then the two efforts in parallel: US2's derived-tab refactor and the app-wide confirm migration. MVP scope if interrupted: Phase 2 + US2 — the per-visit tab rule is the behaviour the user reported, while the footer sweep is a compliance fix that degrades gracefully if only partly applied (each migrated site is independently correct).
+Reproduce, fix, then widen the net. The reproduction (T002) is the deliverable that keeps this from recurring — it asserts on the EMITTED PARAMS, not just the indicator, because a dot-only assertion passes while the URL is being poisoned for the next visit, which is exactly how this survived rounds 2–5 (R41). MVP scope if interrupted: T002 + T003 — that is the user-visible fix; T004–T006 are durability.

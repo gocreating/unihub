@@ -1,36 +1,43 @@
-# Implementation Plan: Entity Views — Round 5 (per-visit tabs, confirm footers)
+# Implementation Plan: Entity Views — Round 6 (the spurious unsaved indicator)
 
 **Branch**: `016-entity-views` | **Date**: 2026-08-04 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-04b (round 5 on top of the round-4 implementation; earlier plans at commits 467beff / 8e1f169 / 3defc24 / 5d6ad96)
+**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-04c (round 6 on top of the round-5 implementation; earlier plans at commits 467beff / 8e1f169 / 3defc24 / 5d6ad96 / bb3f310 / c2c256e)
 
 ## Summary
 
-Three changes, one of which reaches outside the feature:
+One defect, reproduced before planning. The unsaved-changes dot appears on a freshly loaded view the user never touched, at timings that look random.
 
-1. **Tabs become per-visit, not per-session** (FR-018, SC-013). The open-tab list stops being persisted: every page load — refresh, navigation back to the table, or a new session — rebuilds the row from the account's **pinned views** (including the default-role holder) plus **the single view the URL addresses** (an unpinned saved view, or an inline unsaved configuration). Everything else is discarded, unsaved changes included. `useViewTabsState`'s sessionStorage store shrinks from `{tabs, activeTabId, revealed}` to just `revealed` — the FR-025 display preference, which is not a tab and must still survive a reload.
-2. **One shared confirmation helper** (FR-031, SC-014). AntD's `Modal.confirm` right-aligns Cancel and OK together, which violates the constitution's footer rule (primary right, everything else grouped left, Cancel left-most). A new `confirmDialog()` helper renders that footer once, and **all nine** call sites adopt it — eight of them outside this feature, whose tests currently assert on AntD's `.ant-modal-confirm-btns` DOM.
-3. **"Close tab" → "Close"** in both locales — the action already sits inside that tab's own menu, so the noun is redundant.
+**Root cause (reproduced):** the outbound URL effect publishes the active tab's state *before* that tab has finished adopting its stored configuration. `useEntityViews` asks the table to load a view's config via `table.loadConfig(...)`, but the table's state lands in a **later** render — meanwhile the outbound effect, which re-runs in the same commit (its deps include `savedViews`), reads the pre-adoption snapshot and serializes the difference as **override parameters**:
+
+```
+/inventory/catalog?inventory-catalog.view=<id>&inventory-catalog.sort=&inventory-catalog.size=25
+                                              └─ "overrides" that are really just the page defaults
+```
+
+That visit looks fine — the dot settles clean once adoption completes. But the address bar is now poisoned, and the **next** load replays those overrides on top of the stored config (correctly, per FR-005), so the view genuinely differs from its baseline and the dot is shown on arrival. It then rewrites itself, which is what makes the timing feel unmanageable.
+
+**Fix (FR-032):** gate the outbound writer on load completion. Every path that asks the table to load a config records what it asked for; the writer stays silent until the table's live state matches that request, then clears the gate and resumes. Consequence: a load with no user change emits no override parameters, so the next load is clean too (SC-015). Dirty semantics are unchanged — the dot still means "what you see differs from what's stored" (FR-013).
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.7 (frontend). **No backend change this round** — nothing in the API, models, or migrations moves.
+**Language/Version**: TypeScript 5.7 (frontend). **No backend change** — no API, model, migration, or contract move.
 
-**Primary Dependencies**: React 18.3, Ant Design 5.24 (`Modal`, `Modal.useModal`), TanStack React Query 5, React Router 7, react-intl
+**Primary Dependencies**: React 18.3, React Router 7 (`navigate` with `replace`), TanStack React Query 5
 
-**Storage**: `sessionStorage` key `unihub.views.<tableKey>` reduced to `{ revealed: boolean }`; a stale round-4 payload (with `tabs`/`activeTabId`) MUST be read tolerantly — only `revealed` is picked out, everything else ignored. No database or API storage changes.
+**Storage**: None touched. The URL remains the only carrier of "where you were" across a load (round 5), which is exactly why a wrong write there is so damaging.
 
-**Testing**: Vitest + RTL (rebuild-on-load: pinned + default + URL only; unsaved tabs discarded; reveal flag survives; a stale payload is tolerated; the shared helper's footer geometry and danger styling; every migrated call site still confirms and still cancels), Playwright e2e (refresh with scratch tabs open → only pinned + URL remain)
+**Testing**: Vitest + RTL regression suite locking SC-015 — (a) a materialized default whose stored config differs from the page defaults loads CLEAN and writes NO override params; (b) feeding the previously-emitted URL back in still loads clean (the loop is broken); (c) a genuine hand-edited override still marks the tab dirty (FR-013 preserved); (d) switching tabs and opening a saved view never publish a pre-adoption snapshot. Playwright e2e: reload the catalog twice untouched and assert zero indicators.
 
 **Target Platform**: Desktop/tablet web browsers
 
 **Project Type**: Web application — React SPA under `apps/unihub/frontend/`
 
-**Performance Goals**: Unchanged. Dropping the tab store removes a `sessionStorage.setItem` on every tab/config change — strictly less work per interaction.
+**Performance Goals**: Strictly fewer URL writes than today (the spurious ones disappear); no new subscriptions or timers.
 
-**Constraints**: The URL is now the ONLY carrier of "which view is active" across a load, so the outbound URL effect must stay correct or a refresh loses the user's place; the round-1 `lastProcessedRef`/`lastParamRef` ping-pong guard must survive the refactor; `strict: true` TS, zero ESLint warnings; both locales in the same commit; eight non-016 test suites must be updated in lockstep with the helper adoption.
+**Constraints**: The round-1 `lastProcessedRef`/`lastParamRef` ping-pong guard must survive untouched — it solves a *different* problem (re-processing our own echo) and removing it would restart an infinite navigation loop. The gate must be fail-open: if a requested load never lands (e.g. the config was already applied, so no state change occurs), the writer must resume rather than go permanently silent.
 
-**Scale/Scope**: Single-user hub; same 5 adopted pages for views; 9 confirmation call sites app-wide.
+**Scale/Scope**: One hook (`useEntityViews`), its test suite, and one e2e spec. Five adopted pages inherit the fix.
 
 ## Constitution Check
 
@@ -38,21 +45,21 @@ Three changes, one of which reaches outside the feature:
 
 | # | Principle | Status | Notes |
 |---|-----------|--------|-------|
-| I | Entity-centric + data_io | ✅ PASS | No schema, model, or registry change — this round is presentation state only. |
-| II | Domain independence | ✅ PASS | The confirm helper lands in `components/` as shared infrastructure and is imported by finance and inventory pages alike; no domain imports another. |
-| III | Reference alignment | ✅ PASS | The helper wraps AntD's own `Modal` — same component, corrected footer. No new libraries. |
+| I | Entity-centric + data_io | ✅ PASS | No schema, model, or registry change. |
+| II | Domain independence | ✅ PASS | Change confined to `components/EntityViews/useEntityViews.ts`. |
+| III | Reference alignment | ✅ PASS | Plain React refs and effects; no new libraries or patterns. |
 | IV | API contract-driven | ✅ PASS | N/A — no API surface touched. |
-| V | Quality loop + TDD | ✅ PASS | Rebuild-on-load and helper-footer tests are written before the code; the eight migrated call sites keep their existing behavioral assertions (confirm → action runs, cancel → nothing runs), updated only where they reach into AntD's confirm DOM. |
-| VI | UI/UX (ov-fleet) | ✅ **This round's subject** | FR-031 exists precisely to bring every confirmation into line with the footer rule (Cancel left-most, primary right). Danger styling on destructive confirms is preserved. |
+| V | Quality loop + TDD | ✅ **Central** | The defect was reproduced in a throwaway harness before planning; that reproduction becomes the first committed test and must be RED before the fix. Reproduction-first is the same discipline the 015 phantom-diff bug used. |
+| VI | UI/UX (ov-fleet) | ✅ PASS | The indicator's appearance is unchanged; only its truthfulness improves. |
 | VII | PageTable layout | ✅ PASS | Untouched. |
-| VIII | i18n | ✅ PASS | `common.entityViews.close` changes value in en-US **and** zh-TW same commit; the helper takes already-translated strings, adding no hardcoded copy. |
+| VIII | i18n | ✅ PASS | No new strings. |
 | IX–XI | Currency / charts | N/A | Not touched. |
-| XII | Entity toolbar patterns | ✅ PASS | Apply-gate and remount keys unchanged; tab identity still feeds the PageTable remount key, now derived rather than restored. |
-| — | Dev constraints | ✅ PASS | pnpm only; delete gates preserved (every migrated confirm keeps its danger + confirmation semantics); desktop-first. |
+| XII | Entity toolbar patterns | ✅ PASS | Apply-gate and remount keys unchanged. |
+| — | Dev constraints | ✅ PASS | pnpm only; desktop-first. |
 
 **Initial gate result**: PASS — no violations to justify. Re-checked after Phase 1 design: still PASS.
 
-**Scope note**: eight of the nine helper adoptions are outside feature 016. They are in scope because the clarification explicitly chose app-wide consistency, and because a shared helper that only one caller uses cannot enforce anything.
+**Known residue (accepted, documented):** a URL already poisoned by the old behaviour — one the user bookmarked or is currently sitting on — still carries real override parameters, and FR-005 requires them to be honoured. Such a URL will still load dirty after the fix, because the system cannot distinguish a stale machine-written override from a deliberate hand-edited one. Navigating to the page afresh (any nav-menu click) produces a clean URL immediately, and no *new* poisoned URLs can be produced.
 
 ## Project Structure
 
@@ -60,12 +67,12 @@ Three changes, one of which reaches outside the feature:
 
 ```text
 specs/016-entity-views/
-├── spec.md              # + Clarifications Session 2026-08-04b, FR-018 rewritten, FR-031, SC-013/SC-014
-├── plan.md              # This file (round 5; rounds 1–4 in git history)
-├── research.md          # + R37–R39 (round-5 decisions)
-├── data-model.md        # Updated: ViewTabsState reduced to `revealed`; tab list is derived
-├── quickstart.md        # + round-5 manual walk-through
-├── contracts/           # UNCHANGED — no API or URL grammar change this round
+├── spec.md              # + Clarifications Session 2026-08-04c, FR-013 sharpened, FR-032, SC-015
+├── plan.md              # This file (round 6; rounds 1–5 in git history)
+├── research.md          # + R40–R41 (round-6 decisions)
+├── data-model.md        # Updated §3: the URL-emission invariant
+├── quickstart.md        # + round-6 verification walk-through
+├── contracts/           # UNCHANGED — the URL grammar itself is not changing
 └── tasks.md             # Phase 2 output (/speckit-tasks)
 ```
 
@@ -73,30 +80,17 @@ specs/016-entity-views/
 
 ```text
 apps/unihub/frontend/src/
-├── components/
-│   ├── ConfirmDialog/                      # NEW — shared confirmation helper
-│   │   ├── index.tsx                       #   confirmDialog({title, content, okText, danger, onOk})
-│   │   └── index.test.tsx                  #   footer geometry + danger + confirm/cancel wiring
-│   ├── EntityViews/
-│   │   ├── useViewTabsState.ts             # store reduced to `revealed`; tolerant of stale payloads
-│   │   ├── useEntityViews.ts               # tab list derived from pinned views + URL on every load
-│   │   └── ViewTabMenu.tsx                 # adopts confirmDialog; "Close" label
-│   ├── AttributeManagementPanel/index.tsx  # ┐
-│   └── ParameterRowsEditor/index.tsx       # │
-├── pages/                                  # │ eight existing Modal.confirm call sites
-│   ├── finance/accounts/index.tsx          # │ migrated to the shared helper (+ their tests)
-│   ├── finance/currencies/index.tsx        # │
-│   ├── finance/exchange-rates/index.tsx    # │
-│   ├── finance/balance-sheets/index.tsx    # │
-│   ├── inventory/scenarios/detail.tsx      # │
-│   └── inventory/acquisitions/AcquisitionForm.tsx  # ┘
-└── locales/{en-US,zh-TW}/pages.ts          # "Close tab" → "Close"
+└── components/EntityViews/
+    ├── useEntityViews.ts        # pendingLoadRef gate on the outbound URL effect;
+    │                            #   every loadConfig caller records its request
+    └── useEntityViews.test.tsx  # regression suite: clean load, loop broken,
+                                 #   genuine overrides still dirty, tab switches safe
 
 apps/unihub/frontend/e2e/
-└── entity-views.spec.ts                    # + refresh-discards-unsaved-tabs check
+└── entity-views.spec.ts         # + "reload twice untouched → zero indicators" (SC-015)
 ```
 
-**Structure Decision**: Same layered structure as rounds 1–4. The one new shared component (`ConfirmDialog`) sits beside the other cross-domain components (`EmptyValue`, `OverflowTooltip`, `PageTable`) because it is infrastructure every domain consumes — the same placement rationale those components already established.
+**Structure Decision**: A single-file fix in the hook that owns both the URL and the tab state. The gate lives beside the existing `inboundSettledRef`/`lastParamRef`/`lastProcessedRef` guards so all four navigation guards are readable together — with a comment explaining what each one prevents, since this is now the fourth distinct race this effect has had to defend against.
 
 ## Complexity Tracking
 

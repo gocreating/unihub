@@ -323,6 +323,43 @@ test.describe('entity-views per-visit tabs (US2, round 5)', () => {
   });
 });
 
+test.describe('entity-views unsaved indicator (US3, round 6)', () => {
+  test('an untouched load stays clean across repeated reloads (SC-015)', async ({ page }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    const row = page.getByTestId('view-tabs-row');
+    await expect(row).toBeVisible();
+
+    // Make the default view's STORED config differ from the page defaults —
+    // the condition under which the pre-fix code published the pre-adoption
+    // state as overrides.
+    await page.getByText('25 / page').first().click();
+    await page.getByTitle('100 / page').click();
+    await expect(page.getByText('100 / page').first()).toBeVisible();
+
+    const defaultTab = row.getByRole('tab').first();
+    await defaultTab.click();
+    await page.getByRole('menuitem', { name: 'Save' }).click();
+    await expect(page.getByLabel('Unsaved changes')).toHaveCount(0);
+
+    for (let reload = 0; reload < 2; reload += 1) {
+      await page.reload();
+      await revealRow(page);
+      await expect(row).toBeVisible();
+
+      // Nothing was touched — no dot…
+      await expect(page.getByLabel('Unsaved changes')).toHaveCount(0);
+      // …and no override params were written for the next visit to replay.
+      const url = new URL(page.url());
+      const overrides = [...url.searchParams.keys()].filter(
+        (key) => key.startsWith('inventory-catalog.') && key !== 'inventory-catalog.view',
+      );
+      expect(overrides).toEqual([]);
+    }
+  });
+});
+
 test.describe('entity-views URL deep-linking (US3, readable params)', () => {
   test('a readable inline URL applies its config on load and marks the tab dirty', async ({
     page,

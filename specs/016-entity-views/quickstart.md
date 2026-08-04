@@ -109,3 +109,13 @@ On the inventory catalog (`/inventory/catalog`), after `uv run python manage.py 
 5. **The reveal preference survives**: on a table with only its default view, reveal the row, then refresh — the row stays revealed (FR-025).
 6. **Confirmation footers**: trigger a destructive confirm anywhere in the app — delete a view from its tab menu, delete a finance account, delete a parameter definition — and check Cancel sits flush at the footer's LEFT edge with the danger action on the right (SC-014).
 7. **Close label**: open any tab's menu — the item reads "Close", not "Close tab".
+
+## Round 6 verification (2026-08-04)
+
+The defect this round fixes is a loop, so verify the URL as well as the dot:
+
+1. **Untouched load is clean**: open a table whose default view has been saved with a configuration different from the page defaults (e.g. a different page size). No tab shows the unsaved dot, and the address bar carries at most `?<tableKey>.view=<id>` — NO `.sort`, `.size`, `.f` or `.cols` (SC-015).
+2. **Reload twice**: refresh, then refresh again. Still no dot, still no override params — the previous visit cannot poison the next one.
+3. **Genuine change still marks dirty**: change the sort, confirm the dot appears and the URL gains `.sort`; Save and confirm both clear.
+4. **Hand-edited deep link still marks dirty**: paste `?<tableKey>.view=<id>&<tableKey>.size=100` — the view loads with 100/page AND shows the dot, because what you see genuinely differs from what is stored (FR-013 unchanged).
+5. **Tab switches are safe**: with two views open, switch back and forth several times; no override params accumulate for either.

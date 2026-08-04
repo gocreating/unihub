@@ -1,6 +1,6 @@
 # Data Model: Entity Views
 
-**Feature**: 016-entity-views | **Date**: 2026-07-20 | **Updated**: 2026-08-04 (round 5)
+**Feature**: 016-entity-views | **Date**: 2026-07-20 | **Updated**: 2026-08-04 (round 6)
 
 ## 1. `EntityView` (backend, `core/models.py`)
 
@@ -86,6 +86,11 @@ The packed `view[<tableKey>]` mini-format is REPLACED by discrete namespaced par
 | `<tableKey>.page` | both | 1-based page number (transport only, never persisted) |
 
 \* With `.view` present these are optional **overrides** layered onto the stored config; without `.view` (inline) absent params mean "table default". A clean active default tab emits NO params.
+
+**Emission invariant (round 6, FR-032/R40)**: an override parameter is emitted ONLY when the active tab's live configuration genuinely differs from the referenced view's stored configuration. Two rules enforce it:
+
+1. **Never publish a half-loaded tab.** `table.loadConfig()` lands in a later render, so every caller records its request in `pendingLoadRef`; the outbound writer stays silent until the table's reconciled snapshot equals that request. Publishing early wrote the PRE-adoption state as overrides, and the next load replayed them as real ones — the round-6 defect.
+2. **Never restate the stored config.** Facets equal to the baseline are omitted (`facetOverrides` returns them as absent), so an untouched load leaves at most the `.view` reference in the URL.
 
 Note: `cols` transports visible keys only (compact URLs); hidden-column ordering/pins are preserved only in stored `ViewConfig.columns`. Inline round-trip therefore reconstructs hidden columns from page defaults — acceptable per spec (URLs capture what the user sees).
 

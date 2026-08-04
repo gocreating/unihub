@@ -40,6 +40,10 @@
 
 - Q: The Cancel-on-the-left violation is not unique to the delete-view dialog — how far should the fix reach? → A: Everywhere: one shared confirmation helper with a constitution-compliant footer, adopted at every confirmation call site in the app.
 
+### Session 2026-08-04c
+
+- Q: What should the unsaved-changes indicator mean, given it appears on a freshly loaded default view that the user never touched? → A: Keep the meaning "the effective configuration differs from the stored one" and fix the defect that manufactures a false difference: the URL must never carry override parameters that merely restate a view's stored configuration, so a load with no user change is always clean.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Save a table configuration and reopen it later (Priority: P1)
@@ -123,6 +127,8 @@ Over time a user accumulates views and needs to manage them: rename, pin or unpi
 - A saved view references a column or attribute that no longer exists (for example, a removed dynamic parameter column): the unavailable parts are ignored, the rest of the configuration applies, and the view can be re-saved in its cleaned form.
 - Two or more views on the same table carry the same name: this is allowed. They remain distinguishable by tab order and by their URLs, which reference the stored identifier rather than the name.
 - A name is submitted as whitespace only (or with surrounding spaces): surrounding whitespace is trimmed; a name that is empty after trimming is rejected and the Rename dialog stays open.
+- A view is opened or the page is reloaded and the user changes nothing: no tab shows the unsaved-changes indicator, and the URL contains no override parameters beyond the view reference itself (FR-032).
+- A saved view whose stored configuration differs from the page defaults is the active tab at load: the table adopts the STORED configuration and the tab is clean — the pre-adoption state is never published to the URL.
 - The page is refreshed, or the user navigates away and back, while unsaved tabs are open: those tabs are discarded (FR-018). The one exception is the tab the URL addresses, which returns with its inline configuration intact.
 - An unpinned saved view is open as a tab and the page reloads: it returns only if the URL addresses it (i.e. it was the active tab); otherwise it closes and stays listed under the kebab's "Open" submenu.
 - A pinned view's tab is closed and the page reloads: it comes back — the row always shows every pinned view (closing is a per-visit action, unpinning is the persistent one).
@@ -165,7 +171,8 @@ Over time a user accumulates views and needs to manage them: rename, pin or unpi
 - **FR-010**: The displayed tabs MUST be the account's pinned views for that table, in their persisted order, plus any additional views opened during the current visit (see FR-018 — the list is rebuilt on every page load).
 - **FR-011**: The kebab menu MUST provide exactly two entries: "Add empty view" and an "Open" submenu. "Add empty view" immediately opens a new unsaved tab holding a **blank** configuration — no filter conditions, no sort rules, every column visible in the page's natural column order, and no pinned columns — at the page's default page size. (This is deliberately NOT the table's default view configuration, which may carry a seeded filter such as the inventory catalog's "YTD".)
 - **FR-012**: The kebab's "Open" submenu MUST list exactly the table's saved views that are not currently open as tabs; choosing one opens it as a tab and activates it. When no such view exists, the submenu MUST show a disabled empty-state entry.
-- **FR-013**: Modifying an open view's effective configuration — whether through the toolbar or through URL overrides — MUST mark that tab with an unsaved-changes indicator.
+- **FR-013**: A tab MUST show the unsaved-changes indicator exactly when its effective configuration differs from the configuration stored for that view (for a tab with no stored view, whenever it has never been saved). The difference may come from the toolbar or from URL overrides.
+- **FR-032**: The indicator MUST NOT appear as a side effect of loading. Opening or reloading a table without touching it MUST leave every tab clean, which requires two things of the URL writer: (a) it MUST NOT emit override parameters that merely restate a view's stored configuration, and (b) it MUST NOT publish a tab's state before that tab has finished loading its stored configuration — a half-loaded tab's state must never be written to the URL, because a later visit would replay it as genuine overrides and mark the view dirty forever.
 - **FR-014**: Save MUST never prompt for input. Saving a modified saved view persists the current configuration to that view and clears its unsaved-changes indicator; saving a tab that has no stored view yet creates one immediately, named exactly as the tab is currently labelled (a new scratch tab is auto-labelled "New view"). No naming dialog exists anywhere in the save path.
 - **FR-015**: Duplicating a view from its tab menu MUST open a new unsaved tab with an identical configuration and **the same name** as its source — names need not be unique, so no "(n)" suffix is generated.
 - **FR-016**: Saved view names MUST NOT be required to be unique: any number of views on the same table may share a name. Leading and trailing whitespace MUST be trimmed from a name before it is stored, and a name that is empty after trimming MUST be rejected.
@@ -199,6 +206,7 @@ Over time a user accumulates views and needs to manage them: rename, pin or unpi
 - **SC-003**: Opening a copied URL in a different browser session reproduces the identical table state on first load, with zero additional user actions.
 - **SC-004**: For a recurring task requiring 3 filter conditions, 2 sort rules, and a custom column set, total setup time drops from over a minute of manual configuration to under 5 seconds via a pinned tab.
 - **SC-005**: Users can always tell at a glance which open views have unsaved changes: 100% of dirty views show an indicator on their tab, and none show it when clean.
+- **SC-015**: Loading or reloading a table and touching nothing produces ZERO unsaved-changes indicators, on the first load and on every subsequent one — the state written to the URL on load never differs from what the loaded views already store.
 - **SC-006**: On a narrow (mobile-width) screen with 6+ open tabs, every tab and the kebab menu remain reachable without any layout breakage, and the kebab stays fully visible at the row's right edge without scrolling the tab strip.
 - **SC-007**: A person reading a shared view URL can identify the table and every configuration facet as a named query parameter, with no encoded blobs to decode. The only non-prose value permitted is the saved-view reference, which carries the view's identifier so that duplicate names cannot make a link ambiguous (FR-016/FR-022).
 - **SC-008**: After a sync round trip (publish then checkout, or export then import), 100% of saved views are restored with identical names, target tables, configurations, pin states, ordering, and default-role assignment.

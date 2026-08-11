@@ -360,6 +360,87 @@ test.describe('entity-views unsaved indicator (US3, round 6)', () => {
   });
 });
 
+test.describe('entity-views inline state on reload (US3, round 7)', () => {
+  test('an added empty view returns as its own tab, default untouched', async ({ page }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    const row = page.getByTestId('view-tabs-row');
+    await expect(row).toBeVisible();
+
+    // The catalog's default view is "YTD" — a seeded year-to-date filter.
+    const defaultTab = row.getByRole('tab', { name: 'YTD' });
+    await expect(defaultTab).toBeVisible();
+    const filteredCount = await page.getByRole('row').count();
+
+    await row.getByLabel('View menu').click();
+    await page.getByRole('menuitem', { name: 'Add empty view' }).click();
+    await expect(row.getByRole('tab', { name: 'New view' })).toBeVisible();
+
+    // The reported step: reload.
+    await page.reload();
+    await revealRow(page);
+    await expect(row).toBeVisible();
+
+    // The blank view comes back as its OWN tab, active…
+    const restored = row.getByRole('tab', { name: 'New view' });
+    await expect(restored).toBeVisible();
+    await expect(restored).toHaveAttribute('aria-selected', 'true');
+
+    // …and the default tab is present and CLEAN — no dot on arrival.
+    await expect(defaultTab).toBeVisible();
+    await expect(defaultTab.getByLabel('Unsaved changes')).toHaveCount(0);
+
+    // The real regression: the default view still filters. Before the fix the
+    // reload blanked its filter, so the catalog listed everything under "YTD".
+    await defaultTab.click();
+    await expect(defaultTab).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(async () => page.getByRole('row').count()).toBe(filteredCount);
+    await expect(defaultTab.getByLabel('Unsaved changes')).toHaveCount(0);
+  });
+});
+
+test.describe('entity-views indicator/URL agreement (US3, round 8)', () => {
+  /** Override facets for this table — the view reference and page are not overrides. */
+  function overrideParams(url: string): string[] {
+    return [...new URL(url).searchParams.keys()].filter(
+      (key) =>
+        key.startsWith('inventory-catalog.') &&
+        key !== 'inventory-catalog.view' &&
+        key !== 'inventory-catalog.page',
+    );
+  }
+
+  test('the dot and the override params appear and clear together (SC-016)', async ({ page }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    const row = page.getByTestId('view-tabs-row');
+    await expect(row).toBeVisible();
+
+    const name = await createSavedView(page, `E2E invariant ${Date.now()}`);
+    const tab = row.getByRole('tab', { name });
+
+    // Clean: bare reference, no dot.
+    await expect(tab.getByLabel('Unsaved changes')).toHaveCount(0);
+    await expect.poll(() => overrideParams(page.url())).toEqual([]);
+    expect(page.url()).toContain('inventory-catalog.view=');
+
+    // Edit: the dot AND exactly one override facet appear.
+    await page.getByText('50 / page').first().click();
+    await page.getByTitle('100 / page').click();
+    await expect(tab.getByLabel('Unsaved changes')).toHaveCount(1);
+    await expect.poll(() => overrideParams(page.url())).toEqual(['inventory-catalog.size']);
+
+    // Save: both clear in the same step, leaving the compact form.
+    await tab.click();
+    await page.getByRole('menuitem', { name: 'Save' }).click();
+    await expect(tab.getByLabel('Unsaved changes')).toHaveCount(0);
+    await expect.poll(() => overrideParams(page.url())).toEqual([]);
+    expect(page.url()).toContain('inventory-catalog.view=');
+  });
+});
+
 test.describe('entity-views URL deep-linking (US3, readable params)', () => {
   test('a readable inline URL applies its config on load and marks the tab dirty', async ({
     page,

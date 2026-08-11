@@ -372,3 +372,57 @@ Round 2 decisions per the spec's Clarifications Session 2026-07-23. Backend regi
 **Rationale**: the dot is a symptom; the poisoned URL is the defect. SC-015 is written against both so a future regression cannot hide in the gap.
 
 **Coverage note**: the same assertion is applied to a saved tab and to a tab switch, because the pre-adoption window exists on every path that calls `loadConfig`, not only on mount.
+
+---
+
+# Round 7 (Clarifications Session 2026-08-04d)
+
+## R42. Where inbound INLINE url state lands
+
+**Reproduced first**, from the user's exact steps (open the catalog → "Add empty view" → reload):
+
+- After adding the blank view the URL holds `?tbl.f=and%28%29` — the blank config's empty filter group, serialized inline because a scratch tab has no stored view to reference.
+- After the reload the row is `[default:YTD:dirty=true]`: round 5 correctly discarded the scratch tab, and then the inbound handler wrote the blank config **into the default tab**.
+
+**Root cause**: the inline branch picks its target as "the active tab if it is not a saved view, else `DEFAULT_TAB_ID`". That fallback made sense when tabs were restored from sessionStorage (round ≤4) — the scratch tab it belonged to was usually still there. Once round 5 made tabs per-visit, the fallback fires on every reload and the default tab becomes the dumping ground.
+
+**Decision**: inline state MUST create its own unsaved tab (auto-labelled "New view", same as `addBlankTab`) and activate it. It may only update an EXISTING tab when that tab is itself unsaved (`kind === 'anonymous'`) — the in-session case where the user edits the toolbar and the URL echoes back. A tab representing a stored view (`kind === 'saved'`, or the default holder) is never a valid target for inline state, because writing to it silently replaces that view's configuration.
+
+**Why this is a correctness defect, not a cosmetic one**: the catalog's default view seeds a year-to-date filter. Overwriting it with a blank config made the table list *every* row while the tab still read "YTD" — wrong data, presented as the named view. The unsaved dot was the only visible symptom, which is why it was reported as an indicator bug; the regression therefore asserts the restored CONFIGURATION, not just the absence of the dot (the same lesson as R41).
+
+**Creation-once discipline**: the inbound effect can re-run for the same value, so the new tab is created inside the `setTabs` updater with an existence check, and `setActiveTabId` takes the updater form — exactly the pattern the round-5 duplicate-tab fix established. A tab id generated outside the updater is captured and reused so both setters agree.
+
+**Alternatives considered**: keeping the default-tab fallback but restoring the default's config afterwards (rejected: the fallback IS the bug, and "write then repair" leaves a window where the wrong data is displayed); dropping inline state on load entirely (rejected: the user chose to keep the URL's view — and it would also break the deep-link guarantee SC-003 for unsaved configurations); creating the tab only when the inline config differs from the page defaults (rejected: an inline config equal to the defaults emits no params in the first place, so the branch cannot be reached that way).
+
+---
+
+# Round 8 (Clarifications Session 2026-08-04e)
+
+## R43. The indicator/URL invariant, and why this round is mostly a harness
+
+**Verified before deciding anything.** A throwaway probe drove the hook through the saved-view journey and printed the URL at each step:
+
+| Step | URL |
+|------|-----|
+| saved view active, unmodified | `tbl.view=savedview001` |
+| after changing the sort | `tbl.view=savedview001&tbl.sort=name` |
+| after Save | `tbl.view=savedview001` |
+
+The compactness directives (bare reference when unmodified; overrides only for real changes; compact again immediately on save) therefore already hold in the current code — rounds 6 and 7 removed the two mechanisms that were violating them. Reporting that plainly is more useful than inventing a change: the value this round adds is the **regression net**, because the same rule has now been broken three different ways (round 6: publishing a half-loaded tab; round 7: inline state overwriting a stored view; and the round-2→5 window where a dot-only assertion hid both).
+
+**Decision**: express the rule as a bidirectional invariant and assert it at every step of the journey rather than at a single moment.
+
+```
+for the ACTIVE tab:   indicator shown  ⟺  the URL holds ≥1 override param for that table
+```
+
+Both directions matter and each catches a different failure:
+
+- **dot without overrides** → the system invented a difference (the round-6 and round-7 defects both presented this way);
+- **overrides without a dot** → the URL is describing state the table is not actually in, which is what poisons the *next* load (the round-6 loop).
+
+A helper inside the suite (`expectIndicatorMatchesUrl`) is called after load, after an edit, after Save, after a tab switch, and after a reload, so a regression cannot hide in whichever moment the test happened not to sample.
+
+**Scope of the indicator itself (FR-013)**: two cases only — a tab with no stored view, or a stored view whose effective config differs from what is stored. Inactive tabs keep their own indicator: the URL describes only the active tab, so tying the dot to the URL for *every* tab would silently hide unsaved work the user left elsewhere. The invariant is therefore scoped to the active tab by construction, which is exactly how the clarification phrased it.
+
+**Alternatives considered**: asserting only the URL (rejected — the dot is what the user sees, and a URL-only test would have passed throughout rounds 2–5); asserting only the dot (rejected — precisely the blind spot that let the poisoned-URL loop ship, R41); computing the indicator *from* the URL so the invariant is true by construction (rejected — it would make the dot vanish for inactive tabs and couple presentation to transport, and it cannot express the "no stored view" case at all).

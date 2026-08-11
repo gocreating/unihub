@@ -905,13 +905,48 @@ export function useEntityViews({
       const snapshot = table.snapshotConfig();
 
       if (view.viewId === undefined) {
-        // Inline state belongs to a non-saved tab: the active default/anonymous
-        // tab, or the default tab when a saved view is currently active.
+        // Inline state describes an UNSAVED view, so it may only ever land on an
+        // unsaved tab. Round 7: the old fallback wrote it onto the default tab
+        // whenever no scratch tab was open — which, once tabs became per-visit
+        // (round 5), happened on EVERY reload, silently replacing the default
+        // view's stored configuration (the catalog's seeded filter) and showing
+        // the unsaved dot on arrival. A tab representing a stored view — saved
+        // or the default holder — is never a valid target (R42/FR-018).
         const activeInternal = tabs.find((tab) => tab.tabId === activeTabId);
-        const targetId =
-          activeInternal && activeInternal.kind !== 'saved' ? activeTabId : DEFAULT_TAB_ID;
-        setTabs((prev) => prev.map((tab) => (tab.tabId === targetId ? { ...tab, config } : tab)));
-        setActiveTabId(targetId);
+        const restoredTabId = uid();
+        let inlineTabId: string = restoredTabId;
+        setTabs((prev) => {
+          // Reuse the ACTIVE tab only when it is itself unsaved (the in-session
+          // case: the user edits the toolbar and the URL echoes back).
+          const reusable = prev.find(
+            (tab) => tab.tabId === activeInternal?.tabId && tab.kind === 'anonymous',
+          );
+          if (reusable) {
+            inlineTabId = reusable.tabId;
+            return prev.map((tab) => (tab.tabId === reusable.tabId ? { ...tab, config } : tab));
+          }
+          // The inbound effect can re-run for the same value, so the existence
+          // check lives INSIDE the updater (round-5 duplicate-tab discipline).
+          const existing = prev.find((tab) => tab.tabId === restoredTabId);
+          if (existing) {
+            inlineTabId = existing.tabId;
+            return prev;
+          }
+          return [
+            ...prev.map((item) =>
+              item.tabId === activeTabId ? { ...item, config: snapshot } : item,
+            ),
+            {
+              tabId: restoredTabId,
+              kind: 'anonymous' as const,
+              name: t({ id: 'common.entityViews.newViewName' }),
+              config,
+            },
+          ];
+        });
+        // Updater form: React runs it AFTER the setTabs updater, which is what
+        // assigns `inlineTabId`.
+        setActiveTabId(() => inlineTabId);
       } else if (isDefaultTarget) {
         setTabs((prev) =>
           prev.map((tab) =>

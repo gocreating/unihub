@@ -559,14 +559,20 @@ describe('useEntityViews — US2 round 2: view-row auto-hide (FR-025)', () => {
 });
 
 describe('useEntityViews — US3 URL sync (readable per-facet params)', () => {
-  it('applies inline facet params on mount and marks the default tab dirty', async () => {
+  it('applies inline facet params on mount in their OWN unsaved tab (round 7)', async () => {
     const { result } = renderHook(useHarness, {
       wrapper: makeWrapper(['/?tbl.sort=-amount&tbl.size=100']),
     });
     await waitFor(() => expect(result.current.table.queryParams.ordering).toBe('-amount'));
     expect(result.current.table.limit).toBe(100);
-    expect(result.current.views.activeTab.kind).toBe('default');
+
+    // Round 7: inline state describes an UNSAVED view, so it gets its own tab
+    // and never overwrites the default view's configuration (FR-018/R42).
+    expect(result.current.views.activeTab.kind).toBe('anonymous');
     expect(result.current.views.activeTab.dirty).toBe(true);
+    const defaultTab = result.current.views.tabs.find((t) => t.kind === 'default')!;
+    expect(defaultTab).toBeDefined();
+    expect(defaultTab.dirty).toBe(false);
   });
 
   it('opens a saved view referenced BY ID, clean', async () => {
@@ -1374,5 +1380,312 @@ describe('useEntityViews — round 6: the load never publishes a half-loaded tab
     await waitFor(() => expect(result.current.views.activeTab.isDefault).toBe(true));
     expect(result.current.views.activeTab.dirty).toBe(false);
     expect(overrideParams(result.current.searchParams)).toEqual([]);
+  });
+});
+
+// ── Round 7: inline URL state never lands on a stored view (FR-018/R42) ──────
+//
+// Reported flow: open the catalog → "Add empty view" → reload → the DEFAULT
+// view arrived carrying the unsaved dot. The dot was truthful: the inbound
+// inline branch fell back to DEFAULT_TAB_ID and wrote the blank config INTO
+// the default view, blanking its seeded filter — so the table listed
+// everything while still labelled "YTD". These assert the CONFIG, not the dot.
+
+describe('useEntityViews — round 7: inline URL state never lands on a stored view', () => {
+  /** Catalog-like: the page default carries a seeded (year-to-date) filter. */
+  const SEEDED_CONFIG: ViewConfig = {
+    filters: [{ logic: 'or', conditions: [{ attr: 'name', op: 'contains', val: 'seed' }] }],
+    sort: [],
+    columns: [
+      { key: 'name', visible: true, order: 0 },
+      { key: 'amount', visible: true, order: 1 },
+    ],
+    pageSize: 50,
+  };
+
+  /** The table must BOOT into the same state its view config describes — the
+   *  invariant every adopting page satisfies (spec Assumptions). */
+  function useSeededHarness() {
+    const table = useEntityTable({
+      key: 'tbl',
+      filterableAttrs: ATTRS,
+      columnDefs: COLS,
+      defaultFilterGroups: SEEDED_CONFIG.filters,
+      defaultPageSize: 50,
+    });
+    const defaultConfig = useMemo(() => SEEDED_CONFIG, []);
+    const views = useEntityViews({
+      tableKey: 'tbl',
+      table,
+      defaultConfig,
+      defaultViewName: 'YTD',
+    });
+    const [searchParams] = useSearchParams();
+    return { table, views, searchParams };
+  }
+
+  it('restores an added empty view as its OWN tab, leaving the default intact', async () => {
+    listMock.mockResolvedValue([]); // virtual default, no saved views
+
+    const first = renderHook(useSeededHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+    expect(first.result.current.views.activeTab.dirty).toBe(false);
+
+    act(() => first.result.current.views.addBlankTab());
+    await waitFor(() => expect(first.result.current.views.tabs).toHaveLength(2));
+    // A scratch tab has no stored view, so its state goes into the URL inline.
+    const url = first.result.current.searchParams.toString();
+    expect(url).not.toBe('');
+    first.unmount();
+
+    // Reload with exactly that URL — the user's step 3.
+    const second = renderHook(useSeededHarness, { wrapper: makeWrapper([`/?${url}`]) });
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+    await waitFor(() => expect(second.result.current.views.tabs).toHaveLength(2));
+
+    const defaultTab = second.result.current.views.tabs.find((t) => t.kind === 'default')!;
+    const scratchTab = second.result.current.views.tabs.find((t) => t.kind === 'anonymous')!;
+
+    // (a) the row shape: default + a SEPARATE unsaved tab, the scratch one active
+    expect(defaultTab).toBeDefined();
+    expect(scratchTab).toBeDefined();
+    expect(second.result.current.views.activeTabId).toBe(scratchTab.tabId);
+    expect(defaultTab.dirty).toBe(false);
+
+    // (b) THE POINT: the default view still holds its seeded filter. Before the
+    // fix this was the blank config, so the catalog silently listed everything.
+    act(() => second.result.current.views.switchTab(defaultTab.tabId));
+    await waitFor(() =>
+      expect(second.result.current.table.queryParams.filters).toEqual({
+        groups: SEEDED_CONFIG.filters,
+      }),
+    );
+    expect(second.result.current.views.activeTab.dirty).toBe(false);
+  });
+
+  it('updates an ALREADY-ACTIVE unsaved tab instead of creating a second one', async () => {
+    listMock.mockResolvedValue([]);
+    const { result } = renderHook(useSeededHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+
+    act(() => result.current.views.addBlankTab());
+    await waitFor(() => expect(result.current.views.tabs).toHaveLength(2));
+    const scratchId = result.current.views.activeTabId;
+
+    // Editing the toolbar echoes back through the URL — no new tab may appear.
+    act(() => {
+      result.current.table.sort.handleHeaderClick('name');
+    });
+    await waitFor(() => expect(result.current.searchParams.get('tbl.sort')).toBeTruthy());
+
+    expect(result.current.views.tabs).toHaveLength(2);
+    expect(result.current.views.activeTabId).toBe(scratchId);
+  });
+
+  it('leaves the saved-view path untouched (a .view reference still opens it)', async () => {
+    listMock.mockResolvedValue([SAVED_VIEW]);
+    const { result } = renderHook(useSeededHarness, {
+      wrapper: makeWrapper([`/?tbl.view=${SAVED_VIEW.id}`]),
+    });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+
+    await waitFor(() => expect(result.current.views.activeTab.viewId).toBe(SAVED_VIEW.id));
+    expect(result.current.views.activeTab.kind).toBe('saved');
+    expect(result.current.views.tabs.filter((t) => t.kind === 'anonymous')).toHaveLength(0);
+  });
+});
+
+// ── Round 8: the indicator and the URL are one state seen twice ──────────────
+//
+// FR-033: for the ACTIVE tab, the unsaved dot appears IFF the URL carries at
+// least one override parameter. Both directions catch a different failure:
+//   • dot without overrides → the system invented a difference (rounds 6, 7)
+//   • overrides without a dot → the URL describes state the table is not in,
+//     which is what poisons the NEXT load (the round-6 loop)
+// The helper is called at every step of the journey so a regression cannot hide
+// in whichever moment a test happened not to sample (R43).
+
+describe('useEntityViews — round 8: indicator/URL invariant', () => {
+  /** Override facets — the view reference and the page position are not overrides. */
+  function overrideParams(params: URLSearchParams): string[] {
+    return [...params.keys()].filter(
+      (key) => key.startsWith('tbl.') && key !== 'tbl.view' && key !== 'tbl.page',
+    );
+  }
+
+  /** FR-033, asserted in BOTH directions with a message naming the broken side. */
+  function expectIndicatorMatchesUrl(
+    active: { dirty: boolean; kind: string },
+    params: URLSearchParams,
+    step: string,
+  ) {
+    // The invariant is scoped to tabs representing a stored view: a tab with no
+    // stored view is inherently unsaved and serializes inline (FR-013 case 1).
+    if (active.kind === 'anonymous') return;
+    const overrides = overrideParams(params);
+    if (active.dirty && overrides.length === 0) {
+      throw new Error(
+        `[${step}] indicator shown with NO override params — a difference was invented`,
+      );
+    }
+    if (!active.dirty && overrides.length > 0) {
+      throw new Error(
+        `[${step}] override params ${JSON.stringify(overrides)} with NO indicator — ` +
+          'the URL describes state the table is not in, and the next load will replay it',
+      );
+    }
+  }
+
+  // Verify the verifier: a net that cannot fail proves nothing (the iteration-46
+  // lesson). Both violation shapes must actually throw.
+  it('the invariant helper itself catches both violation shapes', () => {
+    const withOverride = new URLSearchParams('tbl.view=v1&tbl.sort=name');
+    const bare = new URLSearchParams('tbl.view=v1');
+
+    expect(() =>
+      expectIndicatorMatchesUrl({ dirty: true, kind: 'saved' }, bare, 'probe'),
+    ).toThrow(/invented/);
+    expect(() =>
+      expectIndicatorMatchesUrl({ dirty: false, kind: 'saved' }, withOverride, 'probe'),
+    ).toThrow(/not in/);
+
+    // …and the two agreeing shapes must NOT throw.
+    expect(() =>
+      expectIndicatorMatchesUrl({ dirty: false, kind: 'saved' }, bare, 'probe'),
+    ).not.toThrow();
+    expect(() =>
+      expectIndicatorMatchesUrl({ dirty: true, kind: 'saved' }, withOverride, 'probe'),
+    ).not.toThrow();
+  });
+
+  /** A stored view whose config differs from the page defaults. */
+  const STORED: EntityView = {
+    ...SAVED_VIEW,
+    id: 'storedview01',
+    name: 'Stored',
+    config: { ...DEFAULT_CONFIG, pageSize: 50, sort: [{ field: 'amount', direction: 'desc' }] },
+    pinned: true,
+    position: 0,
+    is_default: false,
+  };
+
+  it('holds across load → edit → save → switch → back', async () => {
+    let server: EntityView[] = [STORED];
+    listMock.mockImplementation(async () => server);
+    updateMock.mockImplementation(async (id, patch) => {
+      server = server.map((v) => (v.id === id ? ({ ...v, ...(patch as object) } as EntityView) : v));
+      return server.find((v) => v.id === id)!;
+    });
+
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+    await waitFor(() => expect(result.current.views.tabs.some((t) => t.viewId === STORED.id)).toBe(true));
+
+    const storedTabId = result.current.views.tabs.find((t) => t.viewId === STORED.id)!.tabId;
+    act(() => result.current.views.switchTab(storedTabId));
+    await waitFor(() => expect(result.current.views.activeTab.viewId).toBe(STORED.id));
+
+    // (a) after load — clean, and the URL is the bare reference (FR-034)
+    expectIndicatorMatchesUrl(result.current.views.activeTab, result.current.searchParams, 'load');
+    expect(result.current.views.activeTab.dirty).toBe(false);
+    expect(result.current.searchParams.get('tbl.view')).toBe(STORED.id);
+    expect(overrideParams(result.current.searchParams)).toEqual([]);
+
+    // (b) after an edit — dot AND exactly the changed facet
+    act(() => {
+      result.current.table.sort.handleHeaderClick('name');
+    });
+    await waitFor(() => expect(result.current.views.activeTab.dirty).toBe(true));
+    expectIndicatorMatchesUrl(result.current.views.activeTab, result.current.searchParams, 'edit');
+    expect(overrideParams(result.current.searchParams)).toEqual(['tbl.sort']);
+
+    // (c) after Save — both clear in the same step (FR-034)
+    await act(async () => {
+      await result.current.views.saveTab(storedTabId);
+    });
+    await waitFor(() => expect(result.current.views.activeTab.dirty).toBe(false));
+    await waitFor(() => expect(overrideParams(result.current.searchParams)).toEqual([]));
+    expectIndicatorMatchesUrl(result.current.views.activeTab, result.current.searchParams, 'save');
+    expect(result.current.searchParams.get('tbl.view')).toBe(STORED.id);
+
+    // (d) switch away and back
+    act(() => result.current.views.switchTab('__default__'));
+    await waitFor(() => expect(result.current.views.activeTab.isDefault).toBe(true));
+    expectIndicatorMatchesUrl(result.current.views.activeTab, result.current.searchParams, 'switch away');
+
+    act(() => result.current.views.switchTab(storedTabId));
+    await waitFor(() => expect(result.current.views.activeTab.viewId).toBe(STORED.id));
+    expectIndicatorMatchesUrl(result.current.views.activeTab, result.current.searchParams, 'switch back');
+    expect(overrideParams(result.current.searchParams)).toEqual([]);
+  });
+
+  it('holds on a remount with the URL the app left behind', async () => {
+    listMock.mockResolvedValue([STORED]);
+    const first = renderHook(useHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(first.result.current.views.savedViews).toHaveLength(1));
+    await waitFor(() =>
+      expect(first.result.current.views.tabs.some((t) => t.viewId === STORED.id)).toBe(true),
+    );
+    const storedTabId = first.result.current.views.tabs.find((t) => t.viewId === STORED.id)!.tabId;
+    act(() => first.result.current.views.switchTab(storedTabId));
+    await waitFor(() => expect(first.result.current.views.activeTab.viewId).toBe(STORED.id));
+    const url = first.result.current.searchParams.toString();
+    first.unmount();
+
+    const second = renderHook(useHarness, { wrapper: makeWrapper([`/?${url}`]) });
+    await waitFor(() => expect(second.result.current.views.savedViews).toHaveLength(1));
+    await waitFor(() => expect(second.result.current.views.activeTab.viewId).toBe(STORED.id));
+
+    expectIndicatorMatchesUrl(
+      second.result.current.views.activeTab,
+      second.result.current.searchParams,
+      'remount',
+    );
+    expect(second.result.current.views.activeTab.dirty).toBe(false);
+    expect(overrideParams(second.result.current.searchParams)).toEqual([]);
+  });
+
+  it('a hand-edited override loads dirty, satisfying the invariant', async () => {
+    listMock.mockResolvedValue([STORED]);
+    const { result } = renderHook(useHarness, {
+      wrapper: makeWrapper([`/?tbl.view=${STORED.id}&tbl.size=100`]),
+    });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+    await waitFor(() => expect(result.current.table.limit).toBe(100));
+
+    expectIndicatorMatchesUrl(result.current.views.activeTab, result.current.searchParams, 'deep link');
+    expect(result.current.views.activeTab.dirty).toBe(true);
+    expect(overrideParams(result.current.searchParams)).toEqual(['tbl.size']);
+  });
+
+  it('inactive tabs keep their own indicator (FR-013)', async () => {
+    listMock.mockResolvedValue([STORED]);
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+    await waitFor(() => expect(result.current.views.tabs.some((t) => t.viewId === STORED.id)).toBe(true));
+
+    const storedTabId = result.current.views.tabs.find((t) => t.viewId === STORED.id)!.tabId;
+    act(() => result.current.views.switchTab(storedTabId));
+    await waitFor(() => expect(result.current.views.activeTab.viewId).toBe(STORED.id));
+    act(() => {
+      result.current.table.sort.handleHeaderClick('name');
+    });
+    await waitFor(() => expect(result.current.views.activeTab.dirty).toBe(true));
+
+    // Switching away must NOT hide the unsaved work sitting on that tab…
+    act(() => result.current.views.switchTab('__default__'));
+    await waitFor(() => expect(result.current.views.activeTab.isDefault).toBe(true));
+    const inactiveSaved = result.current.views.tabs.find((t) => t.viewId === STORED.id)!;
+    expect(inactiveSaved.dirty).toBe(true);
+    // …while the URL now describes the ACTIVE tab, so it carries no overrides.
+    expect(overrideParams(result.current.searchParams)).toEqual([]);
+    expectIndicatorMatchesUrl(result.current.views.activeTab, result.current.searchParams, 'inactive');
+
+    // An unsaved scratch tab keeps its indicator while inactive too.
+    act(() => result.current.views.addBlankTab());
+    const scratchId = result.current.views.activeTabId;
+    act(() => result.current.views.switchTab('__default__'));
+    await waitFor(() => expect(result.current.views.activeTab.isDefault).toBe(true));
+    expect(result.current.views.tabs.find((t) => t.tabId === scratchId)!.dirty).toBe(true);
   });
 });

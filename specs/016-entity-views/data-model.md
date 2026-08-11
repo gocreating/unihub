@@ -1,6 +1,6 @@
 # Data Model: Entity Views
 
-**Feature**: 016-entity-views | **Date**: 2026-07-20 | **Updated**: 2026-08-04 (round 6)
+**Feature**: 016-entity-views | **Date**: 2026-07-20 | **Updated**: 2026-08-04 (round 8)
 
 ## 1. `EntityView` (backend, `core/models.py`)
 
@@ -92,6 +92,18 @@ The packed `view[<tableKey>]` mini-format is REPLACED by discrete namespaced par
 1. **Never publish a half-loaded tab.** `table.loadConfig()` lands in a later render, so every caller records its request in `pendingLoadRef`; the outbound writer stays silent until the table's reconciled snapshot equals that request. Publishing early wrote the PRE-adoption state as overrides, and the next load replayed them as real ones — the round-6 defect.
 2. **Never restate the stored config.** Facets equal to the baseline are omitted (`facetOverrides` returns them as absent), so an untouched load leaves at most the `.view` reference in the URL.
 
+**Indicator/URL invariant (round 8, FR-033)** — the two are one state seen twice:
+
+```
+ACTIVE tab representing a stored view:
+    unsaved-changes indicator  ⟺  ≥ 1 override param present for that table
+```
+
+`dot without overrides` means a difference was invented; `overrides without a dot`
+means the URL describes state the table is not in (and will replay it next load).
+Inactive tabs are outside the invariant — they keep their own indicator, because
+the URL only ever describes the active tab (FR-013).
+
 Note: `cols` transports visible keys only (compact URLs); hidden-column ordering/pins are preserved only in stored `ViewConfig.columns`. Inline round-trip therefore reconstructs hidden columns from page defaults — acceptable per spec (URLs capture what the user sees).
 
 ## 4. `ViewTab` (frontend-only, DERIVED — round 5)
@@ -126,6 +138,20 @@ active(on load) = the URL's view, else the default holder
 
 so a refresh or a navigation discards every scratch tab, every opened-but-
 unpinned view, and every unsaved change — except the one the URL carries.
+
+**Inbound target rule (round 7, R42)**: where the URL's state lands depends on
+what it describes.
+
+| URL describes | Lands on |
+|---------------|----------|
+| `.view=<id>` (a stored view) | that view's tab — opened if not already present |
+| inline facets, an unsaved tab already active | that unsaved tab |
+| inline facets, no unsaved tab open | a NEW unsaved tab labelled "New view", made active |
+
+Inline state is NEVER written onto a tab that represents a stored view (the
+default holder included): doing so replaces that view's configuration with the
+URL's, which is how the catalog's seeded YTD filter was silently blanked on
+reload.
 
 The sessionStorage key `unihub.views.<tableKey>` survives with a SINGLE field:
 

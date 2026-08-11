@@ -119,3 +119,24 @@ The defect this round fixes is a loop, so verify the URL as well as the dot:
 3. **Genuine change still marks dirty**: change the sort, confirm the dot appears and the URL gains `.sort`; Save and confirm both clear.
 4. **Hand-edited deep link still marks dirty**: paste `?<tableKey>.view=<id>&<tableKey>.size=100` — the view loads with 100/page AND shows the dot, because what you see genuinely differs from what is stored (FR-013 unchanged).
 5. **Tab switches are safe**: with two views open, switch back and forth several times; no override params accumulate for either.
+
+## Round 7 verification (2026-08-04)
+
+The reported flow, plus the check that matters most:
+
+1. Open `/inventory/catalog`, reveal the row — the default "YTD" tab is clean.
+2. Kebab → **Add empty view**. A "New view" tab opens, active, showing unfiltered data (that is correct — it is a blank view).
+3. **Reload.** Expected: the row shows the default "YTD" tab (clean, still filtered to this year) PLUS a "New view" tab which is active and marked unsaved. The default tab must NOT carry the dot.
+4. Click the "YTD" tab and confirm the year-to-date filter is still applied — this is the real regression: before the fix, the reload replaced the default view's filter with an empty one, so the catalog listed everything while still calling itself "YTD".
+5. Close the "New view" tab and reload again: only the default (and any pinned views) remain, all clean, and the URL carries no inline facets.
+
+## Round 8 verification (2026-08-04)
+
+Watch the tab and the address bar together — they should always agree:
+
+1. Open a table and activate a saved view. URL: `?<tableKey>.view=<id>` and no dot.
+2. Change the sort. The dot appears AND the URL gains exactly `<tableKey>.sort=…` — nothing else.
+3. Save. The dot clears AND the override parameter disappears in the same moment, leaving `?<tableKey>.view=<id>`.
+4. Change something again, then switch to another tab. The edited tab KEEPS its dot (your unsaved work is still flagged), while the URL now describes the newly active tab and carries no overrides for the edited one.
+5. Switch back. The dot is still there and the overrides return to the URL.
+6. At no point should you see a dot with no override parameters, or override parameters with no dot, on the active tab.

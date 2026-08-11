@@ -441,6 +441,55 @@ test.describe('entity-views indicator/URL agreement (US3, round 8)', () => {
   });
 });
 
+test.describe('entity-views arrival + reset (round 9)', () => {
+  test('navigating to the table lands clean, and stays clean on reload (SC-017)', async ({
+    page,
+  }) => {
+    await login(page);
+    // Arrive from somewhere else, as the nav menu does.
+    await page.goto('/');
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    await expect(page.getByTestId('view-tabs-row')).toBeVisible();
+
+    const overrides = () => {
+      const url = new URL(page.url());
+      return [...url.searchParams.keys()].filter(
+        (k) => k.startsWith('inventory-catalog.') && k !== 'inventory-catalog.view',
+      );
+    };
+
+    await expect(page.getByLabel('Unsaved changes')).toHaveCount(0);
+    expect(overrides()).toEqual([]);
+
+    await page.reload();
+    await revealRow(page);
+    await expect(page.getByLabel('Unsaved changes')).toHaveCount(0);
+    expect(overrides()).toEqual([]);
+  });
+
+  test('Reset changes clears the indicator and the override params (SC-018)', async ({ page }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    const row = page.getByTestId('view-tabs-row');
+    await expect(row).toBeVisible();
+
+    // Dirty the active view through the toolbar.
+    await page.getByText('50 / page').first().click();
+    await page.getByTitle('100 / page').click();
+    await expect(page.getByLabel('Unsaved changes').first()).toBeVisible();
+    await expect.poll(async () => page.url()).toContain('inventory-catalog.size');
+
+    // Reset from the active tab's own menu — no confirmation dialog.
+    await row.getByRole('tab').first().click();
+    await page.getByRole('menuitem', { name: 'Reset changes' }).click();
+
+    await expect(page.getByLabel('Unsaved changes')).toHaveCount(0);
+    await expect.poll(async () => page.url()).not.toContain('inventory-catalog.size');
+  });
+});
+
 test.describe('entity-views URL deep-linking (US3, readable params)', () => {
   test('a readable inline URL applies its config on load and marks the tab dirty', async ({
     page,

@@ -1689,3 +1689,174 @@ describe('useEntityViews — round 8: indicator/URL invariant', () => {
     expect(result.current.views.tabs.find((t) => t.tabId === scratchId)!.dirty).toBe(true);
   });
 });
+
+// ── Round 9: the stored default view is adopted on arrival (FR-036/R44) ──────
+//
+// Observed in the RUNNING app (read-only probe): navigating to the catalog
+// produced `?…view=<id>&.f=…&.sort=…&.size=50` plus an unsaved dot, surviving
+// reloads. The stored default view was referenced but never LOADED, so every
+// facet serialized as an "override". Asserts CONTENT — the round-8
+// dot⟺overrides invariant stays green through this bug and cannot see it.
+
+describe('useEntityViews — round 9: the stored default view is adopted on arrival', () => {
+  /** Page defaults: a seeded filter, a sort, 50/page — catalog-shaped. */
+  const PAGE_FILTERS: ViewConfig['filters'] = [
+    {
+      logic: 'or',
+      conditions: [{ attr: 'name', op: 'contains', val: 'seed' }],
+    },
+  ];
+  // The catalog declares SPARSE, FRACTIONAL orders (-1, 4.5, 5.2, … 99 for the
+  // pinned actions column). Dense 0..N orders hide this bug entirely.
+  const PAGE_CONFIG: ViewConfig = {
+    filters: PAGE_FILTERS,
+    sort: [{ field: 'amount', direction: 'desc' }],
+    columns: [
+      { key: 'name', visible: true, order: -1, pin: 'left' },
+      { key: 'amount', visible: true, order: 4.5 },
+      { key: 'actions', visible: true, order: 99, pin: 'right' },
+    ],
+    pageSize: 50,
+  };
+
+  /** The STORED default view — deliberately different from the page defaults. */
+  const STORED_DEFAULT: EntityView = {
+    ...DEFAULT_VIEW,
+    id: 'storeddflt01',
+    name: 'YTD',
+    config: {
+      filters: [],
+      sort: [{ field: 'name', direction: 'asc' }],
+      columns: PAGE_CONFIG.columns,
+      pageSize: 25,
+    },
+    pinned: true,
+    position: 0,
+    is_default: true,
+  };
+
+  const PINNED_OTHER: EntityView = {
+    ...SAVED_VIEW,
+    id: 'pinnedother1',
+    name: 'Pinned other',
+    pinned: true,
+    position: 1,
+  };
+
+  function useCatalogHarness() {
+    const table = useEntityTable({
+      key: 'tbl',
+      filterableAttrs: ATTRS,
+      columnDefs: [
+        { key: 'name', label: 'Name', dataType: 'text', visible: true, order: -1, pin: 'left' },
+        { key: 'amount', label: 'Amount', dataType: 'number', visible: true, order: 4.5 },
+        { key: 'actions', label: 'Actions', dataType: 'text', visible: true, order: 99, pin: 'right' },
+      ],
+      defaultFilterGroups: PAGE_FILTERS,
+      defaultSortRules: PAGE_CONFIG.sort,
+      defaultPageSize: 50,
+    });
+    const defaultConfig = useMemo(() => PAGE_CONFIG, []);
+    const views = useEntityViews({
+      tableKey: 'tbl',
+      table,
+      defaultConfig,
+      defaultViewName: 'YTD',
+    });
+    const [searchParams] = useSearchParams();
+    return { table, views, searchParams };
+  }
+
+  const overrideParams = (params: URLSearchParams): string[] =>
+    [...params.keys()].filter((key) => key.startsWith('tbl.') && key !== 'tbl.view');
+
+  it('applies the STORED configuration and leaves the URL free of overrides', async () => {
+    listMock.mockResolvedValue([STORED_DEFAULT, PINNED_OTHER]);
+    const { result } = renderHook(useCatalogHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(2));
+    await new Promise((r) => setTimeout(r, 30));
+
+    // The table must hold the STORED view's config, not the page defaults.
+    expect(result.current.table.limit).toBe(25);
+    expect(result.current.table.queryParams.ordering).toBe('name');
+    // …so nothing is an "override", and nothing is unsaved.
+    expect(overrideParams(result.current.searchParams)).toEqual([]);
+    expect(result.current.views.activeTab.dirty).toBe(false);
+  });
+});
+
+// ── Round 9: "Reset changes" (FR-035/R45) ───────────────────────────────────
+
+describe('useEntityViews — round 9: resetTab', () => {
+  const overrides = (params: URLSearchParams): string[] =>
+    [...params.keys()].filter((key) => key.startsWith('tbl.') && key !== 'tbl.view');
+
+  it('returns a dirty saved tab to its stored configuration', async () => {
+    listMock.mockResolvedValue([SAVED_VIEW]);
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+
+    act(() => result.current.views.openView(SAVED_VIEW.id));
+    const tabId = result.current.views.activeTabId;
+    expect(result.current.table.limit).toBe(50); // the stored page size
+
+    act(() => result.current.table.setLimit(100));
+    await waitFor(() => expect(result.current.views.activeTab.dirty).toBe(true));
+    await waitFor(() => expect(overrides(result.current.searchParams)).toContain('tbl.size'));
+
+    act(() => result.current.views.resetTab(tabId));
+
+    await waitFor(() => expect(result.current.table.limit).toBe(50));
+    expect(result.current.views.activeTab.dirty).toBe(false);
+    await waitFor(() => expect(overrides(result.current.searchParams)).toEqual([]));
+    // Reset touches no stored data.
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a scratch tab to the blank config it was created with', async () => {
+    listMock.mockResolvedValue([]);
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+
+    act(() => result.current.views.addBlankTab());
+    const tabId = result.current.views.activeTabId;
+    const blankSize = result.current.table.limit;
+
+    act(() => {
+      result.current.table.sort.handleHeaderClick('name');
+    });
+    act(() => result.current.table.setLimit(100));
+    await waitFor(() => expect(result.current.table.queryParams.ordering).toBeTruthy());
+
+    act(() => result.current.views.resetTab(tabId));
+
+    await waitFor(() => expect(result.current.table.queryParams.ordering).toBeFalsy());
+    expect(result.current.table.limit).toBe(blankSize);
+  });
+
+  it('resets an INACTIVE tab without disturbing the active one', async () => {
+    listMock.mockResolvedValue([SAVED_VIEW]);
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+
+    act(() => result.current.views.openView(SAVED_VIEW.id));
+    const savedTabId = result.current.views.activeTabId;
+    act(() => result.current.table.setLimit(100)); // dirty the saved tab
+    await waitFor(() =>
+      expect(result.current.views.tabs.find((t) => t.tabId === savedTabId)!.dirty).toBe(true),
+    );
+
+    act(() => result.current.views.switchTab('__default__'));
+    const activeLimitBefore = result.current.table.limit;
+
+    act(() => result.current.views.resetTab(savedTabId));
+
+    await waitFor(() =>
+      expect(result.current.views.tabs.find((t) => t.tabId === savedTabId)!.dirty).toBe(false),
+    );
+    // The active (default) tab and the table are untouched.
+    expect(result.current.views.activeTabId).toBe('__default__');
+    expect(result.current.table.limit).toBe(activeLimitBefore);
+  });
+});

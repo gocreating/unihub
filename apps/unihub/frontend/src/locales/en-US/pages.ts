@@ -403,6 +403,7 @@ export default {
   'common.entityViews.newViewName': 'New view',
   'common.entityViews.unsaved': 'Unsaved changes',
   'common.entityViews.save': 'Save',
+  'common.entityViews.resetChanges': 'Reset changes',
   'common.entityViews.viewName': 'View name',
   'common.entityViews.viewNameRequired': 'Please enter a view name',
   'common.entityViews.duplicate': 'Duplicate',

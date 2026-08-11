@@ -1,56 +1,64 @@
-# Implementation Plan: Entity Views — Rounds 7 & 8 (inline-state fix + indicator/URL invariant)
+# Implementation Plan: Entity Views — Round 9 (default-view adoption + Reset changes)
 
 **Branch**: `016-entity-views` | **Date**: 2026-08-04 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Sessions 2026-08-04d (round 7) and 2026-08-04e (round 8). Earlier plans at 467beff / 8e1f169 / 3defc24 / 5d6ad96 / bb3f310 / c2c256e / a0309e8.
-
-> **Note on round 7's plan file**: rounds 7 and 8 ship in one commit, and `plan.md` is a single-round document that `setup-plan.sh` overwrites. Round 7's plan was still uncommitted when round 8 began, so its text is folded into the section below rather than surviving as its own file; its research (R42), data-model §4 changes, and quickstart section are intact and unchanged.
+**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-04f. Earlier plans at 467beff / 8e1f169 / 3defc24 / 5d6ad96 / bb3f310 / c2c256e / a0309e8 / bf0b2eb.
 
 ## Summary
 
-### Round 7 — implemented and green, shipping in this commit
+Two items: one defect diagnosed against the running application, one new action.
 
-Reproduced from the user's steps (catalog → *Add empty view* → reload → the default view arrives dirty). A scratch tab has no stored view, so its state is serialized **inline** (`?inventory-catalog.f=and()`). On reload round 5 correctly discards the scratch tab, and the inbound inline branch then fell back to `DEFAULT_TAB_ID`, pouring the blank config **into the default view** — blanking the catalog's seeded YTD filter, so the table listed everything while still labelled "YTD". A data-correctness defect whose only visible symptom was the dot.
+### 1. The stored default view is never adopted on arrival (FR-036)
 
-Fixed: inline state now creates its **own** unsaved tab (labelled "New view") and activates it; it may only reuse an existing tab when that tab is itself `kind: 'anonymous'`. A tab representing a stored view is never a valid target. Creation happens inside the `setTabs` updater with an existence check (round-5 duplicate-tab discipline). Outstanding from that round: only the CLAUDE.md ship note.
+A **read-only browser probe** against the running dev stack (navigation only — nothing written) captured the real state after clicking the nav item to a clean `/inventory/catalog`:
 
-### Round 8 — guard rails around the indicator and the URL
+```
+?inventory-catalog.view=zn6iFx8QhBMj
+&inventory-catalog.f=or(acquisition__obtained_at gte 2026-01-01; acquisition__obtained_at is_empty)
+&inventory-catalog.sort=-acquisition__obtained_at__nullsfirst
+&inventory-catalog.size=50                                        → 1 unsaved dot
+```
 
-The three new directives were **verified against the running code before planning**, with a throwaway probe:
+The stored default view is *referenced* but never *loaded*. The table sits at the page defaults while the tab's baseline is the stored config, so every facet serializes as an "override" and the dot is technically truthful. Both reported bugs — the dot on navigation, and the inline/override URL surviving a refresh — are this one state.
 
-| Step | URL observed |
-|---|---|
-| saved view active, unmodified | `tbl.view=savedview001` |
-| after changing the sort | `tbl.view=savedview001&tbl.sort=name` |
-| after Save | `tbl.view=savedview001` |
+Two flaws in the adoption effect produce it:
 
-So compactness (FR-034) and "compact again immediately on save" already hold on the saved path — this round does **not** change that behaviour, it *locks* it. What the round adds:
+```ts
+if (!isFetched || defaultAdoptedRef.current) return;
+defaultAdoptedRef.current = true;                     // ← burned BEFORE the guards
+if (!defaultView) return;
+if (hasViewParams(searchParams, tableKey)) return;    // ← sees OUR OWN write as "the URL"
+```
 
-1. **FR-033, a bidirectional invariant**: for the ACTIVE tab, the indicator appears **iff** the URL carries at least one override parameter. A dot with no overrides means an invented difference (rounds 6/7); overrides with no dot means the URL describes state the table is not in. Both directions get asserted.
-2. **FR-013 restated as two cases** — no stored view, or a stored view whose config differs — with inactive tabs keeping their own dots (the URL only ever describes the active tab).
-3. **FR-034 written down** so the compact form is a requirement rather than an accident.
+The one-shot is consumed on the first `isFetched` render whatever happens next, and the "URL wins" guard reads *live* params — which by then may be the ones the outbound writer just produced. Skipped once, never retried.
 
-This is deliberately a tests-and-requirements round: the code is believed correct, and the deliverable is the harness that keeps it correct, because this exact class of bug has now been reported three times (rounds 6, 7, 8).
+**Fix**: consume the one-shot only when adoption actually happens or is decisively unnecessary, and judge "did the user arrive with view state?" from the value captured **once at mount** (`initialUrlHadViewStateRef`, which already exists for the FR-025 collapse decision) rather than from live params.
+
+**Why round 8's invariant suite stayed green through all of this**: it asserts *dot ⟺ override params*, and here they genuinely agree — the rule held, the state being described was wrong. The new regression therefore asserts the **adopted configuration** and a **clean URL**, not the agreement.
+
+### 2. "Reset changes" (FR-035)
+
+A new item in each tab's own menu, enabled only while the tab differs from its baseline. It discards edits with no confirmation and touches no stored data: a tab representing a stored view returns to that view's saved configuration; a tab with no stored view returns to the configuration it was created with. To make the second half possible, an unsaved tab now records its creation configuration.
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.7 (frontend). **No backend change** in either round.
+**Language/Version**: TypeScript 5.7 (frontend). **No backend change** — no API, model, migration, or contract move.
 
-**Primary Dependencies**: React 18.3, React Router 7, TanStack React Query 5
+**Primary Dependencies**: React 18.3, React Router 7, TanStack React Query 5, Ant Design 5.24
 
-**Storage**: None touched.
+**Storage**: None touched. `InternalTab` gains an in-memory `baseline` field for unsaved tabs (per-visit state, never persisted).
 
-**Testing**: Vitest + RTL. The centrepiece is a **bidirectional invariant suite** that drives one hook through load → edit → save → switch → reload and, at every step, asserts the indicator and the URL agree for the active tab (dot ⟺ override params present). Plus e2e mirroring the reported flow.
+**Testing**: Vitest + RTL. For the defect: a regression that mounts with a stored default whose config differs from the page defaults, lets the app write its URL, and asserts the table adopted the **stored** configuration with a clean URL and no dot — deliberately *not* expressed through the round-8 invariant, which cannot see this failure. For the action: reset on a dirty saved tab (returns to stored config, dot clears, overrides leave the URL), on a scratch tab (returns to blank), on an inactive tab (that tab only), and the enablement rule. Playwright e2e mirrors the reported navigation flow.
 
 **Target Platform**: Desktop/tablet web browsers
 
 **Project Type**: Web application — React SPA under `apps/unihub/frontend/`
 
-**Performance Goals**: Unchanged.
+**Performance Goals**: Unchanged; the fix removes URL writes rather than adding any.
 
-**Constraints**: All four navigation guards must survive (`lastParamRef`, `lastProcessedRef`, `inboundSettledRef`, `pendingLoadRef`) — each documented in the hook with the failure it prevents. If the new suite exposes a genuine divergence, the fix belongs in the hook, not in the assertion.
+**Constraints**: All four navigation guards must survive (`lastParamRef`, `lastProcessedRef`, `inboundSettledRef`, `pendingLoadRef`) — this change adds a fifth consideration to the same effect cluster, so the existing comment block gains the adoption rule rather than being rewritten. Adoption must still lose to a genuine deep link (`?…view=<other>` arriving with the navigation) and to a session tab that is already active.
 
-**Scale/Scope**: One hook and its suite, one e2e spec, plus the round-7 ship note. Five adopted pages inherit both rounds.
+**Scale/Scope**: One hook, one menu component, their suites, one e2e spec. Five adopted pages inherit both items; the inventory catalog is where the defect is visible because its default view was materialized with a configuration that differs from the page defaults.
 
 ## Constitution Check
 
@@ -58,21 +66,21 @@ This is deliberately a tests-and-requirements round: the code is believed correc
 
 | # | Principle | Status | Notes |
 |---|-----------|--------|-------|
-| I | Entity-centric + data_io | ✅ PASS | No schema, model, or registry change in either round. |
+| I | Entity-centric + data_io | ✅ PASS | No schema, model, or registry change. |
 | II | Domain independence | ✅ PASS | Confined to `components/EntityViews/`. |
-| III | Reference alignment | ✅ PASS | Plain React state; no new libraries. |
+| III | Reference alignment | ✅ PASS | AntD menu item; plain React state. No new libraries. |
 | IV | API contract-driven | ✅ PASS | N/A — no API surface touched. |
-| V | Quality loop + TDD | ✅ **Central** | Round 7 reproduced before fixing. Round 8 is tests-first by construction: the invariant suite is written against the requirement, and any failure it surfaces is a real defect to fix in the hook. |
-| VI | UI/UX (ov-fleet) | ✅ PASS | No visual change; the indicator's *truthfulness* is what improves. |
-| VII | PageTable layout | ✅ PASS | Untouched. |
-| VIII | i18n | ✅ PASS | No new strings. |
+| V | Quality loop + TDD | ✅ **Central** | The defect was diagnosed against the running app first, then must be captured as a failing unit regression before the fix. Note the honest limitation recorded in research: unit harnesses did **not** reproduce it, so the regression is written from the observed browser state. |
+| VI | UI/UX (ov-fleet) | ✅ PASS | Reset is a menu item like every other per-tab action; disabled-not-hidden when inapplicable, matching the data-model §7 matrix. No confirmation (clarified). |
+| VII | PageTable layout | ✅ PASS | Untouched — no new control in the row. |
+| VIII | i18n | ✅ PASS | One new key (`resetChanges`) in en-US **and** zh-TW in the same commit. |
 | IX–XI | Currency / charts | N/A | Not touched. |
-| XII | Entity toolbar patterns | ✅ PASS | Apply-gate and remount keys unchanged. |
+| XII | Entity toolbar patterns | ✅ PASS | Reset routes through the existing `loadConfig` path, so the apply-gate and remount keys behave exactly as on any view switch. |
 | — | Dev constraints | ✅ PASS | pnpm only; desktop-first. |
 
 **Initial gate result**: PASS — no violations to justify. Re-checked after Phase 1 design: still PASS.
 
-**Honest scoping note**: if the invariant suite turns out to pass everywhere on the first run, this round ships no behavioural change — and that is the correct outcome to report, not a reason to manufacture one. The value is the regression net over a rule that has been violated three different ways.
+**Method note (worth recording).** The defect was found by driving the real application read-only after three unit harnesses failed to reproduce it. That is the same escalation the 014 emoji-ink work needed: when a bug will not reproduce in the test environment, observe the real thing before theorising further. The corresponding lesson for the suite is that an invariant relating two derived values (dot ⟺ overrides) cannot catch a state where both are consistently wrong — some assertions must name the expected *content*.
 
 ## Project Structure
 
@@ -80,12 +88,12 @@ This is deliberately a tests-and-requirements round: the code is believed correc
 
 ```text
 specs/016-entity-views/
-├── spec.md              # + Sessions 2026-08-04d/e, FR-013 rewritten, FR-032/033/034, SC-015/016
-├── plan.md              # This file (rounds 7 & 8)
-├── research.md          # R42 (round 7) + R43 (round 8)
-├── data-model.md        # §4 inbound-target rule (round 7); §3 emission invariant (rounds 6/8)
-├── quickstart.md        # round-7 and round-8 verification walk-throughs
-├── contracts/           # UNCHANGED — no grammar change in either round
+├── spec.md              # + Session 2026-08-04f, FR-035/FR-036, SC-017/SC-018, 3 edge cases
+├── plan.md              # This file (round 9; rounds 1–8 in git history)
+├── research.md          # + R44 (adoption one-shot), R45 (reset + creation baseline)
+├── data-model.md        # §4: ViewTab gains `baseline`; §7 matrix gains Reset changes
+├── quickstart.md        # + round-9 verification (the reported navigation flow)
+├── contracts/           # UNCHANGED — no API or grammar change
 └── tasks.md             # Phase 2 output (/speckit-tasks)
 ```
 
@@ -93,16 +101,19 @@ specs/016-entity-views/
 
 ```text
 apps/unihub/frontend/src/
-└── components/EntityViews/
-    ├── useEntityViews.ts        # round 7: inline state → its own unsaved tab (DONE)
-    │                            # round 8: only if the invariant suite exposes a divergence
-    └── useEntityViews.test.tsx  # round 7 regression (DONE) + round 8 invariant suite
+├── components/EntityViews/
+│   ├── useEntityViews.ts        # adoption one-shot + mount-captured URL check;
+│   │                            #   resetTab(tabId); unsaved tabs record a baseline
+│   ├── ViewTabMenu.tsx          # "Reset changes" item, enabled iff config ≠ baseline
+│   ├── useViewTabsState.ts      # InternalTab.baseline (in-memory, per-visit)
+│   └── *.test.tsx               # adoption regression + reset coverage
+└── locales/{en-US,zh-TW}/pages.ts   # `common.entityViews.resetChanges`
 
 apps/unihub/frontend/e2e/
-└── entity-views.spec.ts         # round-7 flow (DONE) + round-8 indicator/URL agreement
+└── entity-views.spec.ts         # + nav-to-catalog lands clean; reset clears dot and overrides
 ```
 
-**Structure Decision**: Unchanged from rounds 6–7 — everything lives in the hook that owns both the tab list and the URL, with the invariant expressed as a reusable assertion helper inside the suite so every step of the journey checks the same rule.
+**Structure Decision**: Unchanged from rounds 6–8 — the hook owns tab state and the URL, the menu component owns presentation. Reset is implemented as a tab-addressed hook action (like every action since round 3) so it works from a right-click menu on an inactive tab.
 
 ## Complexity Tracking
 

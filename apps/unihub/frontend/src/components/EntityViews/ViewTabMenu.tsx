@@ -48,6 +48,11 @@ export function ViewTabMenu({
   const items = useMemo<NonNullable<MenuProps['items']>>(
     () => [
       { key: 'save', label: t({ id: 'common.entityViews.save' }), disabled: !tab.dirty },
+      {
+        key: 'reset',
+        label: t({ id: 'common.entityViews.resetChanges' }),
+        disabled: !tab.dirty,
+      },
       { type: 'divider' as const },
       { key: 'close', label: t({ id: 'common.entityViews.close' }), disabled: !tab.closable },
       { key: 'duplicate', label: t({ id: 'common.entityViews.duplicate' }) },
@@ -90,6 +95,11 @@ export function ViewTabMenu({
     switch (key) {
       case 'save':
         void views.saveTab(tab.tabId);
+        return;
+      case 'reset':
+        // No confirmation: the discarded edits are cheap to redo and nothing
+        // stored is destroyed (FR-035, clarified 2026-08-04f).
+        views.resetTab(tab.tabId);
         return;
       case 'close':
         views.closeTab(tab.tabId);

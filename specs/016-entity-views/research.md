@@ -426,3 +426,50 @@ A helper inside the suite (`expectIndicatorMatchesUrl`) is called after load, af
 **Scope of the indicator itself (FR-013)**: two cases only — a tab with no stored view, or a stored view whose effective config differs from what is stored. Inactive tabs keep their own indicator: the URL describes only the active tab, so tying the dot to the URL for *every* tab would silently hide unsaved work the user left elsewhere. The invariant is therefore scoped to the active tab by construction, which is exactly how the clarification phrased it.
 
 **Alternatives considered**: asserting only the URL (rejected — the dot is what the user sees, and a URL-only test would have passed throughout rounds 2–5); asserting only the dot (rejected — precisely the blind spot that let the poisoned-URL loop ship, R41); computing the indicator *from* the URL so the invariant is true by construction (rejected — it would make the dot vanish for inactive tabs and couple presentation to transport, and it cannot express the "no stored view" case at all).
+
+---
+
+# Round 9 (Clarifications Session 2026-08-04f)
+
+## R44. The stored default view is never adopted on arrival
+
+**Found by driving the real application, after unit harnesses failed.** Three vitest harnesses — a seeded-filter catalog model, the same with async parameter columns arriving after mount, and the same with a materialized default whose stored config predates those columns — all landed CLEAN. A **read-only** Playwright probe against the running dev stack (login + navigation only; no writes) then captured the actual state after clicking the nav item to `/inventory/catalog`:
+
+```
+?inventory-catalog.view=zn6iFx8QhBMj
+&inventory-catalog.f=or(acquisition__obtained_at gte 2026-01-01; acquisition__obtained_at is_empty)
+&inventory-catalog.sort=-acquisition__obtained_at__nullsfirst
+&inventory-catalog.size=50        → 1 unsaved dot, unchanged by a reload
+```
+
+The stored default view is referenced but its configuration is never applied: the table holds the page defaults, the tab's baseline is the stored config, so `facetOverrides` reports all three facets and the dot is truthful. Both reported symptoms (dot on navigation; inline/override URL surviving refresh) are this single state.
+
+**Root cause — two flaws in one effect**:
+
+1. `defaultAdoptedRef.current = true` executes *before* the guards, so the one-shot is consumed on the first `isFetched` render even when the effect then bails. There is no retry.
+2. The "URL wins" guard reads `hasViewParams(searchParams, …)` — **live** params. By the time the effect runs, the outbound writer may already have published the un-adopted state, so the effect treats the application's own output as a user-provided deep link and defers to it. Self-sustaining.
+
+**Decision**: (a) consume the one-shot only when adoption actually runs or is decisively unnecessary (no default view / nothing to adopt); (b) judge "arrived with view state" from `initialUrlHadViewStateRef` — captured once during the first render, before any outbound write — which already exists for the FR-025 collapse decision and encodes exactly this distinction. Deep links and already-active session tabs must still win, so those guards stay.
+
+**Why the round-8 invariant suite never caught it**: FR-033 asserts *indicator ⟺ override parameters*, and in this state they agree perfectly — the dot is present and the overrides are present. The invariant was satisfied while the described state was wrong. The regression for this round therefore asserts the **adopted configuration** and an **empty override set**, i.e. named content rather than a relation between two derived values. Recorded as a testing lesson: a consistency invariant cannot detect consistently-wrong state.
+
+**Alternatives considered**: re-running adoption whenever `defaultView` changes without a one-shot (rejected: it would fight a user who deliberately edits the default view, re-adopting on every refetch); comparing live params against `lastParamRef` to detect our own echo (rejected as the primary mechanism — `lastParamRef` tracks the most recent write, not "what the navigation carried", and the mount-captured ref answers the actual question); dropping the URL-wins guard entirely (rejected: it is what makes deep links authoritative, US3-AC1).
+
+## R45. "Reset changes" and the creation baseline
+
+**Decision**: new tab-addressed action `resetTab(tabId)` plus a `Reset changes` item in `ViewTabMenu`, enabled exactly when the tab's effective configuration differs from its baseline. Baseline by tab kind:
+
+| Tab | Baseline restored |
+|-----|-------------------|
+| stored view (saved, or the default holder once materialized) | that view's stored configuration |
+| unsaved tab (scratch, duplicated, or restored from inline URL state) | the configuration the tab was CREATED with |
+
+The second row needs state that does not exist today: an unsaved tab's `config` field is overwritten as the user edits, so `InternalTab` gains an in-memory `baseline?: ViewConfig`, set at creation by `addBlankTab` (the blank config), `duplicateTab` (the source's config), and the round-7 inline restoration (the URL's config). It is per-visit state and is never persisted — round 5 removed tab persistence entirely.
+
+**Rationale**: the clarified rule is "reload what this tab started from", which is the stored config for a stored view and the creation config otherwise. Reusing the existing `loadIntoTable` path means reset behaves exactly like a view switch — the round-6 `pendingLoadRef` gate applies, so the URL is not published mid-load and the override parameters drop out naturally once the baseline lands (SC-018).
+
+**Enablement**: expressed as "config ≠ baseline" rather than reusing `dirty`, because an unsaved tab is *always* dirty by definition (FR-013) — offering Reset on a pristine blank tab would be a no-op control. For stored views the two are identical, so the matrix in data-model §7 gains one row with the same shape as Save.
+
+**No confirmation** (clarified): the discarded edits are filter/sort/column tweaks that cost seconds to redo, and the item is only enabled when there is something to discard. This is a deliberate exception to the delete-gate habit — nothing stored is destroyed.
+
+**Alternatives considered**: a visible button in the view row (rejected by the clarification — rounds 3–4 reduced that row to tabs plus one kebab); disabling Reset on unsaved tabs entirely (rejected in the same clarification: returning a scratch tab to blank is useful); routing reset through `confirmDialog` (rejected — friction on a cheap, reversible-by-redo action).

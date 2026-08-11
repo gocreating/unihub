@@ -25,6 +25,11 @@ export interface InternalTab {
   /** Last-known config for INACTIVE tabs; the active tab's live config is the
    *  table state itself. */
   config: ViewConfig;
+  /** What "Reset changes" restores on a tab with NO stored view: the config it
+   *  was CREATED with (blank for "Add empty view", the source's for Duplicate,
+   *  the URL's for an inline restoration). Stored views need none — theirs is
+   *  the saved config. In-memory only; tabs are never persisted (round 5). */
+  baseline?: ViewConfig;
 }
 
 /** The whole persisted footprint of the view row — one display preference. */

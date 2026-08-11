@@ -400,6 +400,7 @@ export default {
   'common.entityViews.newViewName': '新檢視',
   'common.entityViews.unsaved': '未儲存的變更',
   'common.entityViews.save': '儲存',
+  'common.entityViews.resetChanges': '還原變更',
   'common.entityViews.viewName': '檢視名稱',
   'common.entityViews.viewNameRequired': '請輸入檢視名稱',
   'common.entityViews.duplicate': '建立複本',

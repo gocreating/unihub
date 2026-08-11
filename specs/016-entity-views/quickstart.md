@@ -140,3 +140,15 @@ Watch the tab and the address bar together — they should always agree:
 4. Change something again, then switch to another tab. The edited tab KEEPS its dot (your unsaved work is still flagged), while the URL now describes the newly active tab and carries no overrides for the edited one.
 5. Switch back. The dot is still there and the overrides return to the URL.
 6. At no point should you see a dot with no override parameters, or override parameters with no dot, on the active tab.
+
+## Round 9 verification (2026-08-04)
+
+Both reported bugs are one state — the stored default view not being loaded — so check the URL as well as the dot:
+
+1. **Navigate from the nav menu** to `/inventory/catalog`. Expected: the address bar carries NO view parameters (or at most `?inventory-catalog.view=<id>`), no tab shows the unsaved dot, and the table shows the default view's own filter/sort/page size (SC-017). Before this round the URL arrived as `?…view=<id>&.f=…&.sort=…&.size=50` with a dot.
+2. **Refresh.** Nothing about the URL or the row changes — no inline mode, no dot.
+3. **Deep links still win**: paste `?inventory-catalog.view=<some other view id>` and confirm that view opens instead of the default.
+4. **Reset changes — stored view**: change the sort on the default view (dot appears, URL gains `.sort`), then tab menu → *Reset changes*. The dot clears, the sort returns to the saved one, and `.sort` disappears from the URL in the same step (SC-018).
+5. **Reset changes — scratch tab**: kebab → *Add empty view*, add a filter, then *Reset changes* — the tab returns to the blank configuration it was created with.
+6. **Reset changes — inactive tab**: dirty a view, switch to another tab, right-click the dirty tab → *Reset changes*. That tab loses its dot; the active tab and the URL are untouched.
+7. **Enablement**: on a pristine tab (nothing changed since it opened) the item is greyed out.

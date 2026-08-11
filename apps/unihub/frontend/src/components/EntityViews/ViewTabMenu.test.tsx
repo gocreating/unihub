@@ -40,6 +40,7 @@ function makeViews(overrides: Partial<UseEntityViewsReturn> = {}): UseEntityView
     setDefaultTab: vi.fn().mockResolvedValue(undefined),
     deleteTab: vi.fn().mockResolvedValue(undefined),
     reorderTabs: vi.fn().mockResolvedValue(undefined),
+    resetTab: vi.fn(),
     ...overrides,
   } as unknown as UseEntityViewsReturn;
 }
@@ -80,6 +81,7 @@ describe('ViewTabMenu — items', () => {
     await screen.findByText('Save');
     for (const label of [
       'Save',
+      'Reset changes',
       'Close',
       'Duplicate',
       'Pin',
@@ -226,5 +228,34 @@ describe('ViewTabMenu — actions', () => {
       expect(document.querySelector('.ant-modal-wrap')).toHaveStyle({ display: 'none' }),
     );
     expect(views.deleteTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('ViewTabMenu — round 9: Reset changes (FR-035)', () => {
+  it('is enabled on a dirty tab and resets THIS tab', async () => {
+    const views = makeViews();
+    renderMenu(makeTab({ tabId: 'tab-x', dirty: true }), views);
+    const item = await screen.findByText('Reset changes');
+    expect(itemDisabled('Reset changes')).toBe(false);
+
+    fireEvent.click(item);
+    expect(views.resetTab).toHaveBeenCalledWith('tab-x');
+    // No confirmation in the path (clarified 2026-08-04f).
+    expect(document.querySelector('[data-testid="confirm-dialog-footer"]')).toBeNull();
+  });
+
+  it('is disabled on a pristine tab', async () => {
+    renderMenu(makeTab({ dirty: false }), makeViews());
+    await screen.findByText('Reset changes');
+    expect(itemDisabled('Reset changes')).toBe(true);
+  });
+
+  it('is available on the default holder when it has unsaved edits', async () => {
+    renderMenu(
+      makeTab({ kind: 'default', isDefault: true, pinned: true, closable: false, dirty: true }),
+      makeViews(),
+    );
+    await screen.findByText('Reset changes');
+    expect(itemDisabled('Reset changes')).toBe(false);
   });
 });

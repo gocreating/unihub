@@ -1,6 +1,6 @@
 # Data Model: Entity Views
 
-**Feature**: 016-entity-views | **Date**: 2026-07-20 | **Updated**: 2026-08-04 (round 8)
+**Feature**: 016-entity-views | **Date**: 2026-07-20 | **Updated**: 2026-08-04 (round 9)
 
 ## 1. `EntityView` (backend, `core/models.py`)
 
@@ -116,6 +116,11 @@ interface ViewTab {
   name: string;                    // display LABEL — page defaultViewName / "Table" for the virtual
                                    // default, "New view" for a fresh scratch tab, the stored name
                                    // once saved. Never an identifier (round 4).
+  baseline?: ViewConfig;           // round 9 — what "Reset changes" restores on a tab with NO
+                                   // stored view: the config it was CREATED with (blank for
+                                   // "Add empty view", the source's for Duplicate, the URL's for
+                                   // an inline restoration). In-memory only; never persisted.
+                                   // Stored views need no baseline — theirs is the saved config.
   config: ViewConfig;              // current effective config of this tab
   page: number;                    // transient page position
 }
@@ -147,6 +152,8 @@ what it describes.
 | `.view=<id>` (a stored view) | that view's tab — opened if not already present |
 | inline facets, an unsaved tab already active | that unsaved tab |
 | inline facets, no unsaved tab open | a NEW unsaved tab labelled "New view", made active |
+
+**Arrival rule (round 9, FR-036/R44)**: before anything is published to the URL, the view holding the default role has its STORED configuration applied to the table. Whether the user "arrived with view state" is judged from the params present at MOUNT — never from live params, which by then may be the application's own output. The adoption attempt is one-shot per visit, but the one-shot is consumed only when adoption runs or is decisively unnecessary; bailing for a transient reason must leave it armed.
 
 Inline state is NEVER written onto a tab that represents a stored view (the
 default holder included): doing so replaces that view's configuration with the
@@ -199,12 +206,15 @@ Rows are tab kinds; ✅ = enabled, ⛔ = rendered disabled.
 | Action | anonymous | saved (clean) | saved (dirty) | default holder (virtual) | default holder (materialized) |
 |--------|-----------|---------------|---------------|--------------------------|-------------------------------|
 | Save | ✅ (stores under the tab label, no prompt) | ⛔ | ✅ | ✅ (materializes) | ✅ only when dirty |
+| Reset changes | ✅ when it differs from the blank config it was created with | ⛔ | ✅ | ⛔ | ✅ only when dirty |
 | Close | ✅ | ✅ | ✅ | ⛔ | ⛔ |
 | Duplicate | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Pin / Unpin | ⛔ | ✅ | ✅ | ⛔ | ⛔ (pinned while it holds the role) |
 | Set as default | ⛔ (save first) | ✅ | ✅ | ⛔ (already default) | ⛔ (already default) |
 | Rename | ✅ (relabels locally until Save) | ✅ | ✅ | ✅ (materializes) | ✅ |
 | Delete | ⛔ | ✅ (danger confirm) | ✅ (danger confirm) | ⛔ | ⛔ |
+
+**Reset changes (round 9, FR-035)** restores the tab's baseline — the stored view's configuration, or the creation config for an unsaved tab — with no confirmation and no write to stored data. It is enabled exactly when the effective config differs from that baseline (for stored views this is identical to `dirty`; for unsaved tabs it is narrower, since those are always dirty by definition).
 
 Kebab menu (row right edge, FR-011/FR-012) — round 4 drops *Manage views…*: *Add empty view* (always ✅, creates a **blank**-config tab labelled "New view") · *Open ▸* listing saved views **not currently open as tabs** (⛔ single empty-state entry when none).
 

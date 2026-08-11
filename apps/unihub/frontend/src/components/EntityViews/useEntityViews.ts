@@ -114,6 +114,8 @@ export interface UseEntityViewsReturn {
   deleteTab: (tabId: string) => Promise<void>;
   /** Apply a dragged tab order and persist it for saved views (FR-027). */
   reorderTabs: (orderedTabIds: string[]) => Promise<void>;
+  /** Discard this tab's edits, returning it to its baseline (FR-035). */
+  resetTab: (tabId: string) => void;
 }
 
 /** Coerce a server-stored (unknown-shaped) config into a full v2 ViewConfig,
@@ -516,6 +518,7 @@ export function useEntityViews({
       kind: 'anonymous',
       name: t({ id: 'common.entityViews.newViewName' }),
       config: blank,
+      baseline: blank, // what Reset changes returns to (FR-035)
     };
     setTabs((prev) => [...snapshotOutgoing(prev, snapshot), tab]);
     setActiveTabId(tab.tabId);
@@ -561,11 +564,13 @@ export function useEntityViews({
       // (no "(n)" suffix — FR-015).
       const name = baseName || sourceState?.name || t({ id: 'common.entityViews.newViewName' });
       const snapshot = table.snapshotConfig();
+      const sourceConfig = configOfTab(source);
       const tab: InternalTab = {
         tabId: uid(),
         kind: 'anonymous',
         name,
-        config: configOfTab(source),
+        config: sourceConfig,
+        baseline: sourceConfig, // Reset returns the copy to what it was copied from
       };
       setTabs((prev) => [...snapshotOutgoing(prev, snapshot), tab]);
       setActiveTabId(tab.tabId);
@@ -573,6 +578,32 @@ export function useEntityViews({
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tabs, tabStates, activeTabId, configOfTab, table.snapshotConfig, loadIntoTable, t],
+  );
+
+  /** Discard a tab's edits and return it to its baseline (FR-035).
+   *
+   *  Baseline = the stored view's configuration for a tab that represents one,
+   *  otherwise the configuration the tab was created with. Writes nothing to
+   *  the server. Routing through `loadIntoTable` means the round-6 pending-load
+   *  gate applies, so the override params drop out of the URL once the baseline
+   *  lands rather than being republished mid-flight. */
+  const resetTab = useCallback(
+    (tabId: string) => {
+      const tab = tabs.find((item) => item.tabId === tabId);
+      if (!tab) return;
+      const storedView = tab.kind === 'default' ? defaultView : viewById(tab.viewId);
+      const baseline = storedView
+        ? reconcileConfig(coerceConfig(storedView.config, defaultConfig), defaultConfig)
+        : (tab.baseline ?? blankConfig(defaultConfig));
+
+      setTabs((prev) =>
+        prev.map((item) => (item.tabId === tabId ? { ...item, config: baseline } : item)),
+      );
+      // Only the ACTIVE tab drives the table (and therefore the URL).
+      if (tabId === activeTabId) loadIntoTable(baseline);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tabs, activeTabId, defaultView, defaultConfig, viewById, loadIntoTable],
   );
 
   // ── Persistence (the ONLY API writes) ──────────────────────────────────────
@@ -941,6 +972,7 @@ export function useEntityViews({
               kind: 'anonymous' as const,
               name: t({ id: 'common.entityViews.newViewName' }),
               config,
+              baseline: config, // the state the URL described
             },
           ];
         });
@@ -1096,5 +1128,6 @@ export function useEntityViews({
     setDefaultTab,
     deleteTab,
     reorderTabs,
+    resetTab,
   };
 }

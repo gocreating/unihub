@@ -473,3 +473,81 @@ The second row needs state that does not exist today: an unsaved tab's `config` 
 **No confirmation** (clarified): the discarded edits are filter/sort/column tweaks that cost seconds to redo, and the item is only enabled when there is something to discard. This is a deliberate exception to the delete-gate habit — nothing stored is destroyed.
 
 **Alternatives considered**: a visible button in the view row (rejected by the clarification — rounds 3–4 reduced that row to tabs plus one kebab); disabling Reset on unsaved tabs entirely (rejected in the same clarification: returning a scratch tab to blank is useful); routing reset through `confirmDialog` (rejected — friction on a cheap, reversible-by-redo action).
+
+## R46. Why the default view was never adopted — three defects in one path
+
+**Round 9 concluded this bug was not in the branch. That was wrong**, and the way
+it was wrong is the most reusable part of this record. The reasoning went: the
+running container's image predated the round-6/7 commits, therefore observations
+made against it described old code. The image timestamp was checked once and the
+matter closed. By the time the user re-reported the bug the stack HAD been
+rebuilt — the image was 12 minutes NEWER than `37f4687` — so the observations
+were of current code all along. **An artefact-freshness check is only valid at
+the moment it is made; re-check it before reusing its conclusion**, and treat a
+user who repeats a bug report as evidence about the code, not about the user.
+
+The reproduction that settled it drives the real page and records every URL
+write (`history.pushState`/`replaceState` wrapped in an init script), because
+the final URL alone hides the sequence. Arriving at the catalog produced:
+
+```
+?inventory-catalog.view=zn6iFx8QhBMj
+ &inventory-catalog.f=or(acquisition__obtained_at gte 2026-01-01; …is_empty)
+ &inventory-catalog.sort=-acquisition__obtained_at__nullsfirst
+ &inventory-catalog.size=50
+```
+
+Those three "overrides" are the PAGE defaults, while the stored default view
+holds `filters: []`, `pageSize: 100` — the signature of a table that never
+adopted its own default view. Three independent defects were stacked in that one
+path; each had to be fixed for the flow to come clean.
+
+**(1) The pristine test read a stale snapshot.** Adoption asked whether the
+default TAB's stored config still equalled the page defaults. That config is
+captured when the tab row is built; on a page whose columns arrive
+asynchronously (the catalog's `attr:*` parameter columns) `defaultConfig` then
+GROWS, and `reconcileConfig` appends the newly-known columns at the END while
+the page declares them mid-order (`actions` is order 99). The two can therefore
+never be equal again, so adoption bailed on every visit, forever. The test now
+compares the TABLE's live state against the page defaults — the question was
+always "is the table still pristine?", and the table is the thing that knows.
+
+**(2) The one-shot was consumed before the guards, and the guards read live
+params.** `defaultAdoptedRef` was set true at the top of the effect, so a bail
+for a transient reason was permanent; and "the URL wins" read `searchParams` as
+they are, which meant the hook's OWN outbound write suppressed adoption on the
+next reload. Both were recorded as latent smells in R44 and left unchanged for
+want of a failing test — they were reachable all along. The one-shot is now a
+token of the configuration last offered (`adoptedTokenRef`), which makes the
+effect idempotent, re-entrant as the column universe settles, and loop-proof
+(adoption changes `tabs`, which re-triggers it). The URL question is answered
+from `initialUrlHadViewStateRef`, captured during the first render.
+
+**(3) The corrective write never happened.** Even once adoption worked, the
+address bar kept the parameters written moments earlier. The outbound effect
+computes `desired` (empty, for a clean default view) and compares it against
+`current` — but `searchParams` was not among its dependencies, so it ran on a
+closure captured before the write and read `current: []`. Believing the URL was
+already clean, it returned. This is FR-037: a writer must decide against the URL
+as it stands, not a remembered value. Adding the dependency is safe because the
+write is idempotent — the re-run it triggers finds `desired === current`.
+
+**Why the unit suite stayed green through all of this.** The round-9 harness
+holds a FIXED column set, and every defect above needs the column universe to
+grow after mount. The round-10 regression models the real page: attribute
+columns arrive a tick after mount, the saved-view list resolves after THEM (the
+order observed in production), and the stored default differs from the page
+defaults in filter, sort and page size. It fails on the pre-fix code with
+`expected 50 to be 25` — the table sitting at page defaults.
+
+**Residual, stated plainly**: in the skew window — after the saved-view list
+arrives but before the table's own column state has been patched with the late
+columns — one write of override parameters still escapes, and is corrected
+within the same second. A reload inside that window would pick it up. Closing it
+needs a gate that can distinguish "adoption is still coming" from "the user
+edited during load"; every formulation tried either failed to fire (the skew IS
+a genuine difference) or risked silencing the URL permanently, which is the
+worse failure (R40). The alternative root fix — making `reconcileConfig` merge
+unknown columns at their declared position instead of appending them — would
+remove the skew entirely, but it changes column-drift behaviour for every saved
+view and belongs in its own round with its own tests.

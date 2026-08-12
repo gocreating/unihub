@@ -490,6 +490,52 @@ test.describe('entity-views arrival + reset (round 9)', () => {
   });
 });
 
+test.describe('entity-views default-view adoption (round 10, SC-017/SC-019)', () => {
+  // The round-9 test above asserts "no overrides, no dot", which a table with NO
+  // materialized default also satisfies. This one pins the stronger half: the
+  // stored default view's own configuration must be what the table is showing.
+  // It runs on the catalog deliberately — its parameter columns arrive after
+  // mount, and that late growth is what defeated adoption (R46).
+  test('arriving applies the stored default view itself, on a page with async columns', async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    const row = page.getByTestId('view-tabs-row');
+    await expect(row).toBeVisible();
+
+    // A default view whose page size differs from the page default of 50.
+    await createSavedView(page, 'Adoption probe');
+    await page.getByText('50 / page').first().click();
+    await page.getByTitle('100 / page').click();
+    await row.getByRole('tab', { name: /Adoption probe/ }).click();
+    await page.getByRole('menuitem', { name: 'Save' }).click();
+    await row.getByRole('tab', { name: /Adoption probe/ }).click();
+    await page.getByRole('menuitem', { name: 'Set as default' }).click();
+
+    // Leave and come back the way the nav menu does.
+    await page.goto('/');
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+
+    // The stored page size is in effect — the table adopted the view, rather
+    // than sitting at the page defaults while merely referencing it.
+    await expect(page.getByText('100 / page').first()).toBeVisible();
+    await expect(page.getByLabel('Unsaved changes')).toHaveCount(0);
+    const overrides = [...new URL(page.url()).searchParams.keys()].filter(
+      (k) => k.startsWith('inventory-catalog.') && k !== 'inventory-catalog.view',
+    );
+    expect(overrides).toEqual([]);
+
+    // And the correction survives a reload rather than being replayed as edits.
+    await page.reload();
+    await revealRow(page);
+    await expect(page.getByText('100 / page').first()).toBeVisible();
+    await expect(page.getByLabel('Unsaved changes')).toHaveCount(0);
+  });
+});
+
 test.describe('entity-views URL deep-linking (US3, readable params)', () => {
   test('a readable inline URL applies its config on load and marks the tab dirty', async ({
     page,

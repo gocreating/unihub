@@ -38,6 +38,7 @@ import {
   configsEqual,
   facetParam,
   hasViewParams,
+  normalizeConfig,
   parseViewParams,
   serializeInlineEntries,
   serializeSavedEntries,
@@ -209,7 +210,7 @@ export function useEntityViews({
     [isViewParamKey],
   );
 
-  // ── The four navigation guards of this hook ────────────────────────────────
+  // ── The five navigation guards of this hook ────────────────────────────────
   // Each prevents a DIFFERENT failure; none is redundant with another, and
   // removing any one of them reintroduces a shipped bug:
   //
@@ -228,6 +229,18 @@ export function useEntityViews({
   //                       before it does wrote the PRE-adoption state out as
   //                       "overrides"; the next load replayed them and the view
   //                       showed the unsaved dot on arrival (round 6, FR-032).
+  //   adoptedTokenRef   — the default view's configuration last offered to the
+  //                       table. Adoption is idempotent rather than a one-shot
+  //                       because a page's column universe can grow after
+  //                       mount; a one-shot burned before its guards bailed
+  //                       permanently on a transient skew and the page defaults
+  //                       were then published as "overrides" of the stored view
+  //                       (round 10, FR-036/R46).
+  //
+  // A sixth mechanism is not a ref: the outbound effect depends on
+  // `searchParams` because it DECIDES against them (FR-037). Reading a stale
+  // value let it believe the URL was already correct and skip the corrective
+  // write that adoption requires.
   //
   // The entries last written by us — used to skip the echo of our own
   // outbound writes.
@@ -293,6 +306,16 @@ export function useEntityViews({
   const defaultDisplayName =
     defaultView?.name ?? defaultViewName ?? t({ id: 'common.entityViews.defaultTable' });
 
+  // Whether the URL addressed view state AT MOUNT, captured during the first
+  // render — before any of our OWN outbound writes. Two consumers need the
+  // arrival value rather than the live one: the adoption effect below (R46) and
+  // the view-row auto-hide (FR-025), where a lone materialized default
+  // round-trips its own config through the URL.
+  const initialUrlHadViewStateRef = useRef<boolean | null>(null);
+  if (initialUrlHadViewStateRef.current === null) {
+    initialUrlHadViewStateRef.current = hasViewParams(searchParams, tableKey);
+  }
+
   // Rehydrate the table ONCE from a session-restored active tab (US2): the
   // tab list survives in sessionStorage, but the table hooks boot from page
   // defaults — reload the restored tab's config on mount.
@@ -313,25 +336,62 @@ export function useEntityViews({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Adopt the materialized default view's stored config ONCE per mount when
-  // the default tab still sits at pristine page defaults (fresh session): the
-  // stored row IS the default tab's identity after materialization (US1).
-  const defaultAdoptedRef = useRef(false);
+  // Adopt the materialized default view's stored config while the table still
+  // sits at pristine page defaults: the stored row IS the default tab's
+  // identity after materialization (US1/FR-036).
+  //
+  // Deliberately NOT a one-shot. A page's column universe can GROW after mount
+  // — the catalog's `attr:*` columns arrive with the attribute definitions —
+  // which changes `defaultConfig`, and with it what both "pristine" and "the
+  // stored configuration" mean. The effect re-runs and the comparisons below
+  // decide; `adoptedTokenRef` makes it idempotent (and loop-proof: adoption
+  // itself changes `tabs`).
+  const adoptedTokenRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isFetched || defaultAdoptedRef.current) return;
-    defaultAdoptedRef.current = true;
-    if (!defaultView) return;
-    if (hasViewParams(searchParams, tableKey)) return; // URL wins
+    if (!isFetched || !defaultView) return;
+    // The URL the USER arrived with wins — read the value captured AT MOUNT,
+    // never the live params. This hook writes the URL itself, so reading live
+    // params let our own write masquerade as a deep link and suppress adoption
+    // on every reload (R46).
+    if (initialUrlHadViewStateRef.current) return;
     const active = tabs.find((tab) => tab.tabId === activeTabId);
-    if (!active || active.kind !== 'default') return; // session tab wins
-    if (!configsEqual(reconcileConfig(active.config, defaultConfig), defaultConfig)) return;
-    if (configsEqual(defaultBaseline, defaultConfig)) return; // nothing to adopt
+    if (!active || active.kind !== 'default') return; // a session tab wins
+    const target = reconcileConfig(defaultBaseline, defaultConfig);
+    const token = normalizeConfig(target);
+    if (adoptedTokenRef.current === token) return; // already offered this config
+    const live = reconcileConfig(table.snapshotConfig(), defaultConfig);
+    if (configsEqual(live, target)) {
+      adoptedTokenRef.current = token;
+      return;
+    }
+    // Compare the table's LIVE state, never the tab's stored config: that
+    // snapshot is taken at mount, and once late columns land it can never equal
+    // the grown defaults again (reconcile appends them at the end, the page
+    // declares them mid-order). Adoption then bailed forever and the page
+    // defaults were published as "overrides" of the stored view — the unsaved
+    // dot on arrival, and an inline URL after a reload (R46).
+    if (!configsEqual(live, reconcileConfig(defaultConfig, defaultConfig))) return; // user edits win
+    adoptedTokenRef.current = token;
     setTabs((prev) =>
-      prev.map((tab) => (tab.tabId === DEFAULT_TAB_ID ? { ...tab, config: defaultBaseline } : tab)),
+      prev.map((tab) => (tab.tabId === DEFAULT_TAB_ID ? { ...tab, config: target } : tab)),
     );
-    loadIntoTable(defaultBaseline);
+    loadIntoTable(target);
+    // `table.snapshotConfig` is a dependency for a reason: the table's own
+    // column state is patched with late-arriving columns one commit AFTER
+    // `defaultConfig` gains them, so a run in between sees a live snapshot that
+    // legitimately differs from the defaults. Re-running as the table settles
+    // is what turns that transient skew back into a match; without it the
+    // single run landed inside the skew and adoption never happened (R46).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFetched, defaultView]);
+  }, [
+    isFetched,
+    defaultView,
+    defaultBaseline,
+    defaultConfig,
+    tabs,
+    activeTabId,
+    table.snapshotConfig,
+  ]);
 
   // Pinned tabs closed during this session must not bounce back on the next
   // refetch (round 3: every tab except the default holder is closable).
@@ -448,16 +508,10 @@ export function useEntityViews({
 
   // ── View-row auto-hide (FR-025) ────────────────────────────────────────────
 
-  // Captured ONCE at mount — before any of our own outbound URL writes — so a
-  // lone materialized default (which round-trips its config through the URL)
-  // is not mistaken for URL-addressed non-default state. A URL that addresses
-  // view state AT LOAD forces the row open; later dirtying of the collapsed
-  // default keeps it collapsed (the affordance shows the dirty dot instead).
-  const initialUrlHadViewStateRef = useRef<boolean | null>(null);
-  if (initialUrlHadViewStateRef.current === null) {
-    initialUrlHadViewStateRef.current = hasViewParams(searchParams, tableKey);
-  }
-
+  // `initialUrlHadViewStateRef` (declared above, at mount) decides this too: a
+  // URL that addresses view state AT LOAD forces the row open, while later
+  // dirtying of the collapsed default keeps it collapsed (the affordance shows
+  // the dirty dot instead).
   const collapsed =
     !revealed &&
     !initialUrlHadViewStateRef.current &&
@@ -1106,8 +1160,15 @@ export function useEntityViews({
       { pathname: location.pathname, search: search ? `?${search}` : '' },
       { replace: true },
     );
+    // `searchParams` is a dependency because this effect DECIDES against it:
+    // `currentJson` is what the URL already says. Without it the effect ran on
+    // a stale value, read "[]" while the address bar held override params, and
+    // concluded the URL was already correct — so the corrective write that
+    // should follow adoption never happened and the overrides survived into the
+    // next load (R46). The write itself is idempotent: the re-run it triggers
+    // finds `desired === current` and returns.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs, activeTabId, savedViews, table.snapshotConfig, table.offset, table.limit]);
+  }, [tabs, activeTabId, savedViews, searchParams, table.snapshotConfig, table.offset, table.limit]);
 
   return {
     tabs: tabStates,

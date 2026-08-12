@@ -1785,6 +1785,139 @@ describe('useEntityViews — round 9: the stored default view is adopted on arri
   });
 });
 
+// ── Round 10: the column universe grows AFTER mount (R46) ───────────────────
+//
+// The catalog's `attr:*` columns come from an async query, so `defaultConfig`
+// gains columns a few commits after the tab row is built. The round-9 harness
+// above holds a FIXED column set, which is exactly why it stayed green while
+// the real page failed: the default tab's mount-time config snapshot can never
+// equal the grown defaults again (reconcile appends late columns at the END,
+// while the page declares them mid-order), so adoption bailed forever and the
+// page defaults were published as "overrides" of the stored view.
+
+describe('useEntityViews — round 10: late-arriving columns must not block adoption', () => {
+  const PAGE_FILTERS: ViewConfig['filters'] = [
+    { logic: 'or', conditions: [{ attr: 'name', op: 'contains', val: 'seed' }] },
+  ];
+  const PAGE_SORT: ViewConfig['sort'] = [{ field: 'amount', direction: 'desc' }];
+
+  /** Declared column order: the async `attr:*` columns sit BEFORE `actions`. */
+  const columnDefsFor = (attrIds: string[]): ColumnDef[] => [
+    { key: 'name', label: 'Name', dataType: 'text', visible: true, order: -1, pin: 'left' },
+    { key: 'amount', label: 'Amount', dataType: 'number', visible: true, order: 4.5 },
+    ...attrIds.map((id, i) => ({
+      key: `attr:${id}`,
+      label: id,
+      dataType: 'text' as const,
+      visible: false,
+      order: 5 + i,
+    })),
+    { key: 'actions', label: 'Actions', dataType: 'text', visible: true, order: 99, pin: 'right' },
+  ];
+
+  const configFor = (attrIds: string[]): ViewConfig => ({
+    filters: PAGE_FILTERS,
+    sort: PAGE_SORT,
+    columns: columnDefsFor(attrIds).map((c) => ({
+      key: c.key,
+      visible: c.visible,
+      order: c.order,
+      pin: c.pin,
+    })),
+    pageSize: 50,
+  });
+
+  const ATTR_IDS = ['YOGyUIN1xK2J', 'yrt1HGbrVjSn'];
+
+  /** The stored default view — saved when every column was known, and
+   *  deliberately different from the page defaults (no filter, 25/page). */
+  const STORED_DEFAULT: EntityView = {
+    ...DEFAULT_VIEW,
+    id: 'storeddflt02',
+    name: 'All - 2',
+    config: {
+      filters: [],
+      sort: [{ field: 'name', direction: 'asc' }],
+      columns: configFor(ATTR_IDS).columns,
+      pageSize: 25,
+    },
+    pinned: true,
+    position: 0,
+    is_default: true,
+  };
+
+  /** Catalog-shaped: attribute definitions (and their columns) resolve a tick
+   *  after mount, before the saved-view list arrives. */
+  function useLateColumnsHarness() {
+    const [attrIds, setAttrIds] = React.useState<string[]>([]);
+    React.useEffect(() => {
+      const id = setTimeout(() => setAttrIds(ATTR_IDS), 0);
+      return () => clearTimeout(id);
+    }, []);
+    const columnDefs = useMemo(() => columnDefsFor(attrIds), [attrIds]);
+    const table = useEntityTable({
+      key: 'tbl',
+      filterableAttrs: ATTRS,
+      columnDefs,
+      defaultFilterGroups: PAGE_FILTERS,
+      defaultSortRules: PAGE_SORT,
+      defaultPageSize: 50,
+    });
+    const defaultConfig = useMemo(() => configFor(attrIds), [attrIds]);
+    const views = useEntityViews({ tableKey: 'tbl', table, defaultConfig, defaultViewName: 'YTD' });
+    const [searchParams] = useSearchParams();
+    return { table, views, searchParams };
+  }
+
+  const overrideParams = (params: URLSearchParams): string[] =>
+    [...params.keys()].filter((key) => key.startsWith('tbl.') && key !== 'tbl.view');
+
+  beforeEach(() => {
+    // Saved views resolve AFTER the columns, as observed in the running app.
+    listMock.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve([STORED_DEFAULT]), 20)),
+    );
+  });
+
+  it('adopts the stored default view and writes NO params', async () => {
+    const { result } = renderHook(useLateColumnsHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+    await waitFor(() => expect(result.current.table.limit).toBe(25));
+
+    expect(result.current.table.queryParams.ordering).toBe('name');
+    expect(result.current.views.activeTab.dirty).toBe(false);
+    // The reported symptom: the page defaults serialized as overrides of the
+    // stored view (`tbl.f`/`tbl.sort`/`tbl.size`), which the next load replayed.
+    expect(overrideParams(result.current.searchParams)).toEqual([]);
+  });
+
+  it('leaves a URL-addressed view alone (deep links still win)', async () => {
+    listMock.mockImplementation(
+      () =>
+        new Promise((resolve) => setTimeout(() => resolve([STORED_DEFAULT, SAVED_VIEW]), 20)),
+    );
+    const { result } = renderHook(useLateColumnsHarness, {
+      wrapper: makeWrapper([`/?tbl.view=${SAVED_VIEW.id}`]),
+    });
+    await waitFor(() => expect(result.current.views.activeTab.viewId).toBe(SAVED_VIEW.id));
+    expect(result.current.table.limit).toBe(50); // the deep-linked view's page size
+  });
+
+  it('does not fight a user who edits while the view list is still loading', async () => {
+    const { result } = renderHook(useLateColumnsHarness, { wrapper: makeWrapper() });
+    act(() => {
+      result.current.table.sort.handleHeaderClick('name');
+    });
+    const edited = result.current.table.queryParams.ordering;
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+    await new Promise((r) => setTimeout(r, 30));
+
+    // The edit survives: adoption never overwrites state the user established.
+    expect(result.current.table.queryParams.ordering).toBe(edited);
+    expect(result.current.table.limit).toBe(50);
+  });
+});
+
 // ── Round 9: "Reset changes" (FR-035/R45) ───────────────────────────────────
 
 describe('useEntityViews — round 9: resetTab', () => {

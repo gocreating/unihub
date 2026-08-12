@@ -1,10 +1,35 @@
-# Implementation Plan: Entity Views — Round 9 (default-view adoption + Reset changes)
+# Implementation Plan: Entity Views — Round 10 (the default view is actually adopted)
 
-**Branch**: `016-entity-views` | **Date**: 2026-08-04 | **Spec**: [spec.md](spec.md)
+**Branch**: `016-entity-views` | **Date**: 2026-08-12 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-04f. Earlier plans at 467beff / 8e1f169 / 3defc24 / 5d6ad96 / bb3f310 / c2c256e / a0309e8 / bf0b2eb.
+**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-12. Earlier plans at 467beff / 8e1f169 / 3defc24 / 5d6ad96 / bb3f310 / c2c256e / a0309e8 / bf0b2eb.
 
 ## Summary
+
+**Round 10 supersedes round 9's conclusion on this defect.** Round 9 decided the
+reported bug was not in the branch because the container serving :3001 predated
+the fixes. The stack has since been rebuilt — the image is 12 minutes NEWER than
+round 9's own commit — and the bug reproduces against current code. FR-036 and
+SC-017 were already written correctly; the implementation did not satisfy them.
+
+Three stacked defects on the arrival path, all diagnosed by driving the real page
+and recording every URL write (R46):
+
+1. **The pristine test read a stale snapshot** — it asked whether the default
+   TAB's mount-time config still equalled the page defaults. On the catalog, whose
+   `attr:*` columns arrive asynchronously, those can never be equal again, so
+   adoption bailed forever. It now compares the TABLE's live state.
+2. **The one-shot burned before its guards, and "the URL wins" read live params**
+   — the two smells recorded but not fixed in R44. Replaced by a token of the
+   configuration last offered, plus the mount-captured URL value.
+3. **The corrective write never fired** — the outbound effect compared `desired`
+   against a stale `searchParams`, saw a URL it believed already clean, and
+   skipped the write that adoption requires (FR-037).
+
+Verified against the user's real data: navigating to the catalog and reloading
+both end at `/inventory/catalog` with no parameters and no indicator.
+
+## Round 9 (shipped, retained for the record)
 
 Two items: one defect diagnosed against the running application, one new action.
 

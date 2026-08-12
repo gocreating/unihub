@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
@@ -86,7 +86,6 @@ describe('ScenariosPage (iteration 18 — 2 columns, actions in detail)', () => 
   it('reveals the entity-views row with the default Table tab active', async () => {
     renderPage();
     await screen.findByText('Camping');
-    fireEvent.click(screen.getByLabelText('Show views'));
     const tab = screen.getByRole('tab', { name: /table/i });
     expect(tab.getAttribute('aria-selected')).toBe('true');
   });
@@ -162,11 +161,7 @@ describe('ScenariosPage — the shared view pattern (round 12)', () => {
       const call = vi.mocked(inventoryService.listScenarios).mock.calls.at(-1)![0]!;
       expect(call.limit).toBe(100);
     });
-    const reveal = screen.queryByLabelText('Show views');
-    if (reveal) fireEvent.click(reveal);
-    // Expanded row: the dot carries an aria-label. Collapsed row: it is the
-    // reveal affordance's badge. Neither may be present.
+    // The row is always shown (round 13), so the dot is always the labelled one.
     expect(screen.queryByLabelText('Unsaved changes')).toBeNull();
-    expect(document.querySelector('.ant-badge-dot')).toBeNull();
   });
 });

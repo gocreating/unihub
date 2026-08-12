@@ -28,8 +28,6 @@ function makeViews(overrides: Partial<UseEntityViewsReturn> = {}): UseEntityView
     savedViews: [],
     isAnyDirty: false,
     ready: true,
-    collapsed: false,
-    reveal: vi.fn(),
     switchTab: vi.fn(),
     addBlankTab: vi.fn(),
     closeTab: vi.fn(),

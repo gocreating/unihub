@@ -1,6 +1,6 @@
 // 016 ViewTabs row (round 3): scrollbar-free strip with edge shadows, drag
 // reorder, per-tab menus (left-click active / right-click any), kebab at the
-// right edge, collapsed reveal affordance.
+// right edge. The row is always shown (round 13 withdrew the auto-hide).
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { IntlProvider } from 'react-intl';
@@ -59,8 +59,6 @@ function makeViews(overrides: Partial<UseEntityViewsReturn> = {}): UseEntityView
     savedViews: [],
     isAnyDirty: false,
     ready: true,
-    collapsed: false,
-    reveal: vi.fn(),
     switchTab: vi.fn(),
     addBlankTab: vi.fn(),
     closeTab: vi.fn(),
@@ -104,7 +102,7 @@ describe('ViewTabs', () => {
     expect(tab.getAttribute('aria-selected')).toBe('true');
   });
 
-  it('renders a page-provided default name when given', () => {
+  it('renders the stored default view name once the user has renamed it', () => {
     const namedTab = makeTab({ name: 'YTD' });
     renderTabs(makeViews({ tabs: [namedTab], activeTab: namedTab }));
     expect(screen.getByRole('tab', { name: /ytd/i })).toBeInTheDocument();
@@ -375,25 +373,6 @@ describe('ViewTabs — kebab wiring', () => {
     fireEvent.click(screen.getByLabelText('View menu'));
     await screen.findByText('Add empty view');
     expect(screen.queryByText('Manage views…')).toBeNull();
-  });
-});
-
-describe('ViewTabs — US2 round 2: collapsed reveal affordance (FR-025)', () => {
-  it('renders only the reveal affordance when collapsed and reveals on click', () => {
-    const views = makeViews({ collapsed: true });
-    renderTabs(views);
-    expect(screen.queryByRole('tablist')).toBeNull();
-    const reveal = screen.getByLabelText('Show views');
-    fireEvent.click(reveal);
-    expect(views.reveal).toHaveBeenCalledTimes(1);
-  });
-
-  it('surfaces the dirty dot on the collapsed affordance when the default tab is dirty', () => {
-    const dirtyTab = makeTab({ dirty: true });
-    const { container } = renderTabs(
-      makeViews({ collapsed: true, tabs: [dirtyTab], activeTab: dirtyTab }),
-    );
-    expect(container.querySelector('.ant-badge-dot')).not.toBeNull();
   });
 });
 

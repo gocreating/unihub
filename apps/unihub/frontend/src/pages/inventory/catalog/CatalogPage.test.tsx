@@ -205,7 +205,6 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
   it('reveals the entity-views row with the default tab active', async () => {
     renderPage();
     await screen.findByText('Backpack');
-    fireEvent.click(screen.getByLabelText('Show views'));
     // Round 11: the page no longer names a default view ("YTD"); an account
     // with no stored default falls back to the generic label.
     const tab = screen.getByRole('tab', { name: /table/i });

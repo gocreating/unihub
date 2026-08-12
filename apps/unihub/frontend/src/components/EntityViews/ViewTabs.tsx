@@ -11,9 +11,8 @@
  * the round-2 per-tab close button and double-click rename. The kebab at the
  * row's right edge replaced the round-2 "+" and "View ▾" controls.
  *
- * When the table has only its default view the row auto-hides behind a compact
- * reveal affordance carrying the dirty dot (FR-025). Rendered inside
- * PageTable's `viewBar` slot.
+ * The row is ALWAYS shown (round 13 withdrew the FR-025 auto-hide). Rendered
+ * inside PageTable's `viewBar` slot.
  *
  * Round 4: naming happens ONLY in the Rename dialog (the round-3 inline input
  * and the "Save view" prompt are gone), and an open tab menu dismisses on an
@@ -21,8 +20,7 @@
  * rc-trigger wires no dismissal of its own (R36).
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Badge, Button, Tooltip, message } from 'antd';
-import { TableOutlined } from '@ant-design/icons';
+import { message } from 'antd';
 import { createStyles } from 'antd-style';
 import { useIntl } from 'react-intl';
 import { OverflowTooltip } from '../OverflowTooltip';
@@ -37,10 +35,6 @@ const useStyles = createStyles(({ token }) => ({
     display: 'flex',
     alignItems: 'center',
     gap: token.marginXXS,
-  },
-  collapsedRow: {
-    display: 'flex',
-    justifyContent: 'flex-end',
   },
   stripWrap: {
     flex: '0 1 auto',
@@ -151,7 +145,7 @@ export function ViewTabs({ views }: ViewTabsProps) {
     });
   }, []);
 
-  useLayoutEffect(syncShadows, [syncShadows, views.tabs, views.collapsed]);
+  useLayoutEffect(syncShadows, [syncShadows, views.tabs]);
 
   useEffect(() => {
     const el = stripRef.current;
@@ -159,7 +153,7 @@ export function ViewTabs({ views }: ViewTabsProps) {
     const observer = new ResizeObserver(syncShadows);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [syncShadows, views.collapsed]);
+  }, [syncShadows]);
 
   const renameTarget = views.tabs.find((tab) => tab.tabId === renameTabId);
 
@@ -208,24 +202,6 @@ export function ViewTabs({ views }: ViewTabsProps) {
         <span className={styles.tab} style={{ visibility: 'hidden' }}>
           &nbsp;
         </span>
-      </div>
-    );
-  }
-
-  if (views.collapsed) {
-    return (
-      <div className={styles.collapsedRow} data-testid="view-tabs-collapsed">
-        <Tooltip title={t({ id: 'common.entityViews.showViews' })}>
-          <Badge dot={views.activeTab.dirty} data-testid="view-reveal-badge">
-            <Button
-              type="text"
-              size="small"
-              icon={<TableOutlined />}
-              aria-label={t({ id: 'common.entityViews.showViews' })}
-              onClick={views.reveal}
-            />
-          </Badge>
-        </Tooltip>
       </div>
     );
   }

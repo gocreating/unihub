@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
@@ -52,7 +52,6 @@ describe('ExchangeRatesPage — entity views (016)', () => {
     renderPage();
     // Wait for the exchange-rate row to appear.
     await screen.findByText('USD');
-    fireEvent.click(screen.getByLabelText('Show views'));
     const tab = screen.getByRole('tab', { name: /table/i });
     expect(tab).toHaveAttribute('aria-selected', 'true');
   });
@@ -97,11 +96,7 @@ describe('ExchangeRatesPage — the shared view pattern (round 12)', () => {
       const call = vi.mocked(financeService.listExchangeRates).mock.calls.at(-1)![0]!;
       expect(call.limit).toBe(100);
     });
-    const reveal = screen.queryByLabelText('Show views');
-    if (reveal) fireEvent.click(reveal);
-    // Expanded row: the dot carries an aria-label. Collapsed row: it is the
-    // reveal affordance's badge. Neither may be present.
+    // The row is always shown (round 13), so the dot is always the labelled one.
     expect(screen.queryByLabelText('Unsaved changes')).toBeNull();
-    expect(document.querySelector('.ant-badge-dot')).toBeNull();
   });
 });

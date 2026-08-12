@@ -1,10 +1,35 @@
-# Implementation Plan: Entity Views — Round 12 (one view pattern, on every entity table)
+# Implementation Plan: Entity Views — Round 13 (the row is always shown; "Table" everywhere)
 
 **Branch**: `016-entity-views` | **Date**: 2026-08-12 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-12c. Earlier plans at 467beff / 8e1f169 / 3defc24 / 5d6ad96 / bb3f310 / c2c256e / a0309e8 / bf0b2eb.
+**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-12d. Earlier plans at 467beff / 8e1f169 / 3defc24 / 5d6ad96 / bb3f310 / c2c256e / a0309e8 / bf0b2eb.
 
 ## Summary
+
+Two directives, the first a correction: the user had already said the view
+toolbar is no longer hidden, and it was still hiding on every page.
+
+1. **The FR-025 auto-hide is withdrawn** — removed, not disabled. `collapsed`
+   and `reveal` leave the hook, the collapsed branch and its affordance leave
+   `ViewTabs`, `showViews` leaves both locale files, and the reveal step leaves
+   five page suites and the e2e helper. That removal takes the LAST persisted
+   field with it: `useViewTabsState` had been reduced to `{ revealed }` by round
+   5, so it now writes nothing and its storage machinery is deleted rather than
+   left inert.
+
+2. **"Table" becomes a code policy, not a label** — after round 11 no page
+   passed `defaultViewName` and the fallback was already "Table", so what
+   remained was the OPTION: any page could reintroduce a per-page name, which is
+   how the catalog's "YTD" came to compete with the stored default view (R47).
+   The option is deleted. Clarified: existing stored views KEEP their names —
+   the alternatives (auto-creating a row per table, renaming stored defaults)
+   would have written to the user's data to satisfy a naming policy.
+
+Confirmed on all five pages against real data: the row renders immediately, no
+affordance, no `unihub.views.*` storage, four tables showing "Table" and the
+catalog showing the user's own stored view names.
+
+## Round 12 (shipped, retained for the record)
 
 "Apply this view pattern to all entity views; the catalog is the most
 up-to-date." Auditing the other four pages first changed what this round is

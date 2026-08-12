@@ -662,3 +662,51 @@ shape rather than assuming one.
 
 Confirmed on the running application with real data: all five pages render,
 none shows an indicator, and none writes a URL parameter on arrival.
+
+## R49. Withdrawing the auto-hide, and making the naming policy structural
+
+Two directives, one of them a correction I should have applied earlier: the user
+had said before that the view toolbar is no longer hidden, and it was still
+hiding on every page. Taken at face value and applied everywhere.
+
+**The auto-hide is gone, not disabled.** FR-025 (round 2) hid the row whenever a
+table had only its default view, behind a `TableOutlined` affordance that
+carried the dirty dot, with a "revealed" preference persisted per table. All of
+it is removed: `collapsed`/`reveal` off the hook's return, the collapsed branch
+and its Badge/Tooltip/Button out of `ViewTabs`, `common.entityViews.showViews`
+out of both locale files, and the reveal step out of five page suites and the
+e2e helper. The row is now unconditional.
+
+That removal took the LAST persisted field with it. `useViewTabsState` had been
+reduced to `{ revealed }` by round 5, which made it a storage hook wrapping one
+boolean; with the boolean gone it writes nothing at all, so its `tableKey`
+parameter, its storage key, its tolerant-parse helper and its persistence effect
+were deleted rather than left inert. A hook that no longer persists anything
+should not look like one that does — and its suite now asserts
+`sessionStorage.length === 0` rather than the shape of a payload.
+
+**"All entity types get default view named Table" is a code policy, not a
+label.** After round 11 no page passed `defaultViewName` and the localized
+fallback was already "Table", so the visible behaviour was mostly correct
+already. What remained was the OPTION: any page could reintroduce a per-page
+name, which is exactly how the catalog's "YTD" came to compete with the stored
+default view in the first place (R47). The option is deleted from
+`UseEntityViewsOptions`, so "Table" is the only initial name an entity table can
+have, and renaming is the user's business.
+
+Clarified explicitly and worth recording: **existing stored views keep their
+names.** The user's catalog default is stored as "All - 2", and the alternatives
+offered — auto-creating a "Table" row per table, or renaming stored defaults —
+would both have written to their data to satisfy a naming policy. Neither is
+needed to make the policy true going forward.
+
+Confirmed on the running application, all five pages: the row renders
+immediately with no collapsed affordance and no reveal control, sessionStorage
+holds no `unihub.views.*` key, four tables show "Table", and the catalog shows
+the user's own "All" and "All - 2" — the stored names, untouched.
+
+**Test note**: four hook tests encoded the withdrawn naming behaviour (a virtual
+default named "YTD", materialized under that name). They were updated to the new
+contract rather than deleted — the virtual default now carries an EMPTY name,
+and materialization stores it as "Table" — because what they cover (the
+materialization path) is still live.

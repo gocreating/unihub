@@ -395,7 +395,6 @@ export default {
   'common.entityViews.defaultTable': '表格',
   'common.entityViews.view': '檢視',
   'common.entityViews.newTab': '新增檢視分頁',
-  'common.entityViews.showViews': '顯示檢視',
   'common.entityViews.renameError': '重新命名檢視失敗',
   'common.entityViews.newViewName': '新檢視',
   'common.entityViews.unsaved': '未儲存的變更',

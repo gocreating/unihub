@@ -9,8 +9,7 @@
  * with real geometry (project rule: layout claims need real-browser
  * assertions, not JSDOM).
  *
- * FR-025 — the view row auto-hides when only the default view exists; a
- * compact affordance reveals it on demand.
+ * The view row is ALWAYS shown (round 13 withdrew the FR-025 auto-hide).
  *
  * US3 — deep links: a readable `<tableKey>.<facet>` URL applies its state on
  * load; a saved-view reference by name resolves; a hand-edited facet override
@@ -30,14 +29,6 @@ async function login(page: Page) {
   await page.fill('#password', 'root');
   await page.click('button[type="submit"]');
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10_000 });
-}
-
-/** Reveal the view row (it auto-hides when only the default view exists). */
-async function revealRow(page: Page) {
-  const reveal = page.getByTestId('view-tabs-collapsed');
-  if (await reveal.isVisible().catch(() => false)) {
-    await reveal.getByRole('button').click();
-  }
 }
 
 /** Add N scratch tabs through the kebab's "Add empty view" action. */
@@ -79,31 +70,13 @@ async function createSavedView(page: Page, name: string): Promise<string> {
   return name;
 }
 
-test.describe('entity-views auto-hide (FR-025)', () => {
-  test('the row is hidden by default and the affordance reveals it', async ({ page }) => {
-    await login(page);
-    await page.goto('/inventory/catalog');
-
-    // Collapsed: only the reveal affordance shows, not the full tab row.
-    const collapsed = page.getByTestId('view-tabs-collapsed');
-    await expect(collapsed).toBeVisible();
-    await expect(page.getByTestId('view-tabs-strip')).toBeHidden();
-
-    await collapsed.getByRole('button').click();
-    await expect(page.getByTestId('view-tabs-row')).toBeVisible();
-    // The catalog's default view is named "YTD".
-    await expect(page.getByRole('tab', { name: 'YTD' })).toBeVisible();
-  });
-});
-
 test.describe('entity-views tab row (US2)', () => {
   test('renders the strip, then the kebab at the row edge', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
-    await expect(row.getByRole('tab', { name: 'YTD' })).toBeVisible();
+    await expect(row.getByRole('tab').first()).toBeVisible();
     await expect(row.getByLabel('View menu')).toBeVisible();
     // Round 3 removed the "+" button and the "View ▾" control; round 4 removed
     // the "Manage views…" entry, leaving exactly two.
@@ -119,7 +92,6 @@ test.describe('entity-views tab row (US2)', () => {
   }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
@@ -158,7 +130,6 @@ test.describe('entity-views tab row (US2)', () => {
   }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     await addScratchTabs(page, 8);
     await page.setViewportSize({ width: 500, height: 800 });
 
@@ -201,7 +172,6 @@ test.describe('entity-views tab row (US2)', () => {
   }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
@@ -232,7 +202,6 @@ test.describe('entity-views tab row (US2)', () => {
   }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
@@ -263,7 +232,6 @@ test.describe('entity-views tab row (US2)', () => {
 
     // The persisted order comes back after a reload.
     await page.reload();
-    await revealRow(page);
     await expect
       .poll(async () => {
         const labels = await tabLabels(page);
@@ -277,7 +245,6 @@ test.describe('entity-views per-visit tabs (US2, round 5)', () => {
   test('a refresh keeps only pinned views and the URL\'s view (SC-013)', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
@@ -287,7 +254,6 @@ test.describe('entity-views per-visit tabs (US2, round 5)', () => {
     expect(beforeCount).toBeGreaterThanOrEqual(3);
 
     await page.reload();
-    await revealRow(page);
     await expect(row).toBeVisible();
 
     const after = await tabLabels(page);
@@ -299,7 +265,6 @@ test.describe('entity-views per-visit tabs (US2, round 5)', () => {
   test('the URL keeps an unpinned view open across a refresh', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
 
     const name = await createSavedView(page, `E2E visit ${Date.now()}`);
@@ -311,15 +276,16 @@ test.describe('entity-views per-visit tabs (US2, round 5)', () => {
     await expect(row.getByRole('tab', { name })).toBeVisible();
   });
 
-  test('a revealed row stays revealed across a refresh (FR-025)', async ({ page }) => {
+  test('the row is shown on arrival and after a refresh (round 13)', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
+    // Always visible — nothing to reveal, and no hidden state to restore.
     await expect(page.getByTestId('view-tabs-row')).toBeVisible();
+    await expect(page.getByTestId('view-tabs-collapsed')).toHaveCount(0);
 
     await page.reload();
-    // No manual reveal this time — the display preference persisted.
     await expect(page.getByTestId('view-tabs-row')).toBeVisible();
+    await expect(page.getByTestId('view-tabs-collapsed')).toHaveCount(0);
   });
 });
 
@@ -327,7 +293,6 @@ test.describe('entity-views unsaved indicator (US3, round 6)', () => {
   test('an untouched load stays clean across repeated reloads (SC-015)', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
@@ -345,7 +310,6 @@ test.describe('entity-views unsaved indicator (US3, round 6)', () => {
 
     for (let reload = 0; reload < 2; reload += 1) {
       await page.reload();
-      await revealRow(page);
       await expect(row).toBeVisible();
 
       // Nothing was touched — no dot…
@@ -364,12 +328,11 @@ test.describe('entity-views inline state on reload (US3, round 7)', () => {
   test('an added empty view returns as its own tab, default untouched', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
-    // The catalog's default view is "YTD" — a seeded year-to-date filter.
-    const defaultTab = row.getByRole('tab', { name: 'YTD' });
+    // The default view is whatever this account has stored (no page names it).
+    const defaultTab = row.getByRole('tab').first();
     await expect(defaultTab).toBeVisible();
     const filteredCount = await page.getByRole('row').count();
 
@@ -379,7 +342,6 @@ test.describe('entity-views inline state on reload (US3, round 7)', () => {
 
     // The reported step: reload.
     await page.reload();
-    await revealRow(page);
     await expect(row).toBeVisible();
 
     // The blank view comes back as its OWN tab, active…
@@ -392,7 +354,7 @@ test.describe('entity-views inline state on reload (US3, round 7)', () => {
     await expect(defaultTab.getByLabel('Unsaved changes')).toHaveCount(0);
 
     // The real regression: the default view still filters. Before the fix the
-    // reload blanked its filter, so the catalog listed everything under "YTD".
+    // reload blanked its filter, so the catalog listed everything.
     await defaultTab.click();
     await expect(defaultTab).toHaveAttribute('aria-selected', 'true');
     await expect.poll(async () => page.getByRole('row').count()).toBe(filteredCount);
@@ -414,7 +376,6 @@ test.describe('entity-views indicator/URL agreement (US3, round 8)', () => {
   test('the dot and the override params appear and clear together (SC-016)', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
@@ -449,7 +410,6 @@ test.describe('entity-views arrival + reset (round 9)', () => {
     // Arrive from somewhere else, as the nav menu does.
     await page.goto('/');
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     await expect(page.getByTestId('view-tabs-row')).toBeVisible();
 
     const overrides = () => {
@@ -463,7 +423,6 @@ test.describe('entity-views arrival + reset (round 9)', () => {
     expect(overrides()).toEqual([]);
 
     await page.reload();
-    await revealRow(page);
     await expect(page.getByLabel('Unsaved changes')).toHaveCount(0);
     expect(overrides()).toEqual([]);
   });
@@ -471,7 +430,6 @@ test.describe('entity-views arrival + reset (round 9)', () => {
   test('Reset changes clears the indicator and the override params (SC-018)', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
@@ -501,7 +459,6 @@ test.describe('entity-views default-view adoption (round 10, SC-017/SC-019)', ()
   }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
@@ -517,7 +474,6 @@ test.describe('entity-views default-view adoption (round 10, SC-017/SC-019)', ()
     // Leave and come back the way the nav menu does.
     await page.goto('/');
     await page.goto('/inventory/catalog');
-    await revealRow(page);
 
     // The stored page size is in effect — the table adopted the view, rather
     // than sitting at the page defaults while merely referencing it.
@@ -530,7 +486,6 @@ test.describe('entity-views default-view adoption (round 10, SC-017/SC-019)', ()
 
     // And the correction survives a reload rather than being replayed as edits.
     await page.reload();
-    await revealRow(page);
     await expect(page.getByText('100 / page').first()).toBeVisible();
     await expect(page.getByLabel('Unsaved changes')).toHaveCount(0);
   });
@@ -540,7 +495,6 @@ test.describe('entity-views round 11: quiet arrival (FR-038/SC-020)', () => {
   test('a deep link to another view leaves the default tab clean', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     const row = page.getByTestId('view-tabs-row');
     await expect(row).toBeVisible();
 
@@ -555,7 +509,6 @@ test.describe('entity-views round 11: quiet arrival (FR-038/SC-020)', () => {
 
     await page.goto('/');
     await page.goto(deepLink);
-    await revealRow(page);
 
     // The addressed view owns the table; the default tab is merely open, and
     // carries its own stored configuration — so nothing shows an indicator.
@@ -580,7 +533,6 @@ test.describe('entity-views round 11: quiet arrival (FR-038/SC-020)', () => {
     });
 
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     await expect(page.getByTestId('view-tabs-row')).toBeVisible();
     await page.waitForTimeout(3000);
 
@@ -609,7 +561,6 @@ test.describe('entity-views URL deep-linking (US3, readable params)', () => {
   test('a hand-edited size override on the URL navigates the table state', async ({ page }) => {
     await login(page);
     await page.goto('/inventory/catalog');
-    await revealRow(page);
     await expect(page.getByTestId('view-tabs-row')).toBeVisible();
 
     await page.goto('/inventory/catalog?inventory-catalog.size=100');

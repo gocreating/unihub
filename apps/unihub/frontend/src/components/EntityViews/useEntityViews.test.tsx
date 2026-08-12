@@ -109,20 +109,6 @@ function useHarness() {
   return { table, views, searchParams };
 }
 
-/** Harness with a page-provided default-view name (catalog-style "YTD"). */
-function useNamedHarness() {
-  const table = useEntityTable({ key: 'tbl', filterableAttrs: ATTRS, columnDefs: COLS });
-  const defaultConfig = useMemo(() => DEFAULT_CONFIG, []);
-  const views = useEntityViews({
-    tableKey: 'tbl',
-    table,
-    defaultConfig,
-    defaultViewName: 'YTD',
-  });
-  const [searchParams] = useSearchParams();
-  return { table, views, searchParams };
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
   window.sessionStorage.clear();
@@ -260,11 +246,13 @@ describe('useEntityViews — US1 core', () => {
 });
 
 describe('useEntityViews — US1 round 2: the default view is a plain view', () => {
-  it('renders the page-provided default name on the virtual default tab', async () => {
+  it('gives the virtual default tab no name of its own (round 13)', async () => {
+    // No page may name its default view; the row renders the localized
+    // "Table" for an empty name, and the user renames it if they want.
     listMock.mockResolvedValue([]);
-    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(listMock).toHaveBeenCalled());
-    expect(result.current.views.tabs[0]!.name).toBe('YTD');
+    expect(result.current.views.tabs[0]!.name).toBe('');
     expect(result.current.views.tabs[0]!.kind).toBe('default');
   });
 
@@ -281,7 +269,7 @@ describe('useEntityViews — US1 round 2: the default view is a plain view', () 
       created_at: '2026-07-23T00:00:00Z',
       updated_at: '2026-07-23T00:00:00Z',
     }));
-    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(listMock).toHaveBeenCalled());
 
     act(() => {
@@ -298,18 +286,18 @@ describe('useEntityViews — US1 round 2: the default view is a plain view', () 
     expect(createMock).toHaveBeenCalledTimes(1);
     const payload = createMock.mock.calls[0]![0];
     expect(payload.table_key).toBe('tbl');
-    expect(payload.name).toBe('YTD');
+    expect(payload.name).toBe('Table');
     expect(payload.is_default).toBe(true);
     expect(payload.pinned).toBe(true);
     // The default tab stays the default tab — clean against its NEW baseline.
     await waitFor(() => expect(result.current.views.activeTab.dirty).toBe(false));
     expect(result.current.views.activeTab.kind).toBe('default');
-    expect(result.current.views.activeTab.name).toBe('YTD');
+    expect(result.current.views.activeTab.name).toBe('Table');
   });
 
   it('binds a materialized default row: name, adopted config, stored baseline', async () => {
     listMock.mockResolvedValue([DEFAULT_VIEW]);
-    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
 
     // Stored name wins over the page-provided one.
@@ -334,7 +322,7 @@ describe('useEntityViews — US1 round 2: the default view is a plain view', () 
       ...(patch as object),
       config: (patch.config ?? DEFAULT_VIEW.config) as EntityView['config'],
     }));
-    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.table.queryParams.ordering).toBe('-amount'));
 
     act(() => {
@@ -416,7 +404,7 @@ describe('useEntityViews — US2 tabs', () => {
 
   it('the materialized default is NOT duplicated as a pinned tab', async () => {
     listMock.mockResolvedValue([DEFAULT_VIEW, PINNED_A]);
-    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.views.tabs).toHaveLength(2));
     expect(result.current.views.tabs[0]!.kind).toBe('default');
@@ -500,39 +488,19 @@ describe('useEntityViews — US2 tabs', () => {
   });
 });
 
-describe('useEntityViews — US2 round 2: view-row auto-hide (FR-025)', () => {
-  it('collapses when only the default view/tab exists, reveal() persists for the session', async () => {
+// 016 round 13: the view row is ALWAYS shown — the FR-025 auto-hide and its
+// reveal affordance are withdrawn, and nothing about the row is persisted.
+describe('useEntityViews — the view row is always shown (round 13)', () => {
+  it('exposes no collapse state, whatever the table holds', async () => {
     listMock.mockResolvedValue([]);
     const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(listMock).toHaveBeenCalled());
 
-    expect(result.current.views.collapsed).toBe(true);
-
-    act(() => {
-      result.current.views.reveal();
-    });
-    expect(result.current.views.collapsed).toBe(false);
-    const persisted = JSON.parse(window.sessionStorage.getItem('unihub.views.tbl')!) as {
-      revealed: boolean;
-    };
-    expect(persisted.revealed).toBe(true);
+    expect(result.current.views).not.toHaveProperty('collapsed');
+    expect(result.current.views).not.toHaveProperty('reveal');
   });
 
-  it('stays expanded when any non-default saved view exists', async () => {
-    listMock.mockResolvedValue([SAVED_VIEW]);
-    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
-    expect(result.current.views.collapsed).toBe(false);
-  });
-
-  it('a lone MATERIALIZED default still collapses (it is the only view)', async () => {
-    listMock.mockResolvedValue([DEFAULT_VIEW]);
-    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
-    expect(result.current.views.collapsed).toBe(true);
-  });
-
-  it('expands when a second tab opens and re-collapses when it closes', async () => {
+  it('persists nothing about the row for the next visit', async () => {
     listMock.mockResolvedValue([]);
     const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(listMock).toHaveBeenCalled());
@@ -540,21 +508,7 @@ describe('useEntityViews — US2 round 2: view-row auto-hide (FR-025)', () => {
     act(() => {
       result.current.views.addBlankTab();
     });
-    expect(result.current.views.collapsed).toBe(false);
-
-    act(() => {
-      result.current.views.closeTab(result.current.views.activeTabId);
-    });
-    expect(result.current.views.collapsed).toBe(true);
-  });
-
-  it('stays expanded when the URL addresses view state', async () => {
-    listMock.mockResolvedValue([]);
-    const { result } = renderHook(useHarness, {
-      wrapper: makeWrapper(['/?tbl.size=100']),
-    });
-    await waitFor(() => expect(result.current.table.limit).toBe(100));
-    expect(result.current.views.collapsed).toBe(false);
+    expect(window.sessionStorage.getItem('unihub.views.tbl')).toBeNull();
   });
 });
 
@@ -597,7 +551,7 @@ describe('useEntityViews — US3 URL sync (readable per-facet params)', () => {
 
   it('resolves the page-provided default name to the default tab while virtual', async () => {
     listMock.mockResolvedValue([]);
-    const { result } = renderHook(useNamedHarness, {
+    const { result } = renderHook(useHarness, {
       wrapper: makeWrapper(['/?tbl.view=YTD']),
     });
     await waitFor(() => expect(listMock).toHaveBeenCalled());
@@ -716,7 +670,7 @@ describe('useEntityViews — US4 rename & duplicate', () => {
       created_at: '2026-07-23T00:00:00Z',
       updated_at: '2026-07-23T00:00:00Z',
     }));
-    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(listMock).toHaveBeenCalled());
 
     await act(async () => {
@@ -892,7 +846,7 @@ describe('useEntityViews — round 3: per-tab actions', () => {
       return created;
     });
 
-    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
     await waitFor(() =>
       expect(result.current.views.tabs.some((t) => t.viewId === PINNED_VIEW.id)).toBe(true),
@@ -909,7 +863,7 @@ describe('useEntityViews — round 3: per-tab actions', () => {
       const promoted = result.current.views.tabs.find((t) => t.viewId === PINNED_VIEW.id)!;
       expect(promoted.isDefault).toBe(true);
       // …and the virtual page default was stored so its tab stays clean (R32).
-      const demoted = result.current.views.tabs.find((t) => t.name === 'YTD')!;
+      const demoted = result.current.views.tabs.find((t) => t.name === 'Table')!;
       expect(demoted.kind).toBe('saved');
       expect(demoted.dirty).toBe(false);
     });
@@ -1187,7 +1141,7 @@ describe('useEntityViews — round 4: promotion disturbs nothing (SC-011)', () =
     // to an always-dirty scratch tab is exactly the reported bug, so the hook
     // stores it as an ordinary view instead (R32).
     statefulServer([SESSION_EARLY]);
-    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
 
     act(() => result.current.views.openView(SESSION_EARLY.id));
@@ -1204,7 +1158,7 @@ describe('useEntityViews — round 4: promotion disturbs nothing (SC-011)', () =
       ).toBe(true),
     );
     // The old page-default tab survives, still named "YTD", stored and CLEAN.
-    const demoted = result.current.views.tabs.find((t) => t.name === 'YTD')!;
+    const demoted = result.current.views.tabs.find((t) => t.name === 'Table')!;
     expect(demoted).toBeDefined();
     expect(demoted.kind).toBe('saved');
     expect(demoted.dirty).toBe(false);
@@ -1320,7 +1274,7 @@ describe('useEntityViews — round 6: the load never publishes a half-loaded tab
 
   it('an untouched load is clean AND writes no override params', async () => {
     listMock.mockResolvedValue([STORED_DEFAULT]);
-    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
     // The stored config is adopted…
     await waitFor(() => expect(result.current.table.limit).toBe(50));
@@ -1334,7 +1288,7 @@ describe('useEntityViews — round 6: the load never publishes a half-loaded tab
     listMock.mockResolvedValue([STORED_DEFAULT]);
     // Exactly what the pre-fix code emitted: the PAGE DEFAULTS dressed up as
     // overrides on top of the stored view.
-    const { result } = renderHook(useNamedHarness, {
+    const { result } = renderHook(useHarness, {
       wrapper: makeWrapper([`/?tbl.view=${STORED_DEFAULT.id}`]),
     });
     await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
@@ -1346,7 +1300,7 @@ describe('useEntityViews — round 6: the load never publishes a half-loaded tab
 
   it('a genuine hand-edited override still marks the tab dirty (FR-013)', async () => {
     listMock.mockResolvedValue([STORED_DEFAULT]);
-    const { result } = renderHook(useNamedHarness, {
+    const { result } = renderHook(useHarness, {
       wrapper: makeWrapper([`/?tbl.view=${STORED_DEFAULT.id}&tbl.size=100`]),
     });
     await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
@@ -1364,7 +1318,7 @@ describe('useEntityViews — round 6: the load never publishes a half-loaded tab
       position: 1,
     };
     listMock.mockResolvedValue([STORED_DEFAULT, OTHER]);
-    const { result } = renderHook(useNamedHarness, { wrapper: makeWrapper() });
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.views.savedViews).toHaveLength(2));
     await waitFor(() =>
       expect(result.current.views.tabs.some((t) => t.viewId === OTHER.id)).toBe(true),
@@ -1418,7 +1372,6 @@ describe('useEntityViews — round 7: inline URL state never lands on a stored v
       tableKey: 'tbl',
       table,
       defaultConfig,
-      defaultViewName: 'YTD',
     });
     const [searchParams] = useSearchParams();
     return { table, views, searchParams };
@@ -1761,7 +1714,6 @@ describe('useEntityViews — round 9: the stored default view is adopted on arri
       tableKey: 'tbl',
       table,
       defaultConfig,
-      defaultViewName: 'YTD',
     });
     const [searchParams] = useSearchParams();
     return { table, views, searchParams };
@@ -1864,7 +1816,7 @@ describe('useEntityViews — round 10: late-arriving columns must not block adop
       defaultPageSize: 50,
     });
     const defaultConfig = useMemo(() => configFor(attrIds), [attrIds]);
-    const views = useEntityViews({ tableKey: 'tbl', table, defaultConfig, defaultViewName: 'YTD' });
+    const views = useEntityViews({ tableKey: 'tbl', table, defaultConfig });
     const [searchParams] = useSearchParams();
     return { table, views, searchParams };
   }

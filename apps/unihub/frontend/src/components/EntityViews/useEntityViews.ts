@@ -76,9 +76,6 @@ export interface UseEntityViewsOptions {
   table: UseEntityTableReturn;
   /** The page's default config — the virtual default tab's baseline. */
   defaultConfig: ViewConfig;
-  /** Page-provided initial name of the default view (e.g. catalog "YTD").
-   *  Falls back to the localized generic "Table". */
-  defaultViewName?: string;
 }
 
 export interface UseEntityViewsReturn {
@@ -92,10 +89,6 @@ export interface UseEntityViewsReturn {
    *  present. False until then, so the row can paint once instead of filling
    *  in as the saved views arrive. */
   ready: boolean;
-  /** FR-025: the view row is auto-hidden (only the default view/tab exists). */
-  collapsed: boolean;
-  /** Reveal the auto-hidden view row for the rest of the session. */
-  reveal: () => void;
   switchTab: (tabId: string) => void;
   /** Open a scratch tab holding a BLANK config, labelled "New view" (FR-011). */
   addBlankTab: () => void;
@@ -195,7 +188,6 @@ export function useEntityViews({
   tableKey,
   table,
   defaultConfig,
-  defaultViewName,
 }: UseEntityViewsOptions): UseEntityViewsReturn {
   const { formatMessage: t } = useIntl();
   const queryClient = useQueryClient();
@@ -263,10 +255,7 @@ export function useEntityViews({
   // clear, silencing the URL forever (R40).
   const pendingLoadRef = useRef<ViewConfig | null>(null);
 
-  const { tabs, setTabs, activeTabId, setActiveTabId, revealed, setRevealed } = useViewTabsState(
-    tableKey,
-    defaultConfig,
-  );
+  const { tabs, setTabs, activeTabId, setActiveTabId } = useViewTabsState(defaultConfig);
 
   const {
     data: savedViews = [],
@@ -309,7 +298,7 @@ export function useEntityViews({
   );
   /** The name the default tab renders and materializes under. */
   const defaultDisplayName =
-    defaultView?.name ?? defaultViewName ?? t({ id: 'common.entityViews.defaultTable' });
+    defaultView?.name ?? t({ id: 'common.entityViews.defaultTable' });
 
   // Whether the URL addressed view state AT MOUNT, captured during the first
   // render — before any of our OWN outbound writes. Two consumers need the
@@ -508,7 +497,7 @@ export function useEntityViews({
         tabId: tab.tabId,
         kind: tab.kind,
         viewId: defaultView?.id,
-        name: defaultView?.name ?? defaultViewName ?? '',
+        name: defaultView?.name ?? '',
         dirty,
         pinned: defaultView?.pinned ?? true,
         closable: false,
@@ -535,19 +524,6 @@ export function useEntityViews({
   const tabStates = tabs.map(toTabState);
   const activeTab = tabStates.find((tab) => tab.tabId === activeTabId) ?? tabStates[0]!;
   const isAnyDirty = tabStates.some((tab) => tab.dirty);
-
-  // ── View-row auto-hide (FR-025) ────────────────────────────────────────────
-
-  // `initialUrlHadViewStateRef` (declared above, at mount) decides this too: a
-  // URL that addresses view state AT LOAD forces the row open, while later
-  // dirtying of the collapsed default keeps it collapsed (the affordance shows
-  // the dirty dot instead).
-  const collapsed =
-    !revealed &&
-    !initialUrlHadViewStateRef.current &&
-    tabs.length <= 1 &&
-    !savedViews.some((view) => !view.is_default);
-  const reveal = useCallback(() => setRevealed(true), [setRevealed]);
 
   // ── Tab operations (no API writes) ─────────────────────────────────────────
 
@@ -1207,8 +1183,6 @@ export function useEntityViews({
     savedViews,
     isAnyDirty,
     ready: rowReady,
-    collapsed,
-    reveal,
     switchTab,
     addBlankTab,
     closeTab,

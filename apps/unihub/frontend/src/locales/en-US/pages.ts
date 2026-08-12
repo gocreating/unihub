@@ -398,7 +398,6 @@ export default {
   'common.entityViews.defaultTable': 'Table',
   'common.entityViews.view': 'View',
   'common.entityViews.newTab': 'New view tab',
-  'common.entityViews.showViews': 'Show views',
   'common.entityViews.renameError': 'Failed to rename view',
   'common.entityViews.newViewName': 'New view',
   'common.entityViews.unsaved': 'Unsaved changes',

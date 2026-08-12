@@ -1,10 +1,39 @@
-# Implementation Plan: Entity Views — Round 10 (the default view is actually adopted)
+# Implementation Plan: Entity Views — Round 11 (one column-placement rule; the row paints once)
 
 **Branch**: `016-entity-views` | **Date**: 2026-08-12 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-12. Earlier plans at 467beff / 8e1f169 / 3defc24 / 5d6ad96 / bb3f310 / c2c256e / a0309e8 / bf0b2eb.
+**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-12b. Earlier plans at 467beff / 8e1f169 / 3defc24 / 5d6ad96 / bb3f310 / c2c256e / a0309e8 / bf0b2eb.
 
 ## Summary
+
+Three changes, and the first two share a root cause with the residue round 10
+left open — so that residue closes here too (R47).
+
+1. **The catalog stops shipping a default view** (clarified). Its year-to-date
+   filter, obtained-descending sort, 50/page and the name "YTD" competed with
+   the stored default view every account now has: the page's configuration was
+   what the default tab started from, the stored view was what it was compared
+   against. The page contributes its COLUMNS; `DEFAULT_PAGE_SIZE` is shared so
+   the page baseline cannot drift from the table's own default.
+
+2. **One placement rule for late columns.** A column a configuration does not
+   mention now takes its DECLARED position rather than the tail
+   (`mergeMissingByDeclaredOrder`, used by BOTH `reconcileConfig` and
+   `useColumnConfig.loadState`). Appending made a configuration captured before
+   the `attr:*` columns loaded permanently unequal to the page defaults, so the
+   default tab's "am I untouched?" test could never succeed and it showed an
+   indicator behind any deep link. With one rule the skew disappears, and with
+   it round 10's transient override write: a nav-click now emits NO url write.
+
+3. **The tab row paints once** (FR-038). `ready` is set from inside the pinned
+   merge, so the flag and the tabs it describes land in the same commit;
+   `ViewTabs` reserves the row's height until then. Tab row only, per the
+   clarification — the table keeps loading immediately.
+
+Verified against the user's real data: the reported deep link leaves the default
+tab clean, and the tab count goes placeholder → complete in one step.
+
+## Round 10 (shipped, retained for the record)
 
 **Round 10 supersedes round 9's conclusion on this defect.** Round 9 decided the
 reported bug was not in the branch because the container serving :3001 predated

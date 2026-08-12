@@ -16,7 +16,7 @@
  * Staged-mutation rule: nothing here writes to the API except the explicit
  * save/save-as/rename/duplicate-commit/manage-commit entry points.
  */
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { message } from 'antd';
 import { useIntl } from 'react-intl';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -45,6 +45,7 @@ import {
   upgradeConfigShape,
 } from './serialization';
 import type { ParsedViewState } from './serialization';
+import { mergeMissingByDeclaredOrder } from '../EntityToolbar/columnOrder';
 import { DEFAULT_TAB_ID, useViewTabsState } from './useViewTabsState';
 import type { InternalTab, InternalTabKind } from './useViewTabsState';
 
@@ -87,6 +88,10 @@ export interface UseEntityViewsReturn {
   savedViews: EntityView[];
   /** True when any open view has unsaved changes (drives the Save action). */
   isAnyDirty: boolean;
+  /** FR-038: the tab row is complete — every tab this visit will show is
+   *  present. False until then, so the row can paint once instead of filling
+   *  in as the saved views arrive. */
+  ready: boolean;
   /** FR-025: the view row is auto-hidden (only the default view/tab exists). */
   collapsed: boolean;
   /** Reveal the auto-hidden view row for the rest of the session. */
@@ -133,26 +138,26 @@ export function coerceConfig(raw: unknown, defaults: ViewConfig): ViewConfig {
 
 /** Reconcile a stored config against the CURRENT column universe (FR-021):
  *  stale column keys dropped (their pins with them), missing runtime columns
- *  appended with their default visibility/pin. Keeps dirty comparisons
- *  drift-free (baseline and live snapshot pass through the same path). */
+ *  slotted at their DECLARED position with their default visibility/pin. Keeps
+ *  dirty comparisons drift-free (baseline and live snapshot pass through the
+ *  same path) — see `mergeMissingByDeclaredOrder` for why the position matters. */
 export function reconcileConfig(config: ViewConfig, defaults: ViewConfig): ViewConfig {
   const byKey = new Map(defaults.columns.map((c) => [c.key, c]));
   const listed = [...config.columns]
     .sort((a, b) => a.order - b.order)
     .filter((c) => byKey.has(c.key));
-  const listedKeys = new Set(listed.map((c) => c.key));
-  const appended = defaults.columns.filter((c) => !listedKeys.has(c.key));
+  const listedByKey = new Map(listed.map((c) => [c.key, c]));
+  const declared = [...defaults.columns].sort((a, b) => a.order - b.order);
+  const order = mergeMissingByDeclaredOrder(
+    listed.map((c) => c.key),
+    declared.map((c) => c.key),
+  );
   return {
     ...config,
-    columns: [
-      ...listed.map((c, i) => ({ key: c.key, visible: c.visible, order: i, pin: c.pin })),
-      ...appended.map((c, i) => ({
-        key: c.key,
-        visible: c.visible,
-        order: listed.length + i,
-        pin: c.pin,
-      })),
-    ],
+    columns: order.map((key, i) => {
+      const source = listedByKey.get(key) ?? byKey.get(key)!;
+      return { key, visible: source.visible, order: i, pin: source.pin };
+    }),
   };
 }
 
@@ -349,16 +354,34 @@ export function useEntityViews({
   const adoptedTokenRef = useRef<string | null>(null);
   useEffect(() => {
     if (!isFetched || !defaultView) return;
+    const defaultTab = tabs.find((tab) => tab.kind === 'default');
+    if (!defaultTab) return;
+    const target = reconcileConfig(defaultBaseline, defaultConfig);
+    const token = normalizeConfig(target);
+    const pageDefaults = reconcileConfig(defaultConfig, defaultConfig);
+
+    // (a) The default TAB's own configuration is its stored view's — whether or
+    // not that tab is the one on screen. An untouched default tab sitting
+    // behind a deep link used to keep the PAGE defaults while comparing dirty
+    // against its stored baseline, so it showed an indicator for changes nobody
+    // made (round 11, FR-013/R47). The transition is one-way (page defaults →
+    // stored config) and self-limiting: once applied, the first test fails.
+    const tabConfig = reconcileConfig(defaultTab.config, defaultConfig);
+    if (!configsEqual(tabConfig, target) && configsEqual(tabConfig, pageDefaults)) {
+      setTabs((prev) =>
+        prev.map((tab) => (tab.tabId === DEFAULT_TAB_ID ? { ...tab, config: target } : tab)),
+      );
+    }
+
+    // (b) Loading it into the TABLE is a separate question, and a narrower one:
+    // only when that tab is the one on screen and nothing else has claimed it.
+    if (adoptedTokenRef.current === token) return; // already offered this config
     // The URL the USER arrived with wins — read the value captured AT MOUNT,
     // never the live params. This hook writes the URL itself, so reading live
     // params let our own write masquerade as a deep link and suppress adoption
     // on every reload (R46).
     if (initialUrlHadViewStateRef.current) return;
-    const active = tabs.find((tab) => tab.tabId === activeTabId);
-    if (!active || active.kind !== 'default') return; // a session tab wins
-    const target = reconcileConfig(defaultBaseline, defaultConfig);
-    const token = normalizeConfig(target);
-    if (adoptedTokenRef.current === token) return; // already offered this config
+    if (defaultTab.tabId !== activeTabId) return; // a session tab holds the table
     const live = reconcileConfig(table.snapshotConfig(), defaultConfig);
     if (configsEqual(live, target)) {
       adoptedTokenRef.current = token;
@@ -370,11 +393,8 @@ export function useEntityViews({
     // declares them mid-order). Adoption then bailed forever and the page
     // defaults were published as "overrides" of the stored view — the unsaved
     // dot on arrival, and an inline URL after a reload (R46).
-    if (!configsEqual(live, reconcileConfig(defaultConfig, defaultConfig))) return; // user edits win
+    if (!configsEqual(live, pageDefaults)) return; // user edits win
     adoptedTokenRef.current = token;
-    setTabs((prev) =>
-      prev.map((tab) => (tab.tabId === DEFAULT_TAB_ID ? { ...tab, config: target } : tab)),
-    );
     loadIntoTable(target);
     // `table.snapshotConfig` is a dependency for a reason: the table's own
     // column state is patched with late-arriving columns one commit AFTER
@@ -396,6 +416,14 @@ export function useEntityViews({
   // Pinned tabs closed during this session must not bounce back on the next
   // refetch (round 3: every tab except the default holder is closable).
   const closedPinnedRef = useRef<Set<string>>(new Set());
+
+  // The tab row is COMPLETE — the saved views have resolved AND the pinned
+  // merge below has run against them. Until then the row must not paint at
+  // all: rendering the lone default tab first and letting the pinned ones pop
+  // in afterwards is the flash the row is not allowed to have (FR-038). Set
+  // from inside the merge effect, so the flag and the tabs it describes land in
+  // the SAME commit.
+  const [rowReady, setRowReady] = useState(false);
 
   // Merge pinned views into the tab row (US2). Round 4: the merge is
   // ORDER-PRESERVING — tabs that are already open keep their current strip
@@ -446,8 +474,10 @@ export function useEntityViews({
       }
       return next;
     });
+    // Settled — success or error, the row now shows every tab it will show.
+    if (isFetched) setRowReady(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedViews, defaultConfig]);
+  }, [savedViews, defaultConfig, isFetched]);
 
   // ── Derived tab states ─────────────────────────────────────────────────────
 
@@ -1176,6 +1206,7 @@ export function useEntityViews({
     activeTab,
     savedViews,
     isAnyDirty,
+    ready: rowReady,
     collapsed,
     reveal,
     switchTab,

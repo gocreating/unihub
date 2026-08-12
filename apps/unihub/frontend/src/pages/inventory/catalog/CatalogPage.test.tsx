@@ -202,11 +202,13 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
 
   // 016 round 2: the view row auto-hides with only the default view; the
   // reveal affordance shows the catalog's page-named default "YTD" tab active.
-  it('reveals the entity-views row with the default YTD tab active', async () => {
+  it('reveals the entity-views row with the default tab active', async () => {
     renderPage();
     await screen.findByText('Backpack');
     fireEvent.click(screen.getByLabelText('Show views'));
-    const tab = screen.getByRole('tab', { name: /ytd/i });
+    // Round 11: the page no longer names a default view ("YTD"); an account
+    // with no stored default falls back to the generic label.
+    const tab = screen.getByRole('tab', { name: /table/i });
     expect(tab.getAttribute('aria-selected')).toBe('true');
     // Round 3: one kebab at the row's right edge replaces "+" and "View ▾".
     expect(screen.getByLabelText('View menu')).toBeInTheDocument();
@@ -344,8 +346,9 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     expect(container.querySelector('.anticon-caret-down, .anticon-caret-right')).toBeTruthy();
     expect(container.querySelector('.ant-table-footer .ant-pagination')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'plus New' }).textContent).toBe('New');
+    // Round 11: no seeded sort, so the Sort control is not lit by default.
     const sortBtn = screen.getByRole('button', { name: /Sort/ });
-    expect(sortBtn.className).toContain('ant-btn-primary');
+    expect(sortBtn.className).not.toContain('ant-btn-primary');
   });
 });
 
@@ -593,36 +596,27 @@ describe('CatalogPage (iteration 17 — plurals, name link, url width, seeded de
     expect(anchor.style.maxWidth).toBe('320px');
   });
 
-  // CAT17-04 (FR-003): the YTD+pending default filter is seeded and lit.
-  it('seeds the default filter (obtained >= year start OR empty) and lights Filter', async () => {
+  // CAT11-01 (round 11): the page seeds NO filter — the stored default view
+  // supplies one if the account has saved it.
+  it('seeds no default filter and leaves Filter unlit', async () => {
     renderPage();
     await screen.findByText('Backpack');
-    expect(screen.getByRole('button', { name: /Filter/ }).className).toContain('ant-btn-primary');
+    expect(screen.getByRole('button', { name: /Filter/ }).className).not.toContain(
+      'ant-btn-primary',
+    );
     const call = vi.mocked(inventoryService.listAcquisitions).mock.calls.at(-1)![0]!;
-    const yearStart = dayjs().startOf('year').format('YYYY-MM-DD');
-    // ONE or-group with plain conditions (iteration 24) — no nested groups.
-    expect(call.filters).toEqual({
-      groups: [
-        {
-          logic: 'or',
-          conditions: [
-            { attr: 'obtained_at', op: 'gte', val: yearStart },
-            { attr: 'obtained_at', op: 'is_empty', val: '' },
-          ],
-        },
-      ],
-    });
+    expect(call.filters).toBeUndefined();
   });
 
-  // CAT17-05 (FR-003): default page size is 50.
-  it('defaults to 50 per page', async () => {
+  // CAT11-02 (round 11): page size falls back to the shared table default.
+  it('defaults to 25 per page', async () => {
     const { container } = renderPage();
     await screen.findByText('Backpack');
     expect(
       container.querySelector('.ant-table-footer .ant-select-selection-item')?.textContent,
-    ).toContain('50');
+    ).toContain('25');
     const call = vi.mocked(inventoryService.listAcquisitions).mock.calls.at(-1)![0]!;
-    expect(call.limit).toBe(50);
+    expect(call.limit).toBe(25);
   });
 });
 

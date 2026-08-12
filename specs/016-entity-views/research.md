@@ -551,3 +551,61 @@ worse failure (R40). The alternative root fix — making `reconcileConfig` merge
 unknown columns at their declared position instead of appending them — would
 remove the skew entirely, but it changes column-drift behaviour for every saved
 view and belongs in its own round with its own tests.
+
+## R47. One placement rule for late columns — and a row that paints once
+
+Two directives this round; the first turned out to share a root cause with the
+residue R46 deliberately left open, which is why that residue is now closed too.
+
+**The reported defect**: opening `/inventory/catalog?inventory-catalog.view=<an
+unpinned view>` showed the unsaved indicator on the DEFAULT tab — a tab the user
+was not even looking at. Two independent causes, both real:
+
+1. *The default tab kept the page's configuration rather than its own.* Adoption
+   (R46) bailed entirely when the URL addressed a view, because the URL owns the
+   TABLE. But it also owns nothing else: the default tab's own configuration is
+   its stored view's, on screen or not. Adoption is now two decisions — sync the
+   tab's configuration (always) and load it into the table (only when that tab
+   is the one showing, and nothing arrived in the URL to claim it).
+
+2. *The "is this tab untouched?" test could never succeed.* It compared the
+   tab's captured configuration against the page defaults, and those two can
+   differ forever on the catalog. `reconcileConfig` appended columns a
+   configuration did not mention at the TAIL, so a snapshot captured before the
+   `attr:*` columns loaded ordered them after `actions`, while the page declares
+   `actions` last. Nothing could bring the two back into agreement.
+
+**The fix is the one R46 named and deferred**: a column the configuration does
+not mention takes its DECLARED position — immediately after the nearest declared
+predecessor the configuration does mention (`mergeMissingByDeclaredOrder`). Both
+sides of every comparison must use it, so `useColumnConfig.loadState` adopts the
+same rule: it places the table's live columns, and if it disagreed with
+`reconcileConfig` the mismatch would simply move from one comparison to another.
+
+This also closes R46's residue. The transient override write on arrival existed
+because the live snapshot legitimately differed from the defaults inside the
+column skew; with one placement rule there is no skew, and a nav-click to the
+catalog now emits NO url write at all — not one that is corrected, none.
+
+**Behaviour change, stated**: a newly created parameter column now appears among
+the other parameter columns in an existing saved view, rather than after
+"Actions". That is the better answer to "where does a column the view never knew
+about go?", and it is what makes the comparison stable.
+
+**The catalog's own default view is gone** (clarified): the page shipped a
+year-to-date filter, an obtained-descending sort and 50/page since iteration 17.
+Every account now has a STORED default view, and the two competed — the page's
+configuration was the baseline the default tab started from, the stored view was
+what it was compared against. The page now contributes only its columns.
+`DEFAULT_PAGE_SIZE` is exported from `useEntityTable` and used by the page's
+`ViewConfig` baseline, so the two cannot drift apart into a false indicator.
+Consequence, accepted: an account with no stored default view sees an
+unfiltered, unsorted catalog at 25/page.
+
+**The flash** (FR-038): the row used to render the lone default tab, then insert
+pinned views when the query resolved. `ready` is now set from INSIDE the merge
+effect — so the flag and the tabs it describes land in the same commit — and
+`ViewTabs` paints a height-reserving placeholder until then. Clarified as tab
+row only: the table keeps loading immediately, so this costs nothing in data
+latency. Measured on the real page by sampling the tab count every 50ms:
+`0 → placeholder → 2`, one transition.

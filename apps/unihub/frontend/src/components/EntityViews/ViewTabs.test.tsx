@@ -58,6 +58,7 @@ function makeViews(overrides: Partial<UseEntityViewsReturn> = {}): UseEntityView
     activeTab: defaultTab,
     savedViews: [],
     isAnyDirty: false,
+    ready: true,
     collapsed: false,
     reveal: vi.fn(),
     switchTab: vi.fn(),
@@ -118,6 +119,24 @@ describe('ViewTabs', () => {
   it('renders no unsaved indicator on clean tabs', () => {
     renderTabs(makeViews());
     expect(screen.queryByLabelText('Unsaved changes')).toBeNull();
+  });
+});
+
+describe('ViewTabs — round 11: no flash (FR-038)', () => {
+  it('paints no tabs until the row is ready, and reserves its height', () => {
+    const { container } = renderTabs(makeViews({ ready: false }));
+    expect(screen.queryByRole('tab')).toBeNull();
+    expect(screen.queryByLabelText('View menu')).toBeNull();
+    // The row still occupies its place, so nothing below it shifts.
+    const placeholder = screen.getByTestId('view-tabs-loading');
+    expect(container.firstElementChild).toBe(placeholder);
+    expect(placeholder.firstElementChild).toHaveStyle({ visibility: 'hidden' });
+  });
+
+  it('paints the complete tab set once ready', () => {
+    renderTabs(makeViews({ ready: true, tabs: [makeTab(), makeSavedTab()] }));
+    expect(screen.queryByTestId('view-tabs-loading')).toBeNull();
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
   });
 });
 

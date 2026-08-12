@@ -68,12 +68,17 @@ export interface UseEntityTableReturn {
   loadConfig: (config: ViewConfig, options?: { offset?: number }) => void;
 }
 
+/** Rows per page when a page names no preference. Exported so a page building
+ *  its own `ViewConfig` baseline cannot drift from what the table actually
+ *  starts with — a mismatch reads as unsaved changes (016 round 11). */
+export const DEFAULT_PAGE_SIZE = 25;
+
 export function useEntityTable({
   key,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   filterableAttrs: _filterableAttrs,
   columnDefs,
-  defaultPageSize = 25,
+  defaultPageSize = DEFAULT_PAGE_SIZE,
   defaultSortRules,
   defaultFilterGroups,
 }: UseEntityTableOptions): UseEntityTableReturn {

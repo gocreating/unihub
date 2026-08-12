@@ -36,16 +36,19 @@ import {
   listItems,
   updateItem,
 } from '@/services/unihub-backend/inventory';
-import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
+import {
+  DEFAULT_PAGE_SIZE,
+  EntityOffsetFooter,
+  EntityToolbar,
+  useEntityTable,
+} from '@/components/EntityToolbar';
 import { ViewTabs } from '@/components/EntityViews/ViewTabs';
 import { useEntityViews } from '@/components/EntityViews/useEntityViews';
 import type {
   ColumnDef,
   EntityListParams,
   FilterableAttribute,
-  FilterPayload,
   OffsetPaginatedResponse,
-  SortRule,
   ViewConfig,
 } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
@@ -195,58 +198,32 @@ export function CatalogPage() {
     [t, definitions],
   );
 
-  // Default sort (spec): Obtained descending, NULLS FIRST (pending on top).
-  const defaultSortRules = useMemo<SortRule[]>(
-    () => [{ field: 'acquisition__obtained_at', direction: 'desc', nulls: 'first' }],
-    [],
-  );
-  // Default view (iterations 17→24): YTD acquisitions + pending (no
-  // obtained date yet) — ONE or-group with plain conditions, lit in the
-  // Filter toolbar, freely editable/clearable.
-  const defaultFilterGroups = useMemo<FilterPayload['groups']>(
-    () => [
-      {
-        logic: 'or',
-        conditions: [
-          {
-            attr: 'acquisition__obtained_at',
-            op: 'gte',
-            val: dayjs().startOf('year').format('YYYY-MM-DD'),
-          },
-          { attr: 'acquisition__obtained_at', op: 'is_empty', val: '' },
-        ],
-      },
-    ],
-    [],
-  );
-
+  // No seeded filter, sort or page size (round 11). The page used to ship a
+  // year-to-date default view of its own (iterations 17→24), which competed
+  // with the stored default view every account now has: the two configurations
+  // differed, so the default tab compared dirty against its own baseline. The
+  // page contributes its COLUMNS; the saved default view supplies the rest.
   const table = useEntityTable({
     key: 'inventory-catalog',
     filterableAttrs,
     columnDefs,
-    defaultSortRules,
-    defaultFilterGroups,
-    defaultPageSize: 50,
   });
   const { filter, sort, cols } = table;
 
   // The default-view baseline the view tabs diff against (016 views).
   const defaultViewConfig = useMemo<ViewConfig>(
     () => ({
-      filters: defaultFilterGroups,
-      sort: defaultSortRules,
+      filters: [],
+      sort: [],
       columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order, pin: c.pin })),
-      pageSize: 50,
+      pageSize: DEFAULT_PAGE_SIZE,
     }),
-    [defaultFilterGroups, defaultSortRules, columnDefs],
+    [columnDefs],
   );
   const views = useEntityViews({
     tableKey: table.tableKey,
     table,
     defaultConfig: defaultViewConfig,
-    // The catalog's built-in configuration IS a year-to-date filter — name
-    // its default view accordingly (spec FR-003, round 2).
-    defaultViewName: 'YTD',
   });
 
   // Flat mode when any active filter/sort targets an item-level column.

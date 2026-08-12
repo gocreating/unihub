@@ -1,51 +1,61 @@
-# Tasks: Entity Views — Round 10
+# Tasks: Entity Views — Round 11
 
-**Input**: Design documents from `/specs/016-entity-views/` (spec.md Clarifications Session 2026-08-12, plan.md round 10, research.md R46)
+**Input**: Design documents from `/specs/016-entity-views/` (spec.md Clarifications Session 2026-08-12b, plan.md round 11, research.md R47)
 
-**Prerequisites**: Rounds 1–9 shipped (round 9 at commit 37f4687). This round fixes the defect round 9 wrongly closed as "not in this branch".
+**Prerequisites**: Rounds 1–10 shipped (round 10 at commit 2a1a8c6).
 
-**Scope note**: frontend only — one hook, its test suite, one e2e spec. No backend, no migration, no grammar change, no new UI.
+**Scope note**: frontend only — one shared helper, two hooks, one component, the catalog page, their tests, one e2e spec. No backend, no migration, no grammar change.
 
-**Method note**: three unit harnesses failed to reproduce this in round 9, and its absence was then read as evidence the bug was elsewhere. The reproduction here comes from driving the real page with real data and recording every URL write; only once the mechanism was known could the unit regression be written to fail.
+**Method note**: the reported deep link was reproduced in a unit test first, then confirmed fixed against the user's real data with a read-only probe. The probe is what showed the unit fix was insufficient on the real page — the second cause (column placement) only appears when columns arrive late.
 
 ## Phase 1: Setup
 
-- [X] T001 Re-check which artefact serves the app before trusting any earlier diagnosis: `docker ps` plus the image `Created` timestamp against `git log -1`. Round 9's "the container is stale" finding had expired — the image is now NEWER than round 9's commit, so the user's report describes current code
+- [X] T001 Confirm the green baseline and re-check which artefact serves the app (the round-10 lesson: a freshness check expires)
 
 ## Phase 2: Foundational (blocking prerequisite)
 
-**The reproduction — from the running application, and it must FAIL first**
+- [X] T002 Add the failing regression to `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx` in `describe('round 11: the default tab holds its stored config')`: with `?tbl.view=<an unpinned view>` at mount and a materialized default whose config differs, the DEFAULT tab must not be dirty, the deep-linked tab must own the table, and `ready` must be false until the views resolve. Confirm red (`expected true to be false`)
 
-- [X] T002 Drive the real page read-only (login, navigate by nav click, reload; GET requests only) with `history.pushState`/`replaceState` wrapped so every URL write is recorded, not just the final address. Capture the arrival URL, the tab labels and the indicator state
-- [X] T003 Add the failing regression to `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx` in `describe('round 10: late-arriving columns must not block adoption')`. Model what round 9's harness omitted: attribute columns arriving a tick AFTER mount, the saved-view list resolving after THEM, and a stored default view differing from the page defaults in filter, sort and page size. Assert the adopted configuration, an empty override set and a clean indicator. Confirm it fails (`expected 50 to be 25`)
+**Checkpoint**: the reported state is captured in the suite.
 
-**Checkpoint**: the defect is captured in the suite and demonstrably red.
+## Phase 3: User Story 1 — Save a table configuration and reopen it later (P1)
 
-## Phase 3: User Story 3 — Share and deep-link a view via URL (P3)
+**Goal**: a tab's configuration is its own view's, whether or not it is the tab on screen (FR-013), and a column the configuration never knew about lands where the page declares it (FR-021).
 
-**Goal**: arriving at a table applies the default view's stored configuration and leaves the URL clean, on a page whose columns are discovered asynchronously as much as on one whose columns are fixed (FR-036, FR-037, SC-017, SC-019).
+- [X] T003 [US1] Split adoption in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` into two decisions: (a) sync the default TAB's configuration to its stored view, always; (b) load it into the TABLE only when that tab is active and the URL brought no view state
+- [X] T004 [US1] Add `apps/unihub/frontend/src/components/EntityToolbar/columnOrder.ts` — `mergeMissingByDeclaredOrder(listedKeys, declaredKeys)` places columns a configuration does not mention after their nearest declared predecessor — with its own unit suite covering user-chosen orders, consecutive newcomers, and the no-predecessor case
+- [X] T005 [US1] Adopt the helper in BOTH `reconcileConfig` (useEntityViews.ts) and `useColumnConfig.loadState` — a disagreement between them just moves the mismatch — T002 green
 
-**Independent test**: navigate to the catalog with no view params — the table shows the default view's own configuration, no dot, no parameters; reload and repeat; a deep link to another view still wins.
+**Checkpoint**: US1 delta done — no tab reports changes nobody made.
 
-- [X] T004 [US3] Fix the pristine test in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts`: compare the TABLE's live snapshot against the page defaults rather than the default tab's mount-time config, which a growing column universe makes permanently unequal
-- [X] T005 [US3] Replace the `defaultAdoptedRef` one-shot with `adoptedTokenRef`, holding the configuration last offered: idempotent, re-entrant while the column universe settles, and loop-proof. Answer "did the URL address view state?" from the mount-captured `initialUrlHadViewStateRef` (moved above its new consumer), never from live params — R44 recorded both flaws without fixing them
-- [X] T006 [US3] Add `table.snapshotConfig` to the adoption dependencies so the effect re-evaluates as the table's own column state is patched: a run inside that one-commit skew sees a live snapshot that legitimately differs from the defaults, and without a re-run adoption never happened
-- [X] T007 [US3] Add `searchParams` to the OUTBOUND effect's dependencies (FR-037) — its decision is made against the URL, so a stale value let it conclude the address bar was already correct and skip the corrective write that follows adoption. Document why each is load-bearing — T003 green
-- [X] T008 [US3] Re-verify against the running application with the same probe: arrival and reload must both end at a bare `/inventory/catalog` with no indicator
+## Phase 4: User Story 2 — Switch between saved views (P2)
 
-**Checkpoint**: US3 delta done — the reported flow is clean, deep links unaffected.
+**Goal**: the view row appears complete or not at all (FR-038).
 
-## Phase 4: Polish & Cross-Cutting
+- [X] T006 [US2] Write the failing tests: `ready` in the hook suite, and in `ViewTabs.test.tsx` that no tabs render while the row is not ready, that the placeholder reserves height, and that the complete set renders once ready
+- [X] T007 [US2] Expose `ready` from `useEntityViews`, set from INSIDE the pinned-merge effect so the flag and the tabs it describes land in the same commit; render the height-reserving placeholder in `ViewTabs` ahead of the collapsed branch — T006 green
 
-- [X] T009 [P] Extend e2e `apps/unihub/frontend/e2e/entity-views.spec.ts` with the catalog-shaped case: arrive at a table whose default view is materialized, assert no override parameters and no indicator, reload, assert the same
-- [X] T010 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend untouched. The e2e suite is NOT run here (the live stack serves real data)
-- [X] T011 Record R46 in `specs/016-entity-views/research.md` — including the retracted round-9 conclusion and the residual transient write — and update `CLAUDE.md`
+**Checkpoint**: US2 delta done — one paint, no tab-by-tab fill-in.
+
+## Phase 5: The catalog's own default view
+
+- [X] T008 Remove the seeded filter, sort, page size and the "YTD" default-view name from `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx`; the page's `ViewConfig` baseline keeps only columns and takes `DEFAULT_PAGE_SIZE`
+- [X] T009 Export `DEFAULT_PAGE_SIZE` from `useEntityTable` (and the barrel) so a page baseline cannot drift from the table's own default into a false indicator
+- [X] T010 Update the four catalog tests that assert the removed behaviour (YTD tab name, lit Filter, lit Sort, 50/page) to the new contract — deliberate behaviour change, not a test weakening
+
+## Phase 6: Polish & Cross-Cutting
+
+- [X] T011 [P] Extend e2e `apps/unihub/frontend/e2e/entity-views.spec.ts`: a deep link to an unpinned view leaves every other tab without an indicator; and the tab count never changes after the row first appears
+- [X] T012 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend untouched. The e2e suite is NOT run here (the live stack serves real data)
+- [X] T013 Re-probe the real page: the reported deep link, the tab-count transitions, and a re-check that round 10's transient write is gone
+- [X] T014 Record R47 and update `CLAUDE.md`
 
 ## Dependencies
 
-- T001 → T002 → T003 (red) → T004–T007 (green) → T008 (real-data confirmation).
-- T009–T011 last. T009 is independent of the hook work [P].
+- T002 → T003 → T004 → T005 (the unit fix is insufficient without the placement rule).
+- T006 → T007. T008 → T010; T009 blocks T008.
+- Polish (T011–T014) last.
 
 ## Implementation strategy
 
-Fix in the order the failures stack: adoption must run at all (T004–T006) before the URL can be corrected (T007), and the real-data probe (T008) is the only check that covers all three — each of the three defects alone kept the flow broken, and the unit regression only proves the first two.
+Fix the tab-configuration split first — it is the literal report — then the placement rule, which is what makes it hold on a page with late-arriving columns. The catalog removal is independent and could ship alone; the flash fix is independent of both.

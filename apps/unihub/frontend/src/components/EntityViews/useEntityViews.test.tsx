@@ -1918,6 +1918,73 @@ describe('useEntityViews — round 10: late-arriving columns must not block adop
   });
 });
 
+describe('useEntityViews — round 11: the default tab holds its stored config', () => {
+  const PAGE_CONFIG: ViewConfig = DEFAULT_CONFIG; // no seeded filter/sort (round 11)
+
+  /** A materialized default whose stored config differs from the page's. */
+  const STORED_DEFAULT: EntityView = {
+    ...DEFAULT_VIEW,
+    id: 'storeddflt11',
+    name: 'All - 2',
+    config: {
+      filters: [],
+      sort: [{ field: 'amount', direction: 'desc' }],
+      columns: PAGE_CONFIG.columns,
+      pageSize: 100,
+    },
+    pinned: true,
+    position: 0,
+    is_default: true,
+  };
+
+  /** The unpinned view the deep link addresses. */
+  const OTHER: EntityView = { ...SAVED_VIEW, id: 'otherview001', name: 'All', pinned: false };
+
+  it('does not mark the default tab dirty when the URL addresses another view', async () => {
+    listMock.mockResolvedValue([STORED_DEFAULT, OTHER]);
+    const { result } = renderHook(useHarness, {
+      wrapper: makeWrapper([`/?tbl.view=${OTHER.id}`]),
+    });
+    await waitFor(() => expect(result.current.views.activeTab.viewId).toBe(OTHER.id));
+    await new Promise((r) => setTimeout(r, 30));
+
+    // The deep-linked view owns the table and is clean…
+    expect(result.current.views.activeTab.dirty).toBe(false);
+    // …and the default tab, which is NOT showing, carries its own stored
+    // configuration rather than the page defaults — so no phantom indicator.
+    const defaultTab = result.current.views.tabs.find((tab) => tab.kind === 'default')!;
+    expect(defaultTab.dirty).toBe(false);
+    expect(result.current.views.isAnyDirty).toBe(false);
+  });
+
+  it('still leaves the table showing the deep-linked view, not the default', async () => {
+    listMock.mockResolvedValue([STORED_DEFAULT, OTHER]);
+    const { result } = renderHook(useHarness, {
+      wrapper: makeWrapper([`/?tbl.view=${OTHER.id}`]),
+    });
+    await waitFor(() => expect(result.current.views.activeTab.viewId).toBe(OTHER.id));
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(result.current.table.limit).toBe(50); // OTHER's page size, not 100
+    expect(result.current.table.queryParams.ordering).toBe('-amount');
+  });
+
+  it('reports the tab row ready only once the saved views have resolved', async () => {
+    let resolveList: (views: EntityView[]) => void = () => {};
+    listMock.mockImplementation(
+      () => new Promise<EntityView[]>((resolve) => (resolveList = resolve)),
+    );
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
+
+    expect(result.current.views.ready).toBe(false);
+    act(() => resolveList([STORED_DEFAULT, OTHER]));
+    await waitFor(() => expect(result.current.views.ready).toBe(true));
+    // Every tab the row will ever show this visit is present in that first
+    // ready render — no tab appears afterwards (FR-038).
+    expect(result.current.views.tabs.map((tab) => tab.kind)).toEqual(['default']);
+  });
+});
+
 // ── Round 9: "Reset changes" (FR-035/R45) ───────────────────────────────────
 
 describe('useEntityViews — round 9: resetTab', () => {

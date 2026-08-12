@@ -536,6 +536,60 @@ test.describe('entity-views default-view adoption (round 10, SC-017/SC-019)', ()
   });
 });
 
+test.describe('entity-views round 11: quiet arrival (FR-038/SC-020)', () => {
+  test('a deep link to another view leaves the default tab clean', async ({ page }) => {
+    await login(page);
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    const row = page.getByTestId('view-tabs-row');
+    await expect(row).toBeVisible();
+
+    // A saved view that is NOT pinned, addressed directly by URL.
+    const viewName = await createSavedView(page, 'Deep link probe');
+    await page.getByText('25 / page').first().click();
+    await page.getByTitle('100 / page').click();
+    await row.getByRole('tab', { name: new RegExp(viewName) }).click();
+    await page.getByRole('menuitem', { name: 'Save' }).click();
+    await expect(page.getByLabel('Unsaved changes')).toHaveCount(0);
+    const deepLink = page.url();
+
+    await page.goto('/');
+    await page.goto(deepLink);
+    await revealRow(page);
+
+    // The addressed view owns the table; the default tab is merely open, and
+    // carries its own stored configuration — so nothing shows an indicator.
+    await expect(page.getByText('100 / page').first()).toBeVisible();
+    await expect(page.getByLabel('Unsaved changes')).toHaveCount(0);
+  });
+
+  test('the tab row paints once, never filling in tab by tab', async ({ page }) => {
+    await login(page);
+    await page.goto('/');
+
+    // Sample how many tabs the row shows over the whole load.
+    await page.addInitScript(() => {
+      (window as unknown as { __counts: number[] }).__counts = [];
+      setInterval(() => {
+        const strip = document.querySelector('[data-testid="view-tabs-strip"]');
+        if (!strip) return;
+        const n = strip.querySelectorAll('[role="tab"]').length;
+        const seen = (window as unknown as { __counts: number[] }).__counts;
+        if (seen[seen.length - 1] !== n) seen.push(n);
+      }, 40);
+    });
+
+    await page.goto('/inventory/catalog');
+    await revealRow(page);
+    await expect(page.getByTestId('view-tabs-row')).toBeVisible();
+    await page.waitForTimeout(3000);
+
+    // Once tabs exist, their number never changes: the row appeared complete.
+    const counts = await page.evaluate(() => (window as unknown as { __counts: number[] }).__counts);
+    expect(counts.length).toBeLessThanOrEqual(1);
+  });
+});
+
 test.describe('entity-views URL deep-linking (US3, readable params)', () => {
   test('a readable inline URL applies its config on load and marks the tab dirty', async ({
     page,

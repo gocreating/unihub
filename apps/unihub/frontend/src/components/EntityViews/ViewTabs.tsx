@@ -198,6 +198,20 @@ export function ViewTabs({ views }: ViewTabsProps) {
     [views.tabs],
   );
 
+  if (!views.ready) {
+    // Hold the row's height and paint nothing until every tab is known: the
+    // set must appear complete in one go, never fill in as the saved views
+    // arrive (FR-038). The hidden tab-shaped child is what reserves the exact
+    // height the real row will have, so nothing below it moves.
+    return (
+      <div className={styles.row} data-testid="view-tabs-loading" aria-hidden>
+        <span className={styles.tab} style={{ visibility: 'hidden' }}>
+          &nbsp;
+        </span>
+      </div>
+    );
+  }
+
   if (views.collapsed) {
     return (
       <div className={styles.collapsedRow} data-testid="view-tabs-collapsed">

@@ -24,6 +24,7 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
+  horizontalListSortingStrategy,
   verticalListSortingStrategy,
   arrayMove,
 } from '@dnd-kit/sortable';
@@ -58,6 +59,9 @@ export interface SortableListProps<T extends { id: string }> {
     isDragging: boolean,
   ) => React.ReactNode;
   disabled?: boolean;
+  /** Layout axis of the list. `'horizontal'` is used by the entity-views tab
+   *  strip (016 round 3); every other caller keeps the vertical default. */
+  orientation?: 'vertical' | 'horizontal';
 }
 
 // ── Internal per-item component ───────────────────────────────────────────────
@@ -65,9 +69,14 @@ export interface SortableListProps<T extends { id: string }> {
 interface SortableItemProps<T extends { id: string }> {
   item: T;
   renderItem: SortableListProps<T>['renderItem'];
+  orientation: 'vertical' | 'horizontal';
 }
 
-function SortableItem<T extends { id: string }>({ item, renderItem }: SortableItemProps<T>) {
+function SortableItem<T extends { id: string }>({
+  item,
+  renderItem,
+  orientation,
+}: SortableItemProps<T>) {
   const {
     attributes,
     listeners,
@@ -78,9 +87,20 @@ function SortableItem<T extends { id: string }>({ item, renderItem }: SortableIt
   } = useSortable({ id: item.id });
 
   const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
+    // Horizontal lists use TRANSLATE only: `CSS.Transform` also emits the
+    // scaleX/scaleY that `horizontalListSortingStrategy` computes from the
+    // passed item's width, which stretches variable-width items such as view
+    // tabs mid-drag (016 round 4, FR-027). Vertical rows keep the full
+    // transform — their heights are uniform, so the scale is a no-op there.
+    transform:
+      orientation === 'horizontal'
+        ? CSS.Translate.toString(transform)
+        : CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
+    // In a flex row the wrapper must not stretch or shrink — the rendered item
+    // owns its own width (tab labels stay legible under overflow).
+    ...(orientation === 'horizontal' ? { flex: 'none', display: 'flex' } : null),
   };
 
   return (
@@ -97,6 +117,7 @@ export function SortableList<T extends { id: string }>({
   onReorder,
   renderItem,
   disabled = false,
+  orientation = 'vertical',
 }: SortableListProps<T>) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -129,9 +150,19 @@ export function SortableList<T extends { id: string }>({
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext
+        items={items.map((i) => i.id)}
+        strategy={
+          orientation === 'horizontal' ? horizontalListSortingStrategy : verticalListSortingStrategy
+        }
+      >
         {items.map((item) => (
-          <SortableItem key={item.id} item={item} renderItem={renderItem} />
+          <SortableItem
+            key={item.id}
+            item={item}
+            renderItem={renderItem}
+            orientation={orientation}
+          />
         ))}
       </SortableContext>
     </DndContext>

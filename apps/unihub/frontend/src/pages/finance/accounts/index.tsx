@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, ColorPicker, DatePicker, Form, Input, Modal, Select, Space, Tag, message } from 'antd';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { EmptyValue } from '@/components/EmptyValue';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
@@ -15,8 +16,15 @@ import {
   listCurrencies,
   updateAccount,
 } from '@/services/unihub-backend/finance';
-import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
-import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import {
+  EntityOffsetFooter,
+  EntityToolbar,
+  useEntityTable,
+  viewConfigFromColumns,
+} from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute, ViewConfig } from '@/components/EntityToolbar';
+import { ViewTabs } from '@/components/EntityViews/ViewTabs';
+import { useEntityViews } from '@/components/EntityViews/useEntityViews';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 // 20 preset colors covering the full hue spectrum — Material Design palette.
@@ -86,8 +94,16 @@ export function AccountsPage() {
   ], [t]);
 
   // ── Entity operations — single standardized hook ─────────────────────
-  const table = useEntityTable({ key: 'accounts', filterableAttrs, columnDefs });
+  const table = useEntityTable({ key: 'finance-accounts', filterableAttrs, columnDefs });
   const { filter, sort, cols } = table;
+
+  // The default-view baseline the view tabs diff against (016 views).
+  const defaultViewConfig = useMemo<ViewConfig>(() => viewConfigFromColumns(columnDefs), [columnDefs]);
+  const views = useEntityViews({
+    tableKey: table.tableKey,
+    table,
+    defaultConfig: defaultViewConfig,
+  });
 
   const { data: accountsData, isLoading, isError } = useQuery({
     queryKey: ['finance', 'accounts', table.queryParams],
@@ -145,11 +161,11 @@ export function AccountsPage() {
       const e = err as { body?: { affected_balance_count?: number } };
       if (e?.body?.affected_balance_count !== undefined) {
         const count = e.body.affected_balance_count;
-        Modal.confirm({
+        confirmDialog({
           title: t({ id: 'pages.finance.accounts.delete.title' }),
           content: t({ id: 'pages.finance.accounts.delete.confirm' }, { count }),
           okText: t({ id: 'pages.finance.accounts.delete.ok' }),
-          okType: 'danger',
+          danger: true,
           onOk: () => deleteMutation.mutate({ id: account.id, confirm: true }),
         });
       } else {
@@ -303,13 +319,14 @@ export function AccountsPage() {
   return (
     <>
       <PageTable<Account>
-        key={cols.pinFingerprint}
+        key={`${cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.finance.accounts.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             {t({ id: 'pages.finance.accounts.new' })}
           </Button>
         }
+        viewBar={<ViewTabs views={views} />}
         headerTitle={
           <EntityToolbar
             filterProps={{ attrs: filterableAttrs, hook: filter }}

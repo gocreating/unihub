@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, DatePicker, Form, Input, Modal, Select, Space, Tag, message } from 'antd';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -15,9 +16,16 @@ import {
   listExchangeRates,
   updateExchangeRate,
 } from '@/services/unihub-backend/finance';
-import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
-import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import {
+  EntityOffsetFooter,
+  EntityToolbar,
+  useEntityTable,
+  viewConfigFromColumns,
+} from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute, ViewConfig } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
+import { ViewTabs } from '@/components/EntityViews/ViewTabs';
+import { useEntityViews } from '@/components/EntityViews/useEntityViews';
 
 export function ExchangeRatesPage() {
   const queryClient = useQueryClient();
@@ -41,7 +49,15 @@ export function ExchangeRatesPage() {
     { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 4 },
   ], [t]);
 
-  const table = useEntityTable({ key: 'exchange-rates', filterableAttrs, columnDefs });
+  const table = useEntityTable({ key: 'finance-exchange-rates', filterableAttrs, columnDefs });
+
+  // The default-view baseline the view tabs diff against (016 views).
+  const defaultViewConfig = useMemo<ViewConfig>(() => viewConfigFromColumns(columnDefs), [columnDefs]);
+  const views = useEntityViews({
+    tableKey: table.tableKey,
+    table,
+    defaultConfig: defaultViewConfig,
+  });
 
   const { data: ratesData, isLoading } = useQuery({
     queryKey: ['finance', 'exchange-rates', table.queryParams],
@@ -183,10 +199,10 @@ export function ExchangeRatesPage() {
               <Button
                 size="small" danger icon={<DeleteOutlined />}
                 onClick={() => {
-                  Modal.confirm({
+                  confirmDialog({
                     title: t({ id: 'pages.finance.exchangeRates.delete.title' }),
                     content: t({ id: 'pages.finance.exchangeRates.delete.confirm' }),
-                    okType: 'danger',
+                    danger: true,
                     onOk: () => deleteMutation.mutate(record.id),
                   });
                 }}
@@ -211,7 +227,7 @@ export function ExchangeRatesPage() {
   return (
     <>
       <PageTable<ExchangeRate>
-        key={table.cols.pinFingerprint}
+        key={`${table.cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.finance.exchangeRates.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
@@ -225,6 +241,7 @@ export function ExchangeRatesPage() {
             columnProps={{ hook: table.cols }}
           />
         }
+        viewBar={<ViewTabs views={views} />}
         rowKey="id"
         columns={columns}
         dataSource={rates}

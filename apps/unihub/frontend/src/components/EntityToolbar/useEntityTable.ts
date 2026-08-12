@@ -5,7 +5,7 @@
  * into a single standardized interface so every entity list page uses the same
  * pattern and behavior without repeating boilerplate.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SorterResult } from 'antd/es/table/interface';
 import { useEntityFilter } from './hooks/useEntityFilter';
 import type { UseEntityFilterReturn } from './hooks/useEntityFilter';
@@ -13,7 +13,14 @@ import { useEntitySort } from './hooks/useEntitySort';
 import type { UseEntitySortReturn } from './hooks/useEntitySort';
 import { useColumnConfig } from './hooks/useColumnConfig';
 import type { UseColumnConfigReturn } from './hooks/useColumnConfig';
-import type { ColumnDef, EntityListParams, FilterableAttribute, FilterPayload, SortRule } from './types';
+import type {
+  ColumnDef,
+  EntityListParams,
+  FilterableAttribute,
+  FilterPayload,
+  SortRule,
+  ViewConfig,
+} from './types';
 
 export const ENTITY_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 export type EntityPageSize = (typeof ENTITY_PAGE_SIZE_OPTIONS)[number];
@@ -51,14 +58,27 @@ export interface UseEntityTableReturn {
   handleTableSorterChange: (sorter: SorterResult<unknown> | SorterResult<unknown>[]) => void;
   /** Build AntD pagination props from the API response total count. */
   paginationProps: (total: number | undefined) => EntityPaginationProps;
+  /** The table's view namespace (the `key` option) — used by entity views (016). */
+  tableKey: string;
+  /** Capture the current active state as a serializable ViewConfig (016 views). */
+  snapshotConfig: () => ViewConfig;
+  /** Apply a whole ViewConfig: filter/sort/columns land clean (active+pending),
+   *  page size applies, and the page resets to 0 unless an explicit offset is
+   *  given (URL page transport). */
+  loadConfig: (config: ViewConfig, options?: { offset?: number }) => void;
 }
+
+/** Rows per page when a page names no preference. Exported so a page building
+ *  its own `ViewConfig` baseline cannot drift from what the table actually
+ *  starts with — a mismatch reads as unsaved changes (016 round 11). */
+export const DEFAULT_PAGE_SIZE = 25;
 
 export function useEntityTable({
   key,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   filterableAttrs: _filterableAttrs,
   columnDefs,
-  defaultPageSize = 25,
+  defaultPageSize = DEFAULT_PAGE_SIZE,
   defaultSortRules,
   defaultFilterGroups,
 }: UseEntityTableOptions): UseEntityTableReturn {
@@ -69,8 +89,16 @@ export function useEntityTable({
   const [limit, setLimit] = useState<number>(defaultPageSize);
   const [offset, setOffset] = useState(0);
 
+  // loadConfig() may carry an explicit offset (URL page transport) that must
+  // survive the filter/sort-change page reset below.
+  const skipNextOffsetResetRef = useRef(false);
+
   // Reset to first page whenever the user applies a new filter or sort.
   useEffect(() => {
+    if (skipNextOffsetResetRef.current) {
+      skipNextOffsetResetRef.current = false;
+      return;
+    }
     setOffset(0);
   }, [filter.activeGroups, sort.activeRules]);
 
@@ -136,6 +164,38 @@ export function useEntityTable({
     [limit, offset],
   );
 
+  const { toApiParam, loadGroups } = filter;
+  const { activeRules, loadRules } = sort;
+  const { activeState, loadState } = cols;
+
+  const snapshotConfig = useCallback(
+    (): ViewConfig => ({
+      filters: toApiParam()?.groups ?? [],
+      sort: activeRules,
+      // v2 (016 round 2): per-column pins map 1:1 to ColumnDef.pin — no
+      // projection, multi-pin layouts round-trip exactly.
+      columns: activeState.columns.map((c) => ({
+        key: c.key,
+        visible: c.visible,
+        order: c.order,
+        pin: c.pin,
+      })),
+      pageSize: limit,
+    }),
+    [toApiParam, activeRules, activeState, limit],
+  );
+  const loadConfig = useCallback(
+    (config: ViewConfig, options?: { offset?: number }) => {
+      loadGroups(config.filters);
+      loadRules(config.sort);
+      loadState(config.columns);
+      setLimit(config.pageSize);
+      skipNextOffsetResetRef.current = true;
+      setOffset(options?.offset ?? 0);
+    },
+    [loadGroups, loadRules, loadState],
+  );
+
   return {
     filter,
     sort,
@@ -147,5 +207,8 @@ export function useEntityTable({
     queryParams,
     handleTableSorterChange,
     paginationProps,
+    tableKey: key,
+    snapshotConfig,
+    loadConfig,
   };
 }

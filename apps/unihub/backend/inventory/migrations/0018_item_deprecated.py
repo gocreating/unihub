@@ -4,9 +4,8 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('inventory', '0017_seed_diameter_temperature'),
+        ("inventory", "0017_seed_diameter_temperature"),
     ]
 
     def backfill(apps, schema_editor):
@@ -15,9 +14,9 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AddField(
-            model_name='item',
-            name='deprecated',
+            model_name="item",
+            name="deprecated",
             field=models.BooleanField(default=False),
         ),
-            migrations.RunPython(backfill, migrations.RunPython.noop),
+        migrations.RunPython(backfill, migrations.RunPython.noop),
     ]

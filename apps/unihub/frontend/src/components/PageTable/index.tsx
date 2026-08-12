@@ -30,6 +30,10 @@ const useStyles = createStyles(({ token }) => ({
   titleRow: {
     padding: '16px 24px',
   },
+  viewBarRow: {
+    padding: '0 24px',
+    borderBottom: `1px solid ${token.colorBorderSecondary}`,
+  },
   tableWrapper: {
     padding: '0 24px 16px',
     '.ant-pro-card': {
@@ -218,6 +222,10 @@ export interface PageTableProps<T extends Record<string, any>>
   contentVisibility?: boolean;
   /** Disable all sticky behaviour (fix, scrollbar, header). Use when PageTable is embedded inside a Card to prevent sticky elements from overlapping the Card header border. */
   noStickyFix?: boolean;
+  /** Entity-views tab row (016) — rendered inside the white pageCard between
+   *  the title row and the toolbar row (constitution Principle VII: the card
+   *  structure stays PageTable-owned). */
+  viewBar?: ReactNode;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -227,6 +235,7 @@ function PageTable<T extends Record<string, any>>({
   contentVisibility: enableContentVisibility = false,
   noStickyFix = false,
   pagination = false,
+  viewBar,
   ...proTableProps
 }: PageTableProps<T>) {
   const { styles, cx } = useStyles();
@@ -269,6 +278,8 @@ function PageTable<T extends Record<string, any>>({
           {action}
         </Flex>
       )}
+
+      {viewBar != null && <div className={styles.viewBarRow}>{viewBar}</div>}
 
       <div
         ref={tableContainerRef}

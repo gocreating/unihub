@@ -394,6 +394,45 @@ export default {
   'common.entityOps.pagination.previous': 'Previous',
   'common.entityOps.pagination.next': 'Next',
 
+  // Entity views (016)
+  'common.entityViews.defaultTable': 'Table',
+  'common.entityViews.view': 'View',
+  'common.entityViews.newTab': 'New view tab',
+  'common.entityViews.renameError': 'Failed to rename view',
+  'common.entityViews.newViewName': 'New view',
+  'common.entityViews.unsaved': 'Unsaved changes',
+  'common.entityViews.save': 'Save',
+  'common.entityViews.resetChanges': 'Reset changes',
+  'common.entityViews.viewName': 'View name',
+  'common.entityViews.viewNameRequired': 'Please enter a view name',
+  'common.entityViews.duplicate': 'Duplicate',
+  'common.entityViews.pin': 'Pin',
+  'common.entityViews.unpin': 'Unpin',
+  'common.entityViews.delete': 'Delete',
+  'common.entityViews.deleteConfirmTitle':
+    '{n, plural, one {Delete # view?} other {Delete # views?}}',
+  'common.entityViews.deleteConfirmBody':
+    '{n, plural, one {This will permanently delete # saved view.} other {This will permanently delete # saved views.}}',
+  'common.entityViews.close': 'Close',
+  'common.entityViews.saved': 'View saved',
+  'common.entityViews.saveError': 'Failed to save view',
+  'common.entityViews.loadError': 'Failed to load views',
+
+  // Entity views — round 3 (tab menu + kebab)
+  'common.entityViews.tabMenu': 'View actions',
+  'common.entityViews.setDefault': 'Set as default',
+  'common.entityViews.setDefaultError': 'Failed to set the default view',
+  'common.entityViews.addEmptyView': 'Add empty view',
+  'common.entityViews.open': 'Open',
+  'common.entityViews.noViewsToOpen': 'All views are open',
+  'common.entityViews.viewMenu': 'View menu',
+  'common.entityViews.rename': 'Rename',
+  'common.entityViews.renameViewTitle': 'Rename view',
+  'common.entityViews.unresolvedView':
+    'The view referenced by this link no longer exists — showing the default view',
+  'common.entityViews.invalidView':
+    'This link contains an invalid view — showing the default view',
+
   // System > Profile
   'pages.system.profile.title': 'System Profile',
   'pages.system.profile.version': 'Version',

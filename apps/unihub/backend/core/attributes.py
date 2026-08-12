@@ -17,9 +17,7 @@ from core.models import AttributeDefinition, AttributeValue
 
 # "5-10" / "5~10" (dash max must be non-negative so "-5" stays a single value;
 # "~" separates signed bounds, e.g. "-10~-5").
-_RANGE_RE = re.compile(
-    r"^\s*(-?\d+(?:\.\d+)?)\s*(?:~\s*(-?\d+(?:\.\d+)?)|-\s*(\d+(?:\.\d+)?))\s*$"
-)
+_RANGE_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*(?:~\s*(-?\d+(?:\.\d+)?)|-\s*(\d+(?:\.\d+)?))\s*$")
 
 ATTR_KEY_PREFIX = "attr:"
 
@@ -140,9 +138,7 @@ def _parse_dimension_number(text: str, key: str) -> tuple[Decimal, Decimal | Non
     low = Decimal(match.group(1))
     high = Decimal(match.group(2) or match.group(3))
     if low > high:
-        raise serializers.ValidationError(
-            {key: "range minimum must not exceed its maximum."}
-        )
+        raise serializers.ValidationError({key: "range minimum must not exceed its maximum."})
     return low, high
 
 

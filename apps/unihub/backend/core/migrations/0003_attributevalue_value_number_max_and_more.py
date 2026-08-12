@@ -4,20 +4,31 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0002_dimension_attrs'),
+        ("core", "0002_dimension_attrs"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='attributevalue',
-            name='value_number_max',
+            model_name="attributevalue",
+            name="value_number_max",
             field=models.DecimalField(blank=True, decimal_places=4, max_digits=20, null=True),
         ),
         migrations.AlterField(
-            model_name='attributedefinition',
-            name='unit_family',
-            field=models.CharField(blank=True, choices=[('length', 'Length'), ('weight', 'Weight'), ('volume', 'Volume'), ('temperature', 'Temperature'), ('time', 'Time'), ('battery', 'Battery capacity')], default='', max_length=12),
+            model_name="attributedefinition",
+            name="unit_family",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("length", "Length"),
+                    ("weight", "Weight"),
+                    ("volume", "Volume"),
+                    ("temperature", "Temperature"),
+                    ("time", "Time"),
+                    ("battery", "Battery capacity"),
+                ],
+                default="",
+                max_length=12,
+            ),
         ),
     ]

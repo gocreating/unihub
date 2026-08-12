@@ -119,6 +119,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/core/entity-views/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Owner-scoped CRUD + bulk reorder for saved entity views (016).
+         *
+         *     Collections are small by design (tens of views per table), so list
+         *     responses are plain arrays — no pagination envelope.
+         */
+        get: operations["v1_core_entity_views_list"];
+        put?: never;
+        /**
+         * @description Owner-scoped CRUD + bulk reorder for saved entity views (016).
+         *
+         *     Collections are small by design (tens of views per table), so list
+         *     responses are plain arrays — no pagination envelope.
+         */
+        post: operations["v1_core_entity_views_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/core/entity-views/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Owner-scoped CRUD + bulk reorder for saved entity views (016).
+         *
+         *     Collections are small by design (tens of views per table), so list
+         *     responses are plain arrays — no pagination envelope.
+         */
+        get: operations["v1_core_entity_views_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description Reject deleting the default view — it is the guaranteed fallback (FR-003). */
+        delete: operations["v1_core_entity_views_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description Owner-scoped CRUD + bulk reorder for saved entity views (016).
+         *
+         *     Collections are small by design (tens of views per table), so list
+         *     responses are plain arrays — no pagination envelope.
+         */
+        patch: operations["v1_core_entity_views_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/core/entity-views/reorder/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Rewrite ``position`` for one table's views to match the given id order.
+         *
+         *     Body: ``{"table_key": str, "ids": [str, ...]}``. Every id must exist,
+         *     belong to the caller, and carry the given table_key; duplicates are
+         *     rejected. Returns the table's views in their new order.
+         */
+        post: operations["v1_core_entity_views_reorder_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/finance/accounts/": {
         parameters: {
             query?: never;
@@ -611,7 +691,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sync/apply/confirm/": {
+    "/api/v1/sync/checkout/confirm/": {
         parameters: {
             query?: never;
             header?: never;
@@ -620,23 +700,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description POST /api/v1/sync/apply/confirm/ — pull and import all tables. */
-        post: operations["v1_sync_apply_confirm_create"];
+        /** @description POST /api/v1/sync/checkout/confirm/ — apply the staged subset of a snapshot. */
+        post: operations["v1_sync_checkout_confirm_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sync/apply/preview/": {
+    "/api/v1/sync/checkout/preview/": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** @description GET /api/v1/sync/apply/preview/ — fetch remote and return per-table diff. */
-        get: operations["v1_sync_apply_preview_retrieve"];
+        /** @description GET /api/v1/sync/checkout/preview/?commit=<sha> — diff a snapshot vs the DB. */
+        get: operations["v1_sync_checkout_preview_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -675,6 +755,23 @@ export interface paths {
         put?: never;
         /** @description POST /api/v1/sync/force-publish/ — force-push, overwriting remote history. */
         post: operations["v1_sync_force_publish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/history/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET /api/v1/sync/history/ — the data repository's commit graph payload. */
+        get: operations["v1_sync_history_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -854,6 +951,23 @@ export interface components {
          * @enum {string}
          */
         DataTypeEnum: "text" | "long_text" | "number" | "date" | "boolean" | "single_select" | "dimension";
+        /**
+         * @description Saved entity view. ``owner`` is never serialized — it is stamped from the
+         *     request user by the viewset and every queryset is owner-scoped.
+         */
+        EntityView: {
+            readonly id: string;
+            table_key: string;
+            name: string;
+            config?: unknown;
+            pinned?: boolean;
+            position?: number;
+            is_default?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
         ExchangeRate: {
             readonly id: string;
             base_currency: string;
@@ -1082,6 +1196,23 @@ export interface components {
             name?: string;
             symbol?: string;
             is_base_currency?: boolean;
+        };
+        /**
+         * @description Saved entity view. ``owner`` is never serialized — it is stamped from the
+         *     request user by the viewset and every queryset is owner-scoped.
+         */
+        PatchedEntityView: {
+            readonly id?: string;
+            table_key?: string;
+            name?: string;
+            config?: unknown;
+            pinned?: boolean;
+            position?: number;
+            is_default?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
         };
         PatchedExchangeRate: {
             readonly id?: string;
@@ -1387,6 +1518,143 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    v1_core_entity_views_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityView"][];
+                };
+            };
+        };
+    };
+    v1_core_entity_views_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityView"];
+                "application/x-www-form-urlencoded": components["schemas"]["EntityView"];
+                "multipart/form-data": components["schemas"]["EntityView"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityView"];
+                };
+            };
+        };
+    };
+    v1_core_entity_views_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityView"];
+                };
+            };
+        };
+    };
+    v1_core_entity_views_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_core_entity_views_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedEntityView"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedEntityView"];
+                "multipart/form-data": components["schemas"]["PatchedEntityView"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityView"];
+                };
+            };
+        };
+    };
+    v1_core_entity_views_reorder_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityView"];
+                "application/x-www-form-urlencoded": components["schemas"]["EntityView"];
+                "multipart/form-data": components["schemas"]["EntityView"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityView"];
+                };
             };
         };
     };
@@ -2634,7 +2902,7 @@ export interface operations {
             };
         };
     };
-    v1_sync_apply_confirm_create: {
+    v1_sync_checkout_confirm_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -2652,7 +2920,7 @@ export interface operations {
             };
         };
     };
-    v1_sync_apply_preview_retrieve: {
+    v1_sync_checkout_preview_retrieve: {
         parameters: {
             query?: never;
             header?: never;
@@ -2725,6 +2993,24 @@ export interface operations {
         };
     };
     v1_sync_force_publish_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_sync_history_retrieve: {
         parameters: {
             query?: never;
             header?: never;

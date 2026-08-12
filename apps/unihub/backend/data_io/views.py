@@ -208,7 +208,7 @@ class ImportConfirmView(APIView):
             )
 
         change_records = compute_diff(parsed_rows, descriptor, mode)
-        result = apply_diff(change_records, descriptor, mode)
+        result = apply_diff(change_records, descriptor, mode, acting_user=request.user)
 
         response_data = {
             "table": table_label,
@@ -343,7 +343,9 @@ class ImportZipConfirmView(APIView):
             for result in results:
                 label = result["table_label"]
                 descriptor = registry[label]
-                counts = apply_diff(result["_change_records"], descriptor, mode)
+                counts = apply_diff(
+                    result["_change_records"], descriptor, mode, acting_user=request.user
+                )
                 confirm_results.append(
                     {
                         "table_label": label,

@@ -5,7 +5,8 @@ export { EntityCursorFooter } from './EntityCursorFooter';
 export type { EntityCursorFooterProps } from './EntityCursorFooter';
 export { useEntityTable } from './useEntityTable';
 export type { UseEntityTableOptions, UseEntityTableReturn, EntityPaginationProps, EntityPageSize } from './useEntityTable';
-export { ENTITY_PAGE_SIZE_OPTIONS } from './useEntityTable';
+export { ENTITY_PAGE_SIZE_OPTIONS, DEFAULT_PAGE_SIZE } from './useEntityTable';
+export { viewConfigFromColumns } from './viewConfig';
 export type { EntityToolbarProps } from './EntityToolbar';
 export { FilterPanel } from './FilterPanel';
 export type { FilterPanelProps } from './FilterPanel';
@@ -38,4 +39,6 @@ export type {
   EntityListParams,
   OffsetPaginatedResponse,
   CursorPaginatedResponse,
+  ViewColumn,
+  ViewConfig,
 } from './types';

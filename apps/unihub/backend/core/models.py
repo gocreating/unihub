@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
@@ -64,9 +65,7 @@ class AttributeValue(models.Model):
     # number: the value. For a range value this is the canonical MINIMUM.
     value_number = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
     # Canonical range maximum (dimension ranges only); NULL for single values.
-    value_number_max = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True
-    )
+    value_number_max = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
 
     class Meta:
         unique_together = [("attribute_definition", "content_type", "object_id")]
@@ -76,3 +75,45 @@ class AttributeValue(models.Model):
 
     def __str__(self):
         return f"{self.attribute_definition.name}={self.value}"
+
+
+class EntityView(models.Model):
+    """A saved, per-user, per-table view configuration (016-entity-views).
+
+    ``table_key`` is the frontend table namespace (e.g. ``inventory-catalog``) —
+    a string by design, not a DB relation: tables are code, not data. ``config``
+    stores the serializable ViewConfig payload verbatim; its deep shape is owned
+    by the frontend (forgiving contract, mirroring EntityFilterBackend).
+    """
+
+    id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="entity_views"
+    )
+    table_key = models.CharField(max_length=100, db_index=True)
+    name = models.CharField(max_length=100)
+    config = models.JSONField(default=dict)
+    pinned = models.BooleanField(default=False)
+    position = models.IntegerField(default=0)
+    # The table's materialized default view — at most one per (owner,
+    # table_key) and undeletable (guaranteed fallback). Round 3: the role is
+    # transferable, swapped atomically by EntityViewSerializer.update().
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        # Round 4: names are non-identifying labels, so no uniqueness on them
+        # (migration 0007 dropped `unique_view_name_per_table`). The default
+        # role stays unique per table.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "table_key"],
+                condition=models.Q(is_default=True),
+                name="unique_default_view_per_table",
+            ),
+        ]
+        ordering = ["position", "created_at"]
+
+    def __str__(self):
+        return f"{self.table_key} / {self.name}"

@@ -343,3 +343,73 @@ describe('useEntityTable', () => {
     expect(result.current.queryParams.filters).toBeUndefined();
   });
 });
+
+describe('useEntityTable snapshotConfig / loadConfig (016 entity views)', () => {
+  const CONFIG = {
+    filters: [
+      { logic: 'and' as const, conditions: [{ attr: 'name', op: 'contains' as const, val: 'x' }] },
+    ],
+    sort: [{ field: 'amount', direction: 'desc' as const }],
+    columns: [
+      { key: 'amount', visible: true, order: 0, pin: 'left' as const },
+      { key: 'name', visible: false, order: 1 },
+    ],
+    pageSize: 100,
+  };
+
+  it('snapshotConfig captures the default state', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+    const snap = result.current.snapshotConfig();
+    expect(snap.filters).toEqual([]);
+    expect(snap.sort).toEqual([]);
+    expect(snap.columns).toEqual([
+      { key: 'name', visible: true, order: 0, pin: undefined },
+      { key: 'amount', visible: true, order: 1, pin: undefined },
+    ]);
+    expect(snap.pageSize).toBe(25);
+  });
+
+  it('loadConfig applies every facet and snapshotConfig round-trips it', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+
+    act(() => {
+      result.current.loadConfig(CONFIG);
+    });
+
+    expect(result.current.queryParams.filters).toEqual({ groups: CONFIG.filters });
+    expect(result.current.queryParams.ordering).toBe('-amount');
+    expect(result.current.limit).toBe(100);
+    expect(result.current.offset).toBe(0);
+    expect(result.current.cols.visibleColumns.map((c) => c.key)).toEqual(['amount']);
+    expect(result.current.cols.fixedForKey('amount')).toBe('left');
+    expect(result.current.snapshotConfig()).toEqual(CONFIG);
+  });
+
+  it('loadConfig with an explicit offset survives the filter-change page reset', async () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+
+    act(() => {
+      result.current.loadConfig(CONFIG, { offset: 200 });
+    });
+
+    expect(result.current.offset).toBe(200);
+    expect(result.current.limit).toBe(100);
+  });
+
+  it('exposes the table key as tableKey', () => {
+    const { result } = renderHook(
+      () => useEntityTable({ key: 'my-table', filterableAttrs: ATTRS, columnDefs: COLS }),
+      { wrapper },
+    );
+    expect(result.current.tableKey).toBe('my-table');
+  });
+});

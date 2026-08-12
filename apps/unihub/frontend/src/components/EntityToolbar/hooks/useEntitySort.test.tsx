@@ -480,3 +480,33 @@ describe('useEntitySort', () => {
     expect(result.current.pendingRules[0]!.field).toBe('');
   });
 });
+
+describe('useEntitySort loadRules (016 entity views)', () => {
+  it('sets active+pending clean and bumps panelApplyCount for the remount key', () => {
+    const { result } = renderHook(() => useEntitySort('t'));
+    const before = result.current.panelApplyCount;
+
+    act(() => {
+      result.current.loadRules([{ field: 'name', direction: 'desc', nulls: 'first' }]);
+    });
+
+    expect(result.current.activeRules).toEqual([
+      { field: 'name', direction: 'desc', nulls: 'first' },
+    ]);
+    expect(result.current.isDirty).toBe(false);
+    expect(result.current.panelApplyCount).toBe(before + 1);
+  });
+
+  it('loading empty rules clears active and leaves the pending placeholder', () => {
+    const { result } = renderHook(() => useEntitySort('t', [{ field: 'name', direction: 'asc' }]));
+
+    act(() => {
+      result.current.loadRules([]);
+    });
+
+    expect(result.current.activeRules).toEqual([]);
+    expect(result.current.pendingRules).toHaveLength(1);
+    expect(result.current.pendingRules[0]!.field).toBe('');
+    expect(result.current.isDirty).toBe(false);
+  });
+});

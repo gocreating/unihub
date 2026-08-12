@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Modal, Space, Switch, Typography, message } from 'antd';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { EmptyValue } from '@/components/EmptyValue';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
@@ -13,8 +14,15 @@ import {
   listCurrencies,
   updateCurrency,
 } from '@/services/unihub-backend/finance';
-import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
-import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import {
+  EntityOffsetFooter,
+  EntityToolbar,
+  useEntityTable,
+  viewConfigFromColumns,
+} from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute, ViewConfig } from '@/components/EntityToolbar';
+import { ViewTabs } from '@/components/EntityViews/ViewTabs';
+import { useEntityViews } from '@/components/EntityViews/useEntityViews';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 interface CurrencyFormValues {
@@ -46,7 +54,15 @@ export function CurrenciesPage() {
     { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 4 },
   ], [t]);
 
-  const table = useEntityTable({ key: 'currencies', filterableAttrs, columnDefs });
+  const table = useEntityTable({ key: 'finance-currencies', filterableAttrs, columnDefs });
+
+  // The default-view baseline the view tabs diff against (016 views).
+  const defaultViewConfig = useMemo<ViewConfig>(() => viewConfigFromColumns(columnDefs), [columnDefs]);
+  const views = useEntityViews({
+    tableKey: table.tableKey,
+    table,
+    defaultConfig: defaultViewConfig,
+  });
 
   const { data: currenciesData, isLoading } = useQuery({
     queryKey: ['finance', 'currencies', table.queryParams],
@@ -168,10 +184,10 @@ export function CurrenciesPage() {
               <Button
                 size="small" danger icon={<DeleteOutlined />}
                 onClick={() =>
-                  Modal.confirm({
+                  confirmDialog({
                     title: t({ id: 'pages.finance.currencies.delete.title' }),
                     content: t({ id: 'pages.finance.currencies.delete.confirm' }, { code: record.code, name: record.name }),
-                    okType: 'danger',
+                    danger: true,
                     onOk: () => deleteMutation.mutate(record.code),
                   })
                 }
@@ -196,13 +212,14 @@ export function CurrenciesPage() {
   return (
     <>
       <PageTable<Currency>
-        key={table.cols.pinFingerprint}
+        key={`${table.cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.finance.currencies.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             {t({ id: 'pages.finance.currencies.new' })}
           </Button>
         }
+        viewBar={<ViewTabs views={views} />}
         headerTitle={
           <EntityToolbar
             filterProps={{ attrs: filterableAttrs, hook: table.filter }}

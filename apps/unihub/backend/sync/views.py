@@ -332,7 +332,9 @@ class SyncCheckoutConfirmView(APIView):
             return Response({"error": "nothing_staged"}, status=status.HTTP_400_BAD_REQUEST)
 
         diffs_by_table = {ch["table"]: ch["rows"] for ch in changes}
-        results, auto_included = apply_selected(diffs_by_table, excluded_refs)
+        results, auto_included = apply_selected(
+            diffs_by_table, excluded_refs, acting_user=request.user
+        )
 
         from datetime import datetime, timezone
 

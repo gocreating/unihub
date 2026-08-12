@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
 import enUS from '@/locales/en-US';
+import { DEFAULT_PAGE_SIZE } from '@/components/EntityToolbar';
 import { AccountsPage } from './index';
 import * as financeService from '@/services/unihub-backend/finance';
+import * as coreService from '@/services/unihub-backend/core';
 
 vi.mock('@/services/unihub-backend/finance');
+vi.mock('@/services/unihub-backend/core');
 
 const ACCOUNT_WITH_DATETIME = {
   id: 'acc-dt',
@@ -34,14 +37,17 @@ function renderPage() {
   );
 }
 
-describe('AccountsPage — datetime tooltip suppression (US6)', () => {
-  beforeEach(() => {
-    vi.mocked(financeService.listAccounts).mockResolvedValue({
-      count: 1, next: null, previous: null, results: [ACCOUNT_WITH_DATETIME],
-    });
-    vi.mocked(financeService.listCurrencies).mockResolvedValue(EMPTY_PAGE as never);
-    vi.mocked(financeService.listExchangeRates).mockResolvedValue(EMPTY_PAGE as never);
+beforeEach(() => {
+  window.sessionStorage.clear();
+  vi.mocked(financeService.listAccounts).mockResolvedValue({
+    count: 1, next: null, previous: null, results: [ACCOUNT_WITH_DATETIME],
   });
+  vi.mocked(financeService.listCurrencies).mockResolvedValue(EMPTY_PAGE as never);
+  vi.mocked(financeService.listExchangeRates).mockResolvedValue(EMPTY_PAGE as never);
+  vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
+});
+
+describe('AccountsPage — datetime tooltip suppression (US6)', () => {
 
   it('open_datetime cell shows the formatted date without a Tooltip wrapper', async () => {
     const { container } = renderPage();
@@ -62,5 +68,60 @@ describe('AccountsPage — datetime tooltip suppression (US6)', () => {
     // None of the title attributes should contain a seconds-level datetime
     const hasRedundantTooltip = titleValues.some((t) => /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(t));
     expect(hasRedundantTooltip).toBe(false);
+  });
+});
+
+describe('AccountsPage — entity views (016)', () => {
+  // 016 round 2: the row auto-hides with only the default view; reveal shows
+  // the default "Table" tab active.
+  it('reveals the view row with the default Table tab active', async () => {
+    renderPage();
+    await screen.findByText('Savings');
+    const defaultTab = screen.getByRole('tab', { name: /table/i });
+    expect(defaultTab).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+// 016 round 12 (FR-039/SC-021): every entity table follows the same pattern —
+// the page seeds no filter or sorting, and the account's stored default view is
+// what actually applies on arrival, with nothing reported as unsaved.
+describe('AccountsPage — the shared view pattern (round 12)', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
+  });
+
+  const STORED_DEFAULT = {
+    id: 'dflt00000001',
+    table_key: 'finance-accounts',
+    name: 'Mine',
+    config: { filters: [], sort: [], columns: [], pageSize: 100 },
+    pinned: true,
+    position: 0,
+    is_default: true,
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  };
+
+  it('seeds no filter and no sorting of its own', async () => {
+    renderPage();
+    await screen.findByText('Savings');
+    const call = vi.mocked(financeService.listAccounts).mock.calls.at(-1)![0]!;
+    expect(call.filters).toBeUndefined();
+    expect(call.ordering).toBeFalsy();
+    expect(call.limit).toBe(DEFAULT_PAGE_SIZE);
+  });
+
+  it('applies the stored default view on arrival, with no unsaved indicator', async () => {
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([STORED_DEFAULT]);
+    renderPage();
+    await screen.findByText('Savings');
+
+    await waitFor(() => {
+      const call = vi.mocked(financeService.listAccounts).mock.calls.at(-1)![0]!;
+      expect(call.limit).toBe(100);
+    });
+    // The row is always shown (round 13), so the dot is always the labelled one.
+    expect(screen.queryByLabelText('Unsaved changes')).toBeNull();
   });
 });

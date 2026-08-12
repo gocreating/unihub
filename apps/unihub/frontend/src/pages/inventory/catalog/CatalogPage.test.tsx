@@ -180,8 +180,10 @@ const cellOf = (el: HTMLElement) => {
 
 describe('CatalogPage (iteration 13 — derived columns & density)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     setCurrencySymbols({ TWD: 'NT$', CNY: '¥', JPY: '¥', KRW: '₩', USD: '$' });
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 3,
       next: null,
@@ -196,6 +198,20 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
       totals: { acquisitions: 3, items: 4 },
       results: [ITEM, PLAIN_ITEM, SOLO_ITEM, REQ_ITEM],
     });
+  });
+
+  // 016 round 2: the view row auto-hides with only the default view; the
+  // reveal affordance shows the catalog's page-named default "YTD" tab active.
+  it('reveals the entity-views row with the default tab active', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    // Round 11: the page no longer names a default view ("YTD"); an account
+    // with no stored default falls back to the generic label.
+    const tab = screen.getByRole('tab', { name: /table/i });
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    // Round 3: one kebab at the row's right edge replaces "+" and "View ▾".
+    expect(screen.getByLabelText('View menu')).toBeInTheDocument();
+    expect(screen.queryByLabelText('New view tab')).toBeNull();
   });
 
   // CAT13-01 (a): default visible columns & order.
@@ -281,7 +297,7 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     const absolutes = await screen.findAllByText(dayjs(REQUESTED).format('YYYY-MM-DD HH:mm'));
     const absolute = absolutes.find((el) => cellOf(el))!;
     expect(within(cellOf(absolute)!).getAllByText(dayjs(REQUESTED).fromNow()).length).toBeGreaterThan(0);
-  });
+  }, 15_000);
 
   // CAT13-07 (f): item rows have no Delete; acquisition rows keep Edit + Delete.
   it('offers only Deprecate/Restore on item rows and an Edit LINK on acquisition rows', async () => {
@@ -328,15 +344,18 @@ describe('CatalogPage (iteration 13 — derived columns & density)', () => {
     await screen.findByText('Backpack');
     expect(container.querySelector('.anticon-caret-down, .anticon-caret-right')).toBeTruthy();
     expect(container.querySelector('.ant-table-footer .ant-pagination')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /New/ }).textContent).toBe('New');
+    expect(screen.getByRole('button', { name: 'plus New' }).textContent).toBe('New');
+    // Round 11: no seeded sort, so the Sort control is not lit by default.
     const sortBtn = screen.getByRole('button', { name: /Sort/ });
-    expect(sortBtn.className).toContain('ant-btn-primary');
+    expect(sortBtn.className).not.toContain('ant-btn-primary');
   });
 });
 
 describe('CatalogPage (iteration 15 — merged rows, layers, footer)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 3,
       next: null,
@@ -433,7 +452,9 @@ describe('CatalogPage (iteration 15 — merged rows, layers, footer)', () => {
 
 describe('CatalogPage (iteration 16 — Toggle column)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 3,
       next: null,
@@ -508,7 +529,9 @@ describe('CatalogPage (iteration 16 — Toggle column)', () => {
 
 describe('CatalogPage (iteration 17 — plurals, name link, url width, seeded defaults)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 3,
       next: null,
@@ -572,36 +595,27 @@ describe('CatalogPage (iteration 17 — plurals, name link, url width, seeded de
     expect(anchor.style.maxWidth).toBe('320px');
   });
 
-  // CAT17-04 (FR-003): the YTD+pending default filter is seeded and lit.
-  it('seeds the default filter (obtained >= year start OR empty) and lights Filter', async () => {
+  // CAT11-01 (round 11): the page seeds NO filter — the stored default view
+  // supplies one if the account has saved it.
+  it('seeds no default filter and leaves Filter unlit', async () => {
     renderPage();
     await screen.findByText('Backpack');
-    expect(screen.getByRole('button', { name: /Filter/ }).className).toContain('ant-btn-primary');
+    expect(screen.getByRole('button', { name: /Filter/ }).className).not.toContain(
+      'ant-btn-primary',
+    );
     const call = vi.mocked(inventoryService.listAcquisitions).mock.calls.at(-1)![0]!;
-    const yearStart = dayjs().startOf('year').format('YYYY-MM-DD');
-    // ONE or-group with plain conditions (iteration 24) — no nested groups.
-    expect(call.filters).toEqual({
-      groups: [
-        {
-          logic: 'or',
-          conditions: [
-            { attr: 'obtained_at', op: 'gte', val: yearStart },
-            { attr: 'obtained_at', op: 'is_empty', val: '' },
-          ],
-        },
-      ],
-    });
+    expect(call.filters).toBeUndefined();
   });
 
-  // CAT17-05 (FR-003): default page size is 50.
-  it('defaults to 50 per page', async () => {
+  // CAT11-02 (round 11): page size falls back to the shared table default.
+  it('defaults to 25 per page', async () => {
     const { container } = renderPage();
     await screen.findByText('Backpack');
     expect(
       container.querySelector('.ant-table-footer .ant-select-selection-item')?.textContent,
-    ).toContain('50');
+    ).toContain('25');
     const call = vi.mocked(inventoryService.listAcquisitions).mock.calls.at(-1)![0]!;
-    expect(call.limit).toBe(50);
+    expect(call.limit).toBe(25);
   });
 });
 
@@ -630,7 +644,9 @@ describe('CatalogPage (iteration 18 — alias display)', () => {
   };
 
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 2,
       next: null,
@@ -673,7 +689,9 @@ describe('CatalogPage (iteration 18 — alias display)', () => {
 
 describe('CatalogPage (iteration 21 — flat-mode acquisition Edit link)', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 3,
       next: null,
@@ -721,6 +739,7 @@ describe('CatalogPage (iteration 34 — reactive currency symbols, FR-033)', () 
     // The registry starts UNSEEDED — symbols must arrive reactively.
     setCurrencySymbols({});
     vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
     vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
       count: 1,
       acquisition_count: 1,
@@ -809,7 +828,7 @@ describe('CatalogPage (iteration 48 — per-column pins, 017-multiple-sticky-col
     expect(firstMarks).toHaveLength(1);
     // Display order of the right group: SKU Price (order 3) before Actions (99).
     expect(firstMarks[0]?.textContent).toContain('SKU Price');
-  });
+  }, 15_000);
 
   // CAT48-02 (US3/FR-005/FR-006): Reset restores the seeded default pins after
   // the user re-pins other columns.

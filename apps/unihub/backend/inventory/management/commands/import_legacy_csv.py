@@ -105,7 +105,16 @@ def _item_payload(item) -> dict:
         # leak), not leave the stale value behind under partial update.
         payload["sku_price"] = None
         payload["sku_price_currency"] = ""
-    for measure in ("weight", "length", "width", "height", "diameter", "waist", "temperature", "volume"):
+    for measure in (
+        "weight",
+        "length",
+        "width",
+        "height",
+        "diameter",
+        "waist",
+        "temperature",
+        "volume",
+    ):
         if measure in f and isinstance(f[measure], dict):
             parameters.append(
                 {
@@ -266,8 +275,7 @@ class Command(BaseCommand):
                 except Exception as exc:
                     first = a.items[0].name[:40] if a.items else "(no items)"
                     raise CommandError(
-                        f"Invalid value while importing {ref} "
-                        f"({a.source} — {first}): {exc}"
+                        f"Invalid value while importing {ref} ({a.source} — {first}): {exc}"
                     ) from exc
             # Refs present in the DB but gone from the sheet (e.g. newly
             # struck rows) are deleted; ref-less manual records are untouched.
@@ -347,7 +355,9 @@ class Command(BaseCommand):
                 match = cand
                 break
             if match is None:
-                problems.append(f"{ref}: no unique match for source={a.source!r} items={wanted_names}")
+                problems.append(
+                    f"{ref}: no unique match for source={a.source!r} items={wanted_names}"
+                )
                 continue
             used.add(match.pk)
             match.legacy_ref = ref
@@ -362,4 +372,3 @@ class Command(BaseCommand):
                 self.stdout.write(f"  {line}")
         self.stdout.write(self.style.SUCCESS(f"Stamped {stamped}/{len(refs)} refs for {year}."))
         return
-

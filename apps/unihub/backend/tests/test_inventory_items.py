@@ -304,7 +304,14 @@ class TestItemAlias:
 
         filters = urllib.parse.quote(
             json.dumps(
-                {"groups": [{"logic": "and", "conditions": [{"attr": "alias_name", "op": "contains", "val": "ulu"}]}]}
+                {
+                    "groups": [
+                        {
+                            "logic": "and",
+                            "conditions": [{"attr": "alias_name", "op": "contains", "val": "ulu"}],
+                        }
+                    ]
+                }
             )
         )
         resp = auth_client.get(f"{ITEMS}?filters={filters}")

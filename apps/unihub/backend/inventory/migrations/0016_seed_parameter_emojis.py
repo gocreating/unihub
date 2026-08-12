@@ -25,9 +25,9 @@ def seed_emojis(apps, schema_editor):
     except ContentType.DoesNotExist:
         return
     for name, emoji in DEFAULT_EMOJIS.items():
-        AttributeDefinition.objects.filter(
-            content_type=item_ct, name=name, is_system=True
-        ).update(emoji=emoji)
+        AttributeDefinition.objects.filter(content_type=item_ct, name=name, is_system=True).update(
+            emoji=emoji
+        )
 
 
 def unseed_emojis(apps, schema_editor):

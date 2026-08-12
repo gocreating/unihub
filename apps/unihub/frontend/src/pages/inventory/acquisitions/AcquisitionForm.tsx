@@ -9,12 +9,12 @@ import {
   Divider,
   Form,
   Input,
-  Modal,
   Row,
   Space,
   Typography,
   message,
 } from 'antd';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import {
   CopyOutlined,
   DeleteOutlined,
@@ -166,11 +166,11 @@ export function AcquisitionForm({ initial }: AcquisitionFormProps) {
   // back to the Catalog (FR-007).
   const confirmDeleteAcquisition = () => {
     if (!initial) return;
-    Modal.confirm({
+    confirmDialog({
       title: t({ id: 'pages.inventory.acquisitions.delete.title' }),
       content: t({ id: 'pages.inventory.acquisitions.delete.confirm' }, { count: initial.items.length }),
       okText: t({ id: 'common.delete' }),
-      okType: 'danger',
+      danger: true,
       cancelText: t({ id: 'common.cancel' }),
       onOk: async () => {
         await deleteAcquisition(initial.id);

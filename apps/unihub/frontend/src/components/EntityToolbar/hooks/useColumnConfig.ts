@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ColumnDef, ColumnState, PinSide } from '../types';
+import { mergeMissingByDeclaredOrder } from '../columnOrder';
+import type { ColumnDef, ColumnState, PinSide, ViewColumn } from '../types';
 
 export interface UseColumnConfigReturn {
   /** Column state being edited in the panel (not yet applied). */
@@ -27,6 +28,11 @@ export interface UseColumnConfigReturn {
   isCustomised: boolean;
   /** True when pendingState differs from activeState (panel has unsaved changes). */
   isDirty: boolean;
+  /** Load a whole column state from a ViewConfig (016 views): sets active AND
+   *  pending. Reconciles drift — stale keys dropped, missing runtime columns
+   *  slotted at their DECLARED position with their default visibility;
+   *  labels/dataTypes stay runtime. */
+  loadState: (columns: ViewColumn[]) => void;
 }
 
 function pinRank(pin: PinSide | undefined): number {
@@ -112,6 +118,37 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
     setPendingState(defaultState);
   }, [initialColumns]);
 
+  const loadState = useCallback(
+    (viewColumns: ViewColumn[]) => {
+      const byKey = new Map(initialColumns.map((c) => [c.key, c]));
+      const listed = [...viewColumns]
+        .sort((a, b) => a.order - b.order)
+        .filter((vc) => byKey.has(vc.key));
+      const listedByKey = new Map(listed.map((vc) => [vc.key, vc]));
+      const declared = [...initialColumns].sort((a, b) => a.order - b.order);
+      // Columns the view does not list are slotted at their DECLARED position,
+      // the same rule `reconcileConfig` applies to the stored config. The two
+      // MUST agree: the table's live state is compared against that reconciled
+      // config, so a different placement here reads as unsaved changes (R47).
+      const order = mergeMissingByDeclaredOrder(
+        listed.map((vc) => vc.key),
+        declared.map((c) => c.key),
+      );
+      // v2 (016 round 2): listed columns take their stored per-column pin
+      // verbatim (undefined = unpinned); runtime columns the view never knew
+      // about keep their default visibility/pin from initialColumns.
+      const columns: ColumnDef[] = order.map((key, i) => {
+        const stored = listedByKey.get(key);
+        const base = byKey.get(key)!;
+        return stored ? { ...base, visible: stored.visible, order: i, pin: stored.pin } : { ...base, order: i };
+      });
+      const next: ColumnState = { columns };
+      setActiveState(next);
+      setPendingState(next);
+    },
+    [initialColumns],
+  );
+
   const visible = useMemo(() => sortedVisible(activeState), [activeState]);
 
   const fixedForKey = useCallback(
@@ -141,5 +178,6 @@ export function useColumnConfig(initialColumns: ColumnDef[]): UseColumnConfigRet
     pinFingerprint,
     isCustomised: !statesEqual(activeState, initial),
     isDirty: !statesEqual(pendingState, activeState),
+    loadState,
   };
 }

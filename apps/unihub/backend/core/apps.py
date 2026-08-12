@@ -6,8 +6,13 @@ class CoreConfig(AppConfig):
     name = "core"
 
     def ready(self) -> None:
-        from data_io.registry import FieldDescriptor, TableDescriptor, register
-        from core.models import AttributeDefinition
+        from data_io.registry import (
+            FieldDescriptor,
+            TableDescriptor,
+            auto_system_fields,
+            register,
+        )
+        from core.models import AttributeDefinition, EntityView
 
         register(
             TableDescriptor(
@@ -67,5 +72,22 @@ class CoreConfig(AppConfig):
                 ],
                 has_user_attributes=False,
                 import_order=2,
+            )
+        )
+
+        # EntityView (016 round 2): the owner FK is deliberately EXCLUDED from
+        # the CSV schema — deployment-specific auth.User integer PKs must never
+        # be serialized (phantom-diff class from issue #35). Instead the
+        # descriptor declares owner_field, and the import chain stamps the
+        # acting user (FR-024: imported views attach to the importing account).
+        register(
+            TableDescriptor(
+                content_type_label="core.entityview",
+                display_name="Entity Views",
+                model_class=EntityView,
+                system_fields=auto_system_fields(EntityView, exclude={"owner_id"}),
+                has_user_attributes=False,
+                import_order=2,
+                owner_field="owner",
             )
         )

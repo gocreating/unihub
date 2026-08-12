@@ -463,14 +463,14 @@ class GitSyncService:
         changes = preview_from_fetch_head(self.clone_dir)
         return changes if changes else None
 
-    def apply_confirm(self) -> list:
+    def apply_confirm(self, acting_user: object | None = None) -> list:
         """Reset to the remote head and import all tables. Returns confirm results."""
         if self.reset_to_remote() is None:
             return []  # empty remote repo — nothing to import
 
         from sync.services.apply_helper import import_from_clone
 
-        return import_from_clone(self.clone_dir)
+        return import_from_clone(self.clone_dir, acting_user=acting_user)
 
 
 class DivergedException(Exception):

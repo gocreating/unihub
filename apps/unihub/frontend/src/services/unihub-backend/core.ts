@@ -66,6 +66,71 @@ export function deleteAttributeDefinition(id: string, confirm = false): Promise<
   return fetchJson<void>(`/api/v1/core/attribute-definitions/${id}/${qs}`, { method: 'DELETE' });
 }
 
+// ── Entity views (016) ───────────────────────────────────────────────────────
+
+/** A saved, per-user, per-table view (owner is implicit — never serialized). */
+export interface EntityView {
+  id: string;
+  table_key: string;
+  name: string;
+  /** ViewConfig payload — typed loosely here; the canonical shape lives in
+   *  components/EntityToolbar/types.ts (ViewConfig). */
+  config: Record<string, unknown>;
+  pinned: boolean;
+  position: number;
+  /** The table's materialized default view — create-only, undeletable (round 2). */
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EntityViewCreatePayload {
+  table_key: string;
+  name: string;
+  config: Record<string, unknown>;
+  pinned?: boolean;
+  position?: number;
+  is_default?: boolean;
+}
+
+/** `is_default` is writable to TRANSFER the default role (round 3): sending
+ *  `true` promotes this view and demotes the incumbent server-side; sending
+ *  `false` is rejected with 400 (a table always has exactly one default). */
+export type EntityViewPatch = Partial<
+  Pick<EntityView, 'name' | 'config' | 'pinned' | 'position' | 'is_default'>
+>;
+
+export function listEntityViews(tableKey: string): Promise<EntityView[]> {
+  return fetchJson<EntityView[]>(
+    `/api/v1/core/entity-views/?table_key=${encodeURIComponent(tableKey)}`,
+  );
+}
+
+export function createEntityView(payload: EntityViewCreatePayload): Promise<EntityView> {
+  return fetchJson<EntityView>('/api/v1/core/entity-views/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateEntityView(id: string, patch: EntityViewPatch): Promise<EntityView> {
+  return fetchJson<EntityView>(`/api/v1/core/entity-views/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteEntityView(id: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/core/entity-views/${id}/`, { method: 'DELETE' });
+}
+
+export function reorderEntityViews(tableKey: string, ids: string[]): Promise<EntityView[]> {
+  return fetchJson<EntityView[]>('/api/v1/core/entity-views/reorder/', {
+    method: 'POST',
+    body: JSON.stringify({ table_key: tableKey, ids }),
+  });
+}
+
 export function listAttributeValues(contentType: string, objectId: string): Promise<AttributeValue[]> {
   return fetchJson<AttributeValue[]>(
     `/api/v1/core/attribute-values/?content_type=${contentType}&object_id=${objectId}`,

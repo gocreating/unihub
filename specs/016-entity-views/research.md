@@ -1,0 +1,712 @@
+# Research: Entity Views
+
+**Feature**: 016-entity-views | **Date**: 2026-07-20
+
+No NEEDS CLARIFICATION markers remained in the Technical Context; research below records the concrete design decisions and the alternatives considered. Codebase facts come from a full exploration of the existing entity-operations infrastructure (008-entity-operations et al.).
+
+## R1. Where saved views persist — backend `core/` app
+
+**Decision**: New `EntityView` model in `apps/unihub/backend/core/` (alongside `AttributeDefinition`/`AttributeValue`), exposed via an owner-scoped DRF ViewSet at `/api/v1/core/entity-views/`.
+
+**Rationale**: Issue #19 explicitly calls for database persistence ("inline in the URL or save in the database") and per-account pinning. `core/` is the established home for cross-domain entity infrastructure with concrete models and migrations (precedent: `AttributeDefinition`, migrations 0001–0004, nanoid PKs). Saved views must work identically for every domain's tables (uni-infra label), so no domain app may own them (Principle II).
+
+**Alternatives considered**:
+- *localStorage only* — rejected: no cross-device continuity, contradicts the issue's "save in the database", cannot back up via data_io.
+- *`system/` app* — rejected: system app has no models today and is oriented at app metadata (version); core already owns cross-domain entity infrastructure.
+- *New dedicated Django app* — rejected: overhead (INSTALLED_APPS, urls, data_io wiring) with no isolation benefit over `core/`, which this conceptually belongs to.
+
+## R2. URL wire format — namespaced param with mini query-string value
+
+**Decision**: One query param per table: `view[<tableKey>]=<inner>`, where `<inner>` is itself a URL-encoded `key=value&…` string. Keys: `type` (`inline`|`saved`), `id` (saved only), `filters` (JSON `FilterPayload.groups`), `ordering` (existing DRF-style string via `rulesToOrdering`, incl. `__nullsfirst/__nullslast`), `columns` (comma-separated visible column keys in display order), `pin` (`left`|`right`|`left,right`), `page_size` (int), `page` (1-based int, inline-transport only). For `type=saved`, any additional key overrides the stored config.
+
+**Rationale**: Matches the exact sample formats in issue #19 (`view[namespace1]="type=inline&page=…"`, `view[namespace1]="type=saved&id=…&x=y"`). Hand-readable and hand-editable; namespacing supports multiple tables per page (FR-007). `ordering` and `filters` reuse serializers that already exist and round-trip (`rulesToOrdering`/`orderingToRules`, `groupsToPayload`/`payloadToGroups`) — zero new grammar for the two hardest sub-formats.
+
+**Alternatives considered**:
+- *Base64/LZ-compressed JSON blob* — rejected: opaque, not hand-editable, longer for typical configs, diverges from the issue's sample format.
+- *Flat top-level params (`filters=…&ordering=…`)* — rejected: collides when a page hosts two tables; issue explicitly namespaces.
+- *Path segments* — rejected: views are orthogonal to routes; query string is the natural carrier and works on every existing page without route changes.
+
+## R3. Canonical `ViewConfig` shape (stored JSON and in-memory)
+
+**Decision**:
+
+```ts
+interface ViewConfig {
+  filters: FilterPayload['groups'];                    // flat condition groups (backend shape)
+  sort: SortRule[];                                    // [{field, direction, nulls?}]
+  columns: { key: string; visible: boolean; order: number }[];
+  stickyLeft: boolean;
+  stickyRight: boolean;
+  pageSize: number;
+}
+```
+
+Stored verbatim as `EntityView.config` (JSONField). Column labels/dataTypes are NOT stored (they are runtime concerns; labels can be async-patched and localized).
+
+**Rationale**: Mirrors exactly the active state of the three hooks + page size, so `snapshot()` and `load()` are trivial. Storing the full column list (not just visible keys) preserves hidden-column ordering, matching `ColumnState` minus runtime fields. `sort` stores structured rules (not the DRF string) because JSON is the storage medium; the string form is only for URL/API transport.
+
+**Alternatives considered**: storing the ordering string in DB (rejected: two sources of truth for one concept; structured JSON is queryable and validated); storing only visible column keys (rejected: loses hidden-column order and pin context on round-trip).
+
+## R4. Session tabs & active-tab state — URL is truth for active view; sessionStorage for the open-tab set
+
+**Decision**: The active tab's effective config is always serialized into `view[<tableKey>]` (replace-style URL updates on config change; push on tab switch so back/forward crosses tabs). The list of open tabs (ids of opened saved views + anonymous tab configs + active tab id) lives in `sessionStorage` under `unihub.views.<tableKey>` so tabs survive in-app navigation and reloads within the browser session but die with it (spec assumption). Pinned tabs derive from the fetched saved-view list (`pinned=true`, ordered by `position`).
+
+**Rationale**: Spec US3 requires copy-URL-anytime fidelity and query-string-driven navigation — only continuous URL sync provides both. sessionStorage matches the "opened views in current session" lifetime exactly; localStorage would immortalize scratch tabs (contradicts spec edge case "session ends → anonymous tabs discarded").
+
+**Alternatives considered**: React state only (rejected: tabs vanish on any route change); localStorage (rejected: wrong lifetime); backend persistence of open tabs (rejected: session concept is client-local; adds chatty writes).
+
+## R5. The "Tabular" default view — virtual, client-side
+
+**Decision**: The standard primary "Tabular" view is a virtual tab (id `__default__`), not a DB row. Its config is the page's existing defaults (`defaultFilterGroups`, `defaultSortRules`, `defaultSticky`, initial columns, `defaultPageSize`). It is always present as the first tab, cannot be renamed/deleted, and is treated as pinned.
+
+**Rationale**: FR-003 requires it to always exist and be immutable — a construction guarantee beats a protected DB row (no seed migration per user per table, no delete-protection logic). The page-default seeding mechanism from iteration 17 already models exactly this config.
+
+**Alternatives considered**: seeded per-user DB row (rejected: needs creation-on-first-visit logic per table, protection rules, and data_io noise for derivable data).
+
+## R6. Hook integration — additive `load*()` setters + `useEntityViews` orchestrator
+
+**Decision**: Each of `useEntityFilter`/`useEntitySort`/`useColumnConfig` gains a `load*(state)` function that sets BOTH `active` and `pending` (and, for sort, bumps `panelApplyCount` so the ProTable remount-key pattern fires). `useEntityTable` gains `snapshotConfig(): ViewConfig` and `loadConfig(config)` plus exposes `pageSize` state; the currently-unused `key` param becomes the `tableKey` namespace. A new `useEntityViews({ tableKey, table, defaultConfig })` hook owns: saved-view fetching (React Query), tab list (R4), active-tab resolution from URL, dirty computation, and all mutations.
+
+**Rationale**: Keeps the apply-gate (Principle XII) intact — panels still gate on Apply; a view load is a distinct, whole-config operation semantically identical to the existing `reset()` (which also sets active directly). Layering means zero behavior change for pages that don't adopt views.
+
+**Alternatives considered**: driving loads through pending+`apply()` (rejected: transiently flashes dirty panel state and double-renders); rewriting `useEntityTable` around a single config atom (rejected: high-risk refactor of five shipped pages for no user-visible gain).
+
+## R7. Dirty detection — normalized deep-compare against the tab's baseline
+
+**Decision**: A tab is dirty when `normalize(currentConfig) !== normalize(baselineConfig)`, where baseline = stored config (saved tabs) or the Tabular default (the `__default__` tab), and `normalize` sorts object keys, drops empty condition groups, and compares JSON strings. Anonymous tabs are inherently unsaved and always render the unsaved marker. URL overrides on `type=saved` produce dirty ≠ stored, satisfying spec US3-AC2.
+
+**Rationale**: Same philosophy as the hooks' existing `isDirty` (JSON compare of pending vs active), lifted one level. Normalization prevents false-dirty from key ordering or empty groups.
+
+## R8. Staged mutations in the manage modal
+
+**Decision**: The Edit ("Manage views") modal stages rename/pin/unpin/reorder/delete locally; NOTHING hits the API until the modal's Save. On Save: deletions confirmed first via `Modal.confirm` (`okType: 'danger'`, ICU-plural count), then a `reorder` bulk action (ordered ids + pin flags + names diff) or per-item PATCH/DELETE calls execute; React Query cache invalidates once.
+
+**Rationale**: Hard user rule (memory: "form edits never hit APIs before Save" — a real item was once lost to eager mutation). Constitution's delete-confirmation gate applies at the moment deletion is actually committed.
+
+**Alternatives considered**: immediate per-toggle PATCH (rejected: violates the staged-mutation rule and spams the API), optimistic updates with rollback (rejected: complexity without need at this scale).
+
+## R9. Page position handling
+
+**Decision**: `page` participates only in inline URL transport (deep links land on the exact page). Saving a view never persists page position; loading a saved view resets to page 1 (offset 0). `page_size` IS part of the saved config.
+
+**Rationale**: Spec assumption (documented); a saved "page 7" is meaningless once data changes; existing `useEntityTable` already resets offset on filter/sort changes.
+
+## R10. Column drift resilience (FR-021)
+
+**Decision**: On hydration (URL or saved config), the stored column list reconciles against the page's current `initialColumns` exactly like `useColumnConfig`'s existing `initialColumns` effect: unknown keys are dropped, missing keys are appended with their default visibility at the end, labels/dataTypes always come from runtime. Filters/sorts referencing unknown fields (incl. stale `attr:<id>`) are dropped client-side; the backend already silently skips unknown attrs (EntityFilterBackend) — same forgiving contract end-to-end.
+
+## R11. Rollout surface
+
+**Decision**: Infrastructure is generic; adoption lands on all five existing entity list pages (finance currencies/accounts/exchange-rates, inventory catalog/scenarios) with `tableKey`s: `finance-currencies`, `finance-accounts`, `finance-exchange-rates`, `inventory-catalog`, `inventory-scenarios`. The inventory catalog is the reference integration (richest config: dynamic `attr:` columns, default filter/sort/sticky/page-size, flat-mode switch).
+
+**Rationale**: Wiring per page is small once `useEntityTable` carries the integration; shipping all five avoids a half-consistent UI across the hub. Catalog-specific note: `flatMode` derives from active filter/sort (item-level fields) and therefore needs no view-config field of its own.
+
+## R12. Tab row placement — `PageTable` `viewBar` slot
+
+**Decision**: `PageTable` gains an optional `viewBar?: ReactNode` prop rendered inside the white container between the title row and the toolbar row. Pages pass `<ViewTabs …/>`. The row layout is `[+]` (fixed left) · scrollable tab strip (`overflow-x: auto`, no wrap) · `[View]` (fixed right), per the issue mockup.
+
+**Rationale**: Principle VII requires the white container/title/toolbar/table structure be rendered by `PageTable` only — a new sanctioned slot keeps that guarantee. AntD `Tabs` is NOT used for the strip (its ink-bar/overflow model fights the fixed-edge buttons and per-tab dirty dots); a light custom strip of AntD `Button`/`Tag`-styled tabs with `OverflowTooltip` on labels is simpler and fully controllable. Tab activation via real interactions remains keyboard/e2e-testable.
+
+**Alternatives considered**: AntD `Tabs` with `tabBarExtraContent` (rejected: left extra content scrolls poorly, dirty-dot + editable labels awkward, overflow behavior replaces scrollbar with dropdown — spec demands horizontal scroll); rendering inside `headerTitle` (rejected: headerTitle is a horizontal slot in the toolbar row — stacking there distorts the toolbar layout PageTable owns).
+
+## R13. Backend API shape
+
+**Decision**: `EntityViewViewSet` (ModelViewSet, `http_method_names = get/post/patch/delete`), owner-scoped queryset (`filter(owner=request.user)`), `?table_key=` list filter, `pagination_class = None` (small collections), unique-name validation surfaced as DRF 400, and a `POST /entity-views/reorder/` action accepting `{table_key, ids: […]}` that rewrites `position` in bulk. `perform_create` stamps `owner=request.user`. Config is validated as a JSON object server-side (shape enforcement stays client-side — mirrors the forgiving `EntityFilterBackend` contract and keeps the schema evolvable).
+
+**Rationale**: Matches the canonical `AccountViewSet` shape; owner scoping matches "views are personal" spec assumption; bulk reorder avoids N PATCHes from the staged modal.
+
+---
+
+# Round 2 Research (2026-07-23)
+
+Round 2 decisions per the spec's Clarifications Session 2026-07-23. Backend registry facts below come from a fresh code exploration of `data_io/registry.py`, `csv_exporter.py`, `csv_importer.py`, `change_preview.py`, `sync/views.py`, `apply_helper.py`, `publish_helper.py`.
+
+## R14. "Tabular" → "Table" + page-provided default-view names
+
+**Decision**: The generic default-tab label key (`common.entityViews.*` default-tab entry) changes to "Table" (zh-TW 「表格」). `useEntityTable`/`useEntityViews` accept a new optional `defaultViewName?: string`; the catalog page passes the literal `'YTD'` (same string both locales — it names the seeded year-to-date filter and is view data, not UI chrome). While the default view is virtual, the displayed name is the page-provided literal or the localized generic label; whatever is displayed at materialization time is stored verbatim and is thereafter user data.
+
+**Alternatives considered**: localizing "YTD" per locale (rejected — view names are user data; the user explicitly named it "YTD"); keeping "Tabular" as a stored legacy alias (rejected — nothing stored referenced the old label; it was purely an i18n value).
+
+## R15. Default view as a plain view — `is_default` materialization
+
+**Decision**: `EntityView` gains `is_default = BooleanField(default=False)` with a partial unique constraint (`owner`, `table_key`, `WHERE is_default`). The default tab binds to the stored `is_default` view when one exists (name + config from the row); otherwise it renders virtually from page defaults (round-1 behavior). First save OR rename of the virtual default POSTs with `is_default: true, pinned: true`. Rules: `is_default` is create-only (PATCH rejects changes, like `table_key`); DELETE on an `is_default` row → 400 (frontend never offers it; backend guards the invariant); the default tab is ALWAYS the first tab and is excluded from manage-modal reordering (rename/pin stay enabled; drag handle and delete hidden on its row). Unpinning the default is allowed — the fallback guarantee comes from `is_default`, not from pin state.
+
+**Rationale**: A flag beats name conventions (renamable) and beats keeping it virtual (rename/save must persist). Always-first + no-reorder keeps "guaranteed fallback" trivially true and avoids a position-backfill problem on materialization (append-position would jump the default to the end of the strip).
+
+**Alternatives considered**: seeded per-user default rows for every table (rejected round 1, still rejected: creation-on-visit noise); a separate `DefaultViewOverride` model (rejected: two models for one concept); allowing reorder of the default (rejected: position materialization ambiguity, weak user value).
+
+## R16. "+" button placement — after the last tab, always visible
+
+**Decision**: `ViewTabs` reorders to `[scrollable tab strip][+][spacer][View]`. The "+" button is a flex sibling OUTSIDE the scrollable strip (`flex: 0 0 auto`), so when tabs overflow, the strip scrolls and "+" stays docked at its right edge; when tabs fit, the strip shrink-wraps (`flex: 0 1 auto`) and "+" sits flush after the last tab. The View control keeps `margin-left: auto` (fixed right edge).
+
+**Alternatives considered**: "+" as the last element INSIDE the scrollable strip with `position: sticky; right: 0` (rejected: sticky-in-scroll paints over tab edges and needs background/shadow hacks); keeping "+" left (rejected: explicit user directive).
+
+## R17. Double-click rename — inline input in the tab
+
+**Decision**: Double-clicking a saved or default tab swaps its label for an inline AntD `Input` (autofocused, value preselected). Enter or blur commits; Esc cancels. Commit renames immediately (PATCH; or the materializing POST for a virtual default) — rename IS the save action, so the staged-mutations rule does not apply. On a 400 name collision the input stays open with error state + translated `message.error`. Double-clicking an ANONYMOUS tab opens the existing `SaveViewModal` (name-and-save, FR-014). During inline editing the tab's click/switch handlers suspend.
+
+**Alternatives considered**: reusing `SaveViewModal` for all renames (rejected: heavier than needed for an in-place rename; the modal remains for name-and-save); commit-on-blur = cancel (rejected: blur-commit matches AntD editable-text conventions; Esc is the explicit cancel).
+
+## R18. Readable URL grammar (replaces the packed `view[<tableKey>]` mini-format)
+
+**Decision**: Discrete namespaced params `<tableKey>.<facet>`; full grammar in the rewritten [contracts/view-url-serialization.md](contracts/view-url-serialization.md). Facets: `view` (saved-view reference **by name** — readable, unique per table per account; also matches the page's default name while the default is virtual), repeatable `f` (one filter group per param: `and(...)`/`or(...)` with `attr op val` conditions, `;`-separated), `sort` (existing DRF ordering string), `cols` (visible keys in display order with `~left`/`~right` pin suffixes), `size`, `page`. No `view` param → inline state; with `view` → facets are overrides. A clean default tab emits NO params (clean URLs). Serialization writes minimal percent-encoding (custom emitter; only `& = % # +` and control chars escaped — browsers render `%20` as spaces in the address bar); parsing accepts any encoding via `URLSearchParams`. The round-1 `view[<tableKey>]` format is DROPPED (not parsed): it shipped 2026-07-22 on a personal hub — stale deep-links hit the FR-008 fallback with a notice, which is acceptable; carrying two grammars is not.
+
+**Rationale**: Every facet is legible and hand-editable (`?inventory-catalog.view=YTD&inventory-catalog.size=100` reads itself), satisfying FR-022/SC-007. Name-based references are the single biggest readability win over nanoid ids; rename breaking an old bookmark degrades per FR-008. `sort` and `cols` reuse existing serializers/keys verbatim.
+
+**Alternatives considered**: keeping ids alongside names (`view=YTD~Vx3kQ9aB` — rejected: defeats readability, two sources of truth); flat unnamespaced params for single-table pages (rejected: FR-007 requires namespacing; two grammars again); JSON filters param (rejected: URL-encoded JSON is exactly the unreadable blob the user rejected).
+
+## R19. Per-column pins in ViewConfig v2 (+ stored-config migration)
+
+**Decision**: `ViewConfig.columns[]` entries gain `pin?: 'left' | 'right'`; `stickyLeft`/`stickyRight` are REMOVED. Snapshot/load map 1:1 to `useColumnConfig`'s `ColumnDef.pin` — no projection, multi-pin layouts round-trip (closes the round-1 open decision recorded in memory/CLAUDE.md). Migration `core/0006` data-migrates every stored `EntityView.config`: `stickyLeft` → `pin: 'left'` on the first visible column (by `order`), `stickyRight` → `pin: 'right'` on the last visible, keys dropped. `normalizeConfig` additionally upgrades v1 shapes in memory (sessionStorage tabs from a pre-upgrade session).
+
+## R20. data_io registration — `owner_field` stamping (deferral resolved)
+
+**Decision**: `TableDescriptor` gains `owner_field: str | None = None`. Contract: the named model field is (a) NEVER exported — `auto_system_fields` excludes it, so it appears in no CSV, no diff, no headers; (b) on import/materialize, stamped with the **acting user**, threaded as a new `acting_user` parameter through `apply_diff`, `import_from_clone`, `apply_selected` from the endpoints that own a request (`ImportConfirmView`, `ImportZipConfirmView`, `SyncCheckoutConfirmView` → `request.user`). Registering a table with `owner_field` set makes importing it without an acting user an explicit error. `core/apps.py` replaces the deferral comment with the `core.entityview` registration (`owner_field="owner"`, `is_json` config column, `import_order` beside `core.attributedefinition`).
+
+**Rationale**: Exploration confirmed the registry has NO per-field hooks and NO user context in the import chain; `use_natural_key` is contenttypes-hardwired in three sites (`csv_exporter.py:17`, `change_preview.py:17,178`). FR-024 says imported views attach to the importing account — so a username natural key is not just harder (generalizing three sites + cross-deployment username mismatches), it is WRONG per spec. Excluding owner from CSV also structurally eliminates phantom diffs (integer PKs differing across deployments — the exact class of bug from the 015 sync incident). Single-user assumption documented in spec: export writes all rows; multi-owner collisions on `(owner, table_key, name)` cannot occur in practice.
+
+**Alternatives considered**: generalized FK natural keys (`auth.user` by username — rejected: contradicts FR-024, breaks when usernames differ, triples the touched surface); static `default_value` injection (rejected: registration-time constant cannot be "the requesting user"); a post-import signal fixing owners (rejected: hides the invariant, rows would transiently violate NOT NULL).
+
+## R21. Auto-hidden view row — collapsed affordance in the same `viewBar` slot
+
+**Decision**: `ViewTabs` renders one of two modes in the SAME PageTable `viewBar` slot. Collapsed mode — a single compact icon button, right-aligned (no full row), with a tooltip and the dirty dot when the hidden default tab is dirty; clicking sets `revealed: true` (persisted in the existing `unihub.views.<tableKey>` sessionStorage state). Expanded mode — the full tab row. Expanded is forced (affordance hidden) whenever: any non-default saved view exists, OR >1 tab is open, OR the URL addresses a non-default view state. Collapsed is the initial state otherwise; `revealed` keeps a manual reveal for the session. Closing the last extra tab while `revealed` is false returns to collapsed.
+
+**Rationale**: Keeping both modes inside `viewBar` preserves Principle VII (PageTable owns structure; zero per-page markup). sessionStorage matches the spec's "manual reveal persists for the rest of the session" exactly. The dirty dot on the affordance preserves SC-005 while hidden.
+
+**Alternatives considered**: a toolbar button next to Filter/Sort (rejected: toolbar content is page-owned — five pages would each wire it; the slot already exists); localStorage persistence (rejected: spec says session lifetime); auto-expanding on dirty (rejected: config edits are constant during normal browsing — noisy; the dot on the affordance covers visibility).
+
+---
+
+# Round 3 (Clarifications Session 2026-08-03)
+
+## R22. Drag-to-reorder tabs — horizontal `SortableList` vs a second drag mechanism
+
+**Decision**: Extend the shared `components/EntityToolbar/SortableList.tsx` with an additive `orientation?: 'vertical' | 'horizontal'` prop (default `'vertical'`, so every existing caller is untouched) that swaps `verticalListSortingStrategy` → `horizontalListSortingStrategy`, and render the tab strip through it. The whole tab is its own drag handle (`handleProps` spread on the tab element), with `PointerSensor` configured `activationConstraint: { distance: 5 }` so a plain click never starts a drag.
+
+**Rationale**: dnd-kit is already the project's single drag mechanism (filter/sort/column panels, manage modal, inventory organize tree); a bespoke tab-drag would be a second one to maintain and would drift. `horizontalListSortingStrategy` is the library's supported answer for a row. The 5px activation distance is what makes directive 2 (drag) and directive 3 (click opens a menu) coexist: below the threshold dnd-kit never activates, so `onClick` fires normally; above it, dnd-kit suppresses the click that terminates a drag (behaviour already relied on in the inventory organize e2e).
+
+**Alternatives considered**: HTML5 drag events (rejected: the inventory organize page migrated *away* from them in iteration 18 — no keyboard support, jumpy previews); a dedicated `<Tabs>` from AntD with `items` + drag wrapper (rejected: AntD Tabs owns its own overflow/more-menu behaviour, which fights FR-020's hidden-scrollbar-with-shadows requirement and the docked kebab); duplicating dnd-kit setup inside `ViewTabs` (rejected: the shared component already encapsulates sensors, keyboard coordinates, and no-op-drop suppression).
+
+**Right-click safety**: dnd-kit's pointer sensor ignores non-primary buttons, so a right-click (menu trigger) can never begin a drag.
+
+## R23. Tab menu — controlled AntD `Dropdown` with asymmetric triggers
+
+**Decision**: One `ViewTabMenu` component per tab, rendering a **controlled** AntD `Dropdown` (`open` + `onOpenChange` held in `ViewTabs`, one open menu at a time keyed by `tabId`). The tab element's own handlers decide when to open: `onClick` opens the menu **only when the tab is already active** (otherwise it calls `switchTab`), and `onContextMenu` (with `preventDefault()`) opens it for **any** tab, active or not. Menu body carries `maxHeight: '60vh', overflowY: 'auto'` (Principle VI) and `placement="bottomLeft"`.
+
+**Rationale**: A controlled dropdown keeps the decision logic in one readable place and is directly testable in RTL (no reliance on rc-trigger's handler-merging when a sortable listener, an onClick, and a trigger all live on the same node). Asymmetric triggers are exactly the clarified grammar: a first left-click on an inactive tab must *switch* — opening its menu instead would make switching a two-step action.
+
+**Enablement (disabled, never hidden — 015 kebab precedent)**: see the matrix in [data-model.md](data-model.md) §7. Rules: `Save` disabled while the tab is clean; `Close`/`Delete` disabled for the tab holding the default role; `Pin`/`Set as default`/`Delete` disabled for anonymous tabs (nothing stored yet); `Set as default` disabled for the tab that already holds the role; `Pin` disabled for the default holder (it is pinned as long as it holds the role, FR-003). `Delete` keeps its `Modal.confirm` danger gate.
+
+**Alternatives considered**: uncontrolled `trigger={active ? ['click','contextMenu'] : ['contextMenu']}` (rejected: works, but re-mounting the trigger array on activation churns rc-trigger state and made "switch then immediately open" flaky in practice — the controlled form is deterministic); hiding inapplicable items (rejected: menu height would jump per tab kind, and the 015 review established that a disabled item communicates *why an action exists but is unavailable* better than an absent one).
+
+## R24. Hidden scrollbar + edge shadows on the tab strip
+
+**Decision**: The strip keeps `overflow-x: auto` but hides the bar cross-browser (`scrollbarWidth: 'none'`, `msOverflowStyle: 'none'`, `&::-webkit-scrollbar { display: none }`). Shadow state is derived from the strip's own metrics — `scrollLeft > 0` → left shadow, `scrollLeft + clientWidth < scrollWidth - 1` → right shadow — recomputed on `scroll`, on `ResizeObserver` of the strip, and whenever the tab list changes. The shadows are absolutely-positioned overlay elements (`data-testid="view-tabs-shadow-left|right"`, `pointer-events: none`, ~16px wide `linear-gradient` from `token.colorSplit`-derived rgba to transparent) inside a `position: relative` wrapper — **not** `background-attachment: local` gradients on the strip itself.
+
+**Rationale**: Overlay elements are inspectable and assertable (a Playwright pixel probe can read their box + opacity; an RTL test can assert presence), whereas the `background-attachment: local` trick is invisible to both and cannot express AntD token colors cleanly. Deriving from `scrollLeft/clientWidth/scrollWidth` means the "both edges mid-scroll, one edge at each end" acceptance in SC-009 falls out of the arithmetic. Per the visual-geometry rule (memory), the shipped behaviour is locked with a real-browser probe, not a JSDOM style assertion.
+
+**Alternatives considered**: `mask-image` fade on the strip (rejected: fades the tab text itself, not just a hint); AntD `Tabs` built-in overflow arrows (rejected with R22); keeping a thin styled scrollbar (rejected: the user explicitly asked for it hidden).
+
+## R25. Transferable default role — atomic swap in the serializer
+
+**Decision**: `is_default` becomes writable on update. `validate_is_default` now rejects only an explicit **`false`** on the current holder (that would leave the table with zero defaults — FR-026); promotion (`false → true`) is allowed. `EntityViewSerializer.update()` wraps the write in `transaction.atomic()` and, **before** saving, clears the incumbent: `EntityView.objects.filter(owner, table_key, is_default=True).exclude(pk=instance.pk).update(is_default=False)`. Promotion also forces `pinned=True` on the receiving row; the demoted row keeps its `pinned`/`position`/`config` verbatim.
+
+**Rationale**: Clear-then-set is required because the partial `UniqueConstraint(owner, table_key, WHERE is_default)` is checked per statement (it is not `DEFERRABLE`); the transaction makes the two-statement window invisible to any reader. Doing it in `update()` rather than a bespoke `@action` keeps the contract to endpoints that already exist and are already in the generated schema (Principle IV) — the frontend just PATCHes `{is_default: true}`. Forcing `pinned=True` on promotion is what makes FR-003's "pinned as long as it holds the role" true without a second request; leaving the demoted row's pin alone matches the clarified answer (it *becomes* unpinnable, it is not auto-unpinned).
+
+**Virtual-default edge**: when no materialized `is_default` row exists yet (the page default is still virtual) and the user promotes some other saved view, there is nothing to demote — the PATCH simply sets the flag. The open virtual-default tab then converts to an **anonymous** tab holding the same config, mirroring FR-019's convert-on-delete behaviour, because the page-default configuration no longer has a stored identity. Recorded as a spec edge case.
+
+**Alternatives considered**: a dedicated `POST {id}/set-default/` action (rejected: a new endpoint for a single boolean the resource already exposes; PATCH keeps one write path); making the constraint `DEFERRABLE INITIALLY DEFERRED` and swapping in either order (rejected: needs a migration and hides ordering bugs behind commit-time checks); enforcing the swap in `Model.save()` (rejected: the ORM layer would silently mutate sibling rows on any import/data-migration write — including `data_io` restores, which must stay verbatim).
+
+## R26. Persisting the dragged tab order
+
+**Decision**: On drop, the frontend composes the table's **complete** id order — the saved views visible in the strip, in their new left-to-right order, followed by every other saved view of that table in its current relative order — and POSTs it to the existing `reorder/` action (`{table_key, ids}`). Anonymous tabs hold no id and are simply skipped when composing (their strip position is session state). No new endpoint, no schema change.
+
+**Rationale**: `reorder/` rewrites `position` only for the ids it is given, so sending a partial list would leave non-open views interleaved at stale positions and break FR-017's "manage modal shows the same order". Sending the full list makes the persisted order a total order and keeps modal and strip in lockstep. The action already validates ownership, table membership, and duplicates.
+
+**Alternatives considered**: sending only the visible ids (rejected: the interleaving bug above); a `position` PATCH per moved view (rejected: N requests and a non-atomic intermediate order); persisting the whole tab order including anonymous placeholders (rejected: anonymous tabs are explicitly session-scoped by spec).
+
+## R27. Per-tab actions — generalizing the hook from "active" to "by tabId"
+
+**Decision**: `useEntityViews` exposes tab-addressed actions: `saveTab(tabId)`, `duplicateTab(tabId, baseName)`, `pinTab(tabId, pinned)`, `setDefaultTab(tabId)`, `deleteTab(tabId)`, `renameTab(tabId, name)` (already tab-addressed), `closeTab(tabId)` (already), and `reorderTabs(orderedTabIds)`. The former `saveActiveTab`/`saveActiveTabAs`/`duplicateActiveTab` become thin wrappers over the active id where the modals still need them (`SaveViewModal` saves whichever tab requested a name).
+
+**Rationale**: A right-click menu can target a tab that is not active, so every action must accept an explicit target; keeping "active" variants only would silently apply an action to the wrong tab — the worst possible failure for Delete. Each tab already carries its own `config`/baseline in state, so the generalization is mechanical.
+
+**Deletion semantics**: `deleteTab` on a saved view runs the FR-019 path (tab stays open, converts to anonymous) whether it is invoked from the tab menu or the manage modal, so the two surfaces cannot diverge.
+
+## R28. Default view is no longer first — ordering and manage-modal consequences
+
+**Decision**: Drop the round-2 "default tab is ALWAYS first" invariant. Tab order for saved views comes purely from `position` (pinned merge in position order, session-opened views appended); the default holder sits wherever its `position` puts it. `ManageViewsModal` enables dragging the default row (delete stays blocked, rename/pin stay enabled), and the modal's staged reorder and the strip's drag both write through the same `reorder/` composition (R26). Setting a view as default changes no position (SC-011).
+
+**Rationale**: The clarified answers make the default role orthogonal to ordering: "the default is draggable" and "set as default doesn't move the view". Keeping any always-first special case would contradict both and would make the strip and the modal disagree the moment a user dragged the default row.
+
+**Consequence checked**: the FR-025 auto-hide heuristic is unaffected — it counts views/tabs and URL state, never positions.
+
+---
+
+# Round 4 (Clarifications Session 2026-08-04)
+
+## R29. Dropping the name unique constraint
+
+**Decision**: Migration `core/0007` removes `UniqueConstraint(owner, table_key, name)` from `EntityView.Meta.constraints`; the partial `is_default` constraint is untouched. `EntityViewSerializer.validate()` loses its name-collision branch; `validate_name` keeps `strip()` + reject-blank. The frontend's duplicate-name error path (`common.entityViews.duplicateName`, the `status === 400 && body.name` handling in the rename/save flows) is deleted with it.
+
+**Rationale**: The user's model is that a name is a LABEL. Nothing in the system keys off it once the URL grammar stops doing so (R30): stored references, sync, and data_io are all id-based, so duplicates cannot corrupt anything. Trimming is kept because trailing spaces produce labels that look identical but are not, which is the one way duplicate names could genuinely confuse.
+
+**Alternatives considered**: keeping uniqueness and auto-suffixing on collision (rejected: the user explicitly asked for repeatable names, and round 3's suffix machinery is what they asked to remove); case-insensitive uniqueness (rejected: still a constraint, still surprises); a UI-only warning on duplicates (rejected: noise for an intended state).
+
+**Migration safety**: removing a constraint is non-destructive and instant; no data rewrite. Existing rows already satisfy the weaker rule.
+
+## R30. URL saved-view reference by id
+
+**Decision**: `<tableKey>.view=<id>` carries the `EntityView` nanoid instead of the name. Resolution is `savedViews.find(v => v.id === id)`; an unresolvable id falls back to the default view with the existing `unresolvedView` notice (FR-008). A tab with no stored view (scratch tab, or the still-virtual page default) emits **no** `.view` param and serializes its configuration inline — the round-2/3 special case that matched `.view=<page default name>` against the virtual default disappears.
+
+**Rationale**: FR-016 makes names non-identifying, so a name-based reference would silently resolve to whichever duplicate came first — the worst failure mode for a shared link. Ids are 12-char nanoids from a URL-safe alphabet, so no encoding changes are needed. Every other facet stays prose, which is why SC-007 could be amended narrowly rather than abandoned.
+
+**Alternatives considered**: name + positional index (`YTD~2`) (rejected: the index shifts when views are reordered or deleted, so links rot silently); keeping names and resolving to the first match (rejected by the user in favour of exactness); name + id belt-and-braces (rejected: two sources of truth, and the name half would go stale on rename).
+
+**Consequence**: renaming a view no longer breaks existing deep links — a real improvement over the round-2 grammar.
+
+## R31. No-prompt save + the Rename dialog
+
+**Decision**: `SaveViewModal` is deleted. `saveTab(tabId)` on a tab with no `viewId` POSTs a new view whose `name` is the tab's current label (auto-labelled `New view` at creation), so Save is always a single interaction (SC-012) and never returns `'needs-name'` — that outcome and `ViewTabMenu`'s `onNeedsName` prop are removed. A new `RenameViewModal` (AntD `Modal`, input pre-filled and auto-focused, Enter submits, Cancel left / primary right, `maskClosable` off while the field differs from the original) handles naming: on a stored view it PATCHes `name`; on an unsaved tab it only relabels local state, and the next Save persists that label.
+
+**Rationale**: The user asked for Save to "just save" and for Rename to be an explicit, discoverable dialog. Splitting the two means the common action (Save) has zero friction while naming stays deliberate. Auto-labelling makes the no-prompt path well-defined — there is always a name to store — and duplicate names (R29) make the auto-label safe to reuse for every scratch tab.
+
+**Alternatives considered**: keep a prompt only for unnamed tabs (rejected: that IS the modal the user removed); generate `New view (1)`, `(2)`… per scratch tab (rejected: the user removed the suffix convention in the same round); block Save until renamed (rejected: makes the primary action conditional on a secondary one).
+
+## R32. "Set as default" must not reorder or dirty — two defects
+
+**Decision**: (a) **Order**: the pinned-view merge effect keeps the CURRENT strip order for tabs that are already open and only inserts genuinely new pinned tabs (by `position`). Today it rebuilds `[...pinnedTabs in position order, ...others]`, so a session tab that promotion pins jumps out of the "others" bucket into position order. (b) **Dirty**: `setDefaultTab` snapshots the active tab's live config into tab state BEFORE swapping identities, so the demoted tab compares against its own stored config rather than a stale snapshot.
+
+**Rationale**: Both symptoms the user reported ("don't move tab to first", "previous default should not become dirty") trace to state the swap doesn't own: pin-driven re-sorting and the active tab's config living in the table hooks rather than in `tab.config`. Fixing the merge effect to be order-preserving also removes a general class of tab-jumping on any refetch that changes pin state.
+
+**Alternatives considered**: skipping the forced `pinned=True` on promotion (rejected: FR-003 requires the fallback to stay reachable as a tab); recomputing dirty from the server response only (rejected: the local snapshot is the source of truth for the active tab by design — the fix belongs at the swap, not in the comparison).
+
+## R33. Dragged tab stretches horizontally — `CSS.Transform` vs `CSS.Translate`
+
+**Decision**: `SortableList`'s item transform uses `CSS.Translate.toString(transform)` when `orientation === 'horizontal'`, keeping `CSS.Transform.toString(transform)` for the vertical default.
+
+**Rationale**: `CSS.Transform.toString()` emits `translate3d(…) scaleX(…) scaleY(…)`. `horizontalListSortingStrategy` populates `scaleX` with the ratio between the dragged item's width and the item it is passing — intended for uniform-width lists, but view tabs are text-sized and therefore all different, so the dragged tab visibly stretches and squeezes. Dropping the scale components (translate only) preserves the drag position while leaving the element at its natural width — exactly FR-027's "keeps its own rendered width". Vertical callers (filter/sort/column panels, all uniform-height rows) keep the existing behaviour, so nothing else changes.
+
+**Alternatives considered**: `scaleX(1)` override via CSS (rejected: fights the library every frame and leaves the layout shifted); a `DragOverlay` clone like the inventory organize tree (rejected: far heavier than the bug warrants and would double-render every tab); fixed-width tabs (rejected: truncates names the OverflowTooltip rule exists to preserve).
+
+## R34. Removing "Manage views" and its modal
+
+**Decision**: Delete `ManageViewsModal.tsx` + test, drop the kebab entry, and remove `commitManageChanges`/`ManageChanges` from the hook. Every capability it held is already tab-addressed: rename → `renameTab`, pin → `pinTab`, delete → `deleteTab`, reorder → `reorderTabs` (drag). A view that is not open is reached through the kebab's "Open" submenu first.
+
+**Rationale**: With round 3's tab menus the modal became a second, staged path to the same operations — two code paths, two test suites, and two chances to diverge on the FR-019 convert-on-delete rule. Removing it makes the tab the single management surface.
+
+**Cost accepted**: bulk operations (delete several views at once) are no longer possible, and managing a closed view costs one extra click. Both were explicitly accepted in the clarification.
+
+## R35. Blank configuration for "Add empty view"
+
+**Decision**: New exported helper `blankConfig(defaults: ViewConfig): ViewConfig` → `{ filters: [], sort: [], columns: <every column of `defaults.columns`, sorted by its declared order, `visible: true`, `pin` omitted>, pageSize: defaults.pageSize }`. `addAnonymousTab` (renamed `addBlankTab`) uses it instead of `defaultConfig`, and the new tab is labelled `New view`.
+
+**Rationale**: "Natural order" is the page's declared column order, which is exactly the order `defaultConfig.columns` carries (pages build it from their `columnDefs`). Page size is not a filtering/sorting/column concern and has no meaningful "empty" value, so it inherits the page default — recorded as an assumption in the spec. The distinction matters most on the inventory catalog, whose default view carries the seeded YTD filter: "empty" must mean empty, not "the default view again".
+
+**Alternatives considered**: reusing `defaultConfig` (rejected: that is the current, wrong behaviour); a hardcoded 25/page (rejected: contradicts pages that deliberately default to 50).
+
+## R36. Closing the tab menu on outside click and Esc
+
+**Decision**: `ViewTabs` registers a document-level `mousedown` + `keydown` listener while a tab menu is open: a `mousedown` whose target is inside neither the open menu's portal (`.ant-dropdown`) nor the owning tab closes it; `Escape` closes it too. The Dropdown stays controlled with `trigger={[]}`.
+
+**Rationale**: rc-trigger only wires outside-click dismissal for triggers it manages; with `trigger={[]}` (required so a left-click on an INACTIVE tab switches instead of opening, per FR-023) nothing dismisses the menu today. An explicit listener keeps the open/close decision in the one place that already owns `menuTabId`, and is directly assertable in RTL.
+
+**Alternatives considered**: `trigger={['click']}` plus suppression logic (rejected: rc-trigger would open the menu on the very click meant to switch tabs, re-creating the bug round 3 fixed); `onBlur` on the tab button (rejected: focus leaves the tab for many reasons, including opening the menu itself).
+
+---
+
+# Round 5 (Clarifications Session 2026-08-04b)
+
+## R37. Tabs become derived state — the store shrinks to one flag
+
+**Decision**: `useViewTabsState` stops persisting `tabs` and `activeTabId`. Its sessionStorage payload becomes `{ revealed: boolean }`, and `restore()` reads a legacy round-4 payload tolerantly — it picks `revealed` out and ignores `tabs`/`activeTabId` rather than failing or resurrecting them. The initial tab list is built fresh on every mount from the pinned views (once the saved-view query resolves) plus whatever the URL addresses; the mount-time rehydrate effect that replayed a restored tab's config is deleted with the data it replayed.
+
+**Rationale**: The user's rule — a refresh shows only pinned/default tabs plus the URL's view — makes the tab list a pure function of (saved views, URL). Persisting it therefore stores a value that must then be corrected on every load, which is exactly the class of bug that produced stale tabs. Keeping `revealed` is not an exception to the rule: it is a display preference about the ROW, not a tab, and FR-025 explicitly requires a manual reveal to outlive a reload.
+
+**Ordering consequence**: with no stored order to restore, the strip's initial order comes entirely from `position` (the pinned merge) plus the URL's view appended — which is what the round-4 order-preserving merge already produces on a cold mount. The merge's "preserve current order, insert only new" behaviour still matters for refetches DURING a visit (R32).
+
+**Alternatives considered**: keep the store and prune on restore (rejected: two sources of truth for the same list, and the pruning rule would have to re-implement the URL precedence); drop sessionStorage entirely including `revealed` (rejected: silently breaks FR-025's "a manual reveal persists for the rest of the session"); move the tab list to localStorage (rejected outright — it would make the problem worse by surviving even a browser restart).
+
+## R38. A shared confirmation helper with a constitution-compliant footer
+
+**Decision**: New `components/ConfirmDialog/` exporting `confirmDialog({ title, content, okText, cancelText, danger, onOk })`, implemented over AntD's `Modal` with an explicit footer — `<div style={{display:'flex', justifyContent:'space-between'}}>` holding Cancel on the left and the confirming button on the right, mirroring the footer `ManageViewsModal` used before it was deleted. It returns a promise-friendly handle so `onOk` may be async (the button shows a loading state while it settles), and it is called imperatively exactly like `Modal.confirm` so migration is a one-line swap at each site. All nine call sites adopt it: `ViewTabMenu` (016), `AttributeManagementPanel`, `ParameterRowsEditor`, finance `accounts` / `currencies` / `exchange-rates` / `balance-sheets`, inventory `scenarios/detail`, `acquisitions/AcquisitionForm`.
+
+**Rationale**: AntD's `Modal.confirm` hard-codes a right-aligned `[Cancel][OK]` pair in `.ant-modal-confirm-btns`; there is no prop to flush Cancel left, so compliance requires owning the footer. Centralising it is what makes the rule enforceable — a per-site fix would drift back the moment someone reaches for `Modal.confirm` again. Keeping the imperative call shape means no call site restructures its logic, only its import.
+
+**Test impact (accepted)**: several existing suites assert on `.ant-modal-confirm-btns .ant-btn-dangerous`. Those selectors move to the helper's own markup; each migrated suite keeps its behavioural assertions (confirm runs the action, cancel does not) and updates only the DOM reach-in. The helper's own suite owns the footer-geometry assertion so the other eight do not have to repeat it.
+
+**Alternatives considered**: a global `ConfigProvider`/CSS override on `.ant-modal-confirm-btns` (rejected: styling around a component's structure is fragile across AntD upgrades, and `justify-content: space-between` on that container also spreads any third button unpredictably); a codemod leaving `Modal.confirm` in place (rejected: no single place left to enforce the rule).
+
+## R39. "Close tab" → "Close"
+
+**Decision**: `common.entityViews.close` changes value only — `"Close tab"` → `"Close"`, zh-TW `"關閉分頁"` → `"關閉"`. The key name stays so no call site or test selector churns beyond the label text.
+
+**Rationale**: The action lives inside that tab's own menu, so its object is already unambiguous; every sibling item (Save, Duplicate, Rename, Delete) is likewise a bare verb. Note the aria-label on the round-3 close button used the same key, but that button no longer exists — the string is now menu-only.
+
+---
+
+# Round 6 (Clarifications Session 2026-08-04c)
+
+## R40. The spurious unsaved indicator — a write-then-replay loop
+
+**Reproduced first** (constitution V, and the same reproduction-first discipline the 015 phantom-diff bug used). Harness: a materialized default view whose stored config differs from the page defaults (`pageSize: 50`, a sort rule) mounted with a clean URL.
+
+- Observed: the tab settles CLEAN, but the address bar ends up holding
+  `?tbl.view=<id>&tbl.sort=&tbl.size=25` — override parameters that describe the PAGE DEFAULTS, not the stored view.
+- Feeding that exact URL back into a fresh mount: `dirty === true` on arrival, with no user interaction. The loop is self-sustaining.
+
+**Root cause**: `table.loadConfig(...)` is asynchronous with respect to the effect that calls it — the table's state lands in a later render. The outbound URL effect re-runs in the SAME commit (its dependency list includes `savedViews`, which is what just resolved), reads `table.snapshotConfig()` while the table still holds its pre-adoption boot state, and serializes the difference against the now-known stored baseline as "overrides".
+
+**Decision**: gate the outbound writer on load completion. A `pendingLoadRef` records the config most recently handed to `table.loadConfig(...)` — by the default-adoption effect, the inbound URL effect, `switchTab`, `openView`, `addBlankTab`, and `duplicateTab`. The outbound effect returns early while a request is pending and the table's reconciled snapshot does not yet equal it; once they match (or the ref is empty) it clears the gate and publishes normally.
+
+**Why comparison rather than a flag**: a bare "loading" boolean cannot tell when to clear itself — `loadConfig` produces no completion signal, and if the requested config happens to equal what the table already holds, no state change ever arrives. Comparing against the requested value is self-clearing in both cases: it matches immediately when there was nothing to change (fail-open, per the plan's constraint) and matches one render later when there was.
+
+**Explicitly preserved**: the round-1 `lastProcessedRef` / `lastParamRef` separation. It guards a DIFFERENT race — re-processing the echo of our own outbound write — and removing it restarts the infinite navigation loop recorded in round 1. The new gate is additive; after this round the effect carries four named guards, each commented with the failure it prevents.
+
+**Alternatives considered**: making `loadConfig` synchronous (rejected — it fans out to three independent toolbar hooks' state, none of which can be set synchronously from an effect); deriving the URL from `tab.config` instead of the live snapshot (rejected — the active tab's `config` field is deliberately stale by design; the live table IS the truth for the active tab, and reading the stale copy would break the "copy the URL at any moment" guarantee, SC-003); debouncing the outbound write (rejected — a timing hack that turns a deterministic ordering bug into a flaky one).
+
+## R41. The URL-emission invariant
+
+**Decision**: state the rule the fix enforces, and test it directly rather than only testing the symptom: **the URL must never carry an override parameter whose value merely restates the referenced view's stored configuration.** `facetOverrides()` already returns an empty set for facets that match; the defect was never in that comparison but in *when* it ran. The regression suite therefore asserts on the emitted parameters (no `.sort`/`.size`/`.f`/`.cols` after an untouched load), not just on the absence of the dot — a dot-only assertion would pass even while the URL was being poisoned for the next visit, which is exactly how this shipped undetected through rounds 2–5.
+
+**Rationale**: the dot is a symptom; the poisoned URL is the defect. SC-015 is written against both so a future regression cannot hide in the gap.
+
+**Coverage note**: the same assertion is applied to a saved tab and to a tab switch, because the pre-adoption window exists on every path that calls `loadConfig`, not only on mount.
+
+---
+
+# Round 7 (Clarifications Session 2026-08-04d)
+
+## R42. Where inbound INLINE url state lands
+
+**Reproduced first**, from the user's exact steps (open the catalog → "Add empty view" → reload):
+
+- After adding the blank view the URL holds `?tbl.f=and%28%29` — the blank config's empty filter group, serialized inline because a scratch tab has no stored view to reference.
+- After the reload the row is `[default:YTD:dirty=true]`: round 5 correctly discarded the scratch tab, and then the inbound handler wrote the blank config **into the default tab**.
+
+**Root cause**: the inline branch picks its target as "the active tab if it is not a saved view, else `DEFAULT_TAB_ID`". That fallback made sense when tabs were restored from sessionStorage (round ≤4) — the scratch tab it belonged to was usually still there. Once round 5 made tabs per-visit, the fallback fires on every reload and the default tab becomes the dumping ground.
+
+**Decision**: inline state MUST create its own unsaved tab (auto-labelled "New view", same as `addBlankTab`) and activate it. It may only update an EXISTING tab when that tab is itself unsaved (`kind === 'anonymous'`) — the in-session case where the user edits the toolbar and the URL echoes back. A tab representing a stored view (`kind === 'saved'`, or the default holder) is never a valid target for inline state, because writing to it silently replaces that view's configuration.
+
+**Why this is a correctness defect, not a cosmetic one**: the catalog's default view seeds a year-to-date filter. Overwriting it with a blank config made the table list *every* row while the tab still read "YTD" — wrong data, presented as the named view. The unsaved dot was the only visible symptom, which is why it was reported as an indicator bug; the regression therefore asserts the restored CONFIGURATION, not just the absence of the dot (the same lesson as R41).
+
+**Creation-once discipline**: the inbound effect can re-run for the same value, so the new tab is created inside the `setTabs` updater with an existence check, and `setActiveTabId` takes the updater form — exactly the pattern the round-5 duplicate-tab fix established. A tab id generated outside the updater is captured and reused so both setters agree.
+
+**Alternatives considered**: keeping the default-tab fallback but restoring the default's config afterwards (rejected: the fallback IS the bug, and "write then repair" leaves a window where the wrong data is displayed); dropping inline state on load entirely (rejected: the user chose to keep the URL's view — and it would also break the deep-link guarantee SC-003 for unsaved configurations); creating the tab only when the inline config differs from the page defaults (rejected: an inline config equal to the defaults emits no params in the first place, so the branch cannot be reached that way).
+
+---
+
+# Round 8 (Clarifications Session 2026-08-04e)
+
+## R43. The indicator/URL invariant, and why this round is mostly a harness
+
+**Verified before deciding anything.** A throwaway probe drove the hook through the saved-view journey and printed the URL at each step:
+
+| Step | URL |
+|------|-----|
+| saved view active, unmodified | `tbl.view=savedview001` |
+| after changing the sort | `tbl.view=savedview001&tbl.sort=name` |
+| after Save | `tbl.view=savedview001` |
+
+The compactness directives (bare reference when unmodified; overrides only for real changes; compact again immediately on save) therefore already hold in the current code — rounds 6 and 7 removed the two mechanisms that were violating them. Reporting that plainly is more useful than inventing a change: the value this round adds is the **regression net**, because the same rule has now been broken three different ways (round 6: publishing a half-loaded tab; round 7: inline state overwriting a stored view; and the round-2→5 window where a dot-only assertion hid both).
+
+**Decision**: express the rule as a bidirectional invariant and assert it at every step of the journey rather than at a single moment.
+
+```
+for the ACTIVE tab:   indicator shown  ⟺  the URL holds ≥1 override param for that table
+```
+
+Both directions matter and each catches a different failure:
+
+- **dot without overrides** → the system invented a difference (the round-6 and round-7 defects both presented this way);
+- **overrides without a dot** → the URL is describing state the table is not actually in, which is what poisons the *next* load (the round-6 loop).
+
+A helper inside the suite (`expectIndicatorMatchesUrl`) is called after load, after an edit, after Save, after a tab switch, and after a reload, so a regression cannot hide in whichever moment the test happened not to sample.
+
+**Scope of the indicator itself (FR-013)**: two cases only — a tab with no stored view, or a stored view whose effective config differs from what is stored. Inactive tabs keep their own indicator: the URL describes only the active tab, so tying the dot to the URL for *every* tab would silently hide unsaved work the user left elsewhere. The invariant is therefore scoped to the active tab by construction, which is exactly how the clarification phrased it.
+
+**Alternatives considered**: asserting only the URL (rejected — the dot is what the user sees, and a URL-only test would have passed throughout rounds 2–5); asserting only the dot (rejected — precisely the blind spot that let the poisoned-URL loop ship, R41); computing the indicator *from* the URL so the invariant is true by construction (rejected — it would make the dot vanish for inactive tabs and couple presentation to transport, and it cannot express the "no stored view" case at all).
+
+---
+
+# Round 9 (Clarifications Session 2026-08-04f)
+
+## R44. The stored default view is never adopted on arrival
+
+**Found by driving the real application, after unit harnesses failed.** Three vitest harnesses — a seeded-filter catalog model, the same with async parameter columns arriving after mount, and the same with a materialized default whose stored config predates those columns — all landed CLEAN. A **read-only** Playwright probe against the running dev stack (login + navigation only; no writes) then captured the actual state after clicking the nav item to `/inventory/catalog`:
+
+```
+?inventory-catalog.view=zn6iFx8QhBMj
+&inventory-catalog.f=or(acquisition__obtained_at gte 2026-01-01; acquisition__obtained_at is_empty)
+&inventory-catalog.sort=-acquisition__obtained_at__nullsfirst
+&inventory-catalog.size=50        → 1 unsaved dot, unchanged by a reload
+```
+
+The stored default view is referenced but its configuration is never applied: the table holds the page defaults, the tab's baseline is the stored config, so `facetOverrides` reports all three facets and the dot is truthful. Both reported symptoms (dot on navigation; inline/override URL surviving refresh) are this single state.
+
+**Root cause — two flaws in one effect**:
+
+1. `defaultAdoptedRef.current = true` executes *before* the guards, so the one-shot is consumed on the first `isFetched` render even when the effect then bails. There is no retry.
+2. The "URL wins" guard reads `hasViewParams(searchParams, …)` — **live** params. By the time the effect runs, the outbound writer may already have published the un-adopted state, so the effect treats the application's own output as a user-provided deep link and defers to it. Self-sustaining.
+
+**Decision**: (a) consume the one-shot only when adoption actually runs or is decisively unnecessary (no default view / nothing to adopt); (b) judge "arrived with view state" from `initialUrlHadViewStateRef` — captured once during the first render, before any outbound write — which already exists for the FR-025 collapse decision and encodes exactly this distinction. Deep links and already-active session tabs must still win, so those guards stay.
+
+**Why the round-8 invariant suite never caught it**: FR-033 asserts *indicator ⟺ override parameters*, and in this state they agree perfectly — the dot is present and the overrides are present. The invariant was satisfied while the described state was wrong. The regression for this round therefore asserts the **adopted configuration** and an **empty override set**, i.e. named content rather than a relation between two derived values. Recorded as a testing lesson: a consistency invariant cannot detect consistently-wrong state.
+
+**Alternatives considered**: re-running adoption whenever `defaultView` changes without a one-shot (rejected: it would fight a user who deliberately edits the default view, re-adopting on every refetch); comparing live params against `lastParamRef` to detect our own echo (rejected as the primary mechanism — `lastParamRef` tracks the most recent write, not "what the navigation carried", and the mount-captured ref answers the actual question); dropping the URL-wins guard entirely (rejected: it is what makes deep links authoritative, US3-AC1).
+
+## R45. "Reset changes" and the creation baseline
+
+**Decision**: new tab-addressed action `resetTab(tabId)` plus a `Reset changes` item in `ViewTabMenu`, enabled exactly when the tab's effective configuration differs from its baseline. Baseline by tab kind:
+
+| Tab | Baseline restored |
+|-----|-------------------|
+| stored view (saved, or the default holder once materialized) | that view's stored configuration |
+| unsaved tab (scratch, duplicated, or restored from inline URL state) | the configuration the tab was CREATED with |
+
+The second row needs state that does not exist today: an unsaved tab's `config` field is overwritten as the user edits, so `InternalTab` gains an in-memory `baseline?: ViewConfig`, set at creation by `addBlankTab` (the blank config), `duplicateTab` (the source's config), and the round-7 inline restoration (the URL's config). It is per-visit state and is never persisted — round 5 removed tab persistence entirely.
+
+**Rationale**: the clarified rule is "reload what this tab started from", which is the stored config for a stored view and the creation config otherwise. Reusing the existing `loadIntoTable` path means reset behaves exactly like a view switch — the round-6 `pendingLoadRef` gate applies, so the URL is not published mid-load and the override parameters drop out naturally once the baseline lands (SC-018).
+
+**Enablement**: expressed as "config ≠ baseline" rather than reusing `dirty`, because an unsaved tab is *always* dirty by definition (FR-013) — offering Reset on a pristine blank tab would be a no-op control. For stored views the two are identical, so the matrix in data-model §7 gains one row with the same shape as Save.
+
+**No confirmation** (clarified): the discarded edits are filter/sort/column tweaks that cost seconds to redo, and the item is only enabled when there is something to discard. This is a deliberate exception to the delete-gate habit — nothing stored is destroyed.
+
+**Alternatives considered**: a visible button in the view row (rejected by the clarification — rounds 3–4 reduced that row to tabs plus one kebab); disabling Reset on unsaved tabs entirely (rejected in the same clarification: returning a scratch tab to blank is useful); routing reset through `confirmDialog` (rejected — friction on a cheap, reversible-by-redo action).
+
+## R46. Why the default view was never adopted — three defects in one path
+
+**Round 9 concluded this bug was not in the branch. That was wrong**, and the way
+it was wrong is the most reusable part of this record. The reasoning went: the
+running container's image predated the round-6/7 commits, therefore observations
+made against it described old code. The image timestamp was checked once and the
+matter closed. By the time the user re-reported the bug the stack HAD been
+rebuilt — the image was 12 minutes NEWER than `37f4687` — so the observations
+were of current code all along. **An artefact-freshness check is only valid at
+the moment it is made; re-check it before reusing its conclusion**, and treat a
+user who repeats a bug report as evidence about the code, not about the user.
+
+The reproduction that settled it drives the real page and records every URL
+write (`history.pushState`/`replaceState` wrapped in an init script), because
+the final URL alone hides the sequence. Arriving at the catalog produced:
+
+```
+?inventory-catalog.view=zn6iFx8QhBMj
+ &inventory-catalog.f=or(acquisition__obtained_at gte 2026-01-01; …is_empty)
+ &inventory-catalog.sort=-acquisition__obtained_at__nullsfirst
+ &inventory-catalog.size=50
+```
+
+Those three "overrides" are the PAGE defaults, while the stored default view
+holds `filters: []`, `pageSize: 100` — the signature of a table that never
+adopted its own default view. Three independent defects were stacked in that one
+path; each had to be fixed for the flow to come clean.
+
+**(1) The pristine test read a stale snapshot.** Adoption asked whether the
+default TAB's stored config still equalled the page defaults. That config is
+captured when the tab row is built; on a page whose columns arrive
+asynchronously (the catalog's `attr:*` parameter columns) `defaultConfig` then
+GROWS, and `reconcileConfig` appends the newly-known columns at the END while
+the page declares them mid-order (`actions` is order 99). The two can therefore
+never be equal again, so adoption bailed on every visit, forever. The test now
+compares the TABLE's live state against the page defaults — the question was
+always "is the table still pristine?", and the table is the thing that knows.
+
+**(2) The one-shot was consumed before the guards, and the guards read live
+params.** `defaultAdoptedRef` was set true at the top of the effect, so a bail
+for a transient reason was permanent; and "the URL wins" read `searchParams` as
+they are, which meant the hook's OWN outbound write suppressed adoption on the
+next reload. Both were recorded as latent smells in R44 and left unchanged for
+want of a failing test — they were reachable all along. The one-shot is now a
+token of the configuration last offered (`adoptedTokenRef`), which makes the
+effect idempotent, re-entrant as the column universe settles, and loop-proof
+(adoption changes `tabs`, which re-triggers it). The URL question is answered
+from `initialUrlHadViewStateRef`, captured during the first render.
+
+**(3) The corrective write never happened.** Even once adoption worked, the
+address bar kept the parameters written moments earlier. The outbound effect
+computes `desired` (empty, for a clean default view) and compares it against
+`current` — but `searchParams` was not among its dependencies, so it ran on a
+closure captured before the write and read `current: []`. Believing the URL was
+already clean, it returned. This is FR-037: a writer must decide against the URL
+as it stands, not a remembered value. Adding the dependency is safe because the
+write is idempotent — the re-run it triggers finds `desired === current`.
+
+**Why the unit suite stayed green through all of this.** The round-9 harness
+holds a FIXED column set, and every defect above needs the column universe to
+grow after mount. The round-10 regression models the real page: attribute
+columns arrive a tick after mount, the saved-view list resolves after THEM (the
+order observed in production), and the stored default differs from the page
+defaults in filter, sort and page size. It fails on the pre-fix code with
+`expected 50 to be 25` — the table sitting at page defaults.
+
+**Residual, stated plainly**: in the skew window — after the saved-view list
+arrives but before the table's own column state has been patched with the late
+columns — one write of override parameters still escapes, and is corrected
+within the same second. A reload inside that window would pick it up. Closing it
+needs a gate that can distinguish "adoption is still coming" from "the user
+edited during load"; every formulation tried either failed to fire (the skew IS
+a genuine difference) or risked silencing the URL permanently, which is the
+worse failure (R40). The alternative root fix — making `reconcileConfig` merge
+unknown columns at their declared position instead of appending them — would
+remove the skew entirely, but it changes column-drift behaviour for every saved
+view and belongs in its own round with its own tests.
+
+## R47. One placement rule for late columns — and a row that paints once
+
+Two directives this round; the first turned out to share a root cause with the
+residue R46 deliberately left open, which is why that residue is now closed too.
+
+**The reported defect**: opening `/inventory/catalog?inventory-catalog.view=<an
+unpinned view>` showed the unsaved indicator on the DEFAULT tab — a tab the user
+was not even looking at. Two independent causes, both real:
+
+1. *The default tab kept the page's configuration rather than its own.* Adoption
+   (R46) bailed entirely when the URL addressed a view, because the URL owns the
+   TABLE. But it also owns nothing else: the default tab's own configuration is
+   its stored view's, on screen or not. Adoption is now two decisions — sync the
+   tab's configuration (always) and load it into the table (only when that tab
+   is the one showing, and nothing arrived in the URL to claim it).
+
+2. *The "is this tab untouched?" test could never succeed.* It compared the
+   tab's captured configuration against the page defaults, and those two can
+   differ forever on the catalog. `reconcileConfig` appended columns a
+   configuration did not mention at the TAIL, so a snapshot captured before the
+   `attr:*` columns loaded ordered them after `actions`, while the page declares
+   `actions` last. Nothing could bring the two back into agreement.
+
+**The fix is the one R46 named and deferred**: a column the configuration does
+not mention takes its DECLARED position — immediately after the nearest declared
+predecessor the configuration does mention (`mergeMissingByDeclaredOrder`). Both
+sides of every comparison must use it, so `useColumnConfig.loadState` adopts the
+same rule: it places the table's live columns, and if it disagreed with
+`reconcileConfig` the mismatch would simply move from one comparison to another.
+
+This also closes R46's residue. The transient override write on arrival existed
+because the live snapshot legitimately differed from the defaults inside the
+column skew; with one placement rule there is no skew, and a nav-click to the
+catalog now emits NO url write at all — not one that is corrected, none.
+
+**Behaviour change, stated**: a newly created parameter column now appears among
+the other parameter columns in an existing saved view, rather than after
+"Actions". That is the better answer to "where does a column the view never knew
+about go?", and it is what makes the comparison stable.
+
+**The catalog's own default view is gone** (clarified): the page shipped a
+year-to-date filter, an obtained-descending sort and 50/page since iteration 17.
+Every account now has a STORED default view, and the two competed — the page's
+configuration was the baseline the default tab started from, the stored view was
+what it was compared against. The page now contributes only its columns.
+`DEFAULT_PAGE_SIZE` is exported from `useEntityTable` and used by the page's
+`ViewConfig` baseline, so the two cannot drift apart into a false indicator.
+Consequence, accepted: an account with no stored default view sees an
+unfiltered, unsorted catalog at 25/page.
+
+**The flash** (FR-038): the row used to render the lone default tab, then insert
+pinned views when the query resolved. `ready` is now set from INSIDE the merge
+effect — so the flag and the tabs it describes land in the same commit — and
+`ViewTabs` paints a height-reserving placeholder until then. Clarified as tab
+row only: the table keeps loading immediately, so this costs nothing in data
+latency. Measured on the real page by sampling the tab count every 50ms:
+`0 → placeholder → 2`, one transition.
+
+## R48. Making the pattern a mechanism, not a convention
+
+The directive was "apply this view pattern to all entity views, the catalog is
+the most up-to-date". Auditing the other four pages first was worth the minute
+it cost: **none of them seeded a filter, a sort, a page size or a default-view
+name.** They were already closer to the round-11 pattern than the catalog had
+been. A round that "applies the pattern" by editing four pages into a shape they
+already had would have been busywork dressed as progress.
+
+What they DID share was the real hazard: each hand-copied the same baseline
+object literal, page size included —
+
+```ts
+const defaultViewConfig = useMemo<ViewConfig>(() => ({
+  filters: [], sort: [], columns: columnDefs.map(...), pageSize: 25,
+}), [columnDefs]);
+```
+
+— where `25` restates `useEntityTable`'s own default. That restatement is
+precisely the round-11 defect one edit away from returning: change the table's
+default (or pass `defaultPageSize` on a page) and the baseline silently disagrees
+with what the table opens at, which the tab row reports as unsaved changes on a
+view nobody touched. Five copies, five chances to drift.
+
+So the pattern becomes a mechanism: `viewConfigFromColumns(columnDefs)` builds
+the baseline from the page's columns and the SHARED `DEFAULT_PAGE_SIZE`, and all
+five pages call it. Its own test asserts the property that matters — the page
+size it produces equals the page size a freshly mounted `useEntityTable`
+actually starts at — so the two cannot drift apart without a red test.
+
+**Per-page locks.** The round 6–11 arrival behaviour was only ever verified on
+the catalog, which is also the only page with asynchronously-discovered columns;
+the other four inherited the fixes silently. Each now carries two tests: the
+first request goes out with no filter, no ordering and the default page size,
+and a stored default view is APPLIED on arrival with no indicator anywhere
+(expanded row or collapsed badge — both are asserted, since which one shows
+depends on the reveal state).
+
+**Verifying the verifier** (the iteration-46 habit, and the reason round 9 went
+wrong): adoption was temporarily disabled and the new tests were re-run. They
+fail with `expected 25 to be 100` and pass again when it is restored. A test
+that cannot fail would have been worse than no test, because it would have been
+recorded as coverage.
+
+**Test-isolation note**: the four page suites append a sibling `describe`, which
+inherits NOTHING from the first block's `beforeEach` — and `revealed` persists in
+sessionStorage from earlier tests in the same file, so the row arrives expanded
+rather than collapsed. The new block clears storage itself and tolerates either
+shape rather than assuming one.
+
+Confirmed on the running application with real data: all five pages render,
+none shows an indicator, and none writes a URL parameter on arrival.
+
+## R49. Withdrawing the auto-hide, and making the naming policy structural
+
+Two directives, one of them a correction I should have applied earlier: the user
+had said before that the view toolbar is no longer hidden, and it was still
+hiding on every page. Taken at face value and applied everywhere.
+
+**The auto-hide is gone, not disabled.** FR-025 (round 2) hid the row whenever a
+table had only its default view, behind a `TableOutlined` affordance that
+carried the dirty dot, with a "revealed" preference persisted per table. All of
+it is removed: `collapsed`/`reveal` off the hook's return, the collapsed branch
+and its Badge/Tooltip/Button out of `ViewTabs`, `common.entityViews.showViews`
+out of both locale files, and the reveal step out of five page suites and the
+e2e helper. The row is now unconditional.
+
+That removal took the LAST persisted field with it. `useViewTabsState` had been
+reduced to `{ revealed }` by round 5, which made it a storage hook wrapping one
+boolean; with the boolean gone it writes nothing at all, so its `tableKey`
+parameter, its storage key, its tolerant-parse helper and its persistence effect
+were deleted rather than left inert. A hook that no longer persists anything
+should not look like one that does — and its suite now asserts
+`sessionStorage.length === 0` rather than the shape of a payload.
+
+**"All entity types get default view named Table" is a code policy, not a
+label.** After round 11 no page passed `defaultViewName` and the localized
+fallback was already "Table", so the visible behaviour was mostly correct
+already. What remained was the OPTION: any page could reintroduce a per-page
+name, which is exactly how the catalog's "YTD" came to compete with the stored
+default view in the first place (R47). The option is deleted from
+`UseEntityViewsOptions`, so "Table" is the only initial name an entity table can
+have, and renaming is the user's business.
+
+Clarified explicitly and worth recording: **existing stored views keep their
+names.** The user's catalog default is stored as "All - 2", and the alternatives
+offered — auto-creating a "Table" row per table, or renaming stored defaults —
+would both have written to their data to satisfy a naming policy. Neither is
+needed to make the policy true going forward.
+
+Confirmed on the running application, all five pages: the row renders
+immediately with no collapsed affordance and no reveal control, sessionStorage
+holds no `unihub.views.*` key, four tables show "Table", and the catalog shows
+the user's own "All" and "All - 2" — the stored names, untouched.
+
+**Test note**: four hook tests encoded the withdrawn naming behaviour (a virtual
+default named "YTD", materialized under that name). They were updated to the new
+contract rather than deleted — the virtual default now carries an EMPTY name,
+and materialization stores it as "Table" — because what they cover (the
+materialization path) is still live.

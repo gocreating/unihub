@@ -38,7 +38,7 @@ const makeSort = (overrides: Partial<UseEntitySortReturn> = {}): UseEntitySortRe
     ...overrides,
   }) as unknown as UseEntitySortReturn;
 
-const emptyColumnState = { columns: [], stickyLeft: false, stickyRight: false };
+const emptyColumnState = { columns: [] };
 
 const makeColumns = (overrides: Partial<UseColumnConfigReturn> = {}): UseColumnConfigReturn =>
   ({
@@ -46,8 +46,9 @@ const makeColumns = (overrides: Partial<UseColumnConfigReturn> = {}): UseColumnC
     visibleColumns: [],
     activeState: emptyColumnState,
     pendingState: emptyColumnState,
-    firstColumnFixed: undefined, lastColumnFixed: undefined,
+    fixedForKey: vi.fn().mockReturnValue(undefined), pinFingerprint: '',
     apply: vi.fn(), cancel: vi.fn(), reset: vi.fn(), setPendingState: vi.fn(),
+    loadState: vi.fn(),
     ...overrides,
   }) as unknown as UseColumnConfigReturn;
 

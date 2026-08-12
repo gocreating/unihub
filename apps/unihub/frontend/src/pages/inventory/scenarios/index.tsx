@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, message } from 'antd';
 import { EmptyValue } from '@/components/EmptyValue';
+import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import { PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { Link } from 'react-router-dom';
@@ -95,7 +96,9 @@ export function ScenariosPage() {
           render: (val, record) => (
             // Real hyperlink (FR-010, iteration 45): browser affordances
             // (new tab, copy link) need an href, not an onClick.
-            <Link to={`/inventory/scenarios/${record.id}`}>{val as string}</Link>
+            <Link to={`/inventory/scenarios/${record.id}`}>
+              <SearchMark text={val as string} />
+            </Link>
           ),
           ...makeSortProps('name', t({ id: 'common.name' }), sort),
         },
@@ -105,7 +108,7 @@ export function ScenariosPage() {
           ...widthForHeader(t({ id: 'pages.inventory.scenarios.col.description' }), 260),
           fixed: getFixed('description'),
           ellipsis: true,
-          render: (_, r) => r.description || <EmptyValue />,
+          render: (_, r) => (r.description ? <SearchMark text={r.description} /> : <EmptyValue />),
         },
       };
     },
@@ -122,7 +125,7 @@ export function ScenariosPage() {
   );
 
   return (
-    <>
+    <SearchHighlightProvider value={table.activeSearch}>
       <PageTable<Scenario>
         key={`${cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.inventory.scenarios.title' })}
@@ -136,6 +139,7 @@ export function ScenariosPage() {
             filterProps={{ attrs: filterableAttrs, hook: filter }}
             sortProps={{ attrs: filterableAttrs, hook: sort }}
             columnProps={{ hook: cols }}
+            searchProps={{ value: table.searchQuery, onChange: table.setSearchQuery }}
           />
         }
         viewBar={<ViewTabs views={views} />}
@@ -155,6 +159,6 @@ export function ScenariosPage() {
         onOk={(values) => createMutation.mutate(values)}
         onCancel={() => setModalOpen(false)}
       />
-    </>
+    </SearchHighlightProvider>
   );
 }

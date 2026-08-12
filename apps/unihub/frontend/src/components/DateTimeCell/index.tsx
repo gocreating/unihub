@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { Typography } from 'antd';
 import { EmptyValue } from '@/components/EmptyValue';
+import { SearchMark } from '@/components/HighlightText/SearchMark';
 
 dayjs.extend(relativeTime);
 
@@ -33,7 +34,9 @@ export function DateTimeCell({ value, format = DEFAULT_FORMAT }: DateTimeCellPro
   }
   return (
     <div>
-      <div>{lines[0]}</div>
+      <div>
+        <SearchMark text={lines[0]} />
+      </div>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {lines[1]}
       </Typography.Text>

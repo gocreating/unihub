@@ -527,8 +527,12 @@ export function useEntityViews({
 
   // ── Tab operations (no API writes) ─────────────────────────────────────────
 
+  // Quick search (019): the outgoing tab also snapshots its transient query so
+  // switching back restores it (FR-005). The query never enters ViewConfig.
   const snapshotOutgoing = (prev: InternalTab[], snapshot: ViewConfig): InternalTab[] =>
-    prev.map((tab) => (tab.tabId === activeTabId ? { ...tab, config: snapshot } : tab));
+    prev.map((tab) =>
+      tab.tabId === activeTabId ? { ...tab, config: snapshot, search: table.searchQuery } : tab,
+    );
 
   const switchTab = useCallback(
     (tabId: string) => {
@@ -536,14 +540,13 @@ export function useEntityViews({
       const target = tabs.find((tab) => tab.tabId === tabId);
       if (!target) return;
       const snapshot = table.snapshotConfig();
-      setTabs((prev) =>
-        prev.map((tab) => (tab.tabId === activeTabId ? { ...tab, config: snapshot } : tab)),
-      );
+      setTabs((prev) => snapshotOutgoing(prev, snapshot));
       setActiveTabId(tabId);
       loadIntoTable(target.config);
+      table.setSearchQuery(target.search ?? '');
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeTabId, tabs, table.snapshotConfig, loadIntoTable, setTabs, setActiveTabId],
+    [activeTabId, tabs, table.snapshotConfig, table.searchQuery, table.setSearchQuery, loadIntoTable, setTabs, setActiveTabId],
   );
 
   const openView = useCallback(
@@ -565,6 +568,7 @@ export function useEntityViews({
       setTabs((prev) => [...snapshotOutgoing(prev, snapshot), tab]);
       setActiveTabId(tab.tabId);
       loadIntoTable(config);
+      table.setSearchQuery(''); // new tabs start with an empty query (019)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tabs, viewById, defaultView, defaultConfig, activeTabId, table.snapshotConfig, loadIntoTable, switchTab],
@@ -583,8 +587,9 @@ export function useEntityViews({
     setTabs((prev) => [...snapshotOutgoing(prev, snapshot), tab]);
     setActiveTabId(tab.tabId);
     loadIntoTable(blank);
+    table.setSearchQuery(''); // new tabs start with an empty query (019)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultConfig, activeTabId, table.snapshotConfig, loadIntoTable, t]);
+  }, [defaultConfig, activeTabId, table.snapshotConfig, table.searchQuery, table.setSearchQuery, loadIntoTable, t]);
 
   const closeTab = useCallback(
     (tabId: string) => {
@@ -601,6 +606,7 @@ export function useEntityViews({
         const fallback = tabs[index - 1] ?? tabs.find((item) => item.kind === 'default')!;
         setActiveTabId(fallback.tabId);
         loadIntoTable(fallback.config);
+        table.setSearchQuery(fallback.search ?? ''); // restore the fallback's query (019)
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -635,9 +641,10 @@ export function useEntityViews({
       setTabs((prev) => [...snapshotOutgoing(prev, snapshot), tab]);
       setActiveTabId(tab.tabId);
       loadIntoTable(tab.config);
+      table.setSearchQuery(''); // duplicates copy config, not the query (019)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tabs, tabStates, activeTabId, configOfTab, table.snapshotConfig, loadIntoTable, t],
+    [tabs, tabStates, activeTabId, configOfTab, table.snapshotConfig, table.searchQuery, table.setSearchQuery, loadIntoTable, t],
   );
 
   /** Discard a tab's edits and return it to its baseline (FR-035).

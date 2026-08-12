@@ -924,3 +924,95 @@ describe('CatalogPage (feature 018 US3 — Acquisition pinned left by default)',
     // Two panel round-trips + two table remounts exceed the 5s default in JSDOM.
   }, 15_000);
 });
+
+// Quick search (019, R5): an active search always queries the flat items
+// endpoint (search covers item attributes incl. parameters); tree-mode params
+// never carry a search key.
+describe('CatalogPage — quick search (019)', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    // Mock call history persists across tests in this file — clear it so the
+    // "flat endpoint not used in tree mode" assertion sees only this test.
+    vi.clearAllMocks();
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
+    vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
+      count: 3, next: null, previous: null, results: [ACQ, ACQ_SOLO, ACQ_REQ],
+      totals: { acquisitions: 3, items: 4 },
+    });
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 1, next: null, previous: null, results: [ITEM],
+      totals: { acquisitions: 1, items: 1 },
+    });
+  });
+
+  it('an active search forces the flat items endpoint with the search param', async () => {
+    renderPage();
+    await screen.findByText('Backpack');
+    expect(vi.mocked(inventoryService.listItems)).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'backpack' } });
+    await waitFor(() => {
+      const call = vi.mocked(inventoryService.listItems).mock.calls.at(-1)?.[0];
+      expect(call?.search).toBe('backpack');
+    });
+    // Tree-mode requests never carried the search key (R5).
+    for (const [params] of vi.mocked(inventoryService.listAcquisitions).mock.calls) {
+      expect(params && 'search' in params).toBe(false);
+    }
+  });
+});
+
+// Quick search (019 US3): marks reach the Item cell's name and parameter
+// tags; a row matched only on a hidden attribute stays listed without marks.
+describe('CatalogPage — search highlighting (019)', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    vi.clearAllMocks();
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
+    vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
+      count: 1, next: null, previous: null, results: [ACQ],
+      totals: { acquisitions: 1, items: 2 },
+    });
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 1, next: null, previous: null, results: [ITEM],
+      totals: { acquisitions: 1, items: 1 },
+    });
+  });
+
+  it('marks matches in the Item cell name and in parameter tags', async () => {
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'backpack' } });
+    await waitFor(() => {
+      const marks = Array.from(container.querySelectorAll('.ant-table-tbody mark'));
+      expect(marks.some((m) => m.textContent?.toLowerCase() === 'backpack')).toBe(true);
+    });
+    // Parameter tag content marks too (ItemDisplay → ParameterTag highlight).
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'red' } });
+    await waitFor(() => {
+      const tagMarks = Array.from(container.querySelectorAll('.ant-table-tbody .ant-tag mark'));
+      expect(tagMarks.some((m) => m.textContent === 'red')).toBe(true);
+    });
+  });
+
+  it('a row matched only on a hidden attribute lists without any mark', async () => {
+    // Server-side the match may be on an attribute no visible column renders
+    // (e.g. remark hidden): the row returns, nothing highlights (FR-007).
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 1, next: null, previous: null,
+      results: [{ ...ITEM, remark: 'zzhiddenmatch' }],
+      totals: { acquisitions: 1, items: 1 },
+    });
+    const { container } = renderPage();
+    await screen.findByText('Backpack');
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'zzhiddenmatch' } });
+    await waitFor(() => {
+      expect(vi.mocked(inventoryService.listItems)).toHaveBeenCalled();
+    });
+    await screen.findByText('Backpack');
+    // Remark is not among the default visible columns — no mark anywhere.
+    expect(container.querySelectorAll('.ant-table-tbody mark')).toHaveLength(0);
+  });
+});

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Modal, Space, Switch, Typography, message } from 'antd';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { EmptyValue } from '@/components/EmptyValue';
+import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useIntl } from 'react-intl';
@@ -147,12 +148,16 @@ export function CurrenciesPage() {
         dataIndex: 'code',
         ...widthForHeader('Code', dataWidths.code),
         fixed: getFixed('code'),
+        // SearchMark reads the highlight query from context (019) — no new
+        // colDefMap dependency.
+        render: (_, record) => <SearchMark text={record.code} />,
         ...makeSortProps('code', t({ id: 'pages.finance.currencies.col.code' }), table.sort),
       },
       name: {
         dataIndex: 'name',
         ...widthForHeader('Name', dataWidths.name),
         fixed: getFixed('name'),
+        render: (_, record) => <SearchMark text={record.name} />,
         ...makeSortProps('name', t({ id: 'common.name' }), table.sort),
       },
       symbol: {
@@ -160,7 +165,7 @@ export function CurrenciesPage() {
         ...widthForHeader('Symbol', dataWidths.symbol),
         fixed: getFixed('symbol'),
         render: (val) =>
-          val ? String(val) : <EmptyValue />,
+          val ? <SearchMark text={String(val)} /> : <EmptyValue />,
         ...makeSortProps('symbol', t({ id: 'pages.finance.currencies.col.symbol' }), table.sort),
       },
       is_base_currency: {
@@ -210,7 +215,7 @@ export function CurrenciesPage() {
   );
 
   return (
-    <>
+    <SearchHighlightProvider value={table.activeSearch}>
       <PageTable<Currency>
         key={`${table.cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.finance.currencies.title' })}
@@ -225,6 +230,7 @@ export function CurrenciesPage() {
             filterProps={{ attrs: filterableAttrs, hook: table.filter }}
             sortProps={{ attrs: filterableAttrs, hook: table.sort }}
             columnProps={{ hook: table.cols }}
+            searchProps={{ value: table.searchQuery, onChange: table.setSearchQuery }}
           />
         }
         rowKey="code"
@@ -278,6 +284,6 @@ export function CurrenciesPage() {
           </Typography.Text>
         </Form>
       </Modal>
-    </>
+    </SearchHighlightProvider>
   );
 }

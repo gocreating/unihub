@@ -23,6 +23,7 @@ import { DateTimeCell, dateTimeLines } from '@/components/DateTimeCell';
 import { EmptyValue } from '@/components/EmptyValue';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
 import { acquisitionSummaryLines, formatNetCost } from '../acquisitionSummary';
+import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import { parameterKeyLabel } from '@/components/ParameterRowsEditor';
 import { listAttributeDefinitions } from '@/services/unihub-backend/core';
 import type { AttributeDefinition } from '@/services/unihub-backend/core';
@@ -218,14 +219,17 @@ export function CatalogPage() {
     defaultConfig: defaultViewConfig,
   });
 
-  // Flat mode when any active filter/sort targets an item-level column.
+  // Flat mode when any active filter/sort targets an item-level column — or a
+  // quick search is active (019, R5): search covers item attributes incl.
+  // dynamic parameters, so it always queries the flat items endpoint.
   const flatMode = useMemo(() => {
+    if (table.activeSearch !== '') return true;
     const fields = [
       ...sort.activeRules.map((r) => r.field),
       ...filter.activeGroups.flatMap((g) => g.conditions.map((c) => c.attr)),
     ];
     return fields.some(isItemLevelField);
-  }, [sort.activeRules, filter.activeGroups]);
+  }, [sort.activeRules, filter.activeGroups, table.activeSearch]);
 
   const treeParams = useMemo(() => toTreeParams(table.queryParams), [table.queryParams]);
 
@@ -418,7 +422,8 @@ export function CatalogPage() {
         ...makeSortProps(key, t({ id: labelId }), sort),
         render: (_, r) => {
           const it = itemFor(r);
-          return it ? (get(it) || EMPTY) : EMPTY;
+          const text = it ? get(it) : '';
+          return text ? <SearchMark text={text} /> : EMPTY;
         },
       });
       // Two-row datetime column (constitution v1.18.0).
@@ -450,10 +455,12 @@ export function CatalogPage() {
             const { primary, secondary } = acquisitionSummaryLines(src, untitled);
             return (
               <div>
-                <div>{primary}</div>
+                <div>
+                  <SearchMark text={primary} />
+                </div>
                 {secondary && (
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {secondary}
+                    <SearchMark text={secondary} />
                   </Typography.Text>
                 )}
               </div>
@@ -488,7 +495,7 @@ export function CatalogPage() {
               );
             }
             // Shared item display (FR-031); parameters live in their own column.
-            return <ItemDisplay item={it} />;
+            return <ItemDisplay item={it} highlight={table.activeSearch} />;
           },
         },
         // Derived "Parameters" (FR-003a): one badge per parameter row.
@@ -506,7 +513,7 @@ export function CatalogPage() {
             return (
               <Space size={[4, 4]} wrap style={{ maxWidth: '100%' }}>
                 {pairs.map((pair, i) => (
-                  <ParameterTag key={i} pair={pair} />
+                  <ParameterTag key={i} pair={pair} highlight={table.activeSearch} />
                 ))}
               </Space>
             );
@@ -518,12 +525,11 @@ export function CatalogPage() {
           ...wId('acquisition__source', 'pages.inventory.acquisitions.col.source'),
           fixed: getFixed('acquisition__source'),
           ...makeSortProps('acquisition__source', t({ id: 'pages.inventory.acquisitions.col.source' }), sort),
-          render: (_, r) =>
-            isAcquisition(r)
-              ? r.source || untitled
-              : flatMode
-                ? (r.acquisition?.source ?? EMPTY)
-                : EMPTY,
+          render: (_, r) => {
+            const source = isAcquisition(r) ? r.source : flatMode ? r.acquisition?.source : null;
+            if (isAcquisition(r) && !source) return untitled;
+            return source ? <SearchMark text={source} /> : EMPTY;
+          },
         },
         // Plain text — the derived Item column carries the sole hyperlink (iter 17).
         name: {
@@ -532,7 +538,7 @@ export function CatalogPage() {
           ...wId('name', 'common.name'),
           fixed: getFixed('name'),
           ...makeSortProps('name', t({ id: 'common.name' }), sort),
-          render: (_, r) => itemFor(r)?.name || EMPTY,
+          render: (_, r) => (itemFor(r)?.name ? <SearchMark text={itemFor(r)!.name} /> : EMPTY),
         },
         alias_name: {
           ...itemText('alias_name', 'pages.inventory.items.col.alias', (it) => it.alias_name),
@@ -564,7 +570,9 @@ export function CatalogPage() {
                   verticalAlign: 'bottom',
                 }}
               >
-                <OverflowTooltip title={itemFor(r)!.url}>{itemFor(r)!.url}</OverflowTooltip>
+                <OverflowTooltip title={itemFor(r)!.url}>
+                  <SearchMark text={itemFor(r)!.url} />
+                </OverflowTooltip>
               </a>
             ) : (
               EMPTY
@@ -588,7 +596,7 @@ export function CatalogPage() {
             return (
               <div style={{ maxWidth: 320, overflow: 'hidden', whiteSpace: 'nowrap' }}>
                 <OverflowTooltip title={it.remark} style={{ maxWidth: '100%' }}>
-                  {it.remark.replace(/\n+/g, ' / ')}
+                  <SearchMark text={it.remark.replace(/\n+/g, ' / ')} />
                 </OverflowTooltip>
               </div>
             );
@@ -600,7 +608,10 @@ export function CatalogPage() {
           ...wId('quantity', 'pages.inventory.items.col.quantity'),
           fixed: getFixed('quantity'),
           ...makeSortProps('quantity', t({ id: 'pages.inventory.items.col.quantity' }), sort),
-          render: (_, r) => itemFor(r)?.quantity ?? EMPTY,
+          render: (_, r) => {
+            const qty = itemFor(r)?.quantity;
+            return qty != null ? <SearchMark text={qty} /> : EMPTY;
+          },
         },
         sku_price: { ...itemText('sku_price', 'pages.inventory.items.col.skuPrice', (it) => skuText(it)), align: 'right' },
         deprecate_time: dateTimeCol('deprecate_time', 'pages.inventory.items.col.deprecateTime', (r) => {
@@ -722,7 +733,10 @@ export function CatalogPage() {
           fixed: getFixed(key),
           ...makeSortProps(key, label, sort),
           ...(numeric ? { align: 'right' as const } : {}),
-          render: (_, r) => parameterCellText(paramOf(r, d.id)) || EMPTY,
+          render: (_, r) => {
+            const text = parameterCellText(paramOf(r, d.id));
+            return text ? <SearchMark text={text} /> : EMPTY;
+          },
         };
       }
       return map;
@@ -732,7 +746,7 @@ export function CatalogPage() {
     // changes (previously masked by visibleColumns changing identity every
     // render; the 017 hook memoizes it).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, flatMode, definitions, toggledIds, sort.sortOrderForField, sort.activeRules, cols.fixedForKey, cols.visibleColumns, navigate, currencySymbolsMap],
+    [t, dataWidths, actionsColWidth, flatMode, definitions, toggledIds, sort.sortOrderForField, sort.activeRules, cols.fixedForKey, cols.visibleColumns, navigate, currencySymbolsMap, table.activeSearch],
   );
 
   const caretColumn = useMemo<ProColumns<CatalogRow>>(
@@ -762,7 +776,7 @@ export function CatalogPage() {
   }, [cols.visibleColumns, colDefMap, flatMode, caretColumn]);
 
   return (
-    <>
+    <SearchHighlightProvider value={table.activeSearch}>
       <PageTable<CatalogRow>
         key={`${flatMode}-${cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.inventory.catalog.title' })}
@@ -777,6 +791,7 @@ export function CatalogPage() {
             filterProps={{ attrs: filterableAttrs, hook: filter }}
             sortProps={{ attrs: filterableAttrs, hook: sort }}
             columnProps={{ hook: cols }}
+            searchProps={{ value: table.searchQuery, onChange: table.setSearchQuery }}
           />
         }
         rowKey="id"
@@ -868,6 +883,6 @@ export function CatalogPage() {
           {t({ id: 'pages.inventory.items.deprecate.unknown' })}
         </Checkbox>
       </Modal>
-    </>
+    </SearchHighlightProvider>
   );
 }

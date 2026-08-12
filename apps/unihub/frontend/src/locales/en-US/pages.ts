@@ -337,6 +337,7 @@ export default {
 
   // Entity Operations — shared toolbar labels
   'common.entityOps.filter': 'Filter',
+  'common.entityOps.searchPlaceholder': 'Search',
   'common.entityOps.sort': 'Sort',
   'common.entityOps.columns': 'Columns',
   'common.entityOps.apply': 'Apply',

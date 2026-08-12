@@ -178,4 +178,8 @@ export interface EntityListParams {
   offset?: number;
   /** Cursor-based pagination. */
   cursor?: string;
+  /** Quick search (019): free-text query matched against any searchable
+   *  attribute server-side, ANDed with `filters`. Omit (never `''`) when no
+   *  search is active. */
+  search?: string;
 }

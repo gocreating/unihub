@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, DatePicker, Form, Input, Modal, Select, Space, Tag, message } from 'antd';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -157,14 +158,22 @@ export function ExchangeRatesPage() {
         dataIndex: 'base_currency',
         ...widthForHeader('Base', dataWidths.base_currency),
         fixed: getFixed('base_currency'),
-        render: (val) => <Tag>{val as string}</Tag>,
+        render: (val) => (
+          <Tag>
+            <SearchMark text={val as string} />
+          </Tag>
+        ),
         ...makeSortProps('base_currency', t({ id: 'pages.finance.exchangeRates.col.base' }), table.sort),
       },
       quote_currency: {
         dataIndex: 'quote_currency',
         ...widthForHeader('Quote', dataWidths.quote_currency),
         fixed: getFixed('quote_currency'),
-        render: (val) => <Tag>{val as string}</Tag>,
+        render: (val) => (
+          <Tag>
+            <SearchMark text={val as string} />
+          </Tag>
+        ),
         ...makeSortProps('quote_currency', t({ id: 'pages.finance.exchangeRates.col.quote' }), table.sort),
       },
       rate: {
@@ -172,7 +181,7 @@ export function ExchangeRatesPage() {
         ...widthForHeader('Rate', Math.max(120, dataWidths.rate)),
         align: 'right',
         fixed: getFixed('rate'),
-        render: (val) => formatAmount(val as string),
+        render: (val) => <SearchMark text={formatAmount(val as string)} />,
         ...makeSortProps('rate', t({ id: 'pages.finance.exchangeRates.col.rate' }), table.sort),
       },
       date: {
@@ -181,7 +190,7 @@ export function ExchangeRatesPage() {
         fixed: getFixed('date'),
         render: (val) => {
           const d = dayjs(val as string);
-          return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
+          return <SearchMark text={`${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`} />;
         },
         ...makeSortProps('date', t({ id: 'common.date' }), table.sort),
       },
@@ -225,7 +234,7 @@ export function ExchangeRatesPage() {
   );
 
   return (
-    <>
+    <SearchHighlightProvider value={table.activeSearch}>
       <PageTable<ExchangeRate>
         key={`${table.cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.finance.exchangeRates.title' })}
@@ -239,6 +248,7 @@ export function ExchangeRatesPage() {
             filterProps={{ attrs: filterableAttrs, hook: table.filter }}
             sortProps={{ attrs: filterableAttrs, hook: table.sort }}
             columnProps={{ hook: table.cols }}
+            searchProps={{ value: table.searchQuery, onChange: table.setSearchQuery }}
           />
         }
         viewBar={<ViewTabs views={views} />}
@@ -281,6 +291,6 @@ export function ExchangeRatesPage() {
           </Form.Item>
         </Form>
       </Modal>
-    </>
+    </SearchHighlightProvider>
   );
 }

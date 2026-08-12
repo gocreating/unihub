@@ -334,6 +334,7 @@ export default {
 
   // Entity Operations — shared toolbar labels
   'common.entityOps.filter': '篩選',
+  'common.entityOps.searchPlaceholder': '搜尋',
   'common.entityOps.sort': '排序',
   'common.entityOps.columns': '欄位',
   'common.entityOps.apply': '套用',

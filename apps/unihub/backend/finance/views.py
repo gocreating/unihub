@@ -6,7 +6,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from core.filters import EntityFilterBackend, NullsOrderingFilter
+from core.filters import EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter
 from core.pagination import EntityOffsetPagination
 from finance.models import Account, Balance, BalanceSheet, Currency, ExchangeRate
 from finance.serializers import (
@@ -22,12 +22,18 @@ from finance.serializers import (
 class CurrencyViewSet(viewsets.ModelViewSet):
     queryset = Currency.objects.all()
     serializer_class = CurrencySerializer
-    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filter_backends = [EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter]
     filterable_fields = {
         "code": {"lookup": "code", "type": "text"},
         "name": {"lookup": "name", "type": "text"},
         "symbol": {"lookup": "symbol", "type": "text"},
         "is_base_currency": {"lookup": "is_base_currency", "type": "boolean"},
+    }
+    # Quick search (019): booleans excluded — "true"/"false" text is noise (R3).
+    searchable_fields = {
+        "code": "text",
+        "name": "text",
+        "symbol": "text",
     }
     ordering_fields = ["code", "name", "symbol", "is_base_currency"]
     ordering = ["code"]
@@ -38,13 +44,20 @@ class CurrencyViewSet(viewsets.ModelViewSet):
 class AccountViewSet(viewsets.ModelViewSet):
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
-    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filter_backends = [EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter]
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
         "currency": {"lookup": "currency", "type": "single_select"},
         "color": {"lookup": "color", "type": "text"},
         "open_datetime": {"lookup": "open_datetime", "type": "date"},
         "close_datetime": {"lookup": "close_datetime", "type": "date"},
+    }
+    searchable_fields = {
+        "name": "text",
+        "currency": "text",
+        "color": "text",
+        "open_datetime": "cast",
+        "close_datetime": "cast",
     }
     ordering_fields = ["name", "currency", "color", "open_datetime", "close_datetime"]
     ordering = ["name"]
@@ -156,12 +169,19 @@ class BalanceSheetViewSet(viewsets.ModelViewSet):
 class ExchangeRateViewSet(viewsets.ModelViewSet):
     queryset = ExchangeRate.objects.all()
     serializer_class = ExchangeRateSerializer
-    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filter_backends = [EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter]
     filterable_fields = {
         "base_currency": {"lookup": "base_currency", "type": "single_select"},
         "quote_currency": {"lookup": "quote_currency", "type": "single_select"},
         "rate": {"lookup": "rate", "type": "number"},
         "date": {"lookup": "date", "type": "date"},
+    }
+    # The entity has NO text columns — rate/date match via their text form (R3).
+    searchable_fields = {
+        "base_currency": "text",
+        "quote_currency": "text",
+        "rate": "cast",
+        "date": "cast",
     }
     ordering_fields = ["date", "base_currency", "quote_currency", "rate"]
     ordering = ["-date"]

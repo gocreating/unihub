@@ -6,7 +6,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from core.filters import EntityFilterBackend, NullsOrderingFilter
+from core.filters import EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter
 from core.pagination import EntityOffsetPagination
 from inventory.models import Acquisition, Item, Scenario, ScenarioItem
 from inventory.serializers import (
@@ -23,9 +23,26 @@ class ItemViewSet(viewsets.ModelViewSet):
 
     queryset = Item.objects.all()
     serializer_class = ItemSerializer
-    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filter_backends = [EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter]
     # Opt into attr:<definition_id> filter/sort keys (dynamic parameters).
     attribute_content_type = "inventory.item"
+    # Quick search (019): all text fields + numeric/date via their text form,
+    # forward-FK acquisition text, and ANY dynamic parameter value (R3–R5).
+    # Booleans (deprecated) and computed serializer fields excluded.
+    searchable_fields = {
+        "name": "text",
+        "alias_name": "text",
+        "spec": "text",
+        "remark": "text",
+        "url": "text",
+        "sku_price_currency": "text",
+        "quantity": "cast",
+        "sku_price": "cast",
+        "deprecate_time": "cast",
+        "acquisition__source": "text",
+        "acquisition__remark": "text",
+    }
+    search_attribute_values = True
     # Keys are the real field paths so a single toolbar key works for BOTH filter
     # and sort (the ordering filter validates the raw field name against
     # ordering_fields). The Catalog's flat mode sends these paths directly.
@@ -95,11 +112,19 @@ class AcquisitionViewSet(viewsets.ModelViewSet):
         "cost_factors", "items__attribute_values__attribute_definition"
     )
     serializer_class = AcquisitionSerializer
-    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filter_backends = [EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter]
     filterable_fields = {
         "source": {"lookup": "source", "type": "text"},
         "request_time": {"lookup": "request_time", "type": "date"},
         "obtained_at": {"lookup": "obtained_at", "type": "date"},
+    }
+    # Own fields only — no items__* legs (join duplication; the catalog
+    # searches flat mode via ItemViewSet instead, R5).
+    searchable_fields = {
+        "source": "text",
+        "remark": "text",
+        "request_time": "cast",
+        "obtained_at": "cast",
     }
     ordering_fields = ["source", "request_time", "obtained_at"]
     ordering = ["-obtained_at__nullsfirst"]
@@ -127,9 +152,14 @@ class AcquisitionViewSet(viewsets.ModelViewSet):
 class ScenarioViewSet(viewsets.ModelViewSet):
     queryset = Scenario.objects.all()
     serializer_class = ScenarioSerializer
-    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filter_backends = [EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter]
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
+    }
+    # description is searchable though not filterable (R14).
+    searchable_fields = {
+        "name": "text",
+        "description": "text",
     }
     ordering_fields = ["name", "created_at"]
     ordering = ["name"]

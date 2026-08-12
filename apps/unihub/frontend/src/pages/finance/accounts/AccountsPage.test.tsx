@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
 import enUS from '@/locales/en-US';
+import { DEFAULT_PAGE_SIZE } from '@/components/EntityToolbar';
 import { AccountsPage } from './index';
 import * as financeService from '@/services/unihub-backend/finance';
 import * as coreService from '@/services/unihub-backend/core';
@@ -79,5 +80,53 @@ describe('AccountsPage — entity views (016)', () => {
     fireEvent.click(screen.getByLabelText('Show views'));
     const defaultTab = screen.getByRole('tab', { name: /table/i });
     expect(defaultTab).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+// 016 round 12 (FR-039/SC-021): every entity table follows the same pattern —
+// the page seeds no filter or sorting, and the account's stored default view is
+// what actually applies on arrival, with nothing reported as unsaved.
+describe('AccountsPage — the shared view pattern (round 12)', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
+  });
+
+  const STORED_DEFAULT = {
+    id: 'dflt00000001',
+    table_key: 'finance-accounts',
+    name: 'Mine',
+    config: { filters: [], sort: [], columns: [], pageSize: 100 },
+    pinned: true,
+    position: 0,
+    is_default: true,
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  };
+
+  it('seeds no filter and no sorting of its own', async () => {
+    renderPage();
+    await screen.findByText('Savings');
+    const call = vi.mocked(financeService.listAccounts).mock.calls.at(-1)![0]!;
+    expect(call.filters).toBeUndefined();
+    expect(call.ordering).toBeFalsy();
+    expect(call.limit).toBe(DEFAULT_PAGE_SIZE);
+  });
+
+  it('applies the stored default view on arrival, with no unsaved indicator', async () => {
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([STORED_DEFAULT]);
+    renderPage();
+    await screen.findByText('Savings');
+
+    await waitFor(() => {
+      const call = vi.mocked(financeService.listAccounts).mock.calls.at(-1)![0]!;
+      expect(call.limit).toBe(100);
+    });
+    const reveal = screen.queryByLabelText('Show views');
+    if (reveal) fireEvent.click(reveal);
+    // Expanded row: the dot carries an aria-label. Collapsed row: it is the
+    // reveal affordance's badge. Neither may be present.
+    expect(screen.queryByLabelText('Unsaved changes')).toBeNull();
+    expect(document.querySelector('.ant-badge-dot')).toBeNull();
   });
 });

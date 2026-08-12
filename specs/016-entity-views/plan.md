@@ -1,10 +1,38 @@
-# Implementation Plan: Entity Views — Round 11 (one column-placement rule; the row paints once)
+# Implementation Plan: Entity Views — Round 12 (one view pattern, on every entity table)
 
 **Branch**: `016-entity-views` | **Date**: 2026-08-12 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-12b. Earlier plans at 467beff / 8e1f169 / 3defc24 / 5d6ad96 / bb3f310 / c2c256e / a0309e8 / bf0b2eb.
+**Input**: Feature specification from `/specs/016-entity-views/spec.md` — Clarifications Session 2026-08-12c. Earlier plans at 467beff / 8e1f169 / 3defc24 / 5d6ad96 / bb3f310 / c2c256e / a0309e8 / bf0b2eb.
 
 ## Summary
+
+"Apply this view pattern to all entity views; the catalog is the most
+up-to-date." Auditing the other four pages first changed what this round is
+(R48): **none of them seeded a filter, a sort, a page size or a default-view
+name** — they were already closer to the round-11 pattern than the catalog had
+been. Editing them into a shape they already had would have been busywork.
+
+The real hazard they shared was a hand-copied baseline literal per page, page
+size included, restating what `useEntityTable` already defaults to. That
+restatement is the round-11 defect one edit away from returning: any drift
+between the baseline and what the table actually opens at is reported as unsaved
+changes on a view nobody touched. Five copies, five chances to drift.
+
+1. **The pattern becomes a mechanism** — `viewConfigFromColumns(columnDefs)`
+   builds the baseline from the page's columns and the shared
+   `DEFAULT_PAGE_SIZE`; all five pages call it. Its test asserts the property
+   that matters: the page size it produces equals what a freshly mounted
+   `useEntityTable` starts at.
+2. **Per-page locks** — the round 6–11 arrival behaviour was only ever verified
+   on the catalog. Each of the other four pages now asserts that its first
+   request carries no filter, no ordering and the default page size, and that a
+   stored default view is APPLIED on arrival with no indicator.
+
+Verified by disabling adoption and watching the new tests fail
+(`expected 25 to be 100`), and on the running application: all five pages render
+with real data, no indicator, no URL parameters.
+
+## Round 11 (shipped, retained for the record)
 
 Three changes, and the first two share a root cause with the residue round 10
 left open — so that residue closes here too (R47).

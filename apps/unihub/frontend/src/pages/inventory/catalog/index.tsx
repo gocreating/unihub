@@ -37,10 +37,10 @@ import {
   updateItem,
 } from '@/services/unihub-backend/inventory';
 import {
-  DEFAULT_PAGE_SIZE,
   EntityOffsetFooter,
   EntityToolbar,
   useEntityTable,
+  viewConfigFromColumns,
 } from '@/components/EntityToolbar';
 import { ViewTabs } from '@/components/EntityViews/ViewTabs';
 import { useEntityViews } from '@/components/EntityViews/useEntityViews';
@@ -211,15 +211,7 @@ export function CatalogPage() {
   const { filter, sort, cols } = table;
 
   // The default-view baseline the view tabs diff against (016 views).
-  const defaultViewConfig = useMemo<ViewConfig>(
-    () => ({
-      filters: [],
-      sort: [],
-      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order, pin: c.pin })),
-      pageSize: DEFAULT_PAGE_SIZE,
-    }),
-    [columnDefs],
-  );
+  const defaultViewConfig = useMemo<ViewConfig>(() => viewConfigFromColumns(columnDefs), [columnDefs]);
   const views = useEntityViews({
     tableKey: table.tableKey,
     table,

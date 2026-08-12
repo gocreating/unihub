@@ -14,7 +14,12 @@ import {
   listCurrencies,
   updateCurrency,
 } from '@/services/unihub-backend/finance';
-import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
+import {
+  EntityOffsetFooter,
+  EntityToolbar,
+  useEntityTable,
+  viewConfigFromColumns,
+} from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute, ViewConfig } from '@/components/EntityToolbar';
 import { ViewTabs } from '@/components/EntityViews/ViewTabs';
 import { useEntityViews } from '@/components/EntityViews/useEntityViews';
@@ -52,15 +57,7 @@ export function CurrenciesPage() {
   const table = useEntityTable({ key: 'finance-currencies', filterableAttrs, columnDefs });
 
   // The default-view baseline the view tabs diff against (016 views).
-  const defaultViewConfig = useMemo<ViewConfig>(
-    () => ({
-      filters: [],
-      sort: [],
-      columns: columnDefs.map((c) => ({ key: c.key, visible: c.visible, order: c.order, pin: c.pin })),
-      pageSize: 25,
-    }),
-    [columnDefs],
-  );
+  const defaultViewConfig = useMemo<ViewConfig>(() => viewConfigFromColumns(columnDefs), [columnDefs]);
   const views = useEntityViews({
     tableKey: table.tableKey,
     table,

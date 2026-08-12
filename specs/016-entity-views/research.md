@@ -609,3 +609,56 @@ effect — so the flag and the tabs it describes land in the same commit — and
 row only: the table keeps loading immediately, so this costs nothing in data
 latency. Measured on the real page by sampling the tab count every 50ms:
 `0 → placeholder → 2`, one transition.
+
+## R48. Making the pattern a mechanism, not a convention
+
+The directive was "apply this view pattern to all entity views, the catalog is
+the most up-to-date". Auditing the other four pages first was worth the minute
+it cost: **none of them seeded a filter, a sort, a page size or a default-view
+name.** They were already closer to the round-11 pattern than the catalog had
+been. A round that "applies the pattern" by editing four pages into a shape they
+already had would have been busywork dressed as progress.
+
+What they DID share was the real hazard: each hand-copied the same baseline
+object literal, page size included —
+
+```ts
+const defaultViewConfig = useMemo<ViewConfig>(() => ({
+  filters: [], sort: [], columns: columnDefs.map(...), pageSize: 25,
+}), [columnDefs]);
+```
+
+— where `25` restates `useEntityTable`'s own default. That restatement is
+precisely the round-11 defect one edit away from returning: change the table's
+default (or pass `defaultPageSize` on a page) and the baseline silently disagrees
+with what the table opens at, which the tab row reports as unsaved changes on a
+view nobody touched. Five copies, five chances to drift.
+
+So the pattern becomes a mechanism: `viewConfigFromColumns(columnDefs)` builds
+the baseline from the page's columns and the SHARED `DEFAULT_PAGE_SIZE`, and all
+five pages call it. Its own test asserts the property that matters — the page
+size it produces equals the page size a freshly mounted `useEntityTable`
+actually starts at — so the two cannot drift apart without a red test.
+
+**Per-page locks.** The round 6–11 arrival behaviour was only ever verified on
+the catalog, which is also the only page with asynchronously-discovered columns;
+the other four inherited the fixes silently. Each now carries two tests: the
+first request goes out with no filter, no ordering and the default page size,
+and a stored default view is APPLIED on arrival with no indicator anywhere
+(expanded row or collapsed badge — both are asserted, since which one shows
+depends on the reveal state).
+
+**Verifying the verifier** (the iteration-46 habit, and the reason round 9 went
+wrong): adoption was temporarily disabled and the new tests were re-run. They
+fail with `expected 25 to be 100` and pass again when it is restored. A test
+that cannot fail would have been worse than no test, because it would have been
+recorded as coverage.
+
+**Test-isolation note**: the four page suites append a sibling `describe`, which
+inherits NOTHING from the first block's `beforeEach` — and `revealed` persists in
+sessionStorage from earlier tests in the same file, so the row arrives expanded
+rather than collapsed. The new block clears storage itself and tolerates either
+shape rather than assuming one.
+
+Confirmed on the running application with real data: all five pages render,
+none shows an indicator, and none writes a URL parameter on arrival.

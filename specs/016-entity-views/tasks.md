@@ -1,61 +1,47 @@
-# Tasks: Entity Views — Round 11
+# Tasks: Entity Views — Round 12
 
-**Input**: Design documents from `/specs/016-entity-views/` (spec.md Clarifications Session 2026-08-12b, plan.md round 11, research.md R47)
+**Input**: Design documents from `/specs/016-entity-views/` (spec.md Clarifications Session 2026-08-12c, plan.md round 12, research.md R48)
 
-**Prerequisites**: Rounds 1–10 shipped (round 10 at commit 2a1a8c6).
+**Prerequisites**: Rounds 1–11 shipped (round 11 at commit b91d0f0).
 
-**Scope note**: frontend only — one shared helper, two hooks, one component, the catalog page, their tests, one e2e spec. No backend, no migration, no grammar change.
+**Scope note**: frontend only — one shared helper, five pages, five test suites. No backend, no migration, no hook change, no UI change.
 
-**Method note**: the reported deep link was reproduced in a unit test first, then confirmed fixed against the user's real data with a read-only probe. The probe is what showed the unit fix was insufficient on the real page — the second cause (column placement) only appears when columns arrive late.
+**Method note**: audit before editing. The four non-catalog pages already seeded nothing, so the round is about removing a drift hazard and locking behaviour per page — not about editing four pages into a shape they already had.
 
 ## Phase 1: Setup
 
-- [X] T001 Confirm the green baseline and re-check which artefact serves the app (the round-10 lesson: a freshness check expires)
+- [X] T001 Audit all five entity pages for seeded filters, sorts, page sizes and default-view names, and for how each builds its `defaultViewConfig` — record the actual deltas before planning any edit
+
+**Checkpoint**: the real gap is known (hand-copied baselines, not seeded configuration).
 
 ## Phase 2: Foundational (blocking prerequisite)
 
-- [X] T002 Add the failing regression to `apps/unihub/frontend/src/components/EntityViews/useEntityViews.test.tsx` in `describe('round 11: the default tab holds its stored config')`: with `?tbl.view=<an unpinned view>` at mount and a materialized default whose config differs, the DEFAULT tab must not be dirty, the deep-linked tab must own the table, and `ready` must be false until the views resolve. Confirm red (`expected true to be false`)
+- [X] T002 Add `apps/unihub/frontend/src/components/EntityToolbar/viewConfig.ts` — `viewConfigFromColumns(columnDefs)` builds the page baseline from columns plus the shared `DEFAULT_PAGE_SIZE` — and export it from the barrel
+- [X] T003 Write its test suite, including the property that matters: the page size it produces equals what a freshly mounted `useEntityTable` actually starts at, so the two cannot drift apart without a red test
 
-**Checkpoint**: the reported state is captured in the suite.
+**Checkpoint**: one definition of "this table, untouched" exists.
 
 ## Phase 3: User Story 1 — Save a table configuration and reopen it later (P1)
 
-**Goal**: a tab's configuration is its own view's, whether or not it is the tab on screen (FR-013), and a column the configuration never knew about lands where the page declares it (FR-021).
+**Goal**: every entity table follows one pattern, with no per-page variation (FR-039).
 
-- [X] T003 [US1] Split adoption in `apps/unihub/frontend/src/components/EntityViews/useEntityViews.ts` into two decisions: (a) sync the default TAB's configuration to its stored view, always; (b) load it into the TABLE only when that tab is active and the URL brought no view state
-- [X] T004 [US1] Add `apps/unihub/frontend/src/components/EntityToolbar/columnOrder.ts` — `mergeMissingByDeclaredOrder(listedKeys, declaredKeys)` places columns a configuration does not mention after their nearest declared predecessor — with its own unit suite covering user-chosen orders, consecutive newcomers, and the no-predecessor case
-- [X] T005 [US1] Adopt the helper in BOTH `reconcileConfig` (useEntityViews.ts) and `useColumnConfig.loadState` — a disagreement between them just moves the mismatch — T002 green
+- [X] T004 [US1] Adopt `viewConfigFromColumns` at all five pages (`finance/accounts`, `finance/currencies`, `finance/exchange-rates`, `inventory/catalog`, `inventory/scenarios`), replacing the hand-copied literal and the restated page size
+- [X] T005 [P] [US1] Lock arrival behaviour per page in `AccountsPage.test.tsx`, `CurrenciesPage.test.tsx`, `ExchangeRatesPage.test.tsx` and `ScenariosPage.test.tsx`: the first request carries no filter, no ordering and the default page size; a stored default view is APPLIED on arrival with no indicator in either row shape (SC-021)
+- [X] T006 [US1] Verify the verifier: disable adoption temporarily and confirm the new tests FAIL (`expected 25 to be 100`), then restore. A test that cannot fail would be recorded as coverage while proving nothing (the round-9 lesson)
 
-**Checkpoint**: US1 delta done — no tab reports changes nobody made.
+**Checkpoint**: US1 delta done — the pattern is enforced by a mechanism and checked per page.
 
-## Phase 4: User Story 2 — Switch between saved views (P2)
+## Phase 4: Polish & Cross-Cutting
 
-**Goal**: the view row appears complete or not at all (FR-038).
-
-- [X] T006 [US2] Write the failing tests: `ready` in the hook suite, and in `ViewTabs.test.tsx` that no tabs render while the row is not ready, that the placeholder reserves height, and that the complete set renders once ready
-- [X] T007 [US2] Expose `ready` from `useEntityViews`, set from INSIDE the pinned-merge effect so the flag and the tabs it describes land in the same commit; render the height-reserving placeholder in `ViewTabs` ahead of the collapsed branch — T006 green
-
-**Checkpoint**: US2 delta done — one paint, no tab-by-tab fill-in.
-
-## Phase 5: The catalog's own default view
-
-- [X] T008 Remove the seeded filter, sort, page size and the "YTD" default-view name from `apps/unihub/frontend/src/pages/inventory/catalog/index.tsx`; the page's `ViewConfig` baseline keeps only columns and takes `DEFAULT_PAGE_SIZE`
-- [X] T009 Export `DEFAULT_PAGE_SIZE` from `useEntityTable` (and the barrel) so a page baseline cannot drift from the table's own default into a false indicator
-- [X] T010 Update the four catalog tests that assert the removed behaviour (YTD tab name, lit Filter, lit Sort, 50/page) to the new contract — deliberate behaviour change, not a test weakening
-
-## Phase 6: Polish & Cross-Cutting
-
-- [X] T011 [P] Extend e2e `apps/unihub/frontend/e2e/entity-views.spec.ts`: a deep link to an unpinned view leaves every other tab without an indicator; and the tab count never changes after the row first appears
-- [X] T012 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend untouched. The e2e suite is NOT run here (the live stack serves real data)
-- [X] T013 Re-probe the real page: the reported deep link, the tab-count transitions, and a re-check that round 10's transient write is gone
-- [X] T014 Record R47 and update `CLAUDE.md`
+- [X] T007 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend untouched. Any failure verified in isolation first — balance-sheets and SyncTab flake only under full-suite load
+- [X] T008 Smoke-probe the running application read-only: all five pages render with real data, none shows an indicator, none writes a URL parameter, no page errors
+- [X] T009 Record R48 and update `CLAUDE.md`
 
 ## Dependencies
 
-- T002 → T003 → T004 → T005 (the unit fix is insufficient without the placement rule).
-- T006 → T007. T008 → T010; T009 blocks T008.
-- Polish (T011–T014) last.
+- T001 → T002 → T003 → T004. T005 is independent of T004 [P] but must run after it to pass. T006 follows T005.
+- Polish (T007–T009) last.
 
 ## Implementation strategy
 
-Fix the tab-configuration split first — it is the literal report — then the placement rule, which is what makes it hold on a page with late-arriving columns. The catalog removal is independent and could ship alone; the flash fix is independent of both.
+Audit first — it determined that the round's value is the shared helper and the per-page locks, not the page edits. The helper and its property test come before adoption so the pages have one definition to call; the per-page tests come last because they are the evidence that the pattern actually holds where it was never checked before.

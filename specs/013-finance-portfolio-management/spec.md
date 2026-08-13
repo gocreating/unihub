@@ -34,6 +34,14 @@
 - Q: How does the portfolio detail page handle top-of-page navigation? → A: Via a constitution-compliant breadcrumb (Portfolios → current portfolio name); no page-level Back/Cancel control.
 - Q: How is the portfolio's own information presented on the detail page? → A: Inside a panel (Card) titled "Portfolio" holding the portfolio's fields (name, base currency, state, first/last transaction time). Deleting from this panel (after the standard confirmation, and only when not blocked by FR-010) returns the user to the Portfolios list.
 
+### Session 2026-08-13
+
+- Q: Should the base (valuation) currency bind to Asset instead of Portfolio? → A: Neither new concept — the finance app already has a Currency model (with an `is_base_currency` flag). The base currency remains a per-portfolio, immutable choice that references an existing finance Currency record (legacy data requires per-portfolio: portfolios settle in both TWD and USD). Assets carry no currency binding.
+- Q: How are legacy transfers whose asset is a settleable currency (TWD/USD) represented? → A: Port as-is: the migration is strictly additive — every legacy asset row (including TWD and USD) becomes a unihub Asset record and every transfer ports 1:1 with its asset reference and amounts. Existing unihub records are never modified or deleted; the Currency table is only consulted for the portfolios' base-currency codes (TWD/USD created there only if missing).
+- Q: How is each migrated portfolio's active/closed state derived (legacy has no state column)? → A: From the name prefix — names starting with "[Active]" → state `active`, all others → `closed`; portfolio names are ported verbatim, keeping the "[Active] " prefix text in the name.
+- Q: Where do legacy fields with no unihub home go — `chain_id`/`tx_hash` on 136 transactions, `remark` on 36 transfers (and `description` on 8 portfolios)? → A: Add optional fields: `Transaction.chain_id`, `Transaction.tx_hash`, `Transfer.remark`, `Portfolio.description` — lossless, structured, shown in the relevant forms/panels/expanded rows. Legacy transaction `remark` maps to the existing `description` field.
+- Q: (Directive) Does Asset keep its `category` attribute? → A: No — `category` is removed from the Asset entity, its forms, columns, and API. Legacy asset `decimals` are likewise not stored; they are used only to convert raw integer minor-unit amounts to decimal values during migration (amount ÷ 10^decimals).
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Manage Assets (Priority: P1)
@@ -47,7 +55,7 @@ As a user, I want to create and manage asset records so that I have a catalog of
 **Acceptance Scenarios**:
 
 1. **Given** the user is in the finance section, **When** they navigate to the Assets page, **Then** they see a paginated, sortable, filterable table of all their assets with a toolbar
-2. **Given** the Assets page is open, **When** the user clicks "Create", fills in the asset name and category, and submits, **Then** the new asset appears in the list
+2. **Given** the Assets page is open, **When** the user clicks "Create", fills in the asset name, and submits, **Then** the new asset appears in the list
 3. **Given** an asset exists, **When** the user edits and saves it, **Then** the updated details are reflected immediately in the table
 4. **Given** an asset exists and is not referenced by any transfer, **When** the user deletes it, **Then** it is removed from the list
 5. **Given** an asset is referenced by one or more transfers, **When** the user attempts to delete it, **Then** they receive a clear error message explaining why deletion is blocked
@@ -98,21 +106,40 @@ As a user, I want to record financial transactions — each composed of one or m
 
 ---
 
-### User Story 4 - Migrate Existing Finance Data *(Deferred — out of scope for initial implementation)*
+### User Story 4 - Migrate Legacy Finance Data (Priority: P4) *(un-deferred 2026-08-13)*
 
-> **Deferred**: This story will be addressed in a follow-up after the core CRUD implementation (Stories 1–3) is accepted.
+As a user, I want my legacy finance records — exported as four CSV files (`finance_asset.csv`, `finance_portfolio.csv`, `finance_transaction.csv`, `finance_transfer.csv`) — ported into the new portfolio entities so that I keep my full financial history.
 
-As a user, I want my existing finance data migrated into the new portfolio structure so that I do not lose historical records when the new entities go live.
+**Why this priority**: Data continuity is essential. Without migration, the user starts with a blank slate and loses history. Depends on Stories 1–3 (accepted) and the model amendments in this iteration.
 
-**Why this priority**: Data continuity is essential. Without migration, the user starts with a blank slate and loses history.
-
-**Independent Test**: Can be verified by running the migration and confirming that previously existing records appear correctly in the new entity views without data loss or duplication.
+**Independent Test**: Run the import command against a database and verify record counts, spot-check converted amounts, re-run to prove idempotency.
 
 **Acceptance Scenarios**:
 
-1. **Given** existing finance data is present, **When** the migration is applied, **Then** all historical records appear correctly in the new portfolio, transaction, and transfer views
-2. **Given** the migration has run, **When** the user views migrated data, **Then** no records are missing, duplicated, or corrupted
-3. **Given** the migration has run, **When** the user performs new CRUD operations, **Then** migrated data and new data coexist without conflict
+1. **Given** the four legacy CSV files, **When** the operator runs the import command, **Then** 38 assets, 55 portfolios, 359 transactions, and 837 transfers exist as new unihub records, with each record's legacy reference preserved as its unihub ID
+2. **Given** raw integer minor-unit amounts, **When** they are imported, **Then** each is divided by 10^decimals of its legacy asset (e.g. an 18-decimals token amount `1579130000000000000000` becomes `1579.13`, and a wei-level fee like `-67305900768` keeps its full 18-decimal precision `-0.000000067305900768`)
+3. **Given** a legacy `UPDATE_POSITION` transfer, **When** it is imported, **Then** its Value Change is blank (pure position change); **Given** a `COST`/`EXPENSE`/`REVENUE` transfer, **Then** its Value Change equals the legacy settlement amount ÷ 10^decimals of the portfolio's settlement asset (flow type itself is not stored)
+4. **Given** the portfolio named "[Active] 永豐 DCA TW.00918", **When** it is imported, **Then** its state is `active` and its name keeps the "[Active] " prefix verbatim; portfolios without the prefix arrive `closed`
+5. **Given** the import has already run, **When** it is run again, **Then** no duplicate records are created and existing unihub records (including previously imported ones) are not modified
+6. **Given** any pre-existing unihub data, **When** the import runs, **Then** those records are never modified or deleted (strictly additive); TWD/USD Currency records are created only if missing
+7. **Given** the import has completed, **When** the user opens a migrated portfolio's detail page, **Then** its first/last transaction times reflect the earliest/latest imported transaction timestamps
+
+---
+
+### User Story 5 - Current Hub Policy Compliance & Transactions Panel Fix (Priority: P5)
+
+As a user, I want the 013 pages brought up to the hub-wide policies that landed on main (entity views, quick search, shared confirm dialog), and the portfolio detail Transactions panel to actually load, so the new finance pages behave like every other entity table.
+
+**Why this priority**: The Transactions panel currently returns a server error (500) — Story 3's acceptance is broken in the running app; and the new pages predate the 016/019 policies now mandatory across the hub.
+
+**Independent Test**: Open a portfolio detail page and see transactions listed; verify Assets and Portfolios lists expose view tabs and quick search identical to the other entity list pages.
+
+**Acceptance Scenarios**:
+
+1. **Given** a portfolio with transactions, **When** the user opens its detail page, **Then** the Transactions panel lists them (no server error) — filtering the transactions API by portfolio returns results
+2. **Given** the Assets or Portfolios list page, **When** the user views the toolbar row, **Then** entity view tabs and the quick-search input are present and behave exactly as on the other entity list pages (same shared components and URL grammar)
+3. **Given** a quick-search query on Assets, Portfolios, or the Transactions panel, **When** it is typed, **Then** rows narrow server-side with match highlighting, scoped inside the active filter
+4. **Given** any destructive action on the 013 pages (delete asset/portfolio/transaction), **When** the confirmation appears, **Then** it uses the hub's shared confirm dialog (no `Modal.confirm`)
 
 ---
 
@@ -122,13 +149,15 @@ As a user, I want my existing finance data migrated into the new portfolio struc
 - How does the system handle a transfer with a zero amount?
 - What if the same asset appears in multiple transfers within a single transaction?
 - What happens if the user tries to change a portfolio's base currency? → The base currency field is always read-only after creation; no change is possible.
+- What if the import command encounters a reference to a missing asset/portfolio/transaction? → It aborts inside a database transaction with a clear message; nothing partial is written. (Verified 2026-08-13: the current CSVs have zero orphan references, zero transactions without transfers, and settlement amount 0 occurs exactly on `UPDATE_POSITION` rows.)
+- What if the import is interrupted mid-run? → The command is transaction-wrapped; a failed run leaves the database unchanged and a re-run is safe.
 
 ## Requirements
 
 ### Functional Requirements
 
 - **FR-001**: Users MUST be able to create, view, edit, and delete asset records
-- **FR-002**: Each asset MUST have at minimum a name and a user-defined category
+- **FR-002**: Each asset MUST have a name; the former `category` attribute is removed from the entity, its forms, list columns, and API *(amended 2026-08-13)*
 - **FR-003**: Users MUST be able to create, view, edit, and delete portfolio records
 - **FR-004**: Each portfolio MUST have a name and a designated base (settlement) currency chosen at creation time; the base currency is immutable and MUST NOT be editable after the portfolio is created
 - **FR-004a**: Each portfolio MUST have a state, defaulting to active at creation; users MUST be able to toggle a portfolio's state between active and closed/ended at any time
@@ -141,20 +170,33 @@ As a user, I want my existing finance data migrated into the new portfolio struc
 - **FR-008**: Each transfer MUST reference an asset and include a signed asset change amount in the asset's native currency (positive = inflow, negative = outflow)
 - **FR-008a**: Each transfer MAY include an optional Value Change amount in the portfolio's base currency; when provided it represents the portfolio's gain or loss from this transfer (used for cost, expense, or income events); when omitted the transfer records a pure position change with no base-currency valuation impact
 - **FR-008b**: The Value Change field MUST be labelled with the portfolio's base currency symbol, displayed as "Value Change (XXX)" where XXX is the symbol (e.g., "Value Change (USD)")
+- **FR-008c**: Transfer amount fields (asset change amount and Value Change) MUST store at least 18 decimal places without precision loss — legacy 18-decimals assets include wei-level values (e.g. −0.000000067305900768 ETH) that the current 8-decimal-place storage would corrupt
+- **FR-008d**: Each transfer MAY carry an optional free-text remark, shown in the expanded transfer rows and editable in the transfer editor
+- **FR-008e**: Each transaction MAY carry optional `chain_id` and `tx_hash` values, editable in the transaction form; each portfolio MAY carry an optional description, shown and editable on the "Portfolio" panel
 - **FR-009**: Deleting an asset that is referenced by existing transfers MUST be prevented and the user MUST receive an explanatory message
 - **FR-010**: Deleting a portfolio that has associated transactions MUST be prevented and the user MUST receive an explanatory message
 - **FR-011**: All entity list views MUST include a toolbar, column filtering, sorting, and pagination consistent with existing finance app patterns
-- **FR-012**: *(Deferred)* The system MUST provide a one-time automated migration of existing finance data into the new entity structure — scheduled for a follow-up after initial implementation acceptance
+- **FR-012**: The system MUST provide a legacy-data import command that ports the four legacy CSV files into the new entities *(un-deferred and specified 2026-08-13)*:
+  - **FR-012a**: It is an operator-run backend management command taking the CSV directory as an argument; it MUST parse the files as proper CSV (quoted fields with embedded commas occur in the data)
+  - **FR-012b**: It is strictly additive and idempotent — legacy references are reused as unihub record IDs so re-runs create no duplicates and never modify existing records; pre-existing unihub data is never altered
+  - **FR-012c**: Amounts MUST be converted from raw integer minor units to decimal values by dividing by 10^decimals of the referenced legacy asset; the legacy `decimals` and `is_settleable` attributes themselves are not stored
+  - **FR-012d**: Value Change mapping: `UPDATE_POSITION` transfers → blank; `COST`/`EXPENSE`/`REVENUE` transfers → legacy settlement amount ÷ 10^decimals of the portfolio's settlement asset; the legacy flow type is not stored
+  - **FR-012e**: Portfolio state derives from the "[Active]" name prefix (prefix present → `active`, else `closed`); names, descriptions, remarks, chain/tx metadata, and timestamps port verbatim (legacy `created_time`/`updated_time` preserved onto the records; `transacted_time` → transaction timestamp); portfolio first/last transaction times are recomputed after import
+  - **FR-012f**: Portfolio base currency = the symbol of the legacy settlement asset (TWD/USD), validated against the finance Currency table; missing Currency rows are created (additive)
+  - **FR-012g**: The command MUST print a per-entity import/skip count report and abort transaction-wrapped (no partial writes) on any unknown reference or malformed row
+  - **FR-012h**: The legacy CSV files contain real personal financial data and MUST NOT be committed to version control; the command reads them from a path outside the repository history
+- **FR-016**: Filtering the transactions list by portfolio MUST return results instead of a server error — the three 013 viewsets' filter declarations MUST follow the current core filter contract (`lookup` = ORM field path, as used by the other finance viewsets) *(bug fix; root cause diagnosed 2026-08-13)*
+- **FR-017**: The 013 pages MUST adopt the hub-wide table policies that landed on main: entity view tabs (shared components, URL grammar, `viewConfigFromColumns` baseline) and quick search on the Assets and Portfolios list pages; quick search on the portfolio detail Transactions panel; backend `searchable_fields` opt-in on the Asset, Portfolio, and Transaction viewsets; all destructive confirmations via the shared confirm dialog (no `Modal.confirm` anywhere in the 013 pages)
 - **FR-013**: In the Portfolios list, the Name cell and the row's View action MUST be real hyperlinks to the portfolio detail page (constitution v1.24.0 "Hyperlinked row identifiers & actions"); the list rows MUST NOT contain Edit or Delete actions
 - **FR-014**: The portfolio detail page MUST navigate via a breadcrumb (Portfolios → current portfolio name) with no page-level Back/Cancel control, and MUST present the portfolio's fields inside a panel titled "Portfolio" whose header carries the entity actions per the constitution's panel-header rule: Edit as a visible button (opening the existing portfolio form modal), Delete folded into the kebab (⋯) menu
 - **FR-015**: Deleting a portfolio from the detail page MUST use the standard delete confirmation, remain subject to FR-010 (blocked while transactions exist), and on success MUST return the user to the Portfolios list
 
 ### Key Entities
 
-- **Asset**: Represents any kind of financial asset (stock, cash, crypto, real estate, etc.). Key attributes: name, category. Serves as the foundational reference for transfers.
-- **Portfolio**: A named container for tracking asset positions. Key attributes: name, base currency (immutable), state (active or closed, user-togglable), first_transaction_time (derived read-only field, set to the timestamp of the earliest transaction), last_transaction_time (derived read-only field, set to the timestamp of the most recent transaction). A user can have multiple portfolios.
-- **Transaction**: An atomic financial event tied to a portfolio at a specific point in time. Key attributes: portfolio, timestamp, description. Contains one or more transfers.
-- **Transfer**: A single cash-flow entry within a transaction. Key attributes: asset reference, signed asset change amount (in the asset's native currency), optional Value Change amount in the portfolio's base currency (provided for cost/expense/income events; omitted for pure position changes), parent transaction reference.
+- **Asset**: Represents any kind of financial asset (stock, cash, crypto, real estate, etc.). Key attributes: name (no category — removed 2026-08-13). Serves as the foundational reference for transfers.
+- **Portfolio**: A named container for tracking asset positions. Key attributes: name, base currency (immutable, references an existing finance Currency record), optional description, state (active or closed, user-togglable), first_transaction_time (derived read-only field, set to the timestamp of the earliest transaction), last_transaction_time (derived read-only field, set to the timestamp of the most recent transaction). A user can have multiple portfolios.
+- **Transaction**: An atomic financial event tied to a portfolio at a specific point in time. Key attributes: portfolio, timestamp, description, optional chain_id and tx_hash (blockchain metadata). Contains one or more transfers.
+- **Transfer**: A single cash-flow entry within a transaction. Key attributes: asset reference, signed asset change amount (in the asset's native currency, ≥18 decimal places), optional Value Change amount in the portfolio's base currency (provided for cost/expense/income events; omitted for pure position changes), optional remark, parent transaction reference.
 
 ## Success Criteria
 
@@ -162,16 +204,15 @@ As a user, I want my existing finance data migrated into the new portfolio struc
 
 - **SC-001**: Users can create a new asset, portfolio, and transaction with transfers — and view all records — within 2 minutes of first use with no external instructions
 - **SC-002**: The three entity list views (Assets, Portfolios, Transactions) display data with pagination, sorting, and filtering that matches the visual and interaction patterns of the existing finance app. The Transactions list additionally supports row expansion to reveal transfers as inline child rows within the same table.
-- **SC-003**: *(Deferred)* 100% of existing finance records are successfully migrated — verified by record count and spot checks — with no data lost, duplicated, or corrupted
+- **SC-003**: 100% of the legacy records are imported — 38 assets, 55 portfolios, 359 transactions, 837 transfers, verified by count report and spot checks — with no data lost, duplicated, or corrupted, and a second run changing nothing
+- **SC-006**: The portfolio detail Transactions panel loads real data without server errors, and the Assets/Portfolios pages pass the same view-tabs/quick-search behaviour checks as the other entity list pages
 - **SC-004**: Referential integrity is enforced: attempting to delete a referenced asset or a portfolio with transactions results in a clear user-facing error message, not a crash or silent failure
 - **SC-005**: All entity list views load within standard, perceptibly instant response times under normal data volumes
 
 ## Assumptions
 
 - A user may own multiple portfolios (one-to-many relationship between user and portfolios)
-- Asset categories are free-form text entered by the user, not a fixed system-defined list
 - Transfer amounts are signed decimals — positive values represent asset inflows (acquired), negative values represent asset outflows (disposed)
-- The "existing system" refers to the current finance app's data within the same database; the migration is a one-time automated operation applied at deployment
+- The legacy source is the four CSV exports under `migration/` (kept out of version control per FR-012h); the import is operator-run against the target database, not an automatic deployment step
 - Cross-currency valuation and FX conversion are out of scope for this feature; the base currency field is informational
-- The migration covers only financial records currently stored in the finance app; no external data sources are involved
 - All users with access to the finance section can manage their own assets, portfolios, transactions, and transfers; no additional role hierarchy is introduced in this feature

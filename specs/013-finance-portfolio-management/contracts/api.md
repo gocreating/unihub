@@ -244,3 +244,49 @@ router.register(r'assets', AssetViewSet, basename='asset')
 router.register(r'portfolios', PortfolioViewSet, basename='portfolio')
 router.register(r'transactions', TransactionViewSet, basename='transaction')
 ```
+
+---
+
+# Iteration 3 Contract Amendments (2026-08-13)
+
+All list endpoints below additionally accept the `search` query param (019 quick search): case-insensitive substring matched against the viewset's `searchable_fields`, ANDed with `filters`.
+
+## Assets — `category` REMOVED
+
+- `GET/POST/PATCH /api/v1/finance/assets/`: the `category` field no longer exists in requests or responses. `POST { "name": "..." }`.
+
+## Portfolios — `description` added
+
+- All portfolio payloads/responses gain `"description": string` (optional, default `""`), writable on create and update:
+
+```json
+{ "id": "xUCeWNsp", "name": "[Active] 永豐 DCA TW.0050", "base_currency": "TWD",
+  "description": "每月 06, 16, 26 日 6600 元", "state": "active", ... }
+```
+
+## Transactions — `chain_id` / `tx_hash` added; Transfer gains `remark`; decimals widen
+
+```json
+{
+  "id": "DTz5KwFy",
+  "portfolio": "JD2Wf2BF",
+  "timestamp": "2024-10-14T00:00:00Z",
+  "description": "",
+  "chain_id": "",
+  "tx_hash": "",
+  "transfers": [
+    { "id": "VmWrJCMd", "asset": "9AZhkhfw", "asset_name": "大華優利高填息30",
+      "asset_change_amount": "419.000000000000000000", "value_change": null, "remark": "" },
+    { "id": "yyMzPUtV", "asset": "yRLSZ6Vt", "asset_name": "新台幣",
+      "asset_change_amount": "-1.000000000000000000", "value_change": "-1.000000000000000000",
+      "remark": "手續費" }
+  ]
+}
+```
+
+- `asset_change_amount` / `value_change` are decimal **strings** with up to 18 fraction digits (`max_digits=38, decimal_places=18`).
+- `chain_id` (≤32 chars), `tx_hash` (≤128 chars), `remark` (≤255 chars) are optional, blank by default.
+
+## Filtering contract fix (bug)
+
+`GET /api/v1/finance/transactions/?filters={"groups":[{"logic":"and","conditions":[{"attr":"portfolio","op":"eq","val":"<id>"}]}]}` MUST return 200 with the portfolio's transactions. (Previously 500 — `filterable_fields` declared operators in `lookup`; the current core contract expects ORM field paths.) Same repair applies to the assets and portfolios endpoints.

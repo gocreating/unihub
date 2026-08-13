@@ -150,3 +150,62 @@ NOT navigate.
 **Rationale**: Moves the existing list-row delete behavior without weakening the
 delete-confirmation constraint; navigation-on-success is required because the deleted
 entity's page can no longer render.
+
+---
+
+# Iteration 3 (2026-08-13): Legacy Migration, Policy Compliance, Model Amendments
+
+## Decision I3-1: Transactions 500 — filter contract repair
+
+**Decision**: Fix `filterable_fields` on `AssetViewSet`, `PortfolioViewSet`, `TransactionViewSet` to the current core contract: `lookup` = ORM field path (e.g. `"portfolio": {"lookup": "portfolio", "type": "single_select"}`), operators come from each condition's `op` via `_OP_SUFFIX` in `core/filters.py`.
+
+**Rationale**: Root-caused from the running backend's traceback: `FieldError: Cannot resolve keyword 'exact' into field` raised from `EntityFilterBackend.filter_queryset → queryset.filter(combined)`. The 013 viewsets were written against the pre-016 contract where `lookup` held the operator; main's evolved `core/filters.py` (which this branch now sits on after the rebase) treats it as the field path — `CurrencyViewSet`/`AccountViewSet` show the compliant shape. The 553-test suite stayed green because no existing test drives the `filters` query param through these three viewsets — the regression tests added this iteration do exactly that (portfolio eq, name contains, timestamp date ops).
+
+**Alternatives considered**: Making `EntityFilterBackend` tolerate operator-shaped lookups — rejected: it would freeze a bug as API and diverge the shared machinery for one consumer.
+
+## Decision I3-2: Decimal precision (28,8) → (38,18)
+
+**Decision**: `Transfer.asset_change_amount` and `Transfer.value_change` become `DecimalField(max_digits=38, decimal_places=18)`; `TransferSerializer` mirrors. Conversion at import: `Decimal(raw) / Decimal(10) ** decimals` (exact, no float anywhere).
+
+**Rationale**: Iteration-1's Decision 8 assumed satoshi (8dp) as the finest grain; the legacy CSVs contain 18-decimals ERC-20 amounts down to wei (e.g. `-67305900768` raw = −0.000000067305900768 ETH) that 8dp would corrupt — violating SC-003 "no data corrupted". Data audit: converted values need ≤7 integer digits; (38,18) leaves 20, ample for future manual entries. Postgres `numeric` and DRF string coercion carry it losslessly.
+
+**Alternatives considered**: (28,18) — fits today's data but only 10 integer digits of headroom; string column — loses ordering/aggregation; per-asset decimals stored in unihub — user explicitly removed the concept.
+
+## Decision I3-3: New optional fields
+
+**Decision**: `Portfolio.description` CharField(500), `Transaction.chain_id` CharField(32), `Transaction.tx_hash` CharField(128), `Transfer.remark` CharField(255) — all `blank=True, default=""`, writable in serializers, empty renders as `<EmptyValue />`.
+
+**Rationale**: Clarified 2026-08-13 — user chose lossless first-class fields over folding into description text; 136 transactions carry chain/tx metadata, 36 transfers carry remarks, 8 portfolios carry descriptions.
+
+## Decision I3-4: Importer architecture
+
+**Decision**: `finance/management/commands/import_legacy_finance.py` taking a CSV directory. Python stdlib `csv` (quoted fields with embedded commas exist). Whole run in one `transaction.atomic()`. Legacy `reference` (8-char) reused verbatim as primary key (fits `CharField(max_length=12)` nanoid PKs) — idempotency = "pk exists → skip, never update". Order: assets → currencies-ensure → portfolios → transactions → transfers. Legacy `created_time`/`updated_time` preserved via per-model post-insert `QuerySet.update()` (bypasses `auto_now*`). `refresh_transaction_times()` once per imported portfolio at the end (post_save signals fire during insert but the final recompute is authoritative after timestamp preservation). ORM writes bypass serializer rules by design — historical data lands verbatim (a closed portfolio's history imports fine; the closed-portfolio block is an API-level rule for new activity). Prints per-entity created/skipped counts; any unknown reference or malformed row aborts the whole run.
+
+**Rationale**: A management command is operator-run, repeatable, testable with pytest fixtures, and keeps the CSVs out of the image and out of git (FR-012h) — unlike a data migration (runs implicitly at deploy, needs the files present) or the data_io pipeline (its registry format doesn't match these CSVs, and its natural-key machinery adds nothing when legacy references are already stable ids).
+
+**Alternatives considered**: data_io import (shape mismatch, heavier); Django data migration (couples deploy to personal data files); UPSERT semantics (rejected — "never touch existing data" is stronger and simpler to reason about).
+
+## Decision I3-5: Value Change mapping
+
+**Decision**: `UPDATE_POSITION` → `value_change = None`; `COST`/`EXPENSE`/`REVENUE` → `value_change = Decimal(settlement_raw) / 10**settlement_decimals` where `settlement_decimals` comes from the portfolio's `settlement_asset_reference` row in the asset CSV. `flow_type` itself is not stored (spec removed transfer types, Session 2026-06-08).
+
+**Rationale**: Verified against all 837 rows: settlement `0` occurs exactly on `UPDATE_POSITION` rows, so the mapping is bijective on this data set; signs already encode direction (COST/EXPENSE negative, REVENUE positive).
+
+## Decision I3-6: Currency ensure (TWD/USD)
+
+**Decision**: For each distinct `settlement_asset_reference`, resolve the legacy asset row and require `Currency.objects.get_or_create(code=symbol, defaults={name: legacy name, symbol: symbol})`. Existing Currency rows are left untouched. `Portfolio.base_currency` stores the code (existing CharField contract — `PortfolioCreateSerializer` already validates codes against Currency).
+
+**Rationale**: Clarified 2026-08-13 ("we already have currency model"); only TWD and USD appear as settlement assets; `Currency.code` is `max_length=3`, both fit.
+
+## Decision I3-7: Entity views + quick search adoption wiring
+
+**Decision**: Adopt on `pages/finance/assets/index.tsx` (tableKey `finance-assets`) and `pages/finance/portfolios/index.tsx` (tableKey `finance-portfolios`) exactly per the compliant `pages/finance/currencies/index.tsx` pattern:
+- `useEntityTable({ key, filterableAttrs, columnDefs })`; baseline = `viewConfigFromColumns(columnDefs)`; `useEntityViews({ tableKey: table.tableKey, table, defaultConfig })`.
+- `PageTable` gets `key={`${table.cols.pinFingerprint}-${views.activeTabId}`}`, `viewBar={<ViewTabs views={views} />}`, and `headerTitle={<EntityToolbar filterProps sortProps columnProps searchProps={{ value: table.searchQuery, onChange: table.setSearchQuery }} />}`.
+- Page wrapped in `SearchHighlightProvider value={table.activeSearch}`; text cells render through `<SearchMark />`; column widths via `widthForHeader`/`measureTextWidth`/`computeScrollX`; footer `EntityOffsetFooter {...table.paginationProps(count)}`; sorting via `makeSortProps`.
+- The portfolio-detail Transactions panel gets **quick search only** (searchProps + SearchHighlightProvider + SearchMark on its own table) — NO ViewTabs: view tabs exist solely on top-level entity list pages hub-wide (tableKeys in use: finance-currencies/accounts/exchange-rates, inventory-catalog/scenarios; none on a detail page).
+- All three delete confirmations move from `Modal.confirm` to `confirmDialog` (`@/components/ConfirmDialog`), which supersedes research decision I2-4's `Modal.confirm` prescription.
+
+**Rationale**: 016 FR-039 mandates ONE pattern with no per-page variation and one baseline definition (`viewConfigFromColumns`); 019 put search on every entity table. Reusing the currencies page verbatim keeps the five+2 pages mechanically identical, and the per-page vitest locks from 016 round 12 define the assertions the new pages' tests must replicate (first request carries no filter/ordering + default page size; stored default view applied on arrival with no indicator).
+
+**Alternatives considered**: View tabs on the detail-page transactions table — rejected: no precedent in the hub, sessionless per-visit tabs make little sense scoped under a parent record, and the panel's filter context (portfolio id) must stay outside user-editable view state.

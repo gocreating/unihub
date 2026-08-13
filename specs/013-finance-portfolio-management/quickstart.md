@@ -118,12 +118,45 @@ label={formatMessage({ id: 'pages.finance.transactions.valueChange' }, { currenc
 // zh-TW: "價值變動（{currency}）"
 ```
 
-### Delete confirmation (NON-NEGOTIABLE)
+### Delete confirmation (NON-NEGOTIABLE — superseded in iteration 3)
+`Modal.confirm` is banned since 016 round 5. Use the shared dialog:
 ```tsx
-Modal.confirm({
-  title: formatMessage({ id: 'common.deleteConfirm.title' }),
-  content: formatMessage({ id: 'pages.finance.assets.deleteConfirm.content' }, { name: record.name }),
-  okType: 'danger',
-  onOk: () => deleteMutation.mutate(record.id),
+import { confirmDialog } from '@/components/ConfirmDialog';
+
+confirmDialog({
+  title: formatMessage({ id: 'pages.finance.assets.delete.title' }),
+  content: formatMessage({ id: 'pages.finance.assets.delete.confirm' }, { name: record.name }),
+  danger: true,
+  onOk: () => deleteMutation.mutateAsync(record.id),
 });
 ```
+
+---
+
+# Iteration 3 Runbook (2026-08-13)
+
+## Legacy import (Story 4)
+
+The four CSVs live in `migration/` at the repo root — **untracked; never commit them** (real personal financial data, FR-012h).
+
+```bash
+# Local dev database
+cd apps/unihub/backend
+uv run python manage.py migrate                       # applies 0012
+uv run python manage.py import_legacy_finance ../../../migration
+
+# Running docker stack (real data) — after rebuilding images from this branch:
+docker compose -f apps/unihub/docker-compose.local.yml up -d --build
+docker compose -f apps/unihub/docker-compose.local.yml cp migration unihub-backend-1:/tmp/migration   # or bind-mount
+docker compose -f apps/unihub/docker-compose.local.yml exec backend python manage.py import_legacy_finance /tmp/migration
+```
+
+Expected report: `assets: 38 created / 0 skipped · portfolios: 55 · transactions: 359 · transfers: 837`. A second run must report all-skipped and change nothing (SC-003).
+
+## Verification checklist
+
+1. Portfolio detail page for `[Active] 永豐 DCA TW.00918` → Transactions panel lists rows (500 fixed), description shows the DCA schedule, state Active.
+2. A DCA buy expands to 3 transfers: two value-only TWD rows (one remarked 手續費) and one +N shares row with blank Value Change.
+3. Wei-scale amounts render exactly (e.g. −0.000000067305900768 ETH), not rounded to 8dp.
+4. Assets & Portfolios pages show view tabs + quick search identical to Currencies/Accounts; no `Modal.confirm` anywhere under `pages/finance/assets|portfolios`.
+5. Re-run import → all skipped; counts unchanged.

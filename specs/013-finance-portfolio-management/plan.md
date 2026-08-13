@@ -1,59 +1,53 @@
-# Implementation Plan: Finance Portfolio Management — Iteration 2 (Portfolio Navigation & Detail Panel)
+# Implementation Plan: Finance Portfolio Management — Iteration 3 (Legacy Migration + Policy Compliance)
 
-**Branch**: `013-finance-portfolio-management` | **Date**: 2026-07-20 | **Spec**: [spec.md](spec.md)
+**Branch**: `013-finance-portfolio-management` | **Date**: 2026-08-13 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/013-finance-portfolio-management/spec.md`, Clarifications Session 2026-07-20
-
-> Iteration 2 builds on the accepted base implementation (Asset/Portfolio/Transaction/Transfer
-> CRUD + portfolio detail page hosting the Transactions table). The base plan is preserved in
-> git history (`1f61a2c`). This iteration is **frontend-only**.
+**Input**: Feature specification from `/specs/013-finance-portfolio-management/spec.md` (Clarifications Session 2026-08-13)
 
 ## Summary
 
-Bring the Portfolios list and portfolio detail page into compliance with constitution
-v1.24.0 and the 2026-07-20 clarifications:
+Iteration 3 delivers three work streams on top of the accepted Stories 1–3:
 
-1. **Portfolios list** — the Name cell and the row's View action become real hyperlinks to
-   `/finance/portfolios/:id` (middle-click / Ctrl+Click opens a tab); the row-level Edit and
-   Delete buttons are removed.
-2. **Portfolio detail page** — the ad-hoc arrow back-link is replaced by a constitution
-   breadcrumb (Portfolios → portfolio name); the untitled info ProCard becomes a Card titled
-   "Portfolio" whose header carries the entity actions via the shared `PanelHeaderActions`
-   (Edit visible, Delete in the kebab). Delete confirms, then navigates back to the list.
-
-No backend, schema, or API contract changes.
+1. **Model amendments** (backend migration 0012 + API + frontend): drop `Asset.category`; add `Portfolio.description`, `Transaction.chain_id`/`tx_hash`, `Transfer.remark`; widen `Transfer.asset_change_amount`/`value_change` from `Decimal(28,8)` to `Decimal(38,18)` — legacy 18-decimals tokens carry wei-level values that 8dp would corrupt (FR-002, FR-008c–e).
+2. **Legacy data import** (Story 4, un-deferred): an idempotent, strictly additive management command `import_legacy_finance <csv-dir>` porting the four legacy CSVs (38 assets / 55 portfolios / 359 transactions / 837 transfers), reusing legacy references as primary keys, converting minor-unit integers via each asset's `decimals`, mapping `UPDATE_POSITION → value_change NULL`, deriving portfolio state from the `[Active]` name prefix (names verbatim), preserving legacy timestamps (FR-012a–h).
+3. **Current-policy compliance + bug fix** (Story 5): fix the transactions-list 500 — the three 013 viewsets use the pre-016 `filterable_fields` contract (`lookup` = operator) while the current core contract expects `lookup` = ORM field path, so `portfolio eq <id>` builds `Q(exact=…)` and raises `FieldError`; adopt entity views (016) + quick search (019) + shared `confirmDialog` on the 013 pages, with backend `searchable_fields` opt-in (FR-016/FR-017).
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.7 / React 18.3 (frontend only — no backend changes)
+**Language/Version**: Python 3.12 (backend), TypeScript 5.7 / React 18.3 (frontend)
 
-**Primary Dependencies**: Ant Design 5.24, @ant-design/pro-components 2.8, TanStack React
-Query 5, React Router 7, Vitest + React Testing Library
+**Primary Dependencies**: Django 5 + DRF 3 + drf-spectacular (backend); Ant Design 5.24 + @ant-design/pro-components + TanStack React Query 5 + React Router 7 + Vite 6 (frontend)
 
-**Storage**: N/A (no data-model change)
+**Storage**: PostgreSQL 16 — one database, `finance` app tables; legacy source = 4 CSV files under `migration/` (untracked, real personal data, never committed — FR-012h)
 
-**Testing**: Vitest + React Testing Library; TDD per Principle V — component tests first
+**Testing**: pytest-django (backend, TDD red-first per repo practice); Vitest + React Testing Library (frontend)
 
-**Target Platform**: Desktop/tablet browser
+**Target Platform**: Linux server (docker compose stack); local dev via `docker-compose.local.yml`
 
-**Project Type**: Web application (React SPA)
+**Project Type**: Web application (single Django backend + single React SPA)
 
-**Performance Goals / Constraints / Scale**: unchanged from base plan
+**Performance Goals**: Import completes in seconds for ~1.3k rows; list endpoints keep perceptibly-instant responses (SC-005)
+
+**Constraints**: Import is transaction-wrapped, additive-only, idempotent (re-run ⇒ no duplicates, no modifications); amounts must survive 18-decimal precision end-to-end (DB → DRF string serialization → UI)
+
+**Scale/Scope**: Personal tool; 38/55/359/837 legacy rows; three pages + one detail panel; 3 viewsets
 
 ## Constitution Check
 
-| Principle | Status | Notes |
-|---|---|---|
-| I / II / III / IV | ✅ N/A–PASS | Frontend-only UI iteration; no entity, domain, or API contract changes. |
-| V — Quality Loop | ✅ PASS | Tests first (list link rendering, actions removal, breadcrumb, panel actions, delete-navigate flow); full frontend loop + `pnpm build` before commit. |
-| VI — UX Reference | ✅ PASS | **This iteration exists to enforce VI**: "Hyperlinked row identifiers & actions" (v1.24.0) on the list; "Standalone-page navigation (no Cancel)" breadcrumb and "Panel-header actions (responsive kebab)" on the detail page. |
-| VII — PageTable | ✅ PASS | List keeps PageTable; only column/action content changes. |
-| VIII — i18n | ✅ PASS | New keys (panel title, kebab aria label) added to both en-US and zh-TW in the same commit; breadcrumb reuses existing title keys; ICU plurals unaffected. |
-| IX–XI | ✅ N/A | No charts; no valuation changes. |
-| XII — Entity Toolbar | ✅ PASS | Toolbar/sort/filter untouched. |
-| Delete Confirmation | ✅ PASS | Detail-page Delete uses `Modal.confirm` with `okType: 'danger'` + locale keys (moved, not weakened). |
+*Constitution v1.24.0 — evaluated 2026-08-13, re-evaluated after Phase 1 design: PASS*
 
-**Post-design re-check**: PASS — no violations introduced; no Complexity Tracking entries.
+| Gate | Principle | Status |
+|---|---|---|
+| Entity-centric domain, one Django app per domain | I | ✅ All changes stay inside the existing `finance` app + shared `core` machinery |
+| API contract-driven frontend | IV | ✅ `openapi.yaml` regenerated after serializer/model changes; `api-types.ts` regenerated via `openapi-typescript`; no hand-written response types |
+| Quality loop | V | ✅ `ruff` + `pytest` (backend), `pnpm lint`/`typecheck`/`test` + `pnpm build` (frontend) after every change |
+| UI/UX (empty cells, datetime two-row, FK tags, panel-header kebab, hyperlinks) | VI | ✅ New fields render with `<EmptyValue />` when absent; delete confirmations move from `Modal.confirm` (violation, 3 sites) to shared `confirmDialog` |
+| PageTable layout | VII | ✅ No layout changes; transfers stay `ProTable ghost` inside `expandable` (sanctioned in research D3) |
+| i18n both locales in same commit | VIII | ✅ New keys (description/chain/tx/remark labels, search placeholders) added to `en-US` + `zh-TW` together; `category` keys removed from both |
+| Entity toolbar & sort controls | XII | ✅ Adoption uses the shared `EntityToolbar`/`useEntityTable` machinery unchanged |
+| Views/search hub-wide policy (016 FR-039, 019) | — | ✅ This iteration's core purpose: `viewConfigFromColumns` baselines, `tableKey`s, `searchProps`, backend `searchable_fields` on the three 013 viewsets |
+
+No violations to justify — Complexity Tracking section omitted.
 
 ## Project Structure
 
@@ -61,47 +55,48 @@ Query 5, React Router 7, Vitest + React Testing Library
 
 ```text
 specs/013-finance-portfolio-management/
-├── plan.md              # This file (iteration 2)
-├── research.md          # Iteration 2 decisions (pattern reuse)
-├── data-model.md        # UNCHANGED (base) — no schema changes this iteration
-├── contracts/api.md     # UNCHANGED (base) — no API changes this iteration
-├── quickstart.md        # UNCHANGED (base)
-└── tasks.md             # /speckit-tasks output (iteration 2)
+├── plan.md              # This file
+├── research.md          # Extended: Iteration 3 decisions I3-1 … I3-9
+├── data-model.md        # Extended: iteration-3 model amendments + migration 0012
+├── quickstart.md        # Extended: import runbook + verification
+├── contracts/api.md     # Extended: field additions, search param, category removal
+└── tasks.md             # Regenerated by /speckit-tasks
 ```
 
-### Source Code (files touched this iteration)
+### Source Code (repository root)
 
 ```text
+apps/unihub/backend/
+├── finance/
+│   ├── models.py                     # −category; +description/chain_id/tx_hash/remark; Decimal(38,18)
+│   ├── serializers.py                # Mirror model changes; decimal params 38/18
+│   ├── views.py                      # FIX filterable_fields contract (3 viewsets); +searchable_fields
+│   ├── migrations/0012_*.py          # Schema migration (auto-generated)
+│   └── management/commands/
+│       └── import_legacy_finance.py  # NEW: idempotent CSV importer
+├── openapi.yaml                      # Regenerated
+└── tests/finance/
+    ├── test_assets.py                # category removal, filters-param regression
+    ├── test_portfolios.py            # description field, filters-param regression
+    ├── test_transactions.py          # chain/tx/remark, 18dp precision, portfolio-filter 500 regression
+    └── test_import_legacy.py         # NEW: importer TDD suite (fixtures = synthetic CSVs)
+
 apps/unihub/frontend/src/
-├── pages/finance/portfolios/
-│   ├── index.tsx        # Name + View as real links; REMOVE row Edit/Delete + modal-edit state
-│   └── detail.tsx       # Breadcrumb; "Portfolio" Card + PanelHeaderActions; Edit modal; Delete→navigate
-├── locales/en-US/pages.ts   # ADD pages.finance.portfolios.detail.* keys
-└── locales/zh-TW/pages.ts   # ADD same keys
+├── pages/finance/assets/index.tsx        # −category col/form; views+search adoption; confirmDialog
+├── pages/finance/portfolios/index.tsx    # views+search adoption
+├── pages/finance/portfolios/detail.tsx   # +description on panel; transactions search; confirmDialog ×2; transfer remark col; chain/tx in form
+├── services/unihub-backend/finance.ts    # Regenerated types; search param already generic
+├── services/unihub-backend/api-types.ts  # Regenerated
+└── locales/{en-US,zh-TW}/pages.ts        # +new keys, −category keys, both locales
+
+migration/                                # 4 legacy CSVs — UNTRACKED, never committed (FR-012h)
 ```
 
-## Phase 0: Research → [research.md](research.md)
+**Structure Decision**: Web application layout (existing). All backend work stays in `finance` (+ tests); all frontend work in the three 013 page files plus shared regenerated service types. No new apps, no new shared components — adoption reuses 016/019 machinery as-is.
 
-All three interaction patterns already exist in the codebase; decisions are documented in
-research.md (row-link Button pattern from inventory catalog iter-19, `PanelHeaderActions`
-shared component, balance-sheets breadcrumb pattern, `useContainerWidth` narrowness hook).
-No NEEDS CLARIFICATION remain.
+## Design Highlights (details in research.md / data-model.md)
 
-## Phase 1: Design
-
-- **data-model.md / contracts**: unchanged — no entities or endpoints touched.
-- **UI contract** (from spec US2 scenarios 3, 7, 10–12):
-  - List Name cell: anchor (`href=/finance/portfolios/:id`) with modifier-click guard;
-    plain click = SPA navigate.
-  - List View action: AntD `Button` with `href` + same guard (catalog iter-19 pattern).
-  - List rows: no Edit, no Delete, no modal-edit state left behind (`PortfolioFormModal`
-    stays only for Create on the list page).
-  - Detail breadcrumb: `Breadcrumb` items `[Portfolios (href + navigate guard), <name>]`
-    (balance-sheets detail pattern); the `ArrowLeftOutlined` back-link is removed.
-  - Detail "Portfolio" panel: AntD `Card title=t(pages.finance.portfolios.detail.panelTitle)`
-    with `extra=<PanelHeaderActions narrow={isNarrow} visible=[Edit] advanced=[Delete]>`;
-    `useContainerWidth(720)` supplies `isNarrow`; Edit opens the existing portfolio form
-    modal (staged mutations — no API call before Save); Delete = `Modal.confirm`
-    (`okType: 'danger'`), on success `message.success` + `navigate('/finance/portfolios')`;
-    FR-010 dependency errors surface via the standard error path.
-- **Agent context**: CLAUDE.md Active Feature section updated to describe iteration 2.
+- **500 fix is contract repair, not filter-engine change**: set each `filterable_fields[attr]["lookup"]` to the ORM path (`"name": {"lookup": "name"}` … `"portfolio": {"lookup": "portfolio"}`), exactly like the compliant `CurrencyViewSet`/`AccountViewSet`. Regression tests drive the real `filters` query param through the API (the existing suite never exercised it — why 553 tests stayed green while the page 500ed).
+- **Importer**: `csv` stdlib parsing (quoted fields), `transaction.atomic()`, legacy `reference` → primary key (nanoid-compatible ≤12 chars) giving natural idempotency via `exists()` skip; `Decimal(raw) / 10**decimals` per legacy asset; settlement conversion uses the portfolio's settlement-asset decimals; `created_time`/`updated_time` preserved via post-insert `QuerySet.update()` (bypasses `auto_now*`); per-portfolio `refresh_transaction_times()` at the end; per-entity created/skipped report; abort on unknown reference.
+- **Precision end-to-end**: DB `Decimal(38,18)` → DRF `DecimalField(..., coerce_to_string=True)` → UI `InputNumber stringMode` + `precision`-free display with trailing-zero trim.
+- **Views/search adoption** follows the currencies/accounts pages verbatim (tableKeys `finance-assets`, `finance-portfolios`); the portfolio-detail transactions panel gets quick search only (no view tabs on embedded tables — consistent with the hub: view tabs exist solely on top-level entity list pages).

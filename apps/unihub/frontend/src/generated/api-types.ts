@@ -1667,6 +1667,8 @@ export interface operations {
                 offset?: number;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description Case-insensitive substring matched against any searchable attribute; combined with `filters` as AND. */
+                search?: string;
             };
             header?: never;
             path?: never;
@@ -2034,6 +2036,8 @@ export interface operations {
                 offset?: number;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description Case-insensitive substring matched against any searchable attribute; combined with `filters` as AND. */
+                search?: string;
             };
             header?: never;
             path?: never;
@@ -2156,6 +2160,8 @@ export interface operations {
                 offset?: number;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description Case-insensitive substring matched against any searchable attribute; combined with `filters` as AND. */
+                search?: string;
             };
             header?: never;
             path?: never;
@@ -2278,6 +2284,8 @@ export interface operations {
                 offset?: number;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description Case-insensitive substring matched against any searchable attribute; combined with `filters` as AND. */
+                search?: string;
             };
             header?: never;
             path?: never;
@@ -2419,6 +2427,8 @@ export interface operations {
                 offset?: number;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description Case-insensitive substring matched against any searchable attribute; combined with `filters` as AND. */
+                search?: string;
             };
             header?: never;
             path?: never;
@@ -2516,6 +2526,8 @@ export interface operations {
                 offset?: number;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description Case-insensitive substring matched against any searchable attribute; combined with `filters` as AND. */
+                search?: string;
             };
             header?: never;
             path?: never;

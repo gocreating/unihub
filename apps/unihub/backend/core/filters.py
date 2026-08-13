@@ -1,9 +1,11 @@
-"""DRF filter backends for entity filtering and null-aware ordering."""
+"""DRF filter backends for entity filtering, search, and null-aware ordering."""
 
 import json
 from typing import Any
 
-from django.db.models import F, Q, QuerySet
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Exists, F, OuterRef, Q, QuerySet, TextField
+from django.db.models.functions import Cast
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import BaseFilterBackend, OrderingFilter
 from rest_framework.request import Request
@@ -14,6 +16,7 @@ from core.attributes import (
     parse_attr_key,
     resolve_view_definition,
 )
+from core.models import AttributeValue
 
 
 _NEGATE_OPS: frozenset[str] = frozenset(
@@ -108,6 +111,118 @@ class NullsOrderingFilter(OrderingFilter):
         if not expressions:
             return queryset
         return queryset.order_by(*expressions)
+
+
+class EntitySearchFilter(BaseFilterBackend):
+    """DRF filter backend for the free-text ``search`` query param (019).
+
+    A row matches when the trimmed query is a case-insensitive substring of
+    the textual representation of ANY declared searchable field — the union
+    across attributes. Listed after ``EntityFilterBackend`` in
+    ``filter_backends``, so search always narrows the already-filtered set
+    (logical AND with the ``filters`` payload).
+
+    Viewsets opt in by declaring::
+
+        searchable_fields = {
+            "name": "text",   # matched with __icontains directly
+            "rate": "cast",   # Cast(..., TextField()) then __icontains
+        }
+        search_attribute_values = True   # optional: also match ANY dynamic
+                                         # AttributeValue of the row (requires
+                                         # attribute_content_type on the view)
+
+    An absent/blank ``search``, or a view without ``searchable_fields``, is a
+    silent no-op (never 400) — the same forgiving contract as unknown ``attr``
+    keys in ``filters``. The query is matched literally: ``icontains`` escapes
+    LIKE wildcards, so ``%`` and ``_`` are plain characters (FR-013).
+    """
+
+    def filter_queryset(self, request: Request, queryset: QuerySet, view: Any) -> QuerySet:
+        """Return the queryset narrowed by the ``search`` query param.
+
+        Args:
+            request: The incoming DRF request.
+            queryset: The (already filter-narrowed) queryset.
+            view: The DRF view; opts in via ``searchable_fields`` and
+                optionally ``search_attribute_values``.
+
+        Returns:
+            The searched queryset, or the original queryset when the param is
+            absent/blank or the view declares nothing searchable.
+        """
+        params = getattr(request, "query_params", None) or request.GET
+        query = (params.get("search") or "").strip()
+        if not query:
+            return queryset
+
+        searchable_fields: dict[str, str] = getattr(view, "searchable_fields", None) or {}
+        legs: list[Q] = []
+        annotations: dict[str, Cast] = {}
+        for path, kind in searchable_fields.items():
+            if kind == "cast":
+                # Non-text columns (Decimal/DateTime/int) cannot take
+                # __icontains directly — the iteration-17 hazard documented on
+                # _build_condition_q — so match their database text form.
+                alias = "_search_" + "".join(c if c.isalnum() else "_" for c in path)
+                annotations[alias] = Cast(path, output_field=TextField())
+                legs.append(Q(**{f"{alias}__icontains": query}))
+            else:
+                legs.append(Q(**{f"{path}__icontains": query}))
+
+        if getattr(view, "search_attribute_values", False):
+            ct = self._resolve_content_type(view)
+            if ct is not None:
+                # One EXISTS over the (content_type, object_id) index matches
+                # ANY parameter of the row — union across all definitions,
+                # unlike annotate_attribute's per-definition subquery (R4).
+                values = AttributeValue.objects.filter(
+                    content_type=ct,
+                    object_id=OuterRef("pk"),
+                    value__icontains=query,
+                )
+                legs.append(Q(Exists(values)))
+
+        if not legs:
+            return queryset
+        if annotations:
+            queryset = queryset.annotate(**annotations)
+        combined = legs[0]
+        for leg in legs[1:]:
+            combined |= leg
+        return queryset.filter(combined)
+
+    def _resolve_content_type(self, view: Any) -> ContentType | None:
+        """Resolve the view's ``attribute_content_type`` label to a ContentType.
+
+        Args:
+            view: The DRF view declaring ``attribute_content_type`` as an
+                ``"app_label.model"`` string.
+
+        Returns:
+            The ContentType, or None when the view declares no label or the
+            label does not resolve (silently skipped, forgiving contract).
+        """
+        ct_label = getattr(view, "attribute_content_type", None)
+        if not ct_label:
+            return None
+        app_label, _, model = ct_label.partition(".")
+        return ContentType.objects.filter(app_label=app_label, model=model).first()
+
+    def get_schema_operation_parameters(self, view: Any) -> list[dict]:
+        """Declare the ``search`` query parameter for the OpenAPI schema."""
+        return [
+            {
+                "name": "search",
+                "required": False,
+                "in": "query",
+                "description": (
+                    "Case-insensitive substring matched against any searchable "
+                    "attribute; combined with `filters` as AND."
+                ),
+                "schema": {"type": "string"},
+            }
+        ]
 
 
 class EntityFilterBackend(BaseFilterBackend):

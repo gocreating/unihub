@@ -413,3 +413,154 @@ describe('useEntityTable snapshotConfig / loadConfig (016 entity views)', () => 
     expect(result.current.tableKey).toBe('my-table');
   });
 });
+
+// --- Quick search (019) — T005/T027 locks ------------------------------------
+
+describe('useEntityTable quick search', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const renderTable = () =>
+    renderHook(() => useEntityTable({ key: 'test', filterableAttrs: ATTRS, columnDefs: COLS }), {
+      wrapper,
+    });
+
+  it('exposes searchQuery and setSearchQuery, echoing keystrokes immediately', () => {
+    const { result } = renderTable();
+    expect(result.current.searchQuery).toBe('');
+    act(() => {
+      result.current.setSearchQuery('mu');
+    });
+    expect(result.current.searchQuery).toBe('mu');
+  });
+
+  it('queryParams gains search only after the debounce elapses', () => {
+    const { result } = renderTable();
+    act(() => {
+      result.current.setSearchQuery('muji');
+    });
+    expect(result.current.queryParams.search).toBeUndefined();
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(result.current.queryParams.search).toBe('muji');
+  });
+
+  it('never emits an empty search param (empty and whitespace queries omit the key)', () => {
+    const { result } = renderTable();
+    expect('search' in result.current.queryParams).toBe(false);
+    act(() => {
+      result.current.setSearchQuery('   ');
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect('search' in result.current.queryParams).toBe(false);
+
+    // Type then clear: the key must vanish again, never `search: ''`.
+    act(() => {
+      result.current.setSearchQuery('muji');
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(result.current.queryParams.search).toBe('muji');
+    act(() => {
+      result.current.setSearchQuery('');
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect('search' in result.current.queryParams).toBe(false);
+  });
+
+  it('a settled query change resets offset to 0', () => {
+    const { result } = renderTable();
+    act(() => {
+      result.current.setOffset(50);
+    });
+    expect(result.current.offset).toBe(50);
+    act(() => {
+      result.current.setSearchQuery('muji');
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(result.current.offset).toBe(0);
+  });
+
+  it('snapshotConfig contains no search key and loadConfig leaves the query untouched', () => {
+    const { result } = renderTable();
+    act(() => {
+      result.current.setSearchQuery('muji');
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(Object.keys(result.current.snapshotConfig())).toEqual([
+      'filters',
+      'sort',
+      'columns',
+      'pageSize',
+    ]);
+    act(() => {
+      result.current.loadConfig({
+        filters: [],
+        sort: [],
+        columns: COLS.map((c) => ({ key: c.key, visible: true, order: c.order })),
+        pageSize: 50,
+      });
+    });
+    expect(result.current.searchQuery).toBe('muji');
+  });
+
+  // T027 (US4): a continuous burst produces exactly ONE params transition
+  // carrying the final string — never an intermediate prefix.
+  it('a 10-keystroke burst produces one search transition with the final text', () => {
+    const { result } = renderTable();
+    const seen: Array<string | undefined> = [];
+    const record = () => {
+      const s = result.current.queryParams.search;
+      if (seen.length === 0 || seen[seen.length - 1] !== s) seen.push(s);
+    };
+    record();
+    const text = '0123456789';
+    for (let i = 1; i <= text.length; i += 1) {
+      act(() => {
+        result.current.setSearchQuery(text.slice(0, i));
+      });
+      act(() => {
+        vi.advanceTimersByTime(50); // faster than the 300ms debounce
+      });
+      record();
+      expect(result.current.searchQuery).toBe(text.slice(0, i)); // responsive echo
+    }
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    record();
+    expect(seen).toEqual([undefined, '0123456789']);
+  });
+
+  // T027 (US4): typing then clearing before the debounce fires never emits.
+  it('typing then clearing within the debounce window never emits a search param', () => {
+    const { result } = renderTable();
+    act(() => {
+      result.current.setSearchQuery('muji');
+    });
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    act(() => {
+      result.current.setSearchQuery('');
+    });
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect('search' in result.current.queryParams).toBe(false);
+  });
+});

@@ -76,7 +76,16 @@ export function KeyEmoji({ emoji }: { emoji: string }) {
  * against the label line by LAYOUT (vertical-align tricks are banned — they
  * anchor to x-height, not the row middle).
  */
-export function ParameterTag({ pair, fontSize }: { pair: ParameterPair; fontSize?: number }) {
+export function ParameterTag({
+  pair,
+  fontSize,
+  highlight,
+}: {
+  pair: ParameterPair;
+  fontSize?: number;
+  /** Search query (019) — matches inside the label render as <mark>. */
+  highlight?: string;
+}) {
   return (
     <Tag style={{ marginInlineEnd: 0, maxWidth: '100%', ...(fontSize ? { fontSize } : null) }}>
       <span
@@ -89,7 +98,7 @@ export function ParameterTag({ pair, fontSize }: { pair: ParameterPair; fontSize
       >
         <KeyEmoji emoji={pair.emoji} />
         <OverflowTooltip title={pairText(pair)} style={{ minWidth: 0 }}>
-          {pair.label}
+          {highlight ? <HighlightText text={pair.label} query={highlight} /> : pair.label}
         </OverflowTooltip>
       </span>
     </Tag>
@@ -204,7 +213,7 @@ export function ItemDisplay({
       {tags.length > 0 ? (
         <Space size={[4, 4]} wrap style={{ maxWidth: '100%', marginTop: 2 }}>
           {tags.map((tag, i) => (
-            <ParameterTag key={i} pair={tag} fontSize={11} />
+            <ParameterTag key={i} pair={tag} fontSize={11} highlight={highlight} />
           ))}
         </Space>
       ) : null}

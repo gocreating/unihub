@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, ColorPicker, DatePicker, Form, Input, Modal, Select, Space, Tag, message } from 'antd';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import { EmptyValue } from '@/components/EmptyValue';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
@@ -230,13 +231,19 @@ export function AccountsPage() {
         dataIndex: 'name',
         ...widthForHeader('Name', dataWidths.name),
         fixed: getFixed('name'),
+        // SearchMark reads the highlight query from context (019).
+        render: (_, record) => <SearchMark text={record.name} />,
         ...makeSortProps('name', t({ id: 'common.name' }), sort),
       },
       currency: {
         dataIndex: 'currency',
         ...widthForHeader('Currency', dataWidths.currency),
         fixed: getFixed('currency'),
-        render: (val) => <Tag>{val as string}</Tag>,
+        render: (val) => (
+          <Tag>
+            <SearchMark text={val as string} />
+          </Tag>
+        ),
         ...makeSortProps('currency', t({ id: 'common.currency' }), sort),
       },
       color: {
@@ -268,7 +275,7 @@ export function AccountsPage() {
         ...makeSortProps('open_datetime', t({ id: 'pages.finance.accounts.col.openDatetime' }), sort),
         render: (_, record) => {
           const formatted = formatDateRelative(record.open_datetime);
-          return formatted ?? <EmptyValue />;
+          return formatted ? <SearchMark text={formatted} /> : <EmptyValue />;
         },
       },
       close_datetime: {
@@ -278,7 +285,7 @@ export function AccountsPage() {
         ...makeSortProps('close_datetime', t({ id: 'pages.finance.accounts.col.closeDatetime' }), sort),
         render: (_, record) => {
           const formatted = formatDateRelative(record.close_datetime);
-          return formatted ?? <EmptyValue />;
+          return formatted ? <SearchMark text={formatted} /> : <EmptyValue />;
         },
       },
       actions: {
@@ -317,7 +324,7 @@ export function AccountsPage() {
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} – ${c.name}` }));
 
   return (
-    <>
+    <SearchHighlightProvider value={table.activeSearch}>
       <PageTable<Account>
         key={`${cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.finance.accounts.title' })}
@@ -332,6 +339,7 @@ export function AccountsPage() {
             filterProps={{ attrs: filterableAttrs, hook: filter }}
             sortProps={{ attrs: filterableAttrs, hook: sort }}
             columnProps={{ hook: cols }}
+            searchProps={{ value: table.searchQuery, onChange: table.setSearchQuery }}
           />
         }
         rowKey="id"
@@ -393,6 +401,6 @@ export function AccountsPage() {
           </Form.Item>
         </Form>
       </Modal>
-    </>
+    </SearchHighlightProvider>
   );
 }

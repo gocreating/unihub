@@ -151,3 +151,42 @@ describe('EntityToolbar columnProps visibility', () => {
     expect(screen.getByRole('button', { name: /columns/i })).toBeInTheDocument();
   });
 });
+
+// --- Quick search input (019) — T006 ----------------------------------------
+
+describe('EntityToolbar quick search input', () => {
+  it('renders no search input when searchProps is omitted', () => {
+    renderToolbar();
+    expect(screen.queryByPlaceholderText('Search')).not.toBeInTheDocument();
+  });
+
+  it('renders the search input after the Columns button', () => {
+    render(<EntityToolbar {...defaultProps} searchProps={{ value: '', onChange: vi.fn() }} />, {
+      wrapper,
+    });
+    const input = screen.getByPlaceholderText('Search');
+    const columnsBtn = screen.getByRole('button', { name: /columns/i });
+    expect(
+      columnsBtn.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('typing calls onChange with the new value per keystroke', () => {
+    const onChange = vi.fn();
+    render(<EntityToolbar {...defaultProps} searchProps={{ value: '', onChange }} />, { wrapper });
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'mu' } });
+    expect(onChange).toHaveBeenCalledWith('mu');
+  });
+
+  it('the clear affordance calls onChange with an empty string', () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <EntityToolbar {...defaultProps} searchProps={{ value: 'muji', onChange }} />,
+      { wrapper },
+    );
+    const clear = container.querySelector('.ant-input-clear-icon');
+    expect(clear).not.toBeNull();
+    fireEvent.click(clear as Element);
+    expect(onChange).toHaveBeenCalledWith('');
+  });
+});

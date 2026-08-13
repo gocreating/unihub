@@ -193,3 +193,31 @@ describe('remark icon + deprecated warning (iteration 36)', () => {
     expect(document.querySelector('[data-testid="deprecated-warning"]')).toBeNull();
   });
 });
+
+// Quick search (019 US3): parameter tags carry the highlight too.
+describe('ParameterTag highlight (019)', () => {
+  it('marks query matches inside parameter tag labels', () => {
+    const { container } = wrap(
+      <ItemDisplay
+        item={base}
+        parameters={[{ name: 'color', data_type: 'text', value: 'crimson red', unit: '' }]}
+        showParameters
+        highlight="crimson"
+      />,
+    );
+    const mark = container.querySelector('.ant-tag mark');
+    expect(mark).not.toBeNull();
+    expect(mark!.textContent).toBe('crimson');
+  });
+
+  it('renders no marks in tags without a highlight', () => {
+    const { container } = wrap(
+      <ItemDisplay
+        item={base}
+        parameters={[{ name: 'color', data_type: 'text', value: 'crimson red', unit: '' }]}
+        showParameters
+      />,
+    );
+    expect(container.querySelector('.ant-tag mark')).toBeNull();
+  });
+});

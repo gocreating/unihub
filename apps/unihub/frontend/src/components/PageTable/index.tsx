@@ -64,11 +64,19 @@ const useStyles = createStyles(({ token }) => ({
       gap: `${token.marginXS}px !important`,
       overflowX: 'auto',
     },
+    // Quick search (019, R10): the left container grows so a stretching
+    // control inside headerTitle (the search input) can fill the row. Pages
+    // whose headerTitle holds only intrinsic-width buttons are unaffected.
     '& .ant-pro-table-list-toolbar-left': {
-      flex: 'none !important' as never,
+      flex: '1 1 auto !important' as never,
+      minWidth: '0 !important' as never,
       flexWrap: 'nowrap !important' as never,
       marginBlockEnd: '0 !important' as never,
       maxWidth: '100% !important' as never,
+    },
+    '& .ant-pro-table-list-toolbar-left .ant-pro-table-list-toolbar-title': {
+      flex: '1 1 auto',
+      minWidth: 0,
     },
     '& .ant-pro-table-list-toolbar-right': {
       flex: 'none !important' as never,

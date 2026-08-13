@@ -1,6 +1,11 @@
 import { useCallback, useState } from 'react';
-import { Button, Dropdown, Space } from 'antd';
-import { FilterOutlined, SortAscendingOutlined, TableOutlined } from '@ant-design/icons';
+import { Button, Dropdown, Input } from 'antd';
+import {
+  FilterOutlined,
+  SearchOutlined,
+  SortAscendingOutlined,
+  TableOutlined,
+} from '@ant-design/icons';
 import { useIntl } from 'react-intl';
 import type { UseEntityFilterReturn } from './hooks/useEntityFilter';
 import type { UseEntitySortReturn } from './hooks/useEntitySort';
@@ -23,9 +28,21 @@ export interface EntityToolbarProps {
   columnProps?: {
     hook: UseColumnConfigReturn;
   };
+  /** Quick search (019) — omit to hide the search input. The input is live
+   *  (no apply gate: constitution XII covers panels, not direct controls) and
+   *  stretches to fill the toolbar row's remaining width. */
+  searchProps?: {
+    value: string;
+    onChange: (value: string) => void;
+  };
 }
 
-export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToolbarProps) {
+export function EntityToolbar({
+  filterProps,
+  sortProps,
+  columnProps,
+  searchProps,
+}: EntityToolbarProps) {
   const { formatMessage: t } = useIntl();
 
   const [filterOpen, setFilterOpen] = useState(false);
@@ -86,7 +103,7 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
   };
 
   return (
-    <Space size="small">
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
       {/* Filter */}
       <Dropdown
         open={filterOpen}
@@ -158,6 +175,21 @@ export function EntityToolbar({ filterProps, sortProps, columnProps }: EntityToo
           </Button>
         </Dropdown>
       )}
-    </Space>
+
+      {/* Quick search (019) — next to the Columns dropdown, stretched to fill
+          the remaining row width. Deliberately OUTSIDE the panel machinery:
+          typing never closes or discards a dirty panel. */}
+      {searchProps && (
+        <div style={{ flex: '1 1 auto', minWidth: 160 }}>
+          <Input
+            prefix={<SearchOutlined />}
+            allowClear
+            placeholder={t({ id: 'common.entityOps.searchPlaceholder' })}
+            value={searchProps.value}
+            onChange={(e) => searchProps.onChange(e.target.value)}
+          />
+        </div>
+      )}
+    </div>
   );
 }

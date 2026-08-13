@@ -2012,3 +2012,84 @@ describe('useEntityViews — round 9: resetTab', () => {
     expect(result.current.table.limit).toBe(activeLimitBefore);
   });
 });
+
+// ── Quick search per-tab context (019 US2) ──────────────────────────────────
+// The query is transient per-visit state on InternalTab — never in ViewConfig,
+// so it is invisible to dirty compare, URL serialization, and saved views.
+describe('useEntityViews — quick search per-tab context (019)', () => {
+  it('each open tab holds its own query; switching restores it', async () => {
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.views.savedViews).toHaveLength(1));
+    const defaultTabId = result.current.views.tabs[0]!.tabId;
+
+    act(() => {
+      result.current.table.setSearchQuery('alpha');
+    });
+    act(() => {
+      result.current.views.openView(SAVED_VIEW.id);
+    });
+    // A newly opened view tab starts with an empty query.
+    expect(result.current.table.searchQuery).toBe('');
+
+    act(() => {
+      result.current.table.setSearchQuery('beta');
+    });
+    act(() => {
+      result.current.views.switchTab(defaultTabId);
+    });
+    expect(result.current.table.searchQuery).toBe('alpha');
+
+    const savedTabId = result.current.views.tabs.find((t) => t.viewId === SAVED_VIEW.id)!.tabId;
+    act(() => {
+      result.current.views.switchTab(savedTabId);
+    });
+    expect(result.current.table.searchQuery).toBe('beta');
+  });
+
+  it('a blank tab starts with an empty query', async () => {
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+    act(() => {
+      result.current.table.setSearchQuery('alpha');
+    });
+    act(() => {
+      result.current.views.addBlankTab();
+    });
+    expect(result.current.table.searchQuery).toBe('');
+  });
+
+  it('searching never dirties the active tab and never emits view URL params', async () => {
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+    act(() => {
+      result.current.table.setSearchQuery('muji');
+    });
+    await waitFor(() => expect(result.current.table.queryParams.search).toBe('muji'));
+    // FR-033, both directions at once: no indicator AND no override params
+    // (asserting the EMITTED PARAMS, not just the dot — the round-6 lesson).
+    expect(result.current.views.tabs[0]!.dirty).toBe(false);
+    const viewParams = Array.from(result.current.searchParams.keys()).filter((k) =>
+      k.startsWith('tbl.'),
+    );
+    expect(viewParams).toEqual([]);
+  });
+
+  it('saveTab persists a config without any search key', async () => {
+    createMock.mockResolvedValue({ ...DEFAULT_VIEW, id: 'newview00001' });
+    const { result } = renderHook(useHarness, { wrapper: makeWrapper() });
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+    act(() => {
+      result.current.table.setSearchQuery('muji');
+    });
+    await waitFor(() => expect(result.current.table.queryParams.search).toBe('muji'));
+    await act(async () => {
+      await result.current.views.saveTab(result.current.views.activeTabId);
+    });
+    await waitFor(() => expect(createMock).toHaveBeenCalled());
+    const payload = createMock.mock.calls[0]![0] as { config: Record<string, unknown> };
+    expect(Object.keys(payload.config)).not.toContain('search');
+    expect(Object.keys(payload.config).sort()).toEqual(
+      ['columns', 'filters', 'pageSize', 'sort'],
+    );
+  });
+});

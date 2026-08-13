@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SorterResult } from 'antd/es/table/interface';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useEntityFilter } from './hooks/useEntityFilter';
 import type { UseEntityFilterReturn } from './hooks/useEntityFilter';
 import { useEntitySort } from './hooks/useEntitySort';
@@ -54,6 +55,12 @@ export interface UseEntityTableReturn {
   setOffset: (n: number) => void;
   /** Ready-to-use params for the API query. */
   queryParams: EntityListParams;
+  /** Quick search (019): the live input value — echoes every keystroke. */
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+  /** The debounced, trimmed query actually driving the API (and highlights).
+   *  Empty string = no search active. NEVER part of ViewConfig. */
+  activeSearch: string;
   /** Wire to ProTable's onChange to sync column header sort clicks. */
   handleTableSorterChange: (sorter: SorterResult<unknown> | SorterResult<unknown>[]) => void;
   /** Build AntD pagination props from the API response total count. */
@@ -89,18 +96,27 @@ export function useEntityTable({
   const [limit, setLimit] = useState<number>(defaultPageSize);
   const [offset, setOffset] = useState(0);
 
+  // Quick search (019): the input echoes every keystroke; the API sees the
+  // debounced, trimmed value only. The query is transient per-visit state —
+  // it never enters snapshotConfig/loadConfig (ViewConfig), so it is invisible
+  // to view dirty-compare, URL serialization, and saved views by construction.
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+  const activeSearch = debouncedSearch.trim();
+
   // loadConfig() may carry an explicit offset (URL page transport) that must
   // survive the filter/sort-change page reset below.
   const skipNextOffsetResetRef = useRef(false);
 
-  // Reset to first page whenever the user applies a new filter or sort.
+  // Reset to first page whenever the user applies a new filter or sort, or
+  // the settled search query changes (FR-011).
   useEffect(() => {
     if (skipNextOffsetResetRef.current) {
       skipNextOffsetResetRef.current = false;
       return;
     }
     setOffset(0);
-  }, [filter.activeGroups, sort.activeRules]);
+  }, [filter.activeGroups, sort.activeRules, activeSearch]);
 
   const queryParams = useMemo<EntityListParams>(
     () => ({
@@ -108,9 +124,12 @@ export function useEntityTable({
       ordering: sort.toOrderingParam(),
       limit,
       offset,
+      // Conditional spread — `search: ''` would serialize as `search=` (the
+      // service layer's generic pass-through emits any non-undefined value).
+      ...(activeSearch ? { search: activeSearch } : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filter.toApiParam, sort.toOrderingParam, limit, offset],
+    [filter.toApiParam, sort.toOrderingParam, limit, offset, activeSearch],
   );
 
   const handleTableSorterChange = useCallback(
@@ -205,6 +224,9 @@ export function useEntityTable({
     offset,
     setOffset,
     queryParams,
+    searchQuery,
+    setSearchQuery,
+    activeSearch,
     handleTableSorterChange,
     paginationProps,
     tableKey: key,

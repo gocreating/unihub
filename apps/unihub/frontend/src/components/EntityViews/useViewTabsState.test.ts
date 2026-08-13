@@ -69,3 +69,23 @@ describe('useViewTabsState', () => {
     expect(second.result.current.tabs).toHaveLength(1);
   });
 });
+
+// Quick search (019): `search` rides on InternalTab as transient per-visit
+// state — and the hook still persists NOTHING (round-13 rule).
+describe('useViewTabsState — quick search field (019)', () => {
+  it('the initial default tab carries no search and storage stays empty', () => {
+    const { result } = renderHook(() => useViewTabsState(DEFAULT_CONFIG));
+    expect(result.current.tabs[0]!.search).toBeUndefined();
+    expect(window.sessionStorage.length).toBe(0);
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it('a search set on a tab stays in memory only', () => {
+    const { result } = renderHook(() => useViewTabsState(DEFAULT_CONFIG));
+    act(() => {
+      result.current.setTabs((prev) => prev.map((t) => ({ ...t, search: 'muji' })));
+    });
+    expect(result.current.tabs[0]!.search).toBe('muji');
+    expect(window.sessionStorage.length).toBe(0);
+  });
+});

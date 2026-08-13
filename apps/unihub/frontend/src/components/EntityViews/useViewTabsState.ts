@@ -30,6 +30,12 @@ export interface InternalTab {
    *  the URL's for an inline restoration). Stored views need none — theirs is
    *  the saved config. In-memory only; tabs are never persisted (round 5). */
   baseline?: ViewConfig;
+  /** Quick search (019): the tab's transient query, snapshotted on switch-away
+   *  and restored on switch-to. NOT part of ViewConfig — invisible to dirty
+   *  compare, URL serialization, and saved views; per-visit only (this hook
+   *  persists nothing). New tabs start empty; "Reset changes" leaves it alone
+   *  (reset restores stored CONFIG, and search is not config). */
+  search?: string;
 }
 
 function defaultTab(defaultConfig: ViewConfig): InternalTab {

@@ -188,7 +188,6 @@ export function getNetWorth(sheetId: string): Promise<NetWorthResult> {
 export interface Asset {
   id: string;
   name: string;
-  category: string;
   created_at: string;
   updated_at: string;
 }
@@ -197,11 +196,11 @@ export function listAssets(params?: EntityListParams): Promise<OffsetPaginatedRe
   return fetchJson<OffsetPaginatedResponse<Asset>>(`/api/v1/finance/assets/${buildEntityListQs(params)}`);
 }
 
-export function createAsset(data: Pick<Asset, 'name' | 'category'>): Promise<Asset> {
+export function createAsset(data: Pick<Asset, 'name'>): Promise<Asset> {
   return fetchJson<Asset>('/api/v1/finance/assets/', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateAsset(id: string, data: Partial<Pick<Asset, 'name' | 'category'>>): Promise<Asset> {
+export function updateAsset(id: string, data: Partial<Pick<Asset, 'name'>>): Promise<Asset> {
   return fetchJson<Asset>(`/api/v1/finance/assets/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
@@ -215,6 +214,7 @@ export interface Portfolio {
   id: string;
   name: string;
   base_currency: string;
+  description: string;
   state: 'active' | 'closed';
   first_transaction_time: string | null;
   last_transaction_time: string | null;
@@ -230,11 +230,16 @@ export function getPortfolio(id: string): Promise<Portfolio> {
   return fetchJson<Portfolio>(`/api/v1/finance/portfolios/${id}/`);
 }
 
-export function createPortfolio(data: Pick<Portfolio, 'name' | 'base_currency' | 'state'>): Promise<Portfolio> {
+export function createPortfolio(
+  data: Pick<Portfolio, 'name' | 'base_currency' | 'state'> & Partial<Pick<Portfolio, 'description'>>,
+): Promise<Portfolio> {
   return fetchJson<Portfolio>('/api/v1/finance/portfolios/', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updatePortfolio(id: string, data: Partial<Pick<Portfolio, 'name' | 'state'>>): Promise<Portfolio> {
+export function updatePortfolio(
+  id: string,
+  data: Partial<Pick<Portfolio, 'name' | 'state' | 'description'>>,
+): Promise<Portfolio> {
   return fetchJson<Portfolio>(`/api/v1/finance/portfolios/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
@@ -250,6 +255,7 @@ export interface Transfer {
   asset_name: string;
   asset_change_amount: string;
   value_change: string | null;
+  remark: string;
   created_at: string;
   updated_at: string;
 }
@@ -260,6 +266,8 @@ export interface Transaction {
   portfolio_name: string;
   timestamp: string;
   description: string;
+  chain_id: string;
+  tx_hash: string;
   transfers: Transfer[];
   created_at: string;
   updated_at: string;
@@ -269,12 +277,15 @@ export interface TransferInput {
   asset: string;
   asset_change_amount: string;
   value_change?: string | null;
+  remark?: string;
 }
 
 export interface TransactionInput {
   portfolio: string;
   timestamp: string;
   description?: string;
+  chain_id?: string;
+  tx_hash?: string;
   transfers: TransferInput[];
 }
 

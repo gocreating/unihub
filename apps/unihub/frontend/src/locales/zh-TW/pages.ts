@@ -442,11 +442,8 @@ export default {
   'pages.finance.assets.delete.title': '刪除資產',
   'pages.finance.assets.delete.confirm': '確定刪除資產「{name}」？此操作無法復原。',
   'pages.finance.assets.col.name': '名稱',
-  'pages.finance.assets.col.category': '類別',
   'pages.finance.assets.form.name': '名稱',
   'pages.finance.assets.form.namePlaceholder': '例：Apple Inc.',
-  'pages.finance.assets.form.category': '類別',
-  'pages.finance.assets.form.categoryPlaceholder': '例：股票',
 
   // Finance — Portfolios
   'pages.finance.portfolios.title': '投資組合',
@@ -476,6 +473,9 @@ export default {
   'pages.finance.portfolios.form.baseCurrency': '基準貨幣',
   'pages.finance.portfolios.form.baseCurrencyPlaceholder': '選擇貨幣',
   'pages.finance.portfolios.form.state': '狀態',
+  'pages.finance.portfolios.col.description': '描述',
+  'pages.finance.portfolios.form.description': '描述',
+  'pages.finance.portfolios.form.descriptionPlaceholder': '選填備註，例：定期定額排程',
   'pages.finance.portfolios.detail.panelTitle': '投資組合',
 
   // Finance — Transactions
@@ -500,6 +500,12 @@ export default {
   'pages.finance.transactions.form.timestamp': '時間',
   'pages.finance.transactions.form.description': '描述',
   'pages.finance.transactions.form.descriptionPlaceholder': '例：買入 AAPL',
+  'pages.finance.transactions.form.chainId': '鏈 ID',
+  'pages.finance.transactions.form.chainIdPlaceholder': '選填，例：1',
+  'pages.finance.transactions.form.txHash': '交易雜湊',
+  'pages.finance.transactions.form.txHashPlaceholder': '選填，例：0xabc\u2026',
+  'pages.finance.transactions.form.remark': '備註',
+  'pages.finance.transactions.form.remarkPlaceholder': '選填，例：手續費',
   'pages.finance.transactions.form.transfers': '轉帳明細',
   'pages.finance.transactions.form.addTransfer': '新增轉帳',
   'pages.finance.transactions.form.removeTransfer': '移除',
@@ -511,6 +517,7 @@ export default {
   'pages.finance.transactions.transfer.asset': '資產',
   'pages.finance.transactions.transfer.assetChange': '資產變動',
   'pages.finance.transactions.transfer.valueChange': '價值變動（{currency}）',
+  'pages.finance.transactions.transfer.remark': '備註',
 
   // System > Profile
   'pages.system.profile.title': '系統概覽',

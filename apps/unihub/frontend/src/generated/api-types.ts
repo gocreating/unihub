@@ -231,6 +231,38 @@ export interface paths {
         patch: operations["v1_finance_accounts_partial_update"];
         trace?: never;
     };
+    "/api/v1/finance/assets/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_finance_assets_list"];
+        put?: never;
+        post: operations["v1_finance_assets_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/finance/assets/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_finance_assets_retrieve"];
+        put?: never;
+        post?: never;
+        delete: operations["v1_finance_assets_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["v1_finance_assets_partial_update"];
+        trace?: never;
+    };
     "/api/v1/finance/balance-sheets/": {
         parameters: {
             query?: never;
@@ -389,6 +421,70 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["v1_finance_exchange_rates_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/finance/portfolios/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_finance_portfolios_list"];
+        put?: never;
+        post: operations["v1_finance_portfolios_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/finance/portfolios/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_finance_portfolios_retrieve"];
+        put?: never;
+        post?: never;
+        delete: operations["v1_finance_portfolios_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["v1_finance_portfolios_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/finance/transactions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_finance_transactions_list"];
+        put?: never;
+        post: operations["v1_finance_transactions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/finance/transactions/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_finance_transactions_retrieve"];
+        put?: never;
+        post?: never;
+        delete: operations["v1_finance_transactions_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["v1_finance_transactions_partial_update"];
         trace?: never;
     };
     "/api/v1/inventory/acquisitions/": {
@@ -902,6 +998,14 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        Asset: {
+            readonly id: string;
+            name: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
         AttributeDefinition: {
             readonly id: string;
             content_type: number;
@@ -1041,6 +1145,25 @@ export interface components {
                 [key: string]: number;
             };
         };
+        PaginatedAssetList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?offset=400&limit=100
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?offset=200&limit=100
+             */
+            previous?: string | null;
+            results: components["schemas"]["Asset"][];
+            /** @description Footer totals over the filtered queryset (view-defined). */
+            totals?: {
+                [key: string]: number;
+            };
+        };
         PaginatedBalanceSheetList: {
             /** @example 123 */
             count: number;
@@ -1117,6 +1240,25 @@ export interface components {
                 [key: string]: number;
             };
         };
+        PaginatedPortfolioUpdateList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?offset=400&limit=100
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?offset=200&limit=100
+             */
+            previous?: string | null;
+            results: components["schemas"]["PortfolioUpdate"][];
+            /** @description Footer totals over the filtered queryset (view-defined). */
+            totals?: {
+                [key: string]: number;
+            };
+        };
         PaginatedScenarioList: {
             /** @example 123 */
             count: number;
@@ -1131,6 +1273,25 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Scenario"][];
+            /** @description Footer totals over the filtered queryset (view-defined). */
+            totals?: {
+                [key: string]: number;
+            };
+        };
+        PaginatedTransactionList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?offset=400&limit=100
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?offset=200&limit=100
+             */
+            previous?: string | null;
+            results: components["schemas"]["Transaction"][];
             /** @description Footer totals over the filtered queryset (view-defined). */
             totals?: {
                 [key: string]: number;
@@ -1165,6 +1326,14 @@ export interface components {
             }[];
             items?: components["schemas"]["Item"][];
             readonly item_count?: number;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedAsset: {
+            readonly id?: string;
+            name?: string;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -1249,6 +1418,21 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedPortfolioUpdate: {
+            readonly id?: string;
+            name?: string;
+            readonly base_currency?: string;
+            description?: string;
+            state?: components["schemas"]["StateEnum"];
+            /** Format: date-time */
+            readonly first_transaction_time?: string | null;
+            /** Format: date-time */
+            readonly last_transaction_time?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
         PatchedScenario: {
             readonly id?: string;
             name?: string;
@@ -1273,6 +1457,51 @@ export interface components {
             /** Format: date-time */
             readonly created_at?: string;
         };
+        PatchedTransaction: {
+            readonly id?: string;
+            portfolio?: string;
+            readonly portfolio_name?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            description?: string;
+            chain_id?: string;
+            tx_hash?: string;
+            transfers?: components["schemas"]["Transfer"][];
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PortfolioCreate: {
+            readonly id: string;
+            name: string;
+            base_currency: string;
+            description?: string;
+            state?: components["schemas"]["StateEnum"];
+            /** Format: date-time */
+            readonly first_transaction_time: string | null;
+            /** Format: date-time */
+            readonly last_transaction_time: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        PortfolioUpdate: {
+            readonly id: string;
+            name: string;
+            readonly base_currency: string;
+            description?: string;
+            state?: components["schemas"]["StateEnum"];
+            /** Format: date-time */
+            readonly first_transaction_time: string | null;
+            /** Format: date-time */
+            readonly last_transaction_time: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
         Scenario: {
             readonly id: string;
             name: string;
@@ -1296,6 +1525,41 @@ export interface components {
             notes?: string;
             /** Format: date-time */
             readonly created_at: string;
+        };
+        /**
+         * @description * `active` - Active
+         *     * `closed` - Closed
+         * @enum {string}
+         */
+        StateEnum: "active" | "closed";
+        Transaction: {
+            readonly id: string;
+            portfolio: string;
+            readonly portfolio_name: string;
+            /** Format: date-time */
+            timestamp: string;
+            description?: string;
+            chain_id?: string;
+            tx_hash?: string;
+            transfers: components["schemas"]["Transfer"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        Transfer: {
+            readonly id: string;
+            asset: string;
+            readonly asset_name: string;
+            /** Format: decimal */
+            asset_change_amount: string;
+            /** Format: decimal */
+            value_change?: string | null;
+            remark?: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
         };
         /**
          * @description * `length` - Length
@@ -1778,6 +2042,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Account"];
+                };
+            };
+        };
+    };
+    v1_finance_assets_list: {
+        parameters: {
+            query?: {
+                /** @description Number of results to return per page. */
+                limit?: number;
+                /** @description The initial index from which to return the results. */
+                offset?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Case-insensitive substring matched against any searchable attribute; combined with `filters` as AND. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAssetList"];
+                };
+            };
+        };
+    };
+    v1_finance_assets_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Asset"];
+                "application/x-www-form-urlencoded": components["schemas"]["Asset"];
+                "multipart/form-data": components["schemas"]["Asset"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"];
+                };
+            };
+        };
+    };
+    v1_finance_assets_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique value identifying this asset. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"];
+                };
+            };
+        };
+    };
+    v1_finance_assets_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique value identifying this asset. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_finance_assets_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique value identifying this asset. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedAsset"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedAsset"];
+                "multipart/form-data": components["schemas"]["PatchedAsset"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"];
                 };
             };
         };
@@ -2271,6 +2659,254 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExchangeRate"];
+                };
+            };
+        };
+    };
+    v1_finance_portfolios_list: {
+        parameters: {
+            query?: {
+                /** @description Number of results to return per page. */
+                limit?: number;
+                /** @description The initial index from which to return the results. */
+                offset?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Case-insensitive substring matched against any searchable attribute; combined with `filters` as AND. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPortfolioUpdateList"];
+                };
+            };
+        };
+    };
+    v1_finance_portfolios_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortfolioCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PortfolioCreate"];
+                "multipart/form-data": components["schemas"]["PortfolioCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioCreate"];
+                };
+            };
+        };
+    };
+    v1_finance_portfolios_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique value identifying this portfolio. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioUpdate"];
+                };
+            };
+        };
+    };
+    v1_finance_portfolios_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique value identifying this portfolio. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_finance_portfolios_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique value identifying this portfolio. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPortfolioUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPortfolioUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedPortfolioUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioUpdate"];
+                };
+            };
+        };
+    };
+    v1_finance_transactions_list: {
+        parameters: {
+            query?: {
+                /** @description Number of results to return per page. */
+                limit?: number;
+                /** @description The initial index from which to return the results. */
+                offset?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Case-insensitive substring matched against any searchable attribute; combined with `filters` as AND. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedTransactionList"];
+                };
+            };
+        };
+    };
+    v1_finance_transactions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Transaction"];
+                "application/x-www-form-urlencoded": components["schemas"]["Transaction"];
+                "multipart/form-data": components["schemas"]["Transaction"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+        };
+    };
+    v1_finance_transactions_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique value identifying this transaction. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+        };
+    };
+    v1_finance_transactions_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique value identifying this transaction. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_finance_transactions_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique value identifying this transaction. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedTransaction"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedTransaction"];
+                "multipart/form-data": components["schemas"]["PatchedTransaction"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
                 };
             };
         };

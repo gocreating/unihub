@@ -11,6 +11,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import dayjs from 'dayjs';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
+import { confirmDialog } from '@/components/ConfirmDialog';
+import { DateTimeCell } from '@/components/DateTimeCell';
+import { EmptyValue } from '@/components/EmptyValue';
+import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import type { Transaction, TransferInput } from '@/services/unihub-backend/finance';
 import {
   createTransaction,
@@ -30,30 +34,25 @@ import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/
 import type { ColumnDef, EntityListParams, FilterableAttribute } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
-const EMPTY_CELL = <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
-
 interface TransferFormRow {
   asset: string;
   asset_change_amount: string;
   value_change?: string;
+  remark?: string;
 }
 
 interface TransactionFormValues {
   timestamp: dayjs.Dayjs;
   description?: string;
+  chain_id?: string;
+  tx_hash?: string;
   transfers: TransferFormRow[];
 }
 
-function formatTransactionTime(val: string | null | undefined) {
-  if (!val) return EMPTY_CELL;
-  return (
-    <span title={dayjs(val).format('YYYY-MM-DD HH:mm')}>
-      {dayjs(val).format('YYYY-MM-DD HH:mm')}
-      <Typography.Text type="secondary" style={{ marginLeft: 6, fontSize: 12 }}>
-        ({dayjs(val).fromNow()})
-      </Typography.Text>
-    </span>
-  );
+/** 18dp decimal strings arrive zero-padded ("419.000000000000000000") — trim for display. */
+function formatAmount(val: string): string {
+  if (!val.includes('.')) return val;
+  return val.replace(/0+$/, '').replace(/\.$/, '');
 }
 
 export function PortfolioDetailPage() {
@@ -176,10 +175,10 @@ export function PortfolioDetailPage() {
   });
 
   const confirmDeletePortfolio = () => {
-    Modal.confirm({
+    confirmDialog({
       title: t({ id: 'pages.finance.portfolios.delete.title' }),
       content: t({ id: 'pages.finance.portfolios.delete.confirm' }, { name: portfolio?.name ?? '' }),
-      okType: 'danger',
+      danger: true,
       onOk: () => deletePortfolioMutation.mutate(),
     });
   };
@@ -196,10 +195,13 @@ export function PortfolioDetailPage() {
     form.setFieldsValue({
       timestamp: dayjs(txn.timestamp),
       description: txn.description,
+      chain_id: txn.chain_id,
+      tx_hash: txn.tx_hash,
       transfers: txn.transfers.map((tr) => ({
         asset: tr.asset,
         asset_change_amount: tr.asset_change_amount,
         value_change: tr.value_change ?? undefined,
+        remark: tr.remark,
       })),
     });
     setModalOpen(true);
@@ -210,19 +212,19 @@ export function PortfolioDetailPage() {
       asset: tr.asset,
       asset_change_amount: String(tr.asset_change_amount),
       value_change: tr.value_change ? String(tr.value_change) : null,
+      remark: tr.remark ?? '',
     }));
+    const shared = {
+      timestamp: values.timestamp.toISOString(),
+      description: values.description ?? '',
+      chain_id: values.chain_id ?? '',
+      tx_hash: values.tx_hash ?? '',
+      transfers,
+    };
     if (editingTransaction) {
-      updateMutation.mutate({
-        id: editingTransaction.id,
-        data: { timestamp: values.timestamp.toISOString(), description: values.description ?? '', transfers },
-      });
+      updateMutation.mutate({ id: editingTransaction.id, data: shared });
     } else {
-      createMutation.mutate({
-        portfolio: id!,
-        timestamp: values.timestamp.toISOString(),
-        description: values.description ?? '',
-        transfers,
-      });
+      createMutation.mutate({ portfolio: id!, ...shared });
     }
   };
 
@@ -244,24 +246,14 @@ export function PortfolioDetailPage() {
           dataIndex: 'timestamp',
           width: 200,
           fixed: getFixed('timestamp'),
-          render: (val) => {
-            if (!val) return EMPTY_CELL;
-            return (
-              <span title={dayjs(val as string).format('YYYY-MM-DD HH:mm')}>
-                {dayjs(val as string).format('YYYY-MM-DD HH:mm')}
-                <Typography.Text type="secondary" style={{ marginLeft: 6, fontSize: 12 }}>
-                  ({dayjs(val as string).fromNow()})
-                </Typography.Text>
-              </span>
-            );
-          },
+          render: (val) => <DateTimeCell value={val as string | null} />,
           ...makeSortProps('timestamp', t({ id: 'pages.finance.transactions.col.timestamp' }), table.sort),
         },
         description: {
           dataIndex: 'description',
           ...widthForHeader(t({ id: 'pages.finance.transactions.col.description' }), dataWidths.description),
           fixed: getFixed('description'),
-          render: (val) => val ? String(val) : EMPTY_CELL,
+          render: (val) => (val ? <SearchMark text={String(val)} /> : <EmptyValue />),
         },
         transfer_count: {
           key: 'transfer_count',
@@ -283,10 +275,10 @@ export function PortfolioDetailPage() {
                 <Button
                   size="small" danger icon={<DeleteOutlined />}
                   onClick={() =>
-                    Modal.confirm({
+                    confirmDialog({
                       title: t({ id: 'pages.finance.transactions.delete.title' }),
                       content: t({ id: 'pages.finance.transactions.delete.confirm' }),
-                      okType: 'danger',
+                      danger: true,
                       onOk: () => deleteMutation.mutate(record.id),
                     })
                   }
@@ -320,21 +312,27 @@ export function PortfolioDetailPage() {
     {
       title: t({ id: 'pages.finance.transactions.transfer.asset' }),
       dataIndex: 'asset_name',
-      render: (val) => val ? <Tag>{String(val)}</Tag> : EMPTY_CELL,
+      render: (val) => (val ? <Tag><SearchMark text={String(val)} /></Tag> : <EmptyValue />),
     },
     {
       title: t({ id: 'pages.finance.transactions.transfer.assetChange' }),
       dataIndex: 'asset_change_amount',
+      render: (val) => <SearchMark text={formatAmount(String(val))} />,
     },
     {
       title: t({ id: 'pages.finance.transactions.transfer.valueChange' }, { currency: baseCurrency }),
       dataIndex: 'value_change',
-      render: (val) => val != null ? String(val) : EMPTY_CELL,
+      render: (val) => (val != null ? <SearchMark text={formatAmount(String(val))} /> : <EmptyValue />),
+    },
+    {
+      title: t({ id: 'pages.finance.transactions.transfer.remark' }),
+      dataIndex: 'remark',
+      render: (val) => (val ? <SearchMark text={String(val)} /> : <EmptyValue />),
     },
   ];
 
   return (
-    <>
+    <SearchHighlightProvider value={table.activeSearch}>
       <Breadcrumb
         style={{ marginBottom: 16 }}
         items={[
@@ -390,14 +388,18 @@ export function PortfolioDetailPage() {
                 : t({ id: 'pages.finance.portfolios.state.closed' })}
             </Tag>
           </Space>
+          <div style={{ marginTop: 12 }}>
+            <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.description' })}</Typography.Text>
+            <div>{portfolio?.description ? portfolio.description : <EmptyValue />}</div>
+          </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 32 }}>
             <div>
               <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.firstTransactionTime' })}</Typography.Text>
-              <div>{formatTransactionTime(portfolio?.first_transaction_time)}</div>
+              <div><DateTimeCell value={portfolio?.first_transaction_time} /></div>
             </div>
             <div>
               <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.lastTransactionTime' })}</Typography.Text>
-              <div>{formatTransactionTime(portfolio?.last_transaction_time)}</div>
+              <div><DateTimeCell value={portfolio?.last_transaction_time} /></div>
             </div>
           </div>
         </Card>
@@ -421,6 +423,7 @@ export function PortfolioDetailPage() {
             filterProps={{ attrs: filterableAttrs, hook: table.filter }}
             sortProps={{ attrs: filterableAttrs, hook: table.sort }}
             columnProps={{ hook: table.cols }}
+            searchProps={{ value: table.searchQuery, onChange: table.setSearchQuery }}
           />
         }
         rowKey="id"
@@ -479,6 +482,15 @@ export function PortfolioDetailPage() {
             <Input placeholder={t({ id: 'pages.finance.transactions.form.descriptionPlaceholder' })} />
           </Form.Item>
 
+          <Space style={{ display: 'flex' }} align="start">
+            <Form.Item name="chain_id" label={t({ id: 'pages.finance.transactions.form.chainId' })}>
+              <Input placeholder={t({ id: 'pages.finance.transactions.form.chainIdPlaceholder' })} maxLength={32} style={{ width: 140 }} />
+            </Form.Item>
+            <Form.Item name="tx_hash" label={t({ id: 'pages.finance.transactions.form.txHash' })}>
+              <Input placeholder={t({ id: 'pages.finance.transactions.form.txHashPlaceholder' })} maxLength={128} style={{ width: 300 }} />
+            </Form.Item>
+          </Space>
+
           <Form.List name="transfers" rules={[{ validator: async (_, v) => { if (!v || v.length === 0) return Promise.reject(new Error('At least one transfer required')); } }]}>
             {(fields, { add, remove }, { errors }) => (
               <>
@@ -500,11 +512,11 @@ export function PortfolioDetailPage() {
                       </Select>
                     </Form.Item>
                     <Form.Item name={[name, 'asset_change_amount']} rules={[{ required: true }]} style={{ marginBottom: 0 }}>
+                      {/* stringMode with no `step`: typed values keep full 18dp precision (FR-008c) */}
                       <InputNumber
                         placeholder={t({ id: 'pages.finance.transactions.form.assetChangeAmount' })}
                         style={{ width: 140 }}
                         stringMode
-                        step="0.00000001"
                       />
                     </Form.Item>
                     <Form.Item name={[name, 'value_change']} style={{ marginBottom: 0 }}>
@@ -512,7 +524,13 @@ export function PortfolioDetailPage() {
                         placeholder={t({ id: 'pages.finance.transactions.form.valueChange' }, { currency: baseCurrency })}
                         style={{ width: 160 }}
                         stringMode
-                        step="0.00000001"
+                      />
+                    </Form.Item>
+                    <Form.Item name={[name, 'remark']} style={{ marginBottom: 0 }}>
+                      <Input
+                        placeholder={t({ id: 'pages.finance.transactions.form.remarkPlaceholder' })}
+                        maxLength={255}
+                        style={{ width: 120 }}
                       />
                     </Form.Item>
                     <MinusCircleOutlined onClick={() => remove(name)} style={{ marginTop: 8 }} />
@@ -532,6 +550,6 @@ export function PortfolioDetailPage() {
           </Form.List>
         </Form>
       </Modal>
-    </>
+    </SearchHighlightProvider>
   );
 }

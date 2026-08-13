@@ -1,19 +1,27 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Modal, Space, Typography, message } from 'antd';
+import { Button, Form, Input, Modal, Space, message } from 'antd';
+import { confirmDialog } from '@/components/ConfirmDialog';
+import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useIntl } from 'react-intl';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
 import type { Asset } from '@/services/unihub-backend/finance';
 import { createAsset, deleteAsset, listAssets, updateAsset } from '@/services/unihub-backend/finance';
-import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
-import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import {
+  EntityOffsetFooter,
+  EntityToolbar,
+  useEntityTable,
+  viewConfigFromColumns,
+} from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute, ViewConfig } from '@/components/EntityToolbar';
+import { ViewTabs } from '@/components/EntityViews/ViewTabs';
+import { useEntityViews } from '@/components/EntityViews/useEntityViews';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 interface AssetFormValues {
   name: string;
-  category: string;
 }
 
 export function AssetsPage() {
@@ -25,16 +33,22 @@ export function AssetsPage() {
 
   const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
     { key: 'name', label: t({ id: 'pages.finance.assets.col.name' }), dataType: 'text' },
-    { key: 'category', label: t({ id: 'pages.finance.assets.col.category' }), dataType: 'text' },
   ], [t]);
 
   const columnDefs = useMemo<ColumnDef[]>(() => [
     { key: 'name', label: t({ id: 'pages.finance.assets.col.name' }), dataType: 'text', visible: true, order: 0 },
-    { key: 'category', label: t({ id: 'pages.finance.assets.col.category' }), dataType: 'text', visible: true, order: 1 },
-    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 1 },
   ], [t]);
 
-  const table = useEntityTable({ key: 'assets', filterableAttrs, columnDefs });
+  const table = useEntityTable({ key: 'finance-assets', filterableAttrs, columnDefs });
+
+  // The default-view baseline the view tabs diff against (016 views).
+  const defaultViewConfig = useMemo<ViewConfig>(() => viewConfigFromColumns(columnDefs), [columnDefs]);
+  const views = useEntityViews({
+    tableKey: table.tableKey,
+    table,
+    defaultConfig: defaultViewConfig,
+  });
 
   const { data: assetsData, isLoading } = useQuery({
     queryKey: ['finance', 'assets', table.queryParams],
@@ -89,7 +103,7 @@ export function AssetsPage() {
 
   const openEdit = (asset: Asset) => {
     setEditingAsset(asset);
-    form.setFieldsValue({ name: asset.name, category: asset.category });
+    form.setFieldsValue({ name: asset.name });
     setModalOpen(true);
   };
 
@@ -97,17 +111,16 @@ export function AssetsPage() {
     if (editingAsset) {
       updateMutation.mutate({ id: editingAsset.id, data: values });
     } else {
-      createMutation.mutate({ name: values.name, category: values.category ?? '' });
+      createMutation.mutate({ name: values.name });
     }
   };
 
   const actionsColWidth = useActionsColWidth(assets);
 
   const dataWidths = useMemo(() => {
-    const w = { name: 0, category: 0 };
+    const w = { name: 0 };
     for (const a of assets) {
       w.name = Math.max(w.name, measureTextWidth(a.name));
-      w.category = Math.max(w.category, measureTextWidth(a.category));
     }
     return w;
   }, [assets]);
@@ -120,15 +133,8 @@ export function AssetsPage() {
           dataIndex: 'name',
           ...widthForHeader(t({ id: 'pages.finance.assets.col.name' }), dataWidths.name),
           fixed: getFixed('name'),
+          render: (_, record) => <SearchMark text={record.name} />,
           ...makeSortProps('name', t({ id: 'pages.finance.assets.col.name' }), table.sort),
-        },
-        category: {
-          dataIndex: 'category',
-          ...widthForHeader(t({ id: 'pages.finance.assets.col.category' }), dataWidths.category),
-          fixed: getFixed('category'),
-          render: (val) =>
-            val ? String(val) : <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>,
-          ...makeSortProps('category', t({ id: 'pages.finance.assets.col.category' }), table.sort),
         },
         actions: {
           title: t({ id: 'common.actions' }),
@@ -144,10 +150,10 @@ export function AssetsPage() {
                 <Button
                   size="small" danger icon={<DeleteOutlined />}
                   onClick={() =>
-                    Modal.confirm({
+                    confirmDialog({
                       title: t({ id: 'pages.finance.assets.delete.title' }),
                       content: t({ id: 'pages.finance.assets.delete.confirm' }, { name: record.name }),
-                      okType: 'danger',
+                      danger: true,
                       onOk: () => deleteMutation.mutate(record.id),
                     })
                   }
@@ -170,20 +176,22 @@ export function AssetsPage() {
   );
 
   return (
-    <>
+    <SearchHighlightProvider value={table.activeSearch}>
       <PageTable<Asset>
-        key={table.cols.pinFingerprint}
+        key={`${table.cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.finance.assets.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             {t({ id: 'pages.finance.assets.new' })}
           </Button>
         }
+        viewBar={<ViewTabs views={views} />}
         headerTitle={
           <EntityToolbar
             filterProps={{ attrs: filterableAttrs, hook: table.filter }}
             sortProps={{ attrs: filterableAttrs, hook: table.sort }}
             columnProps={{ hook: table.cols }}
+            searchProps={{ value: table.searchQuery, onChange: table.setSearchQuery }}
           />
         }
         rowKey="id"
@@ -211,11 +219,8 @@ export function AssetsPage() {
           >
             <Input placeholder={t({ id: 'pages.finance.assets.form.namePlaceholder' })} />
           </Form.Item>
-          <Form.Item name="category" label={t({ id: 'pages.finance.assets.form.category' })}>
-            <Input placeholder={t({ id: 'pages.finance.assets.form.categoryPlaceholder' })} />
-          </Form.Item>
         </Form>
       </Modal>
-    </>
+    </SearchHighlightProvider>
   );
 }

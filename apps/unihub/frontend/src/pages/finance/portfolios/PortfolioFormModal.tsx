@@ -6,11 +6,13 @@ export interface PortfolioCreateFormValues {
   name: string;
   base_currency: string;
   state: 'active' | 'closed';
+  description?: string;
 }
 
 export interface PortfolioUpdateFormValues {
   name: string;
   state: 'active' | 'closed';
+  description?: string;
 }
 
 interface PortfolioFormModalProps {
@@ -51,11 +53,18 @@ export function PortfolioFormModal({
           form={updateForm}
           layout="vertical"
           onFinish={(values) => onUpdate?.(values)}
-          initialValues={{ name: portfolio.name, state: portfolio.state }}
+          initialValues={{ name: portfolio.name, state: portfolio.state, description: portfolio.description }}
           preserve={false}
         >
           <Form.Item name="name" label={t({ id: 'pages.finance.portfolios.form.name' })} rules={[{ required: true }]}>
             <Input placeholder={t({ id: 'pages.finance.portfolios.form.namePlaceholder' })} />
+          </Form.Item>
+          <Form.Item name="description" label={t({ id: 'pages.finance.portfolios.form.description' })}>
+            <Input.TextArea
+              rows={2}
+              maxLength={500}
+              placeholder={t({ id: 'pages.finance.portfolios.form.descriptionPlaceholder' })}
+            />
           </Form.Item>
           <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
             {t({ id: 'pages.finance.portfolios.col.baseCurrency' })}: <Tag>{portfolio.base_currency}</Tag>
@@ -83,6 +92,13 @@ export function PortfolioFormModal({
                 <Select.Option key={c.code} value={c.code}>{c.code} — {c.name}</Select.Option>
               ))}
             </Select>
+          </Form.Item>
+          <Form.Item name="description" label={t({ id: 'pages.finance.portfolios.form.description' })}>
+            <Input.TextArea
+              rows={2}
+              maxLength={500}
+              placeholder={t({ id: 'pages.finance.portfolios.form.descriptionPlaceholder' })}
+            />
           </Form.Item>
           <Form.Item name="state" label={t({ id: 'pages.finance.portfolios.form.state' })} initialValue="active">
             <Select>

@@ -7,7 +7,6 @@ from core.nanoid import generate_id
 class Asset(models.Model):
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     name = models.CharField(max_length=255)
-    category = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -30,6 +29,7 @@ class Portfolio(models.Model):
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     name = models.CharField(max_length=255)
     base_currency = models.CharField(max_length=10)
+    description = models.CharField(max_length=500, blank=True, default="")
     state = models.CharField(
         max_length=20, choices=PORTFOLIO_STATE_CHOICES, default=PORTFOLIO_STATE_ACTIVE
     )
@@ -57,6 +57,8 @@ class Transaction(models.Model):
     portfolio = models.ForeignKey(Portfolio, on_delete=models.PROTECT, related_name="transactions")
     timestamp = models.DateTimeField()
     description = models.CharField(max_length=500, blank=True, default="")
+    chain_id = models.CharField(max_length=32, blank=True, default="")
+    tx_hash = models.CharField(max_length=128, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -71,8 +73,10 @@ class Transfer(models.Model):
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="transfers")
     asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name="transfers")
-    asset_change_amount = models.DecimalField(max_digits=28, decimal_places=8)
-    value_change = models.DecimalField(max_digits=28, decimal_places=8, null=True, blank=True)
+    # (38,18): legacy 18-decimals tokens carry wei-level values (FR-008c)
+    asset_change_amount = models.DecimalField(max_digits=38, decimal_places=18)
+    value_change = models.DecimalField(max_digits=38, decimal_places=18, null=True, blank=True)
+    remark = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

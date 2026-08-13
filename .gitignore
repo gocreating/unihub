@@ -41,3 +41,7 @@ htmlcov/
 
 # Personal local notes — never commit
 apps/unihub/prompts.md
+
+# Legacy finance CSVs (real personal data — never commit; FR-012h) + private prompt log
+/migration/
+/prompt.md

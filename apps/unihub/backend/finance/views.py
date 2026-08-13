@@ -35,12 +35,14 @@ from finance.serializers import (
 class AssetViewSet(viewsets.ModelViewSet):
     queryset = Asset.objects.all()
     serializer_class = AssetSerializer
-    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filter_backends = [EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter]
+    # `lookup` is the ORM field path — operators come from each condition's
+    # `op` (the pre-016 operator-shaped declarations built Q(exact=...) → 500).
     filterable_fields = {
-        "name": {"lookup": "icontains", "type": "text"},
-        "category": {"lookup": "icontains", "type": "text"},
+        "name": {"lookup": "name", "type": "text"},
     }
-    ordering_fields = ["name", "category", "created_at"]
+    searchable_fields = {"name": "text"}
+    ordering_fields = ["name", "created_at"]
     ordering = ["name"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
@@ -57,11 +59,20 @@ class AssetViewSet(viewsets.ModelViewSet):
 
 class PortfolioViewSet(viewsets.ModelViewSet):
     queryset = Portfolio.objects.all()
-    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filter_backends = [EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter]
     filterable_fields = {
-        "name": {"lookup": "icontains", "type": "text"},
-        "state": {"lookup": "exact", "type": "single_select"},
-        "base_currency": {"lookup": "exact", "type": "single_select"},
+        "name": {"lookup": "name", "type": "text"},
+        "description": {"lookup": "description", "type": "text"},
+        "state": {"lookup": "state", "type": "single_select"},
+        "base_currency": {"lookup": "base_currency", "type": "single_select"},
+    }
+    searchable_fields = {
+        "name": "text",
+        "description": "text",
+        "base_currency": "text",
+        "state": "text",
+        "first_transaction_time": "cast",
+        "last_transaction_time": "cast",
     }
     ordering_fields = [
         "name",
@@ -94,16 +105,33 @@ class TransactionViewSet(viewsets.ModelViewSet):
         Transaction.objects.select_related("portfolio").prefetch_related("transfers__asset").all()
     )
     serializer_class = TransactionSerializer
-    filter_backends = [EntityFilterBackend, NullsOrderingFilter]
+    filter_backends = [EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter]
     filterable_fields = {
-        "portfolio": {"lookup": "exact", "type": "single_select"},
-        "description": {"lookup": "icontains", "type": "text"},
-        "timestamp": {"lookup": "date", "type": "date"},
+        "portfolio": {"lookup": "portfolio", "type": "single_select"},
+        "description": {"lookup": "description", "type": "text"},
+        "timestamp": {"lookup": "timestamp", "type": "date"},
+    }
+    searchable_fields = {
+        "description": "text",
+        "chain_id": "text",
+        "tx_hash": "text",
+        "timestamp": "cast",
+        "transfers__asset__name": "text",
+        "transfers__remark": "text",
     }
     ordering_fields = ["timestamp", "created_at"]
     ordering = ["-timestamp"]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def filter_queryset(self, queryset):
+        qs = super().filter_queryset(queryset)
+        # The transfers__* search legs join a multi-valued relation — a
+        # transaction with several matching transfers would list once per
+        # match without distinct().
+        if (self.request.query_params.get("search") or "").strip():
+            qs = qs.distinct()
+        return qs
 
 
 class CurrencyViewSet(viewsets.ModelViewSet):

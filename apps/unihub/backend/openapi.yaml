@@ -98,6 +98,8 @@ paths:
           description: ''
     patch:
       operationId: v1_core_attribute_definitions_partial_update
+      description: 'Guard system definitions: only display_order/options may change
+        (Principle I).'
       parameters:
       - in: path
         name: id
@@ -165,6 +167,166 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/core/entity-views/:
+    get:
+      operationId: v1_core_entity_views_list
+      description: |-
+        Owner-scoped CRUD + bulk reorder for saved entity views (016).
+
+        Collections are small by design (tens of views per table), so list
+        responses are plain arrays — no pagination envelope.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EntityView'
+          description: ''
+    post:
+      operationId: v1_core_entity_views_create
+      description: |-
+        Owner-scoped CRUD + bulk reorder for saved entity views (016).
+
+        Collections are small by design (tens of views per table), so list
+        responses are plain arrays — no pagination envelope.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntityView'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EntityView'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EntityView'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityView'
+          description: ''
+  /api/v1/core/entity-views/{id}/:
+    get:
+      operationId: v1_core_entity_views_retrieve
+      description: |-
+        Owner-scoped CRUD + bulk reorder for saved entity views (016).
+
+        Collections are small by design (tens of views per table), so list
+        responses are plain arrays — no pagination envelope.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityView'
+          description: ''
+    patch:
+      operationId: v1_core_entity_views_partial_update
+      description: |-
+        Owner-scoped CRUD + bulk reorder for saved entity views (016).
+
+        Collections are small by design (tens of views per table), so list
+        responses are plain arrays — no pagination envelope.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEntityView'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEntityView'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEntityView'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityView'
+          description: ''
+    delete:
+      operationId: v1_core_entity_views_destroy
+      description: Reject deleting the default view — it is the guaranteed fallback
+        (FR-003).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/core/entity-views/reorder/:
+    post:
+      operationId: v1_core_entity_views_reorder_create
+      description: |-
+        Rewrite ``position`` for one table's views to match the given id order.
+
+        Body: ``{"table_key": str, "ids": [str, ...]}``. Every id must exist,
+        belong to the caller, and carry the given table_key; duplicates are
+        rejected. Returns the table's views in their new order.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntityView'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EntityView'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EntityView'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityView'
+          description: ''
   /api/v1/finance/accounts/:
     get:
       operationId: v1_finance_accounts_list
@@ -185,6 +347,13 @@ paths:
         required: false
         in: query
         description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: Case-insensitive substring matched against any searchable attribute;
+          combined with `filters` as AND.
         schema:
           type: string
       tags:
@@ -311,6 +480,13 @@ paths:
         required: false
         in: query
         description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: Case-insensitive substring matched against any searchable attribute;
+          combined with `filters` as AND.
         schema:
           type: string
       tags:
@@ -701,6 +877,13 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: search
+        required: false
+        in: query
+        description: Case-insensitive substring matched against any searchable attribute;
+          combined with `filters` as AND.
+        schema:
+          type: string
       tags:
       - v1
       security:
@@ -825,6 +1008,13 @@ paths:
         required: false
         in: query
         description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: Case-insensitive substring matched against any searchable attribute;
+          combined with `filters` as AND.
         schema:
           type: string
       tags:
@@ -953,6 +1143,13 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: search
+        required: false
+        in: query
+        description: Case-insensitive substring matched against any searchable attribute;
+          combined with `filters` as AND.
+        schema:
+          type: string
       tags:
       - v1
       security:
@@ -1079,6 +1276,13 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: search
+        required: false
+        in: query
+        description: Case-insensitive substring matched against any searchable attribute;
+          combined with `filters` as AND.
+        schema:
+          type: string
       tags:
       - v1
       security:
@@ -1183,6 +1387,580 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/inventory/acquisitions/:
+    get:
+      operationId: v1_inventory_acquisitions_list
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: Case-insensitive substring matched against any searchable attribute;
+          combined with `filters` as AND.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAcquisitionList'
+          description: ''
+    post:
+      operationId: v1_inventory_acquisitions_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Acquisition'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Acquisition'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Acquisition'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Acquisition'
+          description: ''
+  /api/v1/inventory/acquisitions/{id}/:
+    get:
+      operationId: v1_inventory_acquisitions_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this acquisition.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Acquisition'
+          description: ''
+    patch:
+      operationId: v1_inventory_acquisitions_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this acquisition.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAcquisition'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAcquisition'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAcquisition'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Acquisition'
+          description: ''
+    delete:
+      operationId: v1_inventory_acquisitions_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this acquisition.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/inventory/acquisitions/sources/:
+    get:
+      operationId: v1_inventory_acquisitions_sources_retrieve
+      description: Return distinct previously-used source values for auto-complete.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Acquisition'
+          description: ''
+  /api/v1/inventory/items/:
+    get:
+      operationId: v1_inventory_items_list
+      description: Items are created via the Acquisition endpoint, not directly (no
+        POST).
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: Case-insensitive substring matched against any searchable attribute;
+          combined with `filters` as AND.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedItemList'
+          description: ''
+  /api/v1/inventory/items/{id}/:
+    get:
+      operationId: v1_inventory_items_retrieve
+      description: Items are created via the Acquisition endpoint, not directly (no
+        POST).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this item.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+          description: ''
+    patch:
+      operationId: v1_inventory_items_partial_update
+      description: Items are created via the Acquisition endpoint, not directly (no
+        POST).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this item.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedItem'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+          description: ''
+    delete:
+      operationId: v1_inventory_items_destroy
+      description: Delete a single item from its acquisition.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this item.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/inventory/scenarios/:
+    get:
+      operationId: v1_inventory_scenarios_list
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: offset
+        required: false
+        in: query
+        description: The initial index from which to return the results.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: Case-insensitive substring matched against any searchable attribute;
+          combined with `filters` as AND.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedScenarioList'
+          description: ''
+    post:
+      operationId: v1_inventory_scenarios_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Scenario'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Scenario'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Scenario'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scenario'
+          description: ''
+  /api/v1/inventory/scenarios/{id}/:
+    get:
+      operationId: v1_inventory_scenarios_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this scenario.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scenario'
+          description: ''
+    patch:
+      operationId: v1_inventory_scenarios_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this scenario.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedScenario'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedScenario'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedScenario'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scenario'
+          description: ''
+    delete:
+      operationId: v1_inventory_scenarios_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this scenario.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/inventory/scenarios/{scenario_id}/items/:
+    get:
+      operationId: v1_inventory_scenarios_items_list
+      parameters:
+      - in: path
+        name: scenario_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScenarioItem'
+          description: ''
+    post:
+      operationId: v1_inventory_scenarios_items_create
+      parameters:
+      - in: path
+        name: scenario_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ScenarioItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ScenarioItem'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioItem'
+          description: ''
+  /api/v1/inventory/scenarios/{scenario_id}/items/{id}/:
+    get:
+      operationId: v1_inventory_scenarios_items_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: scenario_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioItem'
+          description: ''
+    patch:
+      operationId: v1_inventory_scenarios_items_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: scenario_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedScenarioItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedScenarioItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedScenarioItem'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioItem'
+          description: ''
+    delete:
+      operationId: v1_inventory_scenarios_items_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: scenario_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/inventory/scenarios/{scenario_id}/items/{id}/move/:
+    post:
+      operationId: v1_inventory_scenarios_items_move_create
+      description: |-
+        Drag-drop endpoint: set the line's container and sibling position.
+
+        Body: ``{"container_id": <line id or null>, "index": <int>,
+        "organized": <bool>}``. ``organized`` defaults to true (any move into
+        the tree organizes the line); ``organized: false`` sends the line back
+        to the unorganized pane — container/index are ignored and its children
+        re-parent to the organized top level. Sibling display_order values are
+        rewritten densely so order survives reloads.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: scenario_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ScenarioItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ScenarioItem'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioItem'
+          description: ''
   /api/v1/io/export/:
     post:
       operationId: v1_io_export_create
@@ -1269,10 +2047,11 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/v1/sync/apply/confirm/:
+  /api/v1/sync/checkout/confirm/:
     post:
-      operationId: v1_sync_apply_confirm_create
-      description: POST /api/v1/sync/apply/confirm/ — pull and import all tables.
+      operationId: v1_sync_checkout_confirm_create
+      description: POST /api/v1/sync/checkout/confirm/ — apply the staged subset of
+        a snapshot.
       tags:
       - v1
       security:
@@ -1280,11 +2059,11 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/v1/sync/apply/preview/:
+  /api/v1/sync/checkout/preview/:
     get:
-      operationId: v1_sync_apply_preview_retrieve
-      description: GET /api/v1/sync/apply/preview/ — fetch remote and return per-table
-        diff.
+      operationId: v1_sync_checkout_preview_retrieve
+      description: GET /api/v1/sync/checkout/preview/?commit=<sha> — diff a snapshot
+        vs the DB.
       tags:
       - v1
       security:
@@ -1328,6 +2107,18 @@ paths:
       operationId: v1_sync_force_publish_create
       description: POST /api/v1/sync/force-publish/ — force-push, overwriting remote
         history.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/sync/history/:
+    get:
+      operationId: v1_sync_history_retrieve
+      description: GET /api/v1/sync/history/ — the data repository's commit graph
+        payload.
       tags:
       - v1
       security:
@@ -1423,6 +2214,87 @@ components:
       - name
       - open_datetime
       - updated_at
+    Acquisition:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        source:
+          type: string
+          maxLength: 200
+        request_time:
+          type: string
+          format: date-time
+          nullable: true
+        obtained_at:
+          type: string
+          format: date-time
+          nullable: true
+        remark:
+          type: string
+        cost_factors:
+          type: array
+          items:
+            $ref: '#/components/schemas/CostFactor'
+        net_cost:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          description: net_cost = per-currency sum of cost-factor values (value carries
+            its sign).
+          readOnly: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        item_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - item_count
+      - net_cost
+      - updated_at
+    AcquisitionSummary:
+      type: object
+      description: Compact acquisition representation nested inside an item.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        source:
+          type: string
+          maxLength: 200
+        request_time:
+          type: string
+          format: date-time
+          nullable: true
+        obtained_at:
+          type: string
+          format: date-time
+          nullable: true
+        net_cost:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          description: net_cost = per-currency sum of cost-factor values (value carries
+            its sign).
+          readOnly: true
+      required:
+      - id
+      - net_cost
     Asset:
       type: object
       properties:
@@ -1430,9 +2302,6 @@ components:
           type: string
           readOnly: true
         name:
-          type: string
-          maxLength: 255
-        category:
           type: string
           maxLength: 255
         created_at:
@@ -1464,6 +2333,13 @@ components:
           maxLength: 200
         data_type:
           $ref: '#/components/schemas/DataTypeEnum'
+        unit_family:
+          oneOf:
+          - $ref: '#/components/schemas/UnitFamilyEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        emoji:
+          type: string
+          maxLength: 8
         is_system:
           type: boolean
           readOnly: true
@@ -1501,6 +2377,34 @@ components:
       - date
       - id
       - updated_at
+    BlankEnum:
+      enum:
+      - ''
+    CostFactor:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,4})?$
+        currency:
+          type: string
+          maxLength: 3
+        type:
+          type: string
+          maxLength: 20
+        display_order:
+          type: integer
+          readOnly: true
+        user_managed:
+          type: boolean
+      required:
+      - display_order
+      - id
+      - value
     Currency:
       type: object
       properties:
@@ -1526,6 +2430,7 @@ components:
       - date
       - boolean
       - single_select
+      - dimension
       type: string
       description: |-
         * `text` - Text
@@ -1534,6 +2439,45 @@ components:
         * `date` - Date
         * `boolean` - Boolean
         * `single_select` - Single Select
+        * `dimension` - Dimension
+    EntityView:
+      type: object
+      description: |-
+        Saved entity view. ``owner`` is never serialized — it is stamped from the
+        request user by the viewset and every queryset is owner-scoped.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        table_key:
+          type: string
+          maxLength: 100
+        name:
+          type: string
+          maxLength: 100
+        config: {}
+        pinned:
+          type: boolean
+        position:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - table_key
+      - updated_at
     ExchangeRate:
       type: object
       properties:
@@ -1559,6 +2503,79 @@ components:
       - id
       - quote_currency
       - rate
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        alias_name:
+          type: string
+          maxLength: 200
+        quantity:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        spec:
+          type: string
+        remark:
+          type: string
+        sku_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,4})?$
+          nullable: true
+        sku_price_currency:
+          type: string
+          maxLength: 3
+        total_price:
+          type: string
+          nullable: true
+          readOnly: true
+        url:
+          type: string
+          maxLength: 500
+        status:
+          type: string
+          readOnly: true
+        deprecated:
+          type: boolean
+        deprecate_time:
+          type: string
+          format: date-time
+          nullable: true
+        parameters:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          description: The item's parameter rows (shared attribute values), stable
+            order.
+          readOnly: true
+        acquisition:
+          allOf:
+          - $ref: '#/components/schemas/AcquisitionSummary'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - acquisition
+      - created_at
+      - id
+      - name
+      - parameters
+      - status
+      - total_price
+      - updated_at
     PaginatedAccountList:
       type: object
       required:
@@ -1582,6 +2599,39 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Account'
+        totals:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Footer totals over the filtered queryset (view-defined).
+    PaginatedAcquisitionList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Acquisition'
+        totals:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Footer totals over the filtered queryset (view-defined).
     PaginatedAssetList:
       type: object
       required:
@@ -1605,6 +2655,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Asset'
+        totals:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Footer totals over the filtered queryset (view-defined).
     PaginatedBalanceSheetList:
       type: object
       required:
@@ -1628,6 +2683,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BalanceSheet'
+        totals:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Footer totals over the filtered queryset (view-defined).
     PaginatedCurrencyList:
       type: object
       required:
@@ -1651,6 +2711,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Currency'
+        totals:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Footer totals over the filtered queryset (view-defined).
     PaginatedExchangeRateList:
       type: object
       required:
@@ -1674,6 +2739,39 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ExchangeRate'
+        totals:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Footer totals over the filtered queryset (view-defined).
+    PaginatedItemList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        totals:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Footer totals over the filtered queryset (view-defined).
     PaginatedPortfolioUpdateList:
       type: object
       required:
@@ -1697,6 +2795,39 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PortfolioUpdate'
+        totals:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Footer totals over the filtered queryset (view-defined).
+    PaginatedScenarioList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=400&limit=100
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?offset=200&limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scenario'
+        totals:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Footer totals over the filtered queryset (view-defined).
     PaginatedTransactionList:
       type: object
       required:
@@ -1720,6 +2851,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Transaction'
+        totals:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Footer totals over the filtered queryset (view-defined).
     PatchedAccount:
       type: object
       properties:
@@ -1750,6 +2886,52 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedAcquisition:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        source:
+          type: string
+          maxLength: 200
+        request_time:
+          type: string
+          format: date-time
+          nullable: true
+        obtained_at:
+          type: string
+          format: date-time
+          nullable: true
+        remark:
+          type: string
+        cost_factors:
+          type: array
+          items:
+            $ref: '#/components/schemas/CostFactor'
+        net_cost:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          description: net_cost = per-currency sum of cost-factor values (value carries
+            its sign).
+          readOnly: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        item_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedAsset:
       type: object
       properties:
@@ -1757,9 +2939,6 @@ components:
           type: string
           readOnly: true
         name:
-          type: string
-          maxLength: 255
-        category:
           type: string
           maxLength: 255
         created_at:
@@ -1786,6 +2965,13 @@ components:
           maxLength: 200
         data_type:
           $ref: '#/components/schemas/DataTypeEnum'
+        unit_family:
+          oneOf:
+          - $ref: '#/components/schemas/UnitFamilyEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        emoji:
+          type: string
+          maxLength: 8
         is_system:
           type: boolean
           readOnly: true
@@ -1825,6 +3011,38 @@ components:
           maxLength: 10
         is_base_currency:
           type: boolean
+    PatchedEntityView:
+      type: object
+      description: |-
+        Saved entity view. ``owner`` is never serialized — it is stamped from the
+        request user by the viewset and every queryset is owner-scoped.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        table_key:
+          type: string
+          maxLength: 100
+        name:
+          type: string
+          maxLength: 100
+        config: {}
+        pinned:
+          type: boolean
+        position:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedExchangeRate:
       type: object
       properties:
@@ -1844,6 +3062,70 @@ components:
         date:
           type: string
           format: date-time
+    PatchedItem:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        alias_name:
+          type: string
+          maxLength: 200
+        quantity:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        spec:
+          type: string
+        remark:
+          type: string
+        sku_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,4})?$
+          nullable: true
+        sku_price_currency:
+          type: string
+          maxLength: 3
+        total_price:
+          type: string
+          nullable: true
+          readOnly: true
+        url:
+          type: string
+          maxLength: 500
+        status:
+          type: string
+          readOnly: true
+        deprecated:
+          type: boolean
+        deprecate_time:
+          type: string
+          format: date-time
+          nullable: true
+        parameters:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          description: The item's parameter rows (shared attribute values), stable
+            order.
+          readOnly: true
+        acquisition:
+          allOf:
+          - $ref: '#/components/schemas/AcquisitionSummary'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedPortfolioUpdate:
       type: object
       properties:
@@ -1856,6 +3138,9 @@ components:
         base_currency:
           type: string
           readOnly: true
+        description:
+          type: string
+          maxLength: 500
         state:
           $ref: '#/components/schemas/StateEnum'
         first_transaction_time:
@@ -1876,6 +3161,63 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedScenario:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        item_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedScenarioItem:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        item_id:
+          type: string
+          writeOnly: true
+        container_id:
+          type: string
+          writeOnly: true
+          nullable: true
+        item:
+          allOf:
+          - $ref: '#/components/schemas/Item'
+          readOnly: true
+        container:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          readOnly: true
+        display_order:
+          type: integer
+          readOnly: true
+        organized:
+          type: boolean
+          readOnly: true
+        notes:
+          type: string
+          maxLength: 200
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedTransaction:
       type: object
       properties:
@@ -1893,6 +3235,12 @@ components:
         description:
           type: string
           maxLength: 500
+        chain_id:
+          type: string
+          maxLength: 32
+        tx_hash:
+          type: string
+          maxLength: 128
         transfers:
           type: array
           items:
@@ -1917,6 +3265,9 @@ components:
         base_currency:
           type: string
           maxLength: 10
+        description:
+          type: string
+          maxLength: 500
         state:
           $ref: '#/components/schemas/StateEnum'
         first_transaction_time:
@@ -1957,6 +3308,9 @@ components:
         base_currency:
           type: string
           readOnly: true
+        description:
+          type: string
+          maxLength: 500
         state:
           $ref: '#/components/schemas/StateEnum'
         first_transaction_time:
@@ -1985,6 +3339,77 @@ components:
       - last_transaction_time
       - name
       - updated_at
+    Scenario:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        item_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - item_count
+      - name
+      - updated_at
+    ScenarioItem:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        item_id:
+          type: string
+          writeOnly: true
+        container_id:
+          type: string
+          writeOnly: true
+          nullable: true
+        item:
+          allOf:
+          - $ref: '#/components/schemas/Item'
+          readOnly: true
+        container:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          readOnly: true
+        display_order:
+          type: integer
+          readOnly: true
+        organized:
+          type: boolean
+          readOnly: true
+        notes:
+          type: string
+          maxLength: 200
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - container
+      - created_at
+      - display_order
+      - id
+      - item
+      - item_id
+      - organized
     StateEnum:
       enum:
       - active
@@ -2010,6 +3435,12 @@ components:
         description:
           type: string
           maxLength: 500
+        chain_id:
+          type: string
+          maxLength: 32
+        tx_hash:
+          type: string
+          maxLength: 128
         transfers:
           type: array
           items:
@@ -2044,12 +3475,15 @@ components:
         asset_change_amount:
           type: string
           format: decimal
-          pattern: ^-?\d{0,20}(?:\.\d{0,8})?$
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
         value_change:
           type: string
           format: decimal
-          pattern: ^-?\d{0,20}(?:\.\d{0,8})?$
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
           nullable: true
+        remark:
+          type: string
+          maxLength: 255
         created_at:
           type: string
           format: date-time
@@ -2065,6 +3499,22 @@ components:
       - created_at
       - id
       - updated_at
+    UnitFamilyEnum:
+      enum:
+      - length
+      - weight
+      - volume
+      - temperature
+      - time
+      - battery
+      type: string
+      description: |-
+        * `length` - Length
+        * `weight` - Weight
+        * `volume` - Volume
+        * `temperature` - Temperature
+        * `time` - Time
+        * `battery` - Battery capacity
   securitySchemes:
     cookieAuth:
       type: apiKey

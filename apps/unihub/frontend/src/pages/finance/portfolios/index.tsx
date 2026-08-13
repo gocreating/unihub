@@ -1,33 +1,28 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Space, Tag, Typography, message } from 'antd';
+import { Button, Space, Tag, message } from 'antd';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import dayjs from 'dayjs';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
+import { DateTimeCell } from '@/components/DateTimeCell';
+import { EmptyValue } from '@/components/EmptyValue';
+import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import type { Portfolio } from '@/services/unihub-backend/finance';
 import { createPortfolio, listCurrencies, listPortfolios, updatePortfolio } from '@/services/unihub-backend/finance';
-import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
-import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
+import {
+  EntityOffsetFooter,
+  EntityToolbar,
+  useEntityTable,
+  viewConfigFromColumns,
+} from '@/components/EntityToolbar';
+import type { ColumnDef, FilterableAttribute, ViewConfig } from '@/components/EntityToolbar';
+import { ViewTabs } from '@/components/EntityViews/ViewTabs';
+import { useEntityViews } from '@/components/EntityViews/useEntityViews';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 import { PortfolioFormModal } from './PortfolioFormModal';
 import type { PortfolioCreateFormValues } from './PortfolioFormModal';
-
-const EMPTY_CELL = <Typography.Text type="secondary" style={{ userSelect: 'none' }}>—</Typography.Text>;
-
-function formatTransactionTime(val: string | null | undefined) {
-  if (!val) return EMPTY_CELL;
-  return (
-    <span title={dayjs(val).format('YYYY-MM-DD HH:mm')}>
-      {dayjs(val).format('YYYY-MM-DD HH:mm')}
-      <Typography.Text type="secondary" style={{ marginLeft: 6, fontSize: 12 }}>
-        ({dayjs(val).fromNow()})
-      </Typography.Text>
-    </span>
-  );
-}
 
 export function PortfoliosPage() {
   const navigate = useNavigate();
@@ -37,24 +32,30 @@ export function PortfoliosPage() {
 
   const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
     { key: 'name', label: t({ id: 'pages.finance.portfolios.col.name' }), dataType: 'text' },
+    { key: 'description', label: t({ id: 'pages.finance.portfolios.col.description' }), dataType: 'text' },
     { key: 'state', label: t({ id: 'pages.finance.portfolios.col.state' }), dataType: 'text' },
     { key: 'base_currency', label: t({ id: 'pages.finance.portfolios.col.baseCurrency' }), dataType: 'text' },
   ], [t]);
 
   const columnDefs = useMemo<ColumnDef[]>(() => [
     { key: 'name', label: t({ id: 'pages.finance.portfolios.col.name' }), dataType: 'text', visible: true, order: 0 },
-    { key: 'base_currency', label: t({ id: 'pages.finance.portfolios.col.baseCurrency' }), dataType: 'text', visible: true, order: 1 },
-    { key: 'state', label: t({ id: 'pages.finance.portfolios.col.state' }), dataType: 'text', visible: true, order: 2 },
-    { key: 'last_transaction_time', label: t({ id: 'pages.finance.portfolios.col.lastTransactionTime' }), dataType: 'text', visible: true, order: 3 },
-    { key: 'first_transaction_time', label: t({ id: 'pages.finance.portfolios.col.firstTransactionTime' }), dataType: 'text', visible: true, order: 4 },
-    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 5 },
+    { key: 'description', label: t({ id: 'pages.finance.portfolios.col.description' }), dataType: 'text', visible: true, order: 1 },
+    { key: 'base_currency', label: t({ id: 'pages.finance.portfolios.col.baseCurrency' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'state', label: t({ id: 'pages.finance.portfolios.col.state' }), dataType: 'text', visible: true, order: 3 },
+    { key: 'last_transaction_time', label: t({ id: 'pages.finance.portfolios.col.lastTransactionTime' }), dataType: 'text', visible: true, order: 4 },
+    { key: 'first_transaction_time', label: t({ id: 'pages.finance.portfolios.col.firstTransactionTime' }), dataType: 'text', visible: true, order: 5 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 6 },
   ], [t]);
 
-  const table = useEntityTable({
-    key: 'portfolios',
-    filterableAttrs,
-    columnDefs,
-    defaultSortRules: [{ field: 'last_transaction_time', direction: 'desc' as const }],
+  // Round 12 (016 FR-039): the page contributes only its columns — no seeded
+  // sort; the backend's default ordering (-last_transaction_time) applies.
+  const table = useEntityTable({ key: 'finance-portfolios', filterableAttrs, columnDefs });
+
+  const defaultViewConfig = useMemo<ViewConfig>(() => viewConfigFromColumns(columnDefs), [columnDefs]);
+  const views = useEntityViews({
+    tableKey: table.tableKey,
+    table,
+    defaultConfig: defaultViewConfig,
   });
 
   const { data: portfoliosData, isLoading } = useQuery({
@@ -91,7 +92,12 @@ export function PortfoliosPage() {
   });
 
   const onCreateFinish = (values: PortfolioCreateFormValues) => {
-    createMutation.mutate({ name: values.name, base_currency: values.base_currency, state: values.state ?? 'active' });
+    createMutation.mutate({
+      name: values.name,
+      base_currency: values.base_currency,
+      state: values.state ?? 'active',
+      description: values.description ?? '',
+    });
   };
 
   const toggleState = (portfolio: Portfolio) => {
@@ -113,9 +119,10 @@ export function PortfoliosPage() {
   const actionsColWidth = useActionsColWidth(portfolios);
 
   const dataWidths = useMemo(() => {
-    const w = { name: 0, base_currency: 0 };
+    const w = { name: 0, description: 0, base_currency: 0 };
     for (const p of portfolios) {
       w.name = Math.max(w.name, measureTextWidth(p.name));
+      w.description = Math.max(w.description, Math.min(measureTextWidth(p.description), 280));
       w.base_currency = Math.max(w.base_currency, measureTextWidth(p.base_currency));
     }
     return w;
@@ -129,14 +136,25 @@ export function PortfoliosPage() {
           dataIndex: 'name',
           ...widthForHeader(t({ id: 'pages.finance.portfolios.col.name' }), dataWidths.name),
           fixed: getFixed('name'),
-          render: (_, record) => <a {...detailLinkProps(record.id)}>{record.name}</a>,
+          render: (_, record) => (
+            <a {...detailLinkProps(record.id)}>
+              <SearchMark text={record.name} />
+            </a>
+          ),
           ...makeSortProps('name', t({ id: 'pages.finance.portfolios.col.name' }), table.sort),
+        },
+        description: {
+          dataIndex: 'description',
+          ...widthForHeader(t({ id: 'pages.finance.portfolios.col.description' }), dataWidths.description),
+          fixed: getFixed('description'),
+          render: (val) => (val ? <SearchMark text={String(val)} /> : <EmptyValue />),
+          ...makeSortProps('description', t({ id: 'pages.finance.portfolios.col.description' }), table.sort),
         },
         base_currency: {
           dataIndex: 'base_currency',
           ...widthForHeader(t({ id: 'pages.finance.portfolios.col.baseCurrency' }), dataWidths.base_currency),
           fixed: getFixed('base_currency'),
-          render: (val) => val ? <Tag>{String(val)}</Tag> : EMPTY_CELL,
+          render: (val) => (val ? <Tag><SearchMark text={String(val)} /></Tag> : <EmptyValue />),
           ...makeSortProps('base_currency', t({ id: 'pages.finance.portfolios.col.baseCurrency' }), table.sort),
         },
         state: {
@@ -156,14 +174,14 @@ export function PortfoliosPage() {
           dataIndex: 'last_transaction_time',
           width: 200,
           fixed: getFixed('last_transaction_time'),
-          render: (val) => formatTransactionTime(val as string | null),
+          render: (val) => <DateTimeCell value={val as string | null} />,
           ...makeSortProps('last_transaction_time', t({ id: 'pages.finance.portfolios.col.lastTransactionTime' }), table.sort),
         },
         first_transaction_time: {
           dataIndex: 'first_transaction_time',
           width: 200,
           fixed: getFixed('first_transaction_time'),
-          render: (val) => formatTransactionTime(val as string | null),
+          render: (val) => <DateTimeCell value={val as string | null} />,
           ...makeSortProps('first_transaction_time', t({ id: 'pages.finance.portfolios.col.firstTransactionTime' }), table.sort),
         },
         actions: {
@@ -198,20 +216,22 @@ export function PortfoliosPage() {
   );
 
   return (
-    <>
+    <SearchHighlightProvider value={table.activeSearch}>
       <PageTable<Portfolio>
-        key={table.cols.pinFingerprint}
+        key={`${table.cols.pinFingerprint}-${views.activeTabId}`}
         pageTitle={t({ id: 'pages.finance.portfolios.title' })}
         action={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
             {t({ id: 'pages.finance.portfolios.new' })}
           </Button>
         }
+        viewBar={<ViewTabs views={views} />}
         headerTitle={
           <EntityToolbar
             filterProps={{ attrs: filterableAttrs, hook: table.filter }}
             sortProps={{ attrs: filterableAttrs, hook: table.sort }}
             columnProps={{ hook: table.cols }}
+            searchProps={{ value: table.searchQuery, onChange: table.setSearchQuery }}
           />
         }
         rowKey="id"
@@ -232,6 +252,6 @@ export function PortfoliosPage() {
         onCancel={() => setModalOpen(false)}
         onCreate={onCreateFinish}
       />
-    </>
+    </SearchHighlightProvider>
   );
 }

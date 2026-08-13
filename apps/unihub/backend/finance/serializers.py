@@ -19,7 +19,7 @@ from finance.models import (
 class AssetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Asset
-        fields = ["id", "name", "category", "created_at", "updated_at"]
+        fields = ["id", "name", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -30,6 +30,7 @@ class PortfolioCreateSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "base_currency",
+            "description",
             "state",
             "first_transaction_time",
             "last_transaction_time",
@@ -60,6 +61,7 @@ class PortfolioUpdateSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "base_currency",
+            "description",
             "state",
             "first_transaction_time",
             "last_transaction_time",
@@ -79,10 +81,10 @@ class PortfolioUpdateSerializer(serializers.ModelSerializer):
 class TransferSerializer(serializers.ModelSerializer):
     asset_name = serializers.CharField(source="asset.name", read_only=True)
     asset_change_amount = serializers.DecimalField(
-        max_digits=28, decimal_places=8, coerce_to_string=True
+        max_digits=38, decimal_places=18, coerce_to_string=True
     )
     value_change = serializers.DecimalField(
-        max_digits=28, decimal_places=8, coerce_to_string=True, allow_null=True, required=False
+        max_digits=38, decimal_places=18, coerce_to_string=True, allow_null=True, required=False
     )
 
     class Meta:
@@ -93,6 +95,7 @@ class TransferSerializer(serializers.ModelSerializer):
             "asset_name",
             "asset_change_amount",
             "value_change",
+            "remark",
             "created_at",
             "updated_at",
         ]
@@ -111,6 +114,8 @@ class TransactionSerializer(serializers.ModelSerializer):
             "portfolio_name",
             "timestamp",
             "description",
+            "chain_id",
+            "tx_hash",
             "transfers",
             "created_at",
             "updated_at",

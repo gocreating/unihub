@@ -224,3 +224,112 @@ class TestPortfolios:
         assert resp.status_code == 200
         names = [p["name"] for p in resp.json()["results"]]
         assert names.index("Active Portfolio") < names.index("Empty Portfolio")
+
+
+def filters_param(attr, op, val):
+    import json
+
+    return json.dumps(
+        {"groups": [{"logic": "and", "conditions": [{"attr": attr, "op": op, "val": val}]}]}
+    )
+
+
+@pytest.mark.django_db
+class TestPortfolioDescription:
+    """FR-008e: optional description, writable on create and update."""
+
+    def test_description_round_trip_on_create(self, auth_client, usd):
+        resp = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {
+                "name": "[Active] 永豐 DCA TW.0050",
+                "base_currency": "USD",
+                "description": "每月 06, 16, 26 日 6600 元",
+            },
+            content_type="application/json",
+        )
+        assert resp.status_code == 201
+        assert resp.json()["description"] == "每月 06, 16, 26 日 6600 元"
+
+    def test_description_defaults_blank_and_updates(self, auth_client, usd):
+        p = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "P", "base_currency": "USD"},
+            content_type="application/json",
+        ).json()
+        assert p["description"] == ""
+        resp = auth_client.patch(
+            f"/api/v1/finance/portfolios/{p['id']}/",
+            {"description": "updated note"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert resp.json()["description"] == "updated note"
+
+
+@pytest.mark.django_db
+class TestPortfolioFilters:
+    """FR-016 regression: filters previously 500ed (operator-shaped lookups)."""
+
+    def test_filter_by_state_eq(self, auth_client, usd):
+        auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Open One", "base_currency": "USD"},
+            content_type="application/json",
+        )
+        closed = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Closed One", "base_currency": "USD"},
+            content_type="application/json",
+        ).json()
+        auth_client.patch(
+            f"/api/v1/finance/portfolios/{closed['id']}/",
+            {"state": "closed"},
+            content_type="application/json",
+        )
+        resp = auth_client.get(
+            "/api/v1/finance/portfolios/", {"filters": filters_param("state", "eq", "closed")}
+        )
+        assert resp.status_code == 200
+        assert [p["name"] for p in resp.json()["results"]] == ["Closed One"]
+
+    def test_filter_by_name_contains(self, auth_client, usd):
+        auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Bybit Launchpool MOCA", "base_currency": "USD"},
+            content_type="application/json",
+        )
+        auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Compound USDC", "base_currency": "USD"},
+            content_type="application/json",
+        )
+        resp = auth_client.get(
+            "/api/v1/finance/portfolios/", {"filters": filters_param("name", "contains", "launchpool")}
+        )
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 1
+
+
+@pytest.mark.django_db
+class TestPortfolioSearch:
+    """FR-017: quick search over name/description/base_currency/state."""
+
+    def test_search_matches_name_and_description(self, auth_client, usd):
+        auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Morpho Earn", "base_currency": "USD", "description": "vault strategy"},
+            content_type="application/json",
+        )
+        auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "DCA 0050", "base_currency": "USD"},
+            content_type="application/json",
+        )
+        assert (
+            auth_client.get("/api/v1/finance/portfolios/", {"search": "morpho"}).json()["count"] == 1
+        )
+        assert (
+            auth_client.get("/api/v1/finance/portfolios/", {"search": "vault strat"}).json()["count"]
+            == 1
+        )

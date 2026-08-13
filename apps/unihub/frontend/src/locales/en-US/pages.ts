@@ -449,11 +449,8 @@ export default {
   'pages.finance.assets.delete.title': 'Delete Asset',
   'pages.finance.assets.delete.confirm': 'Delete asset "{name}"? This cannot be undone.',
   'pages.finance.assets.col.name': 'Name',
-  'pages.finance.assets.col.category': 'Category',
   'pages.finance.assets.form.name': 'Name',
   'pages.finance.assets.form.namePlaceholder': 'e.g. Apple Inc.',
-  'pages.finance.assets.form.category': 'Category',
-  'pages.finance.assets.form.categoryPlaceholder': 'e.g. Stock',
 
   // Finance — Portfolios
   'pages.finance.portfolios.title': 'Portfolios',
@@ -483,6 +480,9 @@ export default {
   'pages.finance.portfolios.form.baseCurrency': 'Base Currency',
   'pages.finance.portfolios.form.baseCurrencyPlaceholder': 'Select currency',
   'pages.finance.portfolios.form.state': 'State',
+  'pages.finance.portfolios.col.description': 'Description',
+  'pages.finance.portfolios.form.description': 'Description',
+  'pages.finance.portfolios.form.descriptionPlaceholder': 'Optional note, e.g. DCA schedule',
   'pages.finance.portfolios.detail.panelTitle': 'Portfolio',
 
   // Finance — Transactions
@@ -507,6 +507,12 @@ export default {
   'pages.finance.transactions.form.timestamp': 'Time',
   'pages.finance.transactions.form.description': 'Description',
   'pages.finance.transactions.form.descriptionPlaceholder': 'e.g. Buy AAPL',
+  'pages.finance.transactions.form.chainId': 'Chain ID',
+  'pages.finance.transactions.form.chainIdPlaceholder': 'Optional, e.g. 1',
+  'pages.finance.transactions.form.txHash': 'Tx Hash',
+  'pages.finance.transactions.form.txHashPlaceholder': 'Optional, e.g. 0xabc\u2026',
+  'pages.finance.transactions.form.remark': 'Remark',
+  'pages.finance.transactions.form.remarkPlaceholder': 'Optional, e.g. fee',
   'pages.finance.transactions.form.transfers': 'Transfers',
   'pages.finance.transactions.form.addTransfer': 'Add Transfer',
   'pages.finance.transactions.form.removeTransfer': 'Remove',
@@ -518,6 +524,7 @@ export default {
   'pages.finance.transactions.transfer.asset': 'Asset',
   'pages.finance.transactions.transfer.assetChange': 'Asset Change',
   'pages.finance.transactions.transfer.valueChange': 'Value Change ({currency})',
+  'pages.finance.transactions.transfer.remark': 'Remark',
 
   // System > Profile
   'pages.system.profile.title': 'System Profile',

@@ -68,7 +68,7 @@
 
 - [X] T024 Full quality loops: backend `uv run ruff check . && uv run pytest`; frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck — run before committing)
 - [X] T025 Grep gates: `Modal.confirm` absent from src/pages/finance/ (assets|portfolios); `category` absent from finance backend + frontend (except migrations history); both locale files key-synced
-- [ ] T026 Operator step (with user, real data): rebuild the docker stack from this branch, apply migration 0012, run `import_legacy_finance` per quickstart.md runbook, verify the portfolio detail Transactions panel loads (SC-006) — requires user confirmation before touching the real database
+- [X] T026 Operator step (with user, real data): rebuild the docker stack from this branch, apply migration 0012, run `import_legacy_finance` per quickstart.md runbook, verify the portfolio detail Transactions panel loads (SC-006) — requires user confirmation before touching the real database
 
 ## Dependencies & Execution Order
 

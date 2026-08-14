@@ -145,13 +145,27 @@ cd apps/unihub/backend
 uv run python manage.py migrate                       # applies 0012
 uv run python manage.py import_legacy_finance ../../../migration
 
-# Running docker stack (real data) — after rebuilding images from this branch:
+# Running docker stack (real data) — after rebuilding images from this branch.
+# The entrypoint migrates on boot, so `up -d --build` applies 0012 for you.
 docker compose -f apps/unihub/docker-compose.local.yml up -d --build
-docker compose -f apps/unihub/docker-compose.local.yml cp migration unihub-backend-1:/tmp/migration   # or bind-mount
-docker compose -f apps/unihub/docker-compose.local.yml exec backend python manage.py import_legacy_finance /tmp/migration
+docker cp migration unihub-backend-1:/tmp/migration
+docker exec unihub-backend-1 /app/.venv/bin/python manage.py import_legacy_finance /tmp/migration
+docker exec unihub-backend-1 rm -rf /tmp/migration     # don't leave the CSVs in the container
 ```
 
-Expected report: `assets: 38 created / 0 skipped · portfolios: 55 · transactions: 359 · transfers: 837`. A second run must report all-skipped and change nothing (SC-003).
+`python manage.py` inside the container fails with `ModuleNotFoundError: No module named 'django'` — dependencies live in the image's venv, so management commands must be invoked as `/app/.venv/bin/python`.
+
+Expected report: `assets: 38 created / 0 skipped · portfolios: 55 · transactions: 359 · transfers: 837`. Currencies report `0 created` when TWD/USD already exist — the command only ever `get_or_create`s them. A second run must report all-skipped and change nothing (SC-003).
+
+**Take a backup first** — the import writes ~1,300 rows into the real database:
+
+```bash
+docker exec unihub-db-1 pg_dump -U unihub -d unihub > unihub-pre-import.sql
+```
+
+### Executed 2026-08-14 (T026)
+
+Ran against the live stack. Backup taken (1.3 MB), then: 38 / 55 / 359 / 837 created, currencies 0 (TWD+USD already present), re-run all-skipped. Totals after import: assets 40 (2 pre-existing test rows kept), portfolios 55 (5 active / 50 closed), transactions 359, transfers 837; accounts (37) and inventory items (1014) untouched. `GET /api/v1/finance/transactions/?filters=<portfolio eq JD2Wf2BF>` returned **HTTP 200 with 49 rows** — the reported 500 is gone — and `&search=手續費` narrowed it to 12.
 
 ## Verification checklist
 

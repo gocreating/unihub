@@ -517,6 +517,8 @@ export default {
   'pages.finance.transactions.transfer.assetChange': '資產變動',
   'pages.finance.transactions.transfer.valueChange': '價值變動（{currency}）',
   'pages.finance.transactions.transfer.remark': '備註',
+  'pages.finance.transactions.footerCounts': '{transactions} 筆交易、{transfers} 筆轉帳',
+  'pages.finance.transactions.closedHint': '此投資組合已關閉 — 重新開啟後才能修改。',
   'pages.finance.transactions.transferCountSummary': '{count} 筆轉帳',
 
   // System > Profile

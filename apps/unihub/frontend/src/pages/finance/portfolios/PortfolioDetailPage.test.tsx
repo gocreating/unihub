@@ -319,6 +319,50 @@ describe('PortfolioDetailPage — transaction & transfer fields (iteration 3)', 
   });
 });
 
+// FR-026 / FR-028 (iteration 5): a closed portfolio disables its controls, and
+// the footer reports both counts.
+describe('PortfolioDetailPage — closed freeze + footer counts (iteration 5)', () => {
+  beforeEach(() => {
+    vi.mocked(financeService.listTransactions).mockResolvedValue({
+      count: 1, next: null, previous: null, results: [TXN],
+    } as never);
+  });
+
+  it('disables the transaction controls while the portfolio is closed', async () => {
+    vi.mocked(financeService.getPortfolio).mockResolvedValue({
+      ...PORTFOLIO, state: 'closed',
+    } as never);
+    renderPage();
+    await screen.findByText('DCA buy');
+    expect(screen.getByRole('button', { name: /New Transaction/ })).toBeDisabled();
+    // Both the panel Edit and the row Edit must be frozen.
+    for (const btn of screen.getAllByRole('button', { name: /Edit$/ })) {
+      expect(btn).toBeDisabled();
+    }
+    for (const btn of screen.getAllByRole('button', { name: /Delete$/ })) {
+      expect(btn).toBeDisabled();
+    }
+    // Reopen is the one action that must stay live.
+    expect(screen.getByRole('button', { name: /Reopen$/ })).not.toBeDisabled();
+  });
+
+  it('leaves the controls enabled while the portfolio is active', async () => {
+    renderPage();
+    await screen.findByText('DCA buy');
+    expect(screen.getByRole('button', { name: /New Transaction/ })).not.toBeDisabled();
+    for (const btn of screen.getAllByRole('button', { name: /Delete$/ })) {
+      expect(btn).not.toBeDisabled();
+    }
+  });
+
+  it('reports transaction AND transfer counts in the footer', async () => {
+    renderPage();
+    await screen.findByText('DCA buy');
+    // TXN carries 2 transfers.
+    expect(await screen.findByText(/1 transaction, 2 transfers/)).toBeInTheDocument();
+  });
+});
+
 // FR-022 / SC-009: transfers are child ROWS of the same table (the inventory
 // catalog pattern), not a nested table with its own header.
 describe('PortfolioDetailPage — transactions tree table (iteration 4)', () => {

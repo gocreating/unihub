@@ -7,6 +7,8 @@ export interface PanelAction {
   label: ReactNode;
   icon?: ReactNode;
   danger?: boolean;
+  /** Rendered but non-interactive (e.g. an entity frozen by its state). */
+  disabled?: boolean;
   onClick: () => void;
 }
 
@@ -34,6 +36,7 @@ export function PanelHeaderActions({ narrow, visible, advanced, kebabLabel }: Pa
     label: a.label,
     icon: a.icon,
     danger: a.danger,
+    disabled: a.disabled,
   }));
   const byKey = new Map(folded.map((a) => [a.key, a]));
 
@@ -41,7 +44,7 @@ export function PanelHeaderActions({ narrow, visible, advanced, kebabLabel }: Pa
     <Space>
       {!narrow &&
         visible.map((a) => (
-          <Button key={a.key} icon={a.icon} danger={a.danger} onClick={a.onClick}>
+          <Button key={a.key} icon={a.icon} danger={a.danger} disabled={a.disabled} onClick={a.onClick}>
             {a.label}
           </Button>
         ))}

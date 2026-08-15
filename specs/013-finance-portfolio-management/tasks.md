@@ -42,10 +42,10 @@ Each task: replace the page's `dataWidths` memo + `widthForHeader(...)` spreads 
 
 ## Phase 5: Portfolio list + detail UI (FR-025, FR-026, FR-027, FR-028)
 
-- [ ] T219 Portfolios list: description column `visible: false` by default (FR-027); test asserts it is absent initially and appears via the Columns control, and that the default saved-view baseline reflects it
-- [ ] T220 `PortfolioFormModal`: description uses a multi-line text area with no maxLength (FR-025); detail panel renders the description clamped
-- [ ] T221 Closed-portfolio UI: disable New/Edit/Delete transaction controls and the panel Edit action when `state === 'closed'`; Reopen stays enabled; tests assert disabled state (the backend is the real guard — SC-012)
-- [ ] T222 Transactions footer: "X transactions, Y transfers" on the footer's information side (FR-028); count transfers across the loaded transactions; test asserts both numbers
+- [X] T219 Portfolios list: description column `visible: false` by default (FR-027); test asserts it is absent initially and appears via the Columns control, and that the default saved-view baseline reflects it
+- [X] T220 `PortfolioFormModal`: description uses a multi-line text area with no maxLength (FR-025); detail panel renders the description clamped
+- [X] T221 Closed-portfolio UI: disable New/Edit/Delete transaction controls and the panel Edit action when `state === 'closed'`; Reopen stays enabled; tests assert disabled state (the backend is the real guard — SC-012)
+- [X] T222 Transactions footer: "X transactions, Y transfers" on the footer's information side (FR-028); count transfers across the loaded transactions; test asserts both numbers
 
 ## Phase 6: Charts (FR-029)
 

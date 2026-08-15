@@ -118,6 +118,8 @@ export function PortfolioDetailPage() {
   });
 
   const baseCurrency = portfolio?.base_currency ?? '???';
+  // FR-026: a closed portfolio is frozen except for reopening it.
+  const isClosed = portfolio?.state === 'closed';
 
   const { data: assetsData } = useQuery({
     queryKey: ['finance', 'assets', { limit: 500 }],
@@ -181,6 +183,12 @@ export function PortfolioDetailPage() {
       return next;
     });
   const expandedRowKeys = useMemo(() => Array.from(expandedIds), [expandedIds]);
+
+  // FR-028: the footer reports both counts for the loaded page.
+  const transferCount = useMemo(
+    () => transactions.reduce((n, txn) => n + txn.transfers.length, 0),
+    [transactions],
+  );
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['finance', 'transactions'] });
@@ -406,11 +414,12 @@ export function PortfolioDetailPage() {
             isTransaction(r) ? (
               <span data-actions-col>
                 <Space>
-                  <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
+                  <Button size="small" icon={<EditOutlined />} disabled={isClosed} onClick={() => openEdit(r)}>
                     {t({ id: 'common.edit' })}
                   </Button>
                   <Button
                     size="small" danger icon={<DeleteOutlined />}
+                    disabled={isClosed}
                     onClick={() =>
                       confirmDialog({
                         title: t({ id: 'pages.finance.transactions.delete.title' }),
@@ -490,6 +499,9 @@ export function PortfolioDetailPage() {
                   key: 'edit',
                   label: t({ id: 'common.edit' }),
                   icon: <EditOutlined />,
+                  // FR-026: frozen while closed. The backend rejects it too —
+                  // this only makes the block visible before it is attempted.
+                  disabled: isClosed,
                   onClick: () => setPortfolioModalOpen(true),
                 },
               ]}
@@ -544,7 +556,7 @@ export function PortfolioDetailPage() {
             type="primary"
             icon={<PlusOutlined />}
             onClick={openCreate}
-            disabled={portfolio?.state !== 'active'}
+            disabled={isClosed}
           >
             {t({ id: 'pages.finance.transactions.new' })}
           </Button>
@@ -563,7 +575,15 @@ export function PortfolioDetailPage() {
         loading={txnLoading}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
-        footer={() => <EntityOffsetFooter {...table.paginationProps(transactionsData?.count)} />}
+        footer={() => (
+          <EntityOffsetFooter
+            {...table.paginationProps(transactionsData?.count)}
+            totalText={t(
+              { id: 'pages.finance.transactions.footerCounts' },
+              { transactions: transactionsData?.count ?? 0, transfers: transferCount },
+            )}
+          />
+        )}
         columnEmptyText={false}
         indentSize={0}
         expandable={{ showExpandColumn: false, expandedRowKeys }}

@@ -40,7 +40,9 @@ export function PortfoliosPage() {
 
   const columnDefs = useMemo<ColumnDef[]>(() => [
     { key: 'name', label: t({ id: 'pages.finance.portfolios.col.name' }), dataType: 'text', visible: true, order: 0 },
-    { key: 'description', label: t({ id: 'pages.finance.portfolios.col.description' }), dataType: 'text', visible: true, order: 1 },
+    // Hidden by default (FR-027) — revealed via the Columns control, and
+    // the choice participates in saved views like any other column.
+    { key: 'description', label: t({ id: 'pages.finance.portfolios.col.description' }), dataType: 'text', visible: false, order: 1 },
     { key: 'base_currency', label: t({ id: 'pages.finance.portfolios.col.baseCurrency' }), dataType: 'text', visible: true, order: 2 },
     { key: 'state', label: t({ id: 'pages.finance.portfolios.col.state' }), dataType: 'text', visible: true, order: 3 },
     { key: 'last_transaction_time', label: t({ id: 'pages.finance.portfolios.col.lastTransactionTime' }), dataType: 'text', visible: true, order: 4 },

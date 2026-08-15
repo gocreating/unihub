@@ -44,6 +44,14 @@ function renderPage() {
   );
 }
 
+/** The description column ships hidden (FR-027) — turn it on via the toolbar. */
+async function revealDescription() {
+  fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+  const toggle = await screen.findByRole('checkbox', { name: /Description/ });
+  fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole('button', { name: /^Apply$/ }));
+}
+
 beforeEach(() => {
   window.sessionStorage.clear();
   vi.clearAllMocks();
@@ -150,10 +158,19 @@ describe('PortfoliosPage — whole-row navigation (iteration 4)', () => {
 
 // FR-008e (iteration 3): portfolios carry an optional description.
 describe('PortfoliosPage — description field (iteration 3)', () => {
-  it('shows the description column with the portfolio description', async () => {
+  // FR-027: present but hidden by default; the user reveals it.
+  it('hides the description column by default', async () => {
     renderPage();
     await screen.findByRole('link', { name: 'Tech Fund' });
-    expect(screen.getByText('monthly DCA plan')).toBeInTheDocument();
+    expect(screen.queryByText('monthly DCA plan')).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: /Description/ })).toBeNull();
+  });
+
+  it('shows the description once revealed through the Columns control', async () => {
+    renderPage();
+    await screen.findByRole('link', { name: 'Tech Fund' });
+    await revealDescription();
+    expect(await screen.findByText('monthly DCA plan')).toBeInTheDocument();
   });
 
   it('create form offers a description field', async () => {
@@ -183,7 +200,8 @@ describe('PortfoliosPage — description column sizing (iteration 5)', () => {
   it('clamps the description cell to two lines instead of letting it wrap', async () => {
     renderPage();
     await screen.findByRole('link', { name: 'Tech Fund' });
-    const cell = screen.getByText(LONG);
+    await revealDescription();
+    const cell = await screen.findByText(LONG);
     expect(cell.style.webkitLineClamp).toBe('2');
     expect(cell).toHaveStyle({ overflow: 'hidden' });
   });
@@ -191,6 +209,7 @@ describe('PortfoliosPage — description column sizing (iteration 5)', () => {
   it('caps the description column at its declared max width', async () => {
     const { container } = renderPage();
     await screen.findByRole('link', { name: 'Tech Fund' });
+    await revealDescription();
     const headers = [...container.querySelectorAll('.ant-table-thead th')];
     const idx = headers.findIndex((h) => h.textContent?.trim().startsWith('Description'));
     expect(idx).toBeGreaterThanOrEqual(0);

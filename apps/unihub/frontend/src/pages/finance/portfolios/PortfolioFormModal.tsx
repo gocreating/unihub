@@ -60,9 +60,9 @@ export function PortfolioFormModal({
             <Input placeholder={t({ id: 'pages.finance.portfolios.form.namePlaceholder' })} />
           </Form.Item>
           <Form.Item name="description" label={t({ id: 'pages.finance.portfolios.form.description' })}>
+            {/* Multi-line, uncapped (FR-025: the column is a TextField). */}
             <Input.TextArea
-              rows={2}
-              maxLength={500}
+              autoSize={{ minRows: 2, maxRows: 8 }}
               placeholder={t({ id: 'pages.finance.portfolios.form.descriptionPlaceholder' })}
             />
           </Form.Item>
@@ -94,9 +94,9 @@ export function PortfolioFormModal({
             </Select>
           </Form.Item>
           <Form.Item name="description" label={t({ id: 'pages.finance.portfolios.form.description' })}>
+            {/* Multi-line, uncapped (FR-025: the column is a TextField). */}
             <Input.TextArea
-              rows={2}
-              maxLength={500}
+              autoSize={{ minRows: 2, maxRows: 8 }}
               placeholder={t({ id: 'pages.finance.portfolios.form.descriptionPlaceholder' })}
             />
           </Form.Item>

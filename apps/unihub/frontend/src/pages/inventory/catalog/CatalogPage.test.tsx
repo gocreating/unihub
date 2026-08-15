@@ -1016,3 +1016,37 @@ describe('CatalogPage — search highlighting (019)', () => {
     expect(container.querySelectorAll('.ant-table-tbody mark')).toHaveLength(0);
   });
 });
+
+// Constitution v1.25.0 exemption lock: catalog rows have NO detail page and
+// their parent rows only expand, so the rule explicitly forbids making them
+// row-clickable. The exemption is deliberate, so it gets a test — otherwise a
+// later sweep "fixes" the catalog and breaks caret-only expansion.
+describe('CatalogPage — rows are deliberately NOT row-clickable', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+    setCurrencySymbols({ TWD: 'NT$', CNY: '¥', JPY: '¥', KRW: '₩', USD: '$' });
+    vi.mocked(coreService.listAttributeDefinitions).mockResolvedValue(DEFS);
+    vi.mocked(coreService.listEntityViews).mockResolvedValue([]);
+    vi.mocked(inventoryService.listAcquisitions).mockResolvedValue({
+      count: 3,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 3, items: 4 },
+      results: [ACQ, ACQ_SOLO, ACQ_REQ],
+    });
+    vi.mocked(inventoryService.listItems).mockResolvedValue({
+      count: 4,
+      next: null,
+      previous: null,
+      totals: { acquisitions: 3, items: 4 },
+      results: [ITEM, PLAIN_ITEM, SOLO_ITEM, REQ_ITEM],
+    });
+  });
+
+  it('does not mark rows as clickable', async () => {
+    renderPage();
+    const row = (await screen.findByText('Backpack')).closest('tr')!;
+    expect(row.style.cursor).not.toBe('pointer');
+  });
+});

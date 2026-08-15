@@ -757,7 +757,9 @@ export function CatalogPage() {
       fixed: cols.fixedForKey('__caret'),
       render: (_, r) =>
         isAcquisition(r) && r.children.length > 0 ? (
-          <span style={{ cursor: 'pointer' }} onClick={() => toggleExpand(r.id)}>
+          // data-row-link-ignore: if these rows ever gain a detail page, the
+          // caret must keep toggling instead of navigating (constitution v1.25.0).
+          <span data-row-link-ignore style={{ cursor: 'pointer' }} onClick={() => toggleExpand(r.id)}>
             {isExpanded(r) ? <CaretDownOutlined /> : <CaretRightOutlined />}
           </span>
         ) : null,

@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Space, Tag, message } from 'antd';
-import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Tag, message } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
+import PageTable, { computeScrollX, measureTextWidth, useRowLink, widthForHeader } from '@/components/PageTable';
 import { DateTimeCell } from '@/components/DateTimeCell';
 import { EmptyValue } from '@/components/EmptyValue';
 import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import type { Portfolio } from '@/services/unihub-backend/finance';
-import { createPortfolio, listCurrencies, listPortfolios, updatePortfolio } from '@/services/unihub-backend/finance';
+import { createPortfolio, listCurrencies, listPortfolios } from '@/services/unihub-backend/finance';
 import {
   EntityOffsetFooter,
   EntityToolbar,
@@ -44,7 +44,9 @@ export function PortfoliosPage() {
     { key: 'state', label: t({ id: 'pages.finance.portfolios.col.state' }), dataType: 'text', visible: true, order: 3 },
     { key: 'last_transaction_time', label: t({ id: 'pages.finance.portfolios.col.lastTransactionTime' }), dataType: 'text', visible: true, order: 4 },
     { key: 'first_transaction_time', label: t({ id: 'pages.finance.portfolios.col.firstTransactionTime' }), dataType: 'text', visible: true, order: 5 },
-    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 6 },
+    // No actions column (constitution v1.25.0): View is replaced by whole-row
+    // navigation, Edit/Delete live on the detail panel (iteration 2), and
+    // Close/Reopen moved there too (FR-020) — nothing is left to render.
   ], [t]);
 
   // Round 12 (016 FR-039): the page contributes only its columns — no seeded
@@ -81,16 +83,6 @@ export function PortfoliosPage() {
     onError: () => message.error(t({ id: 'pages.finance.portfolios.createError' })),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updatePortfolio>[1] }) =>
-      updatePortfolio(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['finance', 'portfolios'] });
-      message.success(t({ id: 'pages.finance.portfolios.updated' }));
-    },
-    onError: () => message.error(t({ id: 'pages.finance.portfolios.updateError' })),
-  });
-
   const onCreateFinish = (values: PortfolioCreateFormValues) => {
     createMutation.mutate({
       name: values.name,
@@ -100,23 +92,21 @@ export function PortfoliosPage() {
     });
   };
 
-  const toggleState = (portfolio: Portfolio) => {
-    const newState = portfolio.state === 'active' ? 'closed' : 'active';
-    updateMutation.mutate({ id: portfolio.id, data: { state: newState } });
-  };
+  const detailUrl = (portfolioId: string) => `/finance/portfolios/${portfolioId}`;
 
   /* Real hyperlink (constitution v1.23.0): middle/ctrl-click opens a tab;
      plain left click stays SPA. */
   const detailLinkProps = (portfolioId: string) => ({
-    href: `/finance/portfolios/${portfolioId}`,
+    href: detailUrl(portfolioId),
     onClick: (e: React.MouseEvent) => {
       if (e.metaKey || e.ctrlKey) return;
       e.preventDefault();
-      navigate(`/finance/portfolios/${portfolioId}`);
+      navigate(detailUrl(portfolioId));
     },
   });
 
-  const actionsColWidth = useActionsColWidth(portfolios);
+  // Whole-row navigation (constitution v1.25.0) — one shared helper.
+  const rowLink = useRowLink();
 
   const dataWidths = useMemo(() => {
     const w = { name: 0, description: 0, base_currency: 0 };
@@ -184,30 +174,10 @@ export function PortfoliosPage() {
           render: (val) => <DateTimeCell value={val as string | null} />,
           ...makeSortProps('first_transaction_time', t({ id: 'pages.finance.portfolios.col.firstTransactionTime' }), table.sort),
         },
-        actions: {
-          title: t({ id: 'common.actions' }),
-          key: 'actions',
-          width: actionsColWidth,
-          fixed: getFixed('actions'),
-          render: (_, record) => (
-            <span data-actions-col>
-              <Space>
-                <Button size="small" icon={<EyeOutlined />} {...detailLinkProps(record.id)}>
-                  {t({ id: 'common.view' })}
-                </Button>
-                <Button size="small" onClick={() => toggleState(record)}>
-                  {record.state === 'active'
-                    ? t({ id: 'pages.finance.portfolios.action.close' })
-                    : t({ id: 'pages.finance.portfolios.action.reopen' })}
-                </Button>
-              </Space>
-            </span>
-          ),
-        },
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
+    [t, dataWidths, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<Portfolio>[]>(
@@ -238,6 +208,7 @@ export function PortfoliosPage() {
         columns={columns}
         dataSource={portfolios}
         loading={isLoading}
+        onRow={(record) => rowLink(detailUrl(record.id))}
         scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}

@@ -1,21 +1,24 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Breadcrumb, Button, Card, DatePicker, Form, Input, InputNumber, Modal,
+  Breadcrumb, Button, Card, DatePicker, Descriptions, Form, Input, InputNumber, Modal,
   Select, Space, Spin, Tag, Typography, message,
 } from 'antd';
-import { DeleteOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  CaretDownOutlined, CaretRightOutlined, DeleteOutlined, EditOutlined, MinusCircleOutlined,
+  PlusOutlined, RedoOutlined, StopOutlined,
+} from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
-import { ProTable } from '@ant-design/pro-components';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
+import Decimal from 'decimal.js';
 import dayjs from 'dayjs';
 import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { DateTimeCell } from '@/components/DateTimeCell';
 import { EmptyValue } from '@/components/EmptyValue';
 import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
-import type { Transaction, TransferInput } from '@/services/unihub-backend/finance';
+import type { Transaction, Transfer, TransferInput } from '@/services/unihub-backend/finance';
 import {
   createTransaction,
   deletePortfolio,
@@ -55,6 +58,42 @@ function formatAmount(val: string): string {
   return val.replace(/0+$/, '').replace(/\.$/, '');
 }
 
+/**
+ * FR-022: transfers are child ROWS of the transactions table sharing its
+ * columns (the inventory catalog pattern), so the table's data is a union.
+ */
+type TxnRow =
+  | (Transaction & { rowType: 'transaction'; children: TxnRow[] })
+  | (Transfer & { rowType: 'transfer' });
+
+function isTransaction(r: TxnRow): r is Transaction & { rowType: 'transaction'; children: TxnRow[] } {
+  return r.rowType === 'transaction';
+}
+
+/**
+ * Transaction and transfer PKs come from two different legacy tables whose
+ * references were reused verbatim as primary keys, so a bare `id` is not
+ * guaranteed unique across the union.
+ */
+function rowKeyOf(r: TxnRow): string {
+  return `${r.rowType}:${r.id}`;
+}
+
+/**
+ * Net base-currency effect of a transaction — what the collapsed row shows.
+ *
+ * Summed with Decimal, never `Number`: these are (38,18) values, and float
+ * arithmetic both loses digits (-1.000000067305900768 → -1.0000000673059009)
+ * and renders wei-scale results in scientific notation.
+ */
+function netValueChange(txn: Transaction): string | null {
+  const contributing = txn.transfers.filter((tr) => tr.value_change != null);
+  if (contributing.length === 0) return null;
+  return contributing
+    .reduce((sum, tr) => sum.plus(new Decimal(tr.value_change as string)), new Decimal(0))
+    .toFixed();
+}
+
 export function PortfolioDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -64,7 +103,12 @@ export function PortfolioDetailPage() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [portfolioModalOpen, setPortfolioModalOpen] = useState(false);
   const [form] = Form.useForm<TransactionFormValues>();
-  const { ref: panelRef, isNarrow } = useContainerWidth(720);
+  const { ref: panelRef, width: panelWidth, isNarrow } = useContainerWidth(720);
+
+  // FR-021 / research I4-2: content-width driven, not viewport breakpoints.
+  // width === 0 is the pre-measurement frame — assume the roomy layout so the
+  // panel doesn't flash a single column before the observer reports.
+  const descriptionColumns = panelWidth === 0 || panelWidth >= 900 ? 3 : panelWidth < 560 ? 1 : 2;
 
   const { data: portfolio, isLoading: portfolioLoading } = useQuery({
     queryKey: ['finance', 'portfolios', id],
@@ -85,12 +129,17 @@ export function PortfolioDetailPage() {
     { key: 'timestamp', label: t({ id: 'pages.finance.transactions.col.timestamp' }), dataType: 'date' },
   ], [t]);
 
+  // FR-022: one shared column set serving both transaction and transfer rows.
   const columnDefs = useMemo<ColumnDef[]>(() => [
-    { key: 'timestamp', label: t({ id: 'pages.finance.transactions.col.timestamp' }), dataType: 'text', visible: true, order: 0 },
-    { key: 'description', label: t({ id: 'pages.finance.transactions.col.description' }), dataType: 'text', visible: true, order: 1 },
-    { key: 'transfer_count', label: t({ id: 'pages.finance.transactions.col.transferCount' }), dataType: 'text', visible: true, order: 2 },
-    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 3 },
-  ], [t]);
+    { key: '__caret', label: '', dataType: 'text', visible: true, order: 0 },
+    { key: 'timestamp', label: t({ id: 'pages.finance.transactions.col.timestamp' }), dataType: 'text', visible: true, order: 1 },
+    { key: 'description', label: t({ id: 'pages.finance.transactions.col.description' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'asset', label: t({ id: 'pages.finance.transactions.transfer.asset' }), dataType: 'text', visible: true, order: 3 },
+    { key: 'asset_change', label: t({ id: 'pages.finance.transactions.transfer.assetChange' }), dataType: 'text', visible: true, order: 4 },
+    { key: 'value_change', label: t({ id: 'pages.finance.transactions.transfer.valueChange' }, { currency: baseCurrency }), dataType: 'text', visible: true, order: 5 },
+    { key: 'remark', label: t({ id: 'pages.finance.transactions.transfer.remark' }), dataType: 'text', visible: true, order: 6 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 7 },
+  ], [t, baseCurrency]);
 
   const table = useEntityTable({ key: `portfolio-transactions-${id}`, filterableAttrs, columnDefs });
 
@@ -110,6 +159,27 @@ export function PortfolioDetailPage() {
     meta: { errorMessage: t({ id: 'pages.finance.transactions.loadError' }) },
   });
   const transactions = useMemo(() => transactionsData?.results ?? [], [transactionsData]);
+
+  // Tree rows: each transaction owns its transfers as children (FR-022).
+  const rows = useMemo<TxnRow[]>(
+    () =>
+      transactions.map((txn) => ({
+        ...txn,
+        rowType: 'transaction' as const,
+        children: txn.transfers.map((tr) => ({ ...tr, rowType: 'transfer' as const })),
+      })),
+    [transactions],
+  );
+
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const toggleExpand = (key: string) =>
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const expandedRowKeys = useMemo(() => Array.from(expandedIds), [expandedIds]);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['finance', 'transactions'] });
@@ -238,65 +308,129 @@ export function PortfolioDetailPage() {
     return w;
   }, [transactions]);
 
-  const colDefMap = useMemo<Record<string, ProColumns<Transaction>>>(
+  const colDefMap = useMemo<Record<string, ProColumns<TxnRow>>>(
     () => {
       const getFixed = table.cols.fixedForKey;
       return {
+        __caret: {
+          key: '__caret',
+          title: '',
+          width: 44,
+          fixed: getFixed('__caret'),
+          render: (_, r) =>
+            isTransaction(r) && r.children.length > 0 ? (
+              // data-row-link-ignore keeps the caret inert to row navigation
+              // (constitution v1.25.0) should these rows ever gain a detail page.
+              <span
+                data-row-link-ignore
+                style={{ cursor: 'pointer' }}
+                onClick={() => toggleExpand(rowKeyOf(r))}
+              >
+                {expandedIds.has(rowKeyOf(r)) ? <CaretDownOutlined /> : <CaretRightOutlined />}
+              </span>
+            ) : null,
+        },
         timestamp: {
           dataIndex: 'timestamp',
           width: 200,
           fixed: getFixed('timestamp'),
-          render: (val) => <DateTimeCell value={val as string | null} />,
+          render: (_, r) => (isTransaction(r) ? <DateTimeCell value={r.timestamp} /> : null),
           ...makeSortProps('timestamp', t({ id: 'pages.finance.transactions.col.timestamp' }), table.sort),
         },
         description: {
           dataIndex: 'description',
           ...widthForHeader(t({ id: 'pages.finance.transactions.col.description' }), dataWidths.description),
           fixed: getFixed('description'),
-          render: (val) => (val ? <SearchMark text={String(val)} /> : <EmptyValue />),
+          render: (_, r) =>
+            isTransaction(r)
+              ? (r.description ? <SearchMark text={r.description} /> : <EmptyValue />)
+              : null,
         },
-        transfer_count: {
-          key: 'transfer_count',
-          width: 100,
-          fixed: getFixed('transfer_count'),
-          render: (_, record) => record.transfers.length,
+        asset: {
+          key: 'asset',
+          width: 160,
+          fixed: getFixed('asset'),
+          // Parent summarises (clarified 2026-08-15); child names its asset.
+          render: (_, r) =>
+            isTransaction(r) ? (
+              r.transfers.length > 0 ? (
+                <Typography.Text type="secondary">
+                  {t(
+                    { id: 'pages.finance.transactions.transferCountSummary' },
+                    { count: r.transfers.length },
+                  )}
+                </Typography.Text>
+              ) : (
+                <EmptyValue />
+              )
+            ) : (
+              <Tag><SearchMark text={r.asset_name} /></Tag>
+            ),
+        },
+        asset_change: {
+          key: 'asset_change',
+          width: 160,
+          align: 'right',
+          fixed: getFixed('asset_change'),
+          render: (_, r) =>
+            isTransaction(r) ? null : <SearchMark text={formatAmount(r.asset_change_amount)} />,
+        },
+        value_change: {
+          key: 'value_change',
+          width: 180,
+          align: 'right',
+          fixed: getFixed('value_change'),
+          render: (_, r) => {
+            const raw = isTransaction(r) ? netValueChange(r) : r.value_change;
+            if (raw == null) return <EmptyValue />;
+            return <SearchMark text={formatAmount(String(raw))} />;
+          },
+        },
+        remark: {
+          key: 'remark',
+          width: 160,
+          fixed: getFixed('remark'),
+          render: (_, r) =>
+            isTransaction(r) ? null : r.remark ? <SearchMark text={r.remark} /> : <EmptyValue />,
         },
         actions: {
           title: t({ id: 'common.actions' }),
           key: 'actions',
           width: actionsColWidth,
           fixed: getFixed('actions'),
-          render: (_, record) => (
-            <span data-actions-col>
-              <Space>
-                <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-                  {t({ id: 'common.edit' })}
-                </Button>
-                <Button
-                  size="small" danger icon={<DeleteOutlined />}
-                  onClick={() =>
-                    confirmDialog({
-                      title: t({ id: 'pages.finance.transactions.delete.title' }),
-                      content: t({ id: 'pages.finance.transactions.delete.confirm' }),
-                      danger: true,
-                      onOk: () => deleteMutation.mutate(record.id),
-                    })
-                  }
-                >
-                  {t({ id: 'common.delete' })}
-                </Button>
-              </Space>
-            </span>
-          ),
+          // Actions belong to the transaction; transfers are edited through it.
+          render: (_, r) =>
+            isTransaction(r) ? (
+              <span data-actions-col>
+                <Space>
+                  <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
+                    {t({ id: 'common.edit' })}
+                  </Button>
+                  <Button
+                    size="small" danger icon={<DeleteOutlined />}
+                    onClick={() =>
+                      confirmDialog({
+                        title: t({ id: 'pages.finance.transactions.delete.title' }),
+                        content: t({ id: 'pages.finance.transactions.delete.confirm' }),
+                        danger: true,
+                        onOk: () => deleteMutation.mutate(r.id),
+                      })
+                    }
+                  >
+                    {t({ id: 'common.delete' })}
+                  </Button>
+                </Space>
+              </span>
+            ) : null,
         },
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
+    [t, dataWidths, actionsColWidth, expandedIds, baseCurrency, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
-  const columns = useMemo<ProColumns<Transaction>[]>(
-    () => table.cols.visibleColumns.map((c) => colDefMap[c.key]).filter((c): c is ProColumns<Transaction> => Boolean(c)),
+  const columns = useMemo<ProColumns<TxnRow>[]>(
+    () => table.cols.visibleColumns.map((c) => colDefMap[c.key]).filter((c): c is ProColumns<TxnRow> => Boolean(c)),
     [table.cols.visibleColumns, colDefMap],
   );
 
@@ -307,29 +441,6 @@ export function PortfolioDetailPage() {
       </div>
     );
   }
-
-  const transferCols: ProColumns[] = [
-    {
-      title: t({ id: 'pages.finance.transactions.transfer.asset' }),
-      dataIndex: 'asset_name',
-      render: (val) => (val ? <Tag><SearchMark text={String(val)} /></Tag> : <EmptyValue />),
-    },
-    {
-      title: t({ id: 'pages.finance.transactions.transfer.assetChange' }),
-      dataIndex: 'asset_change_amount',
-      render: (val) => <SearchMark text={formatAmount(String(val))} />,
-    },
-    {
-      title: t({ id: 'pages.finance.transactions.transfer.valueChange' }, { currency: baseCurrency }),
-      dataIndex: 'value_change',
-      render: (val) => (val != null ? <SearchMark text={formatAmount(String(val))} /> : <EmptyValue />),
-    },
-    {
-      title: t({ id: 'pages.finance.transactions.transfer.remark' }),
-      dataIndex: 'remark',
-      render: (val) => (val ? <SearchMark text={String(val)} /> : <EmptyValue />),
-    },
-  ];
 
   return (
     <SearchHighlightProvider value={table.activeSearch}>
@@ -359,6 +470,20 @@ export function PortfolioDetailPage() {
               kebabLabel="portfolio-actions"
               visible={[
                 {
+                  // FR-020: a frequent, reversible, non-destructive state
+                  // toggle — visible, not folded in with Delete.
+                  key: 'toggle-state',
+                  label:
+                    portfolio?.state === 'active'
+                      ? t({ id: 'pages.finance.portfolios.action.close' })
+                      : t({ id: 'pages.finance.portfolios.action.reopen' }),
+                  icon: portfolio?.state === 'active' ? <StopOutlined /> : <RedoOutlined />,
+                  onClick: () =>
+                    updatePortfolioMutation.mutate({
+                      state: portfolio?.state === 'active' ? 'closed' : 'active',
+                    } as PortfolioUpdateFormValues),
+                },
+                {
                   key: 'edit',
                   label: t({ id: 'common.edit' }),
                   icon: <EditOutlined />,
@@ -377,35 +502,38 @@ export function PortfolioDetailPage() {
             />
           }
         >
-          <Space size="large" wrap>
-            <Typography.Title level={4} style={{ margin: 0 }}>
-              {portfolio?.name}
-            </Typography.Title>
-            <Tag>{portfolio?.base_currency}</Tag>
-            <Tag color={portfolio?.state === 'active' ? 'green' : 'default'}>
-              {portfolio?.state === 'active'
-                ? t({ id: 'pages.finance.portfolios.state.active' })
-                : t({ id: 'pages.finance.portfolios.state.closed' })}
-            </Tag>
-          </Space>
-          <div style={{ marginTop: 12 }}>
-            <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.description' })}</Typography.Text>
-            <div>{portfolio?.description ? portfolio.description : <EmptyValue />}</div>
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 32 }}>
-            <div>
-              <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.firstTransactionTime' })}</Typography.Text>
-              <div><DateTimeCell value={portfolio?.first_transaction_time} /></div>
-            </div>
-            <div>
-              <Typography.Text type="secondary">{t({ id: 'pages.finance.portfolios.col.lastTransactionTime' })}</Typography.Text>
-              <div><DateTimeCell value={portfolio?.last_transaction_time} /></div>
-            </div>
-          </div>
+          {/* FR-021: responsive Descriptions. The column count follows the
+              MEASURED panel width, not AntD's viewport breakpoints — a
+              collapsed-sidebar-narrow content area must collapse too
+              (constitution VI, content-width rule). */}
+          <Descriptions size="small" column={descriptionColumns} bordered={false}>
+            <Descriptions.Item label={t({ id: 'pages.finance.portfolios.form.name' })}>
+              {portfolio?.name || <EmptyValue />}
+            </Descriptions.Item>
+            <Descriptions.Item label={t({ id: 'pages.finance.portfolios.col.baseCurrency' })}>
+              {portfolio?.base_currency ? <Tag>{portfolio.base_currency}</Tag> : <EmptyValue />}
+            </Descriptions.Item>
+            <Descriptions.Item label={t({ id: 'pages.finance.portfolios.col.state' })}>
+              <Tag color={portfolio?.state === 'active' ? 'green' : 'default'}>
+                {portfolio?.state === 'active'
+                  ? t({ id: 'pages.finance.portfolios.state.active' })
+                  : t({ id: 'pages.finance.portfolios.state.closed' })}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label={t({ id: 'pages.finance.portfolios.col.description' })}>
+              {portfolio?.description || <EmptyValue />}
+            </Descriptions.Item>
+            <Descriptions.Item label={t({ id: 'pages.finance.portfolios.col.firstTransactionTime' })}>
+              <DateTimeCell value={portfolio?.first_transaction_time} />
+            </Descriptions.Item>
+            <Descriptions.Item label={t({ id: 'pages.finance.portfolios.col.lastTransactionTime' })}>
+              <DateTimeCell value={portfolio?.last_transaction_time} />
+            </Descriptions.Item>
+          </Descriptions>
         </Card>
       </div>
 
-      <PageTable<Transaction>
+      <PageTable<TxnRow>
         key={table.cols.pinFingerprint}
         pageTitle={t({ id: 'pages.finance.transactions.title' })}
         action={
@@ -426,29 +554,17 @@ export function PortfolioDetailPage() {
             searchProps={{ value: table.searchQuery, onChange: table.setSearchQuery }}
           />
         }
-        rowKey="id"
+        rowKey={rowKeyOf}
         columns={columns}
-        dataSource={transactions}
+        dataSource={rows}
         loading={txnLoading}
         scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
         footer={() => <EntityOffsetFooter {...table.paginationProps(transactionsData?.count)} />}
-        expandable={{
-          expandedRowRender: (record) => (
-            <ProTable
-              ghost
-              dataSource={record.transfers}
-              columns={transferCols}
-              rowKey="id"
-              search={false}
-              toolBarRender={false}
-              pagination={false}
-              size="small"
-            />
-          ),
-          rowExpandable: (record) => record.transfers.length > 0,
-        }}
+        columnEmptyText={false}
+        indentSize={0}
+        expandable={{ showExpandColumn: false, expandedRowKeys }}
       />
 
       {portfolio && (

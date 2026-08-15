@@ -26,7 +26,6 @@ export default {
   'common.new': '新增',
   'common.add': '新增',
   'common.delete': '刪除',
-  'common.view': '查看',
   'common.remove': '移除',
   'common.save': '儲存',
   'common.name': '名稱',
@@ -518,6 +517,7 @@ export default {
   'pages.finance.transactions.transfer.assetChange': '資產變動',
   'pages.finance.transactions.transfer.valueChange': '價值變動（{currency}）',
   'pages.finance.transactions.transfer.remark': '備註',
+  'pages.finance.transactions.transferCountSummary': '{count} 筆轉帳',
 
   // System > Profile
   'pages.system.profile.title': '系統概覽',

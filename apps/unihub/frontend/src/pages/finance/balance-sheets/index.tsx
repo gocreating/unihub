@@ -3,7 +3,7 @@ import { EmptyValue } from '@/components/EmptyValue';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, Select, Space, Spin, Typography, message } from 'antd';
 import { confirmDialog } from '@/components/ConfirmDialog';
-import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, MinusOutlined, PlusOutlined } from '@ant-design/icons';
+import { CheckOutlined, DeleteOutlined, EditOutlined, MinusOutlined, PlusOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import type { ProColumns } from '@ant-design/pro-components';
@@ -11,7 +11,7 @@ import Decimal from 'decimal.js';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
+import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, useRowLink, widthForHeader } from '@/components/PageTable';
 import { EntityOffsetFooter, EntityToolbar, useColumnConfig, useEntityFilter, useEntitySort } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
@@ -68,6 +68,9 @@ export function BalanceSheetsPage() {
   const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
     { key: 'date', label: t({ id: 'common.date' }), dataType: 'date' },
   ], [t]);
+
+  // Whole-row navigation (constitution v1.25.0) — one shared helper.
+  const rowLink = useRowLink();
 
   const filter = useEntityFilter('balance-sheets');
   const sort = useEntitySort('balance-sheets', [{ field: 'date', direction: 'desc' }]);
@@ -466,14 +469,8 @@ export function BalanceSheetsPage() {
           render: (_, record) => (
             <span data-actions-col>
             <Space>
-              <Button
-                size="small"
-                icon={<EyeOutlined />}
-                href={`/finance/balance-sheets/${record.id}`}
-                onClick={(e) => { e.preventDefault(); navigate(`/finance/balance-sheets/${record.id}`); }}
-              >
-                {t({ id: 'common.view' })}
-              </Button>
+              {/* No View button (constitution v1.25.0) — the row itself opens
+                  the sheet; Edit stays because it targets a DIFFERENT page. */}
               <Button
                 size="small"
                 icon={<EditOutlined />}
@@ -737,6 +734,7 @@ export function BalanceSheetsPage() {
         columns={columns}
         dataSource={sheets}
         loading={isLoading}
+        onRow={(record) => rowLink(`/finance/balance-sheets/${record.id}`)}
         scroll={{ x: computeScrollX(columns) }}
       />
     </>

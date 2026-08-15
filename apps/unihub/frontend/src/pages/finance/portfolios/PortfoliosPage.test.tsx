@@ -63,13 +63,8 @@ describe('PortfoliosPage — hyperlinked rows, no row edit/delete (iteration 2, 
     expect(nameLink.getAttribute('href')).toBe('/finance/portfolios/p1');
   });
 
-  // FR-013b: the View action is a real anchor with the same href
-  it('renders the View action as a real hyperlink to the detail page', async () => {
-    renderPage();
-    await screen.findByRole('link', { name: 'Tech Fund' });
-    const viewLink = screen.getByRole('link', { name: /View/ });
-    expect(viewLink.getAttribute('href')).toBe('/finance/portfolios/p1');
-  });
+  // (The iteration-2 "View action is a hyperlink" test is gone: constitution
+  // v1.25.0 removes the View action entirely — see the iteration-4 block below.)
 
   // FR-013c: plain click SPA-navigates; ctrl/meta-click leaves navigation to the browser
   it('SPA-navigates on plain click but not on ctrl/meta click (browser handles those)', async () => {
@@ -95,12 +90,61 @@ describe('PortfoliosPage — hyperlinked rows, no row edit/delete (iteration 2, 
     expect(screen.queryByRole('button', { name: /Delete/ })).toBeNull();
   });
 
-  // Close/Reopen is a non-navigating action and stays a button; Create stays intact
-  it('keeps the Close/Reopen toggle button and the New Portfolio action', async () => {
+  it('keeps the New Portfolio action', async () => {
     renderPage();
     await screen.findByRole('link', { name: 'Tech Fund' });
-    expect(screen.getByRole('button', { name: /Close/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /New Portfolio/ })).toBeTruthy();
+  });
+});
+
+// Constitution v1.25.0 / FR-013, FR-018, FR-020: the row IS the link, the View
+// button is gone, Close/Reopen moved to the detail panel — which leaves the
+// list with no row actions at all, so the Actions column itself disappears.
+describe('PortfoliosPage — whole-row navigation (iteration 4)', () => {
+  it('renders no View button and no Actions column', async () => {
+    renderPage();
+    await screen.findByRole('link', { name: 'Tech Fund' });
+    // Exact-match: the entity-views kebab is legitimately named "View menu".
+    expect(screen.queryByRole('button', { name: /^View$/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /^View$/ })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Actions' })).toBeNull();
+  });
+
+  it('no longer offers Close/Reopen in the list', async () => {
+    renderPage();
+    await screen.findByRole('link', { name: 'Tech Fund' });
+    expect(screen.queryByRole('button', { name: /^Close$/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Reopen$/ })).toBeNull();
+  });
+
+  it('navigates when the row is clicked', async () => {
+    renderPage();
+    const nameLink = await screen.findByRole('link', { name: 'Tech Fund' });
+    const row = nameLink.closest('tr')!;
+    fireEvent.click(row);
+    expect(mockNavigate).toHaveBeenCalledWith('/finance/portfolios/p1');
+  });
+
+  it('opens a new tab on ctrl-click of the row instead of navigating', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    renderPage();
+    const nameLink = await screen.findByRole('link', { name: 'Tech Fund' });
+    const row = nameLink.closest('tr')!;
+    mockNavigate.mockReset();
+    fireEvent.click(row, { ctrlKey: true });
+    expect(openSpy).toHaveBeenCalledWith(
+      '/finance/portfolios/p1',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  it('marks rows as clickable', async () => {
+    renderPage();
+    const nameLink = await screen.findByRole('link', { name: 'Tech Fund' });
+    expect(nameLink.closest('tr')!.style.cursor).toBe('pointer');
   });
 });
 

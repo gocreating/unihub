@@ -26,7 +26,6 @@ export default {
   'common.new': 'New',
   'common.add': 'Add',
   'common.delete': 'Delete',
-  'common.view': 'View',
   'common.remove': 'Remove',
   'common.save': 'Save',
   'common.name': 'Name',
@@ -525,6 +524,8 @@ export default {
   'pages.finance.transactions.transfer.assetChange': 'Asset Change',
   'pages.finance.transactions.transfer.valueChange': 'Value Change ({currency})',
   'pages.finance.transactions.transfer.remark': 'Remark',
+  'pages.finance.transactions.transferCountSummary':
+    '{count, plural, one {# transfer} other {# transfers}}',
 
   // System > Profile
   'pages.system.profile.title': 'System Profile',

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -7,6 +7,7 @@ import { Modal, message } from 'antd';
 import enUS from '@/locales/en-US';
 import { PortfolioDetailPage } from './detail';
 import * as financeService from '@/services/unihub-backend/finance';
+import { ResizeObserverMock } from '@/test-setup';
 
 vi.mock('@/services/unihub-backend/finance');
 
@@ -190,6 +191,95 @@ describe('PortfolioDetailPage — breadcrumb + Portfolio panel (iteration 2, US2
   });
 });
 
+// Iteration 4 (FR-020, FR-021): the panel is a responsive Descriptions block
+// and Close/Reopen is a visible header action beside Edit.
+describe('PortfolioDetailPage — Descriptions panel + Close/Reopen (iteration 4)', () => {
+  it('presents every field inside an AntD Descriptions block', async () => {
+    const { container } = renderPage();
+    await screen.findAllByText('Tech Fund');
+    const desc = container.querySelector('.ant-descriptions');
+    expect(desc).toBeTruthy();
+    const labels = Array.from(desc!.querySelectorAll('.ant-descriptions-item-label')).map(
+      (el) => el.textContent?.trim(),
+    );
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        'Name',
+        'Base Currency',
+        'State',
+        'Description',
+        'First Transaction',
+        'Last Transaction',
+      ]),
+    );
+    // The name lives in the Descriptions block, not in a separate panel title
+    // (the page-level PageTable heading below is a different element).
+    expect(desc!.closest('.ant-card-body')!.querySelector('h4')).toBeNull();
+  });
+
+  // NOTE: AntD icons contribute their own aria-label to the accessible name
+  // ("stop Close"), so these matchers are suffix-anchored, not exact.
+  it('shows Close as a visible header button that flips the state', async () => {
+    renderPage();
+    await screen.findAllByText('Tech Fund');
+    const closeBtn = screen.getByRole('button', { name: /Close$/ });
+    fireEvent.click(closeBtn);
+    await waitFor(() => {
+      expect(vi.mocked(financeService.updatePortfolio).mock.calls.at(-1)![1]).toEqual({
+        state: 'closed',
+      });
+    });
+  });
+
+  it('shows Reopen instead when the portfolio is closed', async () => {
+    vi.mocked(financeService.getPortfolio).mockResolvedValue({
+      ...PORTFOLIO,
+      state: 'closed',
+    } as never);
+    renderPage();
+    await screen.findAllByText('Tech Fund');
+    expect(screen.getByRole('button', { name: /Reopen$/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Close$/ })).toBeNull();
+  });
+
+  // FR-021 / constitution VI: narrowness is judged by MEASURED CONTENT width,
+  // not the viewport — a collapsed-sidebar-narrow panel must stack too, which
+  // AntD's own xs/sm breakpoints (viewport-based) would miss.
+  it('collapses the Descriptions to one column when the panel itself is narrow', async () => {
+    const { container } = renderPage();
+    await screen.findAllByText('Tech Fund');
+    const panel = container.querySelector('.ant-descriptions')!.closest('div[class]')!
+      .parentElement!;
+    const observed = ResizeObserverMock.instances.find((i) => i.targets.length > 0);
+    expect(observed).toBeTruthy();
+    const target = observed!.targets[0]!;
+
+    const rowsAtWidth = async (width: number) => {
+      vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
+        width, height: 200, top: 0, left: 0, right: width, bottom: 200, x: 0, y: 0,
+        toJSON: () => ({}),
+      } as DOMRect);
+      await act(async () => {
+        observed!.trigger();
+      });
+      return container.querySelectorAll('.ant-descriptions-row').length;
+    };
+
+    expect(panel).toBeTruthy();
+    // 6 items: 3 columns → 2 rows; 1 column → 6 rows.
+    expect(await rowsAtWidth(1200)).toBe(2);
+    expect(await rowsAtWidth(400)).toBe(6);
+  });
+
+  it('keeps Delete in the kebab, not as a visible button', async () => {
+    renderPage();
+    await screen.findAllByText('Tech Fund');
+    expect(screen.queryByRole('button', { name: /^Delete$/ })).toBeNull();
+    fireEvent.click(screen.getByLabelText('portfolio-actions'));
+    expect(await screen.findByText('Delete')).toBeTruthy();
+  });
+});
+
 // Iteration 3 (US3): chain/tx metadata, transfer remarks, 18dp amounts.
 describe('PortfolioDetailPage — transaction & transfer fields (iteration 3)', () => {
   it('transaction form offers Chain ID, Tx Hash, and per-transfer Remark fields', async () => {
@@ -205,9 +295,9 @@ describe('PortfolioDetailPage — transaction & transfer fields (iteration 3)', 
     vi.mocked(financeService.listTransactions).mockResolvedValue({
       count: 1, next: null, previous: null, results: [TXN],
     } as never);
-    renderPage();
+    const { container } = renderPage();
     await screen.findByText('DCA buy');
-    fireEvent.click(document.querySelector('.ant-table-row-expand-icon') as HTMLElement);
+    fireEvent.click(container.querySelector('[data-row-link-ignore]') as HTMLElement);
     expect(await screen.findByText('手續費')).toBeTruthy();
     // 18dp storage must not leak trailing zeros into the display
     expect(screen.getByText('419')).toBeTruthy();
@@ -226,6 +316,88 @@ describe('PortfolioDetailPage — transaction & transfer fields (iteration 3)', 
     await waitFor(() => {
       expect(vi.mocked(financeService.deleteTransaction).mock.calls.at(-1)![0]).toBe('tx1');
     });
+  });
+});
+
+// FR-022 / SC-009: transfers are child ROWS of the same table (the inventory
+// catalog pattern), not a nested table with its own header.
+describe('PortfolioDetailPage — transactions tree table (iteration 4)', () => {
+  beforeEach(() => {
+    vi.mocked(financeService.listTransactions).mockResolvedValue({
+      count: 1, next: null, previous: null, results: [TXN],
+    } as never);
+  });
+
+  const bodyRows = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll('.ant-table-tbody tr.ant-table-row'));
+
+  it('adds one row per transfer, sharing the parent columns, with no nested table', async () => {
+    const { container } = renderPage();
+    await screen.findByText('DCA buy');
+    expect(bodyRows(container)).toHaveLength(1);
+
+    fireEvent.click(container.querySelector('[data-row-link-ignore]') as HTMLElement);
+    await screen.findByText('手續費');
+
+    // 1 transaction + its 2 transfers, all rows of the SAME table.
+    expect(bodyRows(container)).toHaveLength(3);
+    // Exactly one header — a nested ProTable would add a second.
+    expect(container.querySelectorAll('.ant-table-thead')).toHaveLength(1);
+  });
+
+  it('summarises transfers on the collapsed parent row', async () => {
+    renderPage();
+    const parent = (await screen.findByText('DCA buy')).closest('tr')!;
+    // Asset column shows the count; Value Change shows the net (0 + -1).
+    expect(parent.textContent).toContain('2 transfers');
+    expect(parent.textContent).toContain('-1');
+  });
+
+  // The whole point of the (38,18) columns: the parent summary must not be
+  // computed in float. Number arithmetic yields -1.0000000673059009 and can
+  // emit scientific notation for wei-scale values.
+  it('sums the parent net value at full 18dp precision, never in float', async () => {
+    vi.mocked(financeService.listTransactions).mockResolvedValue({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [
+        {
+          ...TXN,
+          transfers: [
+            { ...TXN.transfers[0]!, value_change: '-0.000000067305900768' },
+            { ...TXN.transfers[1]!, value_change: '-1.000000000000000000' },
+          ],
+        },
+      ],
+    } as never);
+    renderPage();
+    const parent = (await screen.findByText('DCA buy')).closest('tr')!;
+    expect(parent.textContent).toContain('-1.000000067305900768');
+    expect(parent.textContent).not.toContain('e-');
+  });
+
+  it('toggles the caret open and closed', async () => {
+    const { container } = renderPage();
+    await screen.findByText('DCA buy');
+    const caret = container.querySelector('[data-row-link-ignore]') as HTMLElement;
+    fireEvent.click(caret);
+    await screen.findByText('手續費');
+    fireEvent.click(container.querySelector('[data-row-link-ignore]') as HTMLElement);
+    await waitFor(() => {
+      expect(screen.queryByText('手續費')).toBeNull();
+    });
+  });
+
+  it('renders row actions on the parent only', async () => {
+    const { container } = renderPage();
+    await screen.findByText('DCA buy');
+    fireEvent.click(container.querySelector('[data-row-link-ignore]') as HTMLElement);
+    await screen.findByText('手續費');
+    const rows = bodyRows(container);
+    expect(rows[0]!.querySelectorAll('button').length).toBeGreaterThan(0);
+    const childRows = rows.slice(1);
+    for (const row of childRows) expect(row.querySelectorAll('button')).toHaveLength(0);
   });
 });
 

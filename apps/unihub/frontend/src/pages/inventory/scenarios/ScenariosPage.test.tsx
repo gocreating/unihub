@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
@@ -110,6 +110,22 @@ describe('ScenariosPage (iteration 45 — real links + tab title)', () => {
     const link = (await screen.findByText('Camping')).closest('a')!;
     expect(link).not.toBeNull();
     expect(link.getAttribute('href')).toBe('/inventory/scenarios/sc-1');
+  });
+
+  // Constitution v1.25.0 (FR-018/FR-019): the whole row navigates, with
+  // modifier-click parity — the name link alone is no longer sufficient.
+  it('navigates when the row is clicked and opens a tab on ctrl-click', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    renderPage();
+    const row = (await screen.findByText('Camping')).closest('tr')!;
+    expect(row.style.cursor).toBe('pointer');
+    fireEvent.click(row, { ctrlKey: true });
+    expect(openSpy).toHaveBeenCalledWith(
+      '/inventory/scenarios/sc-1',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    openSpy.mockRestore();
   });
 
   // SP-04 (FR-035): the list page sets the browser tab title and restores it.

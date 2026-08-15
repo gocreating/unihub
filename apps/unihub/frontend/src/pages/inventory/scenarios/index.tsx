@@ -11,6 +11,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import PageTable, {
   computeScrollX,
   measureTextWidth,
+  useRowLink,
   widthForHeader,
 } from '@/components/PageTable';
 import type { Scenario } from '@/services/unihub-backend/inventory';
@@ -50,6 +51,9 @@ export function ScenariosPage() {
   );
 
   const table = useEntityTable({ key: 'inventory-scenarios', filterableAttrs, columnDefs });
+
+  // Whole-row navigation (constitution v1.25.0) — one shared helper.
+  const rowLink = useRowLink();
   const { filter, sort, cols } = table;
 
   // The default-view baseline the view tabs diff against (016 views).
@@ -147,6 +151,7 @@ export function ScenariosPage() {
         columns={columns}
         dataSource={scenarios}
         loading={isLoading}
+        onRow={(record) => rowLink(`/inventory/scenarios/${record.id}`)}
         scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}

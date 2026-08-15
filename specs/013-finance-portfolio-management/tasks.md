@@ -10,36 +10,36 @@
 
 ## Phase 1: Foundational — the shared helper (blocks everything)
 
-- [ ] T101 Write failing tests `src/components/PageTable/useRowLink.test.tsx`: plain click navigates; **Ctrl/Cmd/Shift+click calls `window.open(url,'_blank','noopener,noreferrer')` and does NOT navigate**; **middle click (`auxclick`, `button: 1`) opens a new tab and calls `preventDefault()`**; a click inside `[data-actions-col]`, a `<button>`, an `<a>`, an `<input>`, or `[data-row-link-ignore]` does nothing; a click while `window.getSelection()` holds non-empty text does nothing; a null/empty url yields `{}` (no cursor, no handlers) (FR-018, SC-007, SC-008)
-- [ ] T102 Implement `src/components/PageTable/useRowLink.ts` per research I4-1 and export it from `src/components/PageTable/index.tsx`; T101 passes
-- [ ] T103 Verify-the-verifier: temporarily strip the modifier branch and the selection guard, confirm T101 fails on both, restore (the round-9 lesson — a net that cannot fail proves nothing)
+- [X] T101 Write failing tests `src/components/PageTable/useRowLink.test.tsx`: plain click navigates; **Ctrl/Cmd/Shift+click calls `window.open(url,'_blank','noopener,noreferrer')` and does NOT navigate**; **middle click (`auxclick`, `button: 1`) opens a new tab and calls `preventDefault()`**; a click inside `[data-actions-col]`, a `<button>`, an `<a>`, an `<input>`, or `[data-row-link-ignore]` does nothing; a click while `window.getSelection()` holds non-empty text does nothing; a null/empty url yields `{}` (no cursor, no handlers) (FR-018, SC-007, SC-008)
+- [X] T102 Implement `src/components/PageTable/useRowLink.ts` per research I4-1 and export it from `src/components/PageTable/index.tsx`; T101 passes
+- [X] T103 Verify-the-verifier: temporarily strip the modifier branch and the selection guard, confirm T101 fails on both, restore (the round-9 lesson — a net that cannot fail proves nothing)
 
 ## Phase 2: System-wide sweep (FR-019) — independent per page
 
-- [ ] T104 [P] Update `src/pages/finance/portfolios/PortfoliosPage.test.tsx`: no View button anywhere; **no Actions column at all**; no Close/Reopen button; row click navigates to the detail page; Ctrl+click opens a new tab instead; the existing Name-hyperlink assertions stay green
-- [ ] T105 [P] Amend `src/pages/finance/portfolios/index.tsx`: delete the actions column def (and its `useActionsColWidth`, `EyeOutlined`, `toggleState`/`updateMutation` if now unused), drop `actions` from `columnDefs`, wire `onRow={rowLink(...)}` (FR-013, FR-020)
-- [ ] T106 [P] Update `src/pages/finance/balance-sheets/` tests: View button gone; row click navigates to the sheet detail; Edit still a real hyperlink to `/edit`; clicking Delete does NOT navigate (SC-008)
-- [ ] T107 [P] Amend `src/pages/finance/balance-sheets/index.tsx`: remove the View button, wire `onRow`, keep Edit/Delete
-- [ ] T108 [P] Update inventory scenarios tests + `src/pages/inventory/scenarios/index.tsx`: row click navigates; the name `<Link>` stays
-- [ ] T109 [P] Add `data-row-link-ignore` to the catalog caret in `src/pages/inventory/catalog/index.tsx` and add a catalog test asserting its rows are NOT clickable (the exemption is deliberate, so it gets a lock)
-- [ ] T110 Remove the now-dead `common.view` key from both locale files **only if** a repo-wide grep shows no remaining reference (constitution VIII: both locales, same commit)
+- [X] T104 [P] Update `src/pages/finance/portfolios/PortfoliosPage.test.tsx`: no View button anywhere; **no Actions column at all**; no Close/Reopen button; row click navigates to the detail page; Ctrl+click opens a new tab instead; the existing Name-hyperlink assertions stay green
+- [X] T105 [P] Amend `src/pages/finance/portfolios/index.tsx`: delete the actions column def (and its `useActionsColWidth`, `EyeOutlined`, `toggleState`/`updateMutation` if now unused), drop `actions` from `columnDefs`, wire `onRow={rowLink(...)}` (FR-013, FR-020)
+- [X] T106 [P] Update `src/pages/finance/balance-sheets/` tests: View button gone; row click navigates to the sheet detail; Edit still a real hyperlink to `/edit`; clicking Delete does NOT navigate (SC-008)
+- [X] T107 [P] Amend `src/pages/finance/balance-sheets/index.tsx`: remove the View button, wire `onRow`, keep Edit/Delete
+- [X] T108 [P] Update inventory scenarios tests + `src/pages/inventory/scenarios/index.tsx`: row click navigates; the name `<Link>` stays
+- [X] T109 [P] Add `data-row-link-ignore` to the catalog caret in `src/pages/inventory/catalog/index.tsx` and add a catalog test asserting its rows are NOT clickable (the exemption is deliberate, so it gets a lock)
+- [X] T110 Remove the now-dead `common.view` key from both locale files **only if** a repo-wide grep shows no remaining reference (constitution VIII: both locales, same commit)
 
 ## Phase 3: Portfolio panel — Descriptions + Close/Reopen (FR-020, FR-021)
 
-- [ ] T111 Update `src/pages/finance/portfolios/PortfolioDetailPage.test.tsx`: the panel renders an AntD `Descriptions` containing Name, Base Currency, State, Description, First/Last Transaction (no separate page title); a visible **Close** button sits beside Edit and toggles to **Reopen** for a closed portfolio; Delete stays in the kebab; clicking Close calls `updatePortfolio` with the flipped state
-- [ ] T112 Amend `src/pages/finance/portfolios/detail.tsx`: replace the ad-hoc `Space`/`Typography`/div block with `<Descriptions>` whose `column` derives from the existing `useContainerWidth()` `width` (`<560 → 1`, `<900 → 2`, else 3 — research I4-2); add Close/Reopen to `PanelHeaderActions.visible` beside Edit
-- [ ] T113 Add a narrow-panel test asserting the Descriptions column count collapses from measured **content** width (mock `ResizeObserver`/width as the existing container-width tests do), not viewport breakpoints
+- [X] T111 Update `src/pages/finance/portfolios/PortfolioDetailPage.test.tsx`: the panel renders an AntD `Descriptions` containing Name, Base Currency, State, Description, First/Last Transaction (no separate page title); a visible **Close** button sits beside Edit and toggles to **Reopen** for a closed portfolio; Delete stays in the kebab; clicking Close calls `updatePortfolio` with the flipped state
+- [X] T112 Amend `src/pages/finance/portfolios/detail.tsx`: replace the ad-hoc `Space`/`Typography`/div block with `<Descriptions>` whose `column` derives from the existing `useContainerWidth()` `width` (`<560 → 1`, `<900 → 2`, else 3 — research I4-2); add Close/Reopen to `PanelHeaderActions.visible` beside Edit
+- [X] T113 Add a narrow-panel test asserting the Descriptions column count collapses from measured **content** width (mock `ResizeObserver`/width as the existing container-width tests do), not viewport breakpoints
 
 ## Phase 4: Transactions tree table (FR-022)
 
-- [ ] T114 Update the transactions-panel tests in `PortfolioDetailPage.test.tsx`: expanding a transaction adds its transfers as rows **of the same table** sharing the parent's columns, with **no nested table header** in the DOM; a collapsed parent shows `N transfers` in the Asset column and the **net** value change; the caret toggles; child rows show asset/change/value/remark; the Actions column renders only on parents (SC-009)
-- [ ] T115 Amend `src/pages/finance/portfolios/detail.tsx`: build the `TxnRow` union with `children`, add the `__caret` column (width 44, `data-row-link-ignore`, participates in column config), set `indentSize={0}` + `expandable={{ showExpandColumn: false, expandedRowKeys }}`, switch renderers on `rowType`, and use the composite `rowKey` `` `${rowType}:${id}` `` (research I4-3); delete the nested `expandedRowRender` ProTable and the now-unused `transferCols`
-- [ ] T116 Reflect the merged column set in `columnDefs` and both locale files (the Asset column header now serves both row types; the old transfer-count column is absorbed into the parent summary)
+- [X] T114 Update the transactions-panel tests in `PortfolioDetailPage.test.tsx`: expanding a transaction adds its transfers as rows **of the same table** sharing the parent's columns, with **no nested table header** in the DOM; a collapsed parent shows `N transfers` in the Asset column and the **net** value change; the caret toggles; child rows show asset/change/value/remark; the Actions column renders only on parents (SC-009)
+- [X] T115 Amend `src/pages/finance/portfolios/detail.tsx`: build the `TxnRow` union with `children`, add the `__caret` column (width 44, `data-row-link-ignore`, participates in column config), set `indentSize={0}` + `expandable={{ showExpandColumn: false, expandedRowKeys }}`, switch renderers on `rowType`, and use the composite `rowKey` `` `${rowType}:${id}` `` (research I4-3); delete the nested `expandedRowRender` ProTable and the now-unused `transferCols`
+- [X] T116 Reflect the merged column set in `columnDefs` and both locale files (the Asset column header now serves both row types; the old transfer-count column is absorbed into the parent summary)
 
 ## Phase 5: Polish & verification
 
-- [ ] T117 Full quality loops: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck — run it before committing). Backend untouched; run `uv run pytest` once to confirm no collateral damage
-- [ ] T118 Grep gates: zero `EyeOutlined`/`common.view` under `src/pages`; every table with a detail route passes `onRow`; no `expandedRowRender` left in the portfolio detail page
+- [X] T117 Full quality loops: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck — run it before committing). Backend untouched; run `uv run pytest` once to confirm no collateral damage
+- [X] T118 Grep gates: zero `EyeOutlined`/`common.view` under `src/pages`; every table with a detail route passes `onRow`; no `expandedRowRender` left in the portfolio detail page
 - [ ] T119 Read-only browser probe against the running stack (real data): portfolio row click opens the detail page, Ctrl+click opens a tab, Delete on balance-sheets does not navigate, the Portfolio panel Descriptions reflows at a narrow width, and a real transaction expands into child rows sharing columns. Rebuild the docker images first — the served app is a built image, so source edits are invisible until then
 
 ## Dependencies

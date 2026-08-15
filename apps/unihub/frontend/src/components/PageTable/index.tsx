@@ -21,6 +21,9 @@ import { useStickyHeaderOffset } from './useStickyHeaderOffset';
 export { widthForHeader, measureTextWidth, computeScrollX, computeStickyScrollX, twoLineCellStyle } from './utils';
 // eslint-disable-next-line react-refresh/only-export-components
 export { useActionsColWidth } from './useActionsColWidth';
+// eslint-disable-next-line react-refresh/only-export-components
+export { useRowLink } from './useRowLink';
+export type { RowLinkProps } from './useRowLink';
 
 const useStyles = createStyles(({ token }) => ({
   pageCard: {

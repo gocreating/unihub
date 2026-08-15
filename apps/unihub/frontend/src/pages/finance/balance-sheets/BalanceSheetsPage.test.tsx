@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IntlProvider } from 'react-intl';
 import { MemoryRouter } from 'react-router-dom';
@@ -36,10 +36,37 @@ describe('BalanceSheetsPage — action column hyperlinks (US1)', () => {
     vi.mocked(financeService.listBalances).mockResolvedValue([]);
   });
 
-  it('View button renders as an anchor with href pointing to the detail page', async () => {
+  // Constitution v1.25.0: the View action is gone — the row itself opens the
+  // sheet, so a redundant View button is now a violation.
+  it('renders no View action at all', async () => {
     renderPage();
-    const link = await screen.findByRole('link', { name: /view/i });
-    expect(link).toHaveAttribute('href', `/finance/balance-sheets/${SHEET_ID}`);
+    await screen.findAllByRole('link', { name: /edit/i });
+    expect(screen.queryByRole('link', { name: /^view$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^view$/i })).toBeNull();
+  });
+
+  it('navigates to the sheet when its row is clicked, and opens a tab on ctrl-click', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    renderPage();
+    const editLink = (await screen.findAllByRole('link', { name: /edit/i }))[0]!;
+    const row = editLink.closest('tr')!;
+    expect(row.style.cursor).toBe('pointer');
+
+    fireEvent.click(row, { ctrlKey: true });
+    expect(openSpy).toHaveBeenCalledWith(
+      `/finance/balance-sheets/${SHEET_ID}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+    openSpy.mockRestore();
+  });
+
+  // SC-008: the regression whole-row navigation classically introduces.
+  it('clicking Delete opens the confirm dialog and does NOT navigate', async () => {
+    renderPage();
+    const deleteBtn = await screen.findByRole('button', { name: /delete/i });
+    fireEvent.click(deleteBtn);
+    expect(await screen.findByTestId('confirm-dialog-footer')).toBeInTheDocument();
   });
 
   it('Edit button renders as an anchor with href pointing to the edit page', async () => {

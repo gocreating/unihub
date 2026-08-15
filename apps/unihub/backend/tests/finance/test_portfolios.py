@@ -333,3 +333,87 @@ class TestPortfolioSearch:
             auth_client.get("/api/v1/finance/portfolios/", {"search": "vault strat"}).json()["count"]
             == 1
         )
+
+
+@pytest.mark.django_db
+class TestClosedPortfolioIsFrozen:
+    """FR-026: a closed portfolio rejects every mutation except reopening."""
+
+    @pytest.fixture
+    def closed_portfolio(self, auth_client, usd):
+        p = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Frozen", "base_currency": "USD", "description": "before"},
+            content_type="application/json",
+        ).json()
+        resp = auth_client.patch(
+            f"/api/v1/finance/portfolios/{p['id']}/",
+            {"state": "closed"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        return p
+
+    def test_editing_a_closed_portfolio_is_rejected(self, auth_client, closed_portfolio):
+        resp = auth_client.patch(
+            f"/api/v1/finance/portfolios/{closed_portfolio['id']}/",
+            {"name": "renamed"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+        from finance.models import Portfolio
+
+        assert Portfolio.objects.get(pk=closed_portfolio["id"]).name == "Frozen"
+
+    def test_editing_the_description_of_a_closed_portfolio_is_rejected(
+        self, auth_client, closed_portfolio
+    ):
+        resp = auth_client.patch(
+            f"/api/v1/finance/portfolios/{closed_portfolio['id']}/",
+            {"description": "after"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+
+    def test_reopening_a_closed_portfolio_SUCCEEDS(self, auth_client, closed_portfolio):
+        """The case a naive 'reject all writes when closed' validator bricks."""
+        resp = auth_client.patch(
+            f"/api/v1/finance/portfolios/{closed_portfolio['id']}/",
+            {"state": "active"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200, resp.content
+        assert resp.json()["state"] == "active"
+
+    def test_deleting_a_closed_portfolio_is_still_allowed(self, auth_client, closed_portfolio):
+        resp = auth_client.delete(f"/api/v1/finance/portfolios/{closed_portfolio['id']}/")
+        assert resp.status_code == 204
+
+    def test_an_active_portfolio_is_unaffected(self, auth_client, usd):
+        p = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Open", "base_currency": "USD"},
+            content_type="application/json",
+        ).json()
+        resp = auth_client.patch(
+            f"/api/v1/finance/portfolios/{p['id']}/",
+            {"name": "renamed"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "renamed"
+
+
+@pytest.mark.django_db
+class TestPortfolioDescriptionIsMultiline:
+    """FR-025: description is an unbounded TextField edited as a text area."""
+
+    def test_multiline_description_round_trips(self, auth_client, usd):
+        text = "line one\nline two\n\nline four with a much longer tail " + ("x" * 800)
+        resp = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Multi", "base_currency": "USD", "description": text},
+            content_type="application/json",
+        )
+        assert resp.status_code == 201, resp.content
+        assert resp.json()["description"] == text

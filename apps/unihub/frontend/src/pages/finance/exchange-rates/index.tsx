@@ -7,7 +7,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
+import PageTable, { useActionsColWidth } from '@/components/PageTable';
 import type { ExchangeRate } from '@/services/unihub-backend/finance';
 import { formatAmount } from '@/utils/finance';
 import {
@@ -138,25 +138,13 @@ export function ExchangeRatesPage() {
 
   const actionsColWidth = useActionsColWidth(rates);
 
-  const dataWidths = useMemo(() => {
-    const w = { base_currency: 0, quote_currency: 0, rate: 0, date: 0 };
-    for (const r of rates) {
-      w.base_currency = Math.max(w.base_currency, measureTextWidth(r.base_currency));
-      w.quote_currency = Math.max(w.quote_currency, measureTextWidth(r.quote_currency));
-      w.rate = Math.max(w.rate, measureTextWidth(parseFloat(r.rate).toString()));
-      const d = dayjs(r.date);
-      w.date = Math.max(w.date, measureTextWidth(`${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`));
-    }
-    return w;
-  }, [rates]);
-
   const colDefMap = useMemo<Record<string, ProColumns<ExchangeRate>>>(
     () => {
       const getFixed = table.cols.fixedForKey;
       return {
       base_currency: {
         dataIndex: 'base_currency',
-        ...widthForHeader('Base', dataWidths.base_currency),
+        autoWidth: { header: 'Base' },
         fixed: getFixed('base_currency'),
         render: (val) => (
           <Tag>
@@ -167,7 +155,7 @@ export function ExchangeRatesPage() {
       },
       quote_currency: {
         dataIndex: 'quote_currency',
-        ...widthForHeader('Quote', dataWidths.quote_currency),
+        autoWidth: { header: 'Quote' },
         fixed: getFixed('quote_currency'),
         render: (val) => (
           <Tag>
@@ -178,7 +166,7 @@ export function ExchangeRatesPage() {
       },
       rate: {
         dataIndex: 'rate',
-        ...widthForHeader('Rate', Math.max(120, dataWidths.rate)),
+        autoWidth: { header: 'Rate', min: 120, measure: (r: ExchangeRate) => parseFloat(r.rate).toString() },
         align: 'right',
         fixed: getFixed('rate'),
         render: (val) => <SearchMark text={formatAmount(val as string)} />,
@@ -186,7 +174,14 @@ export function ExchangeRatesPage() {
       },
       date: {
         dataIndex: 'date',
-        ...widthForHeader('Date', Math.max(220, dataWidths.date)),
+        autoWidth: {
+          header: 'Date',
+          min: 220,
+          measure: (r: ExchangeRate) => {
+            const d = dayjs(r.date);
+            return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
+          },
+        },
         fixed: getFixed('date'),
         render: (val) => {
           const d = dayjs(val as string);
@@ -225,7 +220,7 @@ export function ExchangeRatesPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
+    [t, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<ExchangeRate>[]>(
@@ -256,7 +251,6 @@ export function ExchangeRatesPage() {
         columns={columns}
         dataSource={rates}
         loading={isLoading}
-        scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
         footer={() => <EntityOffsetFooter {...table.paginationProps(ratesData?.count)} />}

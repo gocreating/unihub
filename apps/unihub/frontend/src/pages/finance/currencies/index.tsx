@@ -7,7 +7,7 @@ import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
+import PageTable, { useActionsColWidth } from '@/components/PageTable';
 import type { Currency } from '@/services/unihub-backend/finance';
 import {
   createCurrency,
@@ -130,23 +130,13 @@ export function CurrenciesPage() {
 
   const actionsColWidth = useActionsColWidth(currencies);
 
-  const dataWidths = useMemo(() => {
-    const w = { code: 0, name: 0, symbol: 0 };
-    for (const c of currencies) {
-      w.code = Math.max(w.code, measureTextWidth(c.code));
-      w.name = Math.max(w.name, measureTextWidth(c.name));
-      w.symbol = Math.max(w.symbol, measureTextWidth(c.symbol));
-    }
-    return w;
-  }, [currencies]);
-
   const colDefMap = useMemo<Record<string, ProColumns<Currency>>>(
     () => {
       const getFixed = table.cols.fixedForKey;
       return {
       code: {
         dataIndex: 'code',
-        ...widthForHeader('Code', dataWidths.code),
+        autoWidth: { header: 'Code' },
         fixed: getFixed('code'),
         // SearchMark reads the highlight query from context (019) — no new
         // colDefMap dependency.
@@ -155,14 +145,14 @@ export function CurrenciesPage() {
       },
       name: {
         dataIndex: 'name',
-        ...widthForHeader('Name', dataWidths.name),
+        autoWidth: { header: 'Name' },
         fixed: getFixed('name'),
         render: (_, record) => <SearchMark text={record.name} />,
         ...makeSortProps('name', t({ id: 'common.name' }), table.sort),
       },
       symbol: {
         dataIndex: 'symbol',
-        ...widthForHeader('Symbol', dataWidths.symbol),
+        autoWidth: { header: 'Symbol' },
         fixed: getFixed('symbol'),
         render: (val) =>
           val ? <SearchMark text={String(val)} /> : <EmptyValue />,
@@ -206,7 +196,7 @@ export function CurrenciesPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
+    [t, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<Currency>[]>(
@@ -237,7 +227,6 @@ export function CurrenciesPage() {
         columns={columns}
         dataSource={currencies}
         loading={isLoading}
-        scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
         footer={() => <EntityOffsetFooter {...table.paginationProps(currenciesData?.count)} />}

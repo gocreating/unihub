@@ -6,7 +6,7 @@ import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
+import PageTable, { useActionsColWidth } from '@/components/PageTable';
 import type { Asset } from '@/services/unihub-backend/finance';
 import { createAsset, deleteAsset, listAssets, updateAsset } from '@/services/unihub-backend/finance';
 import {
@@ -117,21 +117,13 @@ export function AssetsPage() {
 
   const actionsColWidth = useActionsColWidth(assets);
 
-  const dataWidths = useMemo(() => {
-    const w = { name: 0 };
-    for (const a of assets) {
-      w.name = Math.max(w.name, measureTextWidth(a.name));
-    }
-    return w;
-  }, [assets]);
-
   const colDefMap = useMemo<Record<string, ProColumns<Asset>>>(
     () => {
       const getFixed = table.cols.fixedForKey;
       return {
         name: {
           dataIndex: 'name',
-          ...widthForHeader(t({ id: 'pages.finance.assets.col.name' }), dataWidths.name),
+          autoWidth: { header: t({ id: 'pages.finance.assets.col.name' }) },
           fixed: getFixed('name'),
           render: (_, record) => <SearchMark text={record.name} />,
           ...makeSortProps('name', t({ id: 'pages.finance.assets.col.name' }), table.sort),
@@ -167,7 +159,7 @@ export function AssetsPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
+    [t, actionsColWidth, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<Asset>[]>(
@@ -198,7 +190,6 @@ export function AssetsPage() {
         columns={columns}
         dataSource={assets}
         loading={isLoading}
-        scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
         footer={() => <EntityOffsetFooter {...table.paginationProps(assetsData?.count)} />}

@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from core.filters import EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter
 from core.pagination import EntityOffsetPagination
 from finance.models import (
+    PORTFOLIO_STATE_ACTIVE,
     Account,
     Asset,
     Balance,
@@ -132,6 +133,25 @@ class TransactionViewSet(viewsets.ModelViewSet):
         if (self.request.query_params.get("search") or "").strip():
             qs = qs.distinct()
         return qs
+
+    def destroy(self, request, *args, **kwargs):
+        """FR-026: deleting is a mutation too — a closed portfolio blocks it.
+
+        The serializer guards create/update; DELETE never runs a serializer,
+        so the same rule has to be stated here.
+        """
+        instance = self.get_object()
+        if instance.portfolio.state != PORTFOLIO_STATE_ACTIVE:
+            return Response(
+                {
+                    "portfolio": (
+                        "This portfolio is closed. Reopen it before deleting its "
+                        "transactions."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 class CurrencyViewSet(viewsets.ModelViewSet):

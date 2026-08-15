@@ -165,6 +165,48 @@ describe('PortfoliosPage — description field (iteration 3)', () => {
   });
 });
 
+// FR-023/FR-024 (constitution v1.26.0): PageTable sizes the column and the
+// cell clamps. The reported bug was a 280px cap with untruncated text, which
+// produced three-line rows whose content still overflowed to 356px.
+describe('PortfoliosPage — description column sizing (iteration 5)', () => {
+  const LONG = 'Roll PT-USD0++-27FEB2025 to PT-USD0++-26JUN2025 and then onwards';
+
+  beforeEach(() => {
+    vi.mocked(financeService.listPortfolios).mockResolvedValue({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [{ ...PORTFOLIO, description: LONG }],
+    } as never);
+  });
+
+  it('clamps the description cell to two lines instead of letting it wrap', async () => {
+    renderPage();
+    await screen.findByRole('link', { name: 'Tech Fund' });
+    const cell = screen.getByText(LONG);
+    expect(cell.style.webkitLineClamp).toBe('2');
+    expect(cell).toHaveStyle({ overflow: 'hidden' });
+  });
+
+  it('caps the description column at its declared max width', async () => {
+    const { container } = renderPage();
+    await screen.findByRole('link', { name: 'Tech Fund' });
+    const headers = [...container.querySelectorAll('.ant-table-thead th')];
+    const idx = headers.findIndex((h) => h.textContent?.trim().startsWith('Description'));
+    expect(idx).toBeGreaterThanOrEqual(0);
+    // AntD carries resolved widths on <colgroup><col>, not on the th.
+    const col = container.querySelectorAll('colgroup col')[idx] as HTMLElement;
+    // PageTable resolved this from autoWidth (max 280) — the page never measured.
+    expect(col.style.width).toBe('280px');
+  });
+
+  it('the page performs no width measurement of its own', async () => {
+    // Guard for SC-010: the module must not import the measuring helpers.
+    const src = await import('./index?raw').catch(() => null);
+    if (src) expect(String((src as { default?: string }).default ?? '')).not.toContain('measureTextWidth');
+  });
+});
+
 // 016 FR-039/SC-021: the shared view pattern.
 describe('PortfoliosPage — the shared view pattern', () => {
   const STORED_DEFAULT = {

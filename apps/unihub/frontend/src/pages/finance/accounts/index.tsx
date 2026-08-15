@@ -8,7 +8,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
+import PageTable, { useActionsColWidth } from '@/components/PageTable';
 import type { Account } from '@/services/unihub-backend/finance';
 import {
   createAccount,
@@ -210,17 +210,6 @@ export function AccountsPage() {
 
   const actionsColWidth = useActionsColWidth(accounts);
 
-  const dataWidths = useMemo(() => {
-    const w = { name: 0, currency: 0, open_datetime: 0, close_datetime: 0 };
-    for (const a of accounts) {
-      w.name = Math.max(w.name, measureTextWidth(a.name));
-      w.currency = Math.max(w.currency, measureTextWidth(a.currency));
-      w.open_datetime = Math.max(w.open_datetime, measureTextWidth(formatDateRelative(a.open_datetime)));
-      w.close_datetime = Math.max(w.close_datetime, measureTextWidth(formatDateRelative(a.close_datetime)));
-    }
-    return w;
-  }, [accounts]);
-
   // All column definitions keyed by column key. Derived order comes from cols.visibleColumns.
   // Depends on sort.sortOrderForField so sort highlighting updates when active rules change.
   const colDefMap = useMemo<Record<string, ProColumns<Account>>>(
@@ -229,7 +218,7 @@ export function AccountsPage() {
       return {
       name: {
         dataIndex: 'name',
-        ...widthForHeader('Name', dataWidths.name),
+        autoWidth: { header: 'Name' },
         fixed: getFixed('name'),
         // SearchMark reads the highlight query from context (019).
         render: (_, record) => <SearchMark text={record.name} />,
@@ -237,7 +226,7 @@ export function AccountsPage() {
       },
       currency: {
         dataIndex: 'currency',
-        ...widthForHeader('Currency', dataWidths.currency),
+        autoWidth: { header: 'Currency' },
         fixed: getFixed('currency'),
         render: (val) => (
           <Tag>
@@ -270,7 +259,7 @@ export function AccountsPage() {
       },
       open_datetime: {
         dataIndex: 'open_datetime',
-        ...widthForHeader('Open Date', Math.max(220, dataWidths.open_datetime)),
+        autoWidth: { header: 'Open Date', min: 220, measure: (a: Account) => formatDateRelative(a.open_datetime) },
         fixed: getFixed('open_datetime'),
         ...makeSortProps('open_datetime', t({ id: 'pages.finance.accounts.col.openDatetime' }), sort),
         render: (_, record) => {
@@ -280,7 +269,7 @@ export function AccountsPage() {
       },
       close_datetime: {
         dataIndex: 'close_datetime',
-        ...widthForHeader('Close Date', Math.max(220, dataWidths.close_datetime)),
+        autoWidth: { header: 'Close Date', min: 220, measure: (a: Account) => formatDateRelative(a.close_datetime) },
         fixed: getFixed('close_datetime'),
         ...makeSortProps('close_datetime', t({ id: 'pages.finance.accounts.col.closeDatetime' }), sort),
         render: (_, record) => {
@@ -309,7 +298,7 @@ export function AccountsPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, sort.sortOrderForField, sort.activeRules, cols.fixedForKey, cols.visibleColumns],
+    [t, actionsColWidth, sort.sortOrderForField, sort.activeRules, cols.fixedForKey, cols.visibleColumns],
   );
 
   // Column array derived from the visible column order — this is what makes reordering work.
@@ -346,7 +335,6 @@ export function AccountsPage() {
         columns={columns}
         dataSource={accounts}
         loading={isLoading}
-        scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
         footer={() => <EntityOffsetFooter {...table.paginationProps(accountsData?.count)} />}

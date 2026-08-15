@@ -11,7 +11,7 @@ import Decimal from 'decimal.js';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, useRowLink, widthForHeader } from '@/components/PageTable';
+import PageTable, { useActionsColWidth, useRowLink } from '@/components/PageTable';
 import { EntityOffsetFooter, EntityToolbar, useColumnConfig, useEntityFilter, useEntitySort } from '@/components/EntityToolbar';
 import type { ColumnDef, FilterableAttribute } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
@@ -424,22 +424,20 @@ export function BalanceSheetsPage() {
 
   const actionsColWidth = useActionsColWidth(sheets);
 
-  const dataWidths = useMemo(() => {
-    const w = { date: 0 };
-    for (const s of sheets) {
-      const d = dayjs(s.date);
-      w.date = Math.max(w.date, measureTextWidth(`${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`));
-    }
-    return w;
-  }, [sheets]);
-
   const colDefMap = useMemo<Record<string, ProColumns<BalanceSheet> | undefined>>(
     () => {
       const getFixed = cols.fixedForKey;
       return {
         date: {
           dataIndex: 'date',
-          ...widthForHeader('Date', Math.max(220, dataWidths.date)),
+          autoWidth: {
+            header: 'Date',
+            min: 220,
+            measure: (s: BalanceSheet) => {
+              const d = dayjs(s.date);
+              return `${d.format('YYYY-MM-DD HH:mm')} (${d.fromNow()})`;
+            },
+          },
           fixed: getFixed('date'),
           render: (val) => {
             const d = dayjs(val as string);
@@ -501,7 +499,7 @@ export function BalanceSheetsPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, navigate, dataWidths, actionsColWidth, baseCurrency, sheetNetWorths, allBalancesLoading,
+    [t, navigate, actionsColWidth, baseCurrency, sheetNetWorths, allBalancesLoading,
      sort.sortOrderForField, sort.activeRules, cols.visibleColumns, cols.fixedForKey],
   );
 
@@ -735,7 +733,6 @@ export function BalanceSheetsPage() {
         dataSource={sheets}
         loading={isLoading}
         onRow={(record) => rowLink(`/finance/balance-sheets/${record.id}`)}
-        scroll={{ x: computeScrollX(columns) }}
       />
     </>
   );

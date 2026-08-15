@@ -481,6 +481,12 @@ export interface paths {
         get: operations["v1_finance_transactions_retrieve"];
         put?: never;
         post?: never;
+        /**
+         * @description FR-026: deleting is a mutation too — a closed portfolio blocks it.
+         *
+         *     The serializer guards create/update; DELETE never runs a serializer,
+         *     so the same rule has to be stated here.
+         */
         delete: operations["v1_finance_transactions_destroy"];
         options?: never;
         head?: never;

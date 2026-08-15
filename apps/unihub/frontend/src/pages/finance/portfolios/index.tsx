@@ -5,8 +5,9 @@ import { PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, measureTextWidth, useRowLink, widthForHeader } from '@/components/PageTable';
+import PageTable, { useRowLink } from '@/components/PageTable';
 import { DateTimeCell } from '@/components/DateTimeCell';
+import { ClampedText } from '@/components/ClampedText';
 import { EmptyValue } from '@/components/EmptyValue';
 import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import type { Portfolio } from '@/services/unihub-backend/finance';
@@ -108,23 +109,13 @@ export function PortfoliosPage() {
   // Whole-row navigation (constitution v1.25.0) — one shared helper.
   const rowLink = useRowLink();
 
-  const dataWidths = useMemo(() => {
-    const w = { name: 0, description: 0, base_currency: 0 };
-    for (const p of portfolios) {
-      w.name = Math.max(w.name, measureTextWidth(p.name));
-      w.description = Math.max(w.description, Math.min(measureTextWidth(p.description), 280));
-      w.base_currency = Math.max(w.base_currency, measureTextWidth(p.base_currency));
-    }
-    return w;
-  }, [portfolios]);
-
   const colDefMap = useMemo<Record<string, ProColumns<Portfolio>>>(
     () => {
       const getFixed = table.cols.fixedForKey;
       return {
         name: {
           dataIndex: 'name',
-          ...widthForHeader(t({ id: 'pages.finance.portfolios.col.name' }), dataWidths.name),
+          autoWidth: { header: t({ id: 'pages.finance.portfolios.col.name' }) },
           fixed: getFixed('name'),
           render: (_, record) => (
             <a {...detailLinkProps(record.id)}>
@@ -135,14 +126,21 @@ export function PortfoliosPage() {
         },
         description: {
           dataIndex: 'description',
-          ...widthForHeader(t({ id: 'pages.finance.portfolios.col.description' }), dataWidths.description),
+          autoWidth: { header: t({ id: 'pages.finance.portfolios.col.description' }), max: 280 },
           fixed: getFixed('description'),
-          render: (val) => (val ? <SearchMark text={String(val)} /> : <EmptyValue />),
+          render: (val) =>
+            val ? (
+              <ClampedText text={String(val)}>
+                <SearchMark text={String(val)} />
+              </ClampedText>
+            ) : (
+              <EmptyValue />
+            ),
           ...makeSortProps('description', t({ id: 'pages.finance.portfolios.col.description' }), table.sort),
         },
         base_currency: {
           dataIndex: 'base_currency',
-          ...widthForHeader(t({ id: 'pages.finance.portfolios.col.baseCurrency' }), dataWidths.base_currency),
+          autoWidth: { header: t({ id: 'pages.finance.portfolios.col.baseCurrency' }) },
           fixed: getFixed('base_currency'),
           render: (val) => (val ? <Tag><SearchMark text={String(val)} /></Tag> : <EmptyValue />),
           ...makeSortProps('base_currency', t({ id: 'pages.finance.portfolios.col.baseCurrency' }), table.sort),
@@ -177,7 +175,7 @@ export function PortfoliosPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
+    [t, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<Portfolio>[]>(
@@ -209,7 +207,6 @@ export function PortfoliosPage() {
         dataSource={portfolios}
         loading={isLoading}
         onRow={(record) => rowLink(detailUrl(record.id))}
-        scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
         footer={() => <EntityOffsetFooter {...table.paginationProps(portfoliosData?.count)} />}

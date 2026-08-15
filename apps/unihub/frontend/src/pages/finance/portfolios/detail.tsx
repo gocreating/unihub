@@ -13,8 +13,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import Decimal from 'decimal.js';
 import dayjs from 'dayjs';
-import PageTable, { computeScrollX, measureTextWidth, useActionsColWidth, widthForHeader } from '@/components/PageTable';
+import PageTable, { useActionsColWidth } from '@/components/PageTable';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { ClampedText } from '@/components/ClampedText';
 import { DateTimeCell } from '@/components/DateTimeCell';
 import { EmptyValue } from '@/components/EmptyValue';
 import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
@@ -300,14 +301,6 @@ export function PortfolioDetailPage() {
 
   const actionsColWidth = useActionsColWidth(transactions);
 
-  const dataWidths = useMemo(() => {
-    const w = { description: 0 };
-    for (const txn of transactions) {
-      w.description = Math.max(w.description, measureTextWidth(txn.description));
-    }
-    return w;
-  }, [transactions]);
-
   const colDefMap = useMemo<Record<string, ProColumns<TxnRow>>>(
     () => {
       const getFixed = table.cols.fixedForKey;
@@ -339,12 +332,22 @@ export function PortfolioDetailPage() {
         },
         description: {
           dataIndex: 'description',
-          ...widthForHeader(t({ id: 'pages.finance.transactions.col.description' }), dataWidths.description),
+          autoWidth: {
+            header: t({ id: 'pages.finance.transactions.col.description' }),
+            max: 320,
+            measure: (r: TxnRow) => (isTransaction(r) ? r.description : ''),
+          },
           fixed: getFixed('description'),
           render: (_, r) =>
-            isTransaction(r)
-              ? (r.description ? <SearchMark text={r.description} /> : <EmptyValue />)
-              : null,
+            isTransaction(r) ? (
+              r.description ? (
+                <ClampedText text={r.description}>
+                  <SearchMark text={r.description} />
+                </ClampedText>
+              ) : (
+                <EmptyValue />
+              )
+            ) : null,
         },
         asset: {
           key: 'asset',
@@ -426,7 +429,7 @@ export function PortfolioDetailPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, expandedIds, baseCurrency, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
+    [t, actionsColWidth, expandedIds, baseCurrency, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<TxnRow>[]>(
@@ -558,7 +561,6 @@ export function PortfolioDetailPage() {
         columns={columns}
         dataSource={rows}
         loading={txnLoading}
-        scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
         footer={() => <EntityOffsetFooter {...table.paginationProps(transactionsData?.count)} />}

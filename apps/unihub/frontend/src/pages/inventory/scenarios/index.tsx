@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, message } from 'antd';
+import { ClampedText } from '@/components/ClampedText';
 import { EmptyValue } from '@/components/EmptyValue';
 import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import { PlusOutlined } from '@ant-design/icons';
@@ -8,12 +9,7 @@ import type { ProColumns } from '@ant-design/pro-components';
 import { Link } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import PageTable, {
-  computeScrollX,
-  measureTextWidth,
-  useRowLink,
-  widthForHeader,
-} from '@/components/PageTable';
+import PageTable, { useRowLink } from '@/components/PageTable';
 import type { Scenario } from '@/services/unihub-backend/inventory';
 import { createScenario, listScenarios } from '@/services/unihub-backend/inventory';
 import {
@@ -84,10 +80,6 @@ export function ScenariosPage() {
     onError: () => message.error(t({ id: 'pages.inventory.scenarios.saveError' })),
   });
 
-  const nameWidth = useMemo(
-    () => scenarios.reduce((m, s) => Math.max(m, measureTextWidth(s.name)), 0),
-    [scenarios],
-  );
 
   const colDefMap = useMemo<Record<string, ProColumns<Scenario>>>(
     () => {
@@ -95,7 +87,7 @@ export function ScenariosPage() {
       return {
         name: {
           dataIndex: 'name',
-          ...widthForHeader(t({ id: 'common.name' }), Math.max(160, nameWidth)),
+          autoWidth: { header: t({ id: 'common.name' }), min: 160 },
           fixed: getFixed('name'),
           render: (val, record) => (
             // Real hyperlink (FR-010, iteration 45): browser affordances
@@ -109,15 +101,25 @@ export function ScenariosPage() {
         description: {
           key: 'description',
           title: t({ id: 'pages.inventory.scenarios.col.description' }),
-          ...widthForHeader(t({ id: 'pages.inventory.scenarios.col.description' }), 260),
+          autoWidth: {
+            header: t({ id: 'pages.inventory.scenarios.col.description' }),
+            max: 260,
+            measure: (r: Scenario) => r.description,
+          },
           fixed: getFixed('description'),
-          ellipsis: true,
-          render: (_, r) => (r.description ? <SearchMark text={r.description} /> : <EmptyValue />),
+          render: (_, r) =>
+            r.description ? (
+              <ClampedText text={r.description}>
+                <SearchMark text={r.description} />
+              </ClampedText>
+            ) : (
+              <EmptyValue />
+            ),
         },
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, nameWidth, sort.sortOrderForField, sort.activeRules, cols.fixedForKey, cols.visibleColumns],
+    [t, sort.sortOrderForField, sort.activeRules, cols.fixedForKey, cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<Scenario>[]>(
@@ -152,7 +154,6 @@ export function ScenariosPage() {
         dataSource={scenarios}
         loading={isLoading}
         onRow={(record) => rowLink(`/inventory/scenarios/${record.id}`)}
-        scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
         footer={() => <EntityOffsetFooter {...table.paginationProps(data?.count)} />}

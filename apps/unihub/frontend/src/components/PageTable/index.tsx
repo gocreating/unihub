@@ -11,19 +11,32 @@
  * - Sticky horizontal scrollbar above footer
  * - Sticky footer (custom or pagination) at viewport bottom
  */
-import type { ProTableProps } from '@ant-design/pro-components';
+import type { ProColumns, ProTableProps } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
 import { Flex, Typography } from 'antd';
 import { createStyles } from 'antd-style';
-import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef } from 'react';
+import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useStickyHeaderOffset } from './useStickyHeaderOffset';
+import { resolveAutoWidths } from './autoWidth';
+import { computeScrollX } from './utils';
 // eslint-disable-next-line react-refresh/only-export-components
-export { widthForHeader, measureTextWidth, computeScrollX, computeStickyScrollX, twoLineCellStyle } from './utils';
+export { widthForHeader, measureTextWidth, computeScrollX, computeStickyScrollX, twoLineCellStyle, widestText } from './utils';
 // eslint-disable-next-line react-refresh/only-export-components
 export { useActionsColWidth } from './useActionsColWidth';
 // eslint-disable-next-line react-refresh/only-export-components
 export { useRowLink } from './useRowLink';
 export type { RowLinkProps } from './useRowLink';
+// eslint-disable-next-line react-refresh/only-export-components
+export { resolveAutoWidths } from './autoWidth';
+export type { AutoWidthSpec } from './autoWidth';
+
+/**
+ * A column that may declare `autoWidth` (constitution v1.26.0). PageTable
+ * resolves it automatically; tables that must use `ProTable` directly (e.g.
+ * inside a Card, per Principle XI) call `resolveAutoWidths` themselves.
+ */
+export type SizedColumn<T> = ProColumns<T> & { autoWidth?: AutoWidthSpecOf<T> };
+type AutoWidthSpecOf<T> = import('./autoWidth').AutoWidthSpec<T>;
 
 const useStyles = createStyles(({ token }) => ({
   pageCard: {
@@ -247,10 +260,29 @@ function PageTable<T extends Record<string, any>>({
   noStickyFix = false,
   pagination = false,
   viewBar,
+  columns,
+  dataSource,
+  scroll,
   ...proTableProps
 }: PageTableProps<T>) {
   const { styles, cx } = useStyles();
   const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  // Constitution v1.26.0 (Principle VII): PageTable owns column sizing. Pages
+  // declare `autoWidth` on a column; the measuring, clamping and scroll.x
+  // total all happen here so they cannot drift page by page.
+  const sizedColumns = useMemo(
+    () => (columns ? resolveAutoWidths(columns as never, (dataSource ?? []) as never) : columns),
+    [columns, dataSource],
+  ) as typeof columns;
+
+  const resolvedScroll = useMemo(() => {
+    if (scroll !== undefined) return scroll;
+    if (!sizedColumns?.length) return undefined;
+    // Only auto-total when at least one width is known; otherwise let AntD lay out.
+    const hasWidths = sizedColumns.some((c) => typeof (c as { width?: unknown }).width === 'number');
+    return hasWidths ? { x: computeScrollX(sizedColumns as never) } : undefined;
+  }, [scroll, sizedColumns]);
 
   const hasToolbar = !!proTableProps.headerTitle || !!proTableProps.toolBarRender;
   const { toolbarTop, offsetHeader } = useStickyHeaderOffset(tableContainerRef);
@@ -302,6 +334,9 @@ function PageTable<T extends Record<string, any>>({
           options={false}
           pagination={pagination}
           sticky={noStickyFix ? false : { offsetHeader }}
+          columns={sizedColumns}
+          dataSource={dataSource}
+          scroll={resolvedScroll}
           {...proTableProps}
           showSorterTooltip={false}
         />

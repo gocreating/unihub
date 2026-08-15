@@ -1373,6 +1373,11 @@ paths:
           description: ''
     delete:
       operationId: v1_finance_transactions_destroy
+      description: |-
+        FR-026: deleting is a mutation too — a closed portfolio blocks it.
+
+        The serializer guards create/update; DELETE never runs a serializer,
+        so the same rule has to be stated here.
       parameters:
       - in: path
         name: id
@@ -3140,7 +3145,6 @@ components:
           readOnly: true
         description:
           type: string
-          maxLength: 500
         state:
           $ref: '#/components/schemas/StateEnum'
         first_transaction_time:
@@ -3267,7 +3271,6 @@ components:
           maxLength: 10
         description:
           type: string
-          maxLength: 500
         state:
           $ref: '#/components/schemas/StateEnum'
         first_transaction_time:
@@ -3310,7 +3313,6 @@ components:
           readOnly: true
         description:
           type: string
-          maxLength: 500
         state:
           $ref: '#/components/schemas/StateEnum'
         first_transaction_time:

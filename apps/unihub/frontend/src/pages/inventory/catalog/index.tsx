@@ -13,12 +13,7 @@ import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, {
-  computeScrollX,
-  measureTextWidth,
-  useActionsColWidth,
-  widthForHeader,
-} from '@/components/PageTable';
+import PageTable, { useActionsColWidth, widestText } from '@/components/PageTable';
 import { DateTimeCell, dateTimeLines } from '@/components/DateTimeCell';
 import { EmptyValue } from '@/components/EmptyValue';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
@@ -257,18 +252,6 @@ export function CatalogPage() {
     }));
   }, [flatMode, flatItems, acquisitions]);
 
-  // Every displayed row (parents AND their item children) — used for width
-  // measurement so item columns (Item/Parameters/…) size to their real content.
-  const measuredRows = useMemo<CatalogRow[]>(() => {
-    if (flatMode) return rows;
-    const out: CatalogRow[] = [];
-    for (const a of acquisitions) {
-      out.push({ ...a, rowType: 'acquisition', children: [] });
-      for (const it of a.items) out.push({ ...it, rowType: 'item' });
-    }
-    return out;
-  }, [flatMode, rows, acquisitions]);
-
   const isExpanded = (a: Acquisition) => (a.items.length > 1) !== toggledIds.has(a.id);
   const expandedKeys = useMemo(
     () => acquisitions.filter((a) => isExpanded(a)).map((a) => a.id),
@@ -327,11 +310,10 @@ export function CatalogPage() {
   const paramOf = (r: CatalogRow, definitionId: string): ItemParameter | undefined =>
     isAcquisition(r) ? undefined : r.parameters?.find((p) => p.definition_id === definitionId);
 
-  // Widest displayed line per column (for canonical dataWidths measurement).
+  // Widest displayed line per column (PageTable measures from displayText).
   // Two-row cells measure as max(primary, secondary).
   const displayText = (r: CatalogRow, key: string): string => {
-    const widest = (lines: string[]) =>
-      lines.reduce((a, b) => (measureTextWidth(b) > measureTextWidth(a) ? b : a), '');
+    const widest = widestText;
     if (key === 'acquisition_summary') {
       const src = summaryFor(r);
       if (!src) return '';
@@ -393,26 +375,18 @@ export function CatalogPage() {
     }
   };
 
-  // Canonical dataWidths: per-column max content width across the displayed rows.
-  const dataWidths = useMemo(() => {
-    const w: Record<string, number> = {};
-    for (const def of columnDefs) {
-      if (def.key === 'actions') continue;
-      let max = 0;
-      for (const r of measuredRows) max = Math.max(max, measureTextWidth(displayText(r, def.key)));
-      w[def.key] = max;
-    }
-    return w;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [measuredRows, columnDefs, t, flatMode, currencySymbolsMap]);
-
+  // displayText: the single source of what a cell renders (PageTable measures it).
   const actionsColWidth = useActionsColWidth(rows);
 
   const colDefMap = useMemo<Record<string, ProColumns<CatalogRow>>>(
     () => {
       const getFixed = cols.fixedForKey;
       // Width = max(measured content, header) + padding — NO arbitrary floors.
-      const w = (key: string, label: string) => widthForHeader(label, dataWidths[key] ?? 0);
+      // PageTable does the measuring (constitution v1.26.0); `displayText`
+      // stays the single source of what a cell actually renders.
+      const w = (key: string, label: string, max?: number) => ({
+        autoWidth: { header: label, measure: (r: CatalogRow) => displayText(r, key), ...(max ? { max } : {}) },
+      });
       const wId = (key: string, labelId: string) => w(key, t({ id: labelId }));
       const itemText = (key: string, labelId: string, get: (it: Item) => string): ProColumns<CatalogRow> => ({
         key,
@@ -479,7 +453,9 @@ export function CatalogPage() {
             // in auto table layout an unconstrained nowrap spec would otherwise
             // shrink-wrap against its own row's primary width.
             style: {
-              maxWidth: wId('item_summary', 'pages.inventory.catalog.col.item').width,
+              // PageTable owns the column width now; fill it rather than
+              // re-deriving the pixel value here.
+              maxWidth: '100%',
               overflow: 'hidden',
             },
           }),
@@ -550,10 +526,7 @@ export function CatalogPage() {
           // Measure-what-you-render (iter 17): the cell caps its render at
           // 320px, so the measured width is capped to match — never sized to
           // the unrendered full URL text.
-          ...widthForHeader(
-            t({ id: 'pages.inventory.items.col.url' }),
-            Math.min(dataWidths['url'] ?? 0, 320),
-          ),
+          ...w('url', t({ id: 'pages.inventory.items.col.url' }), 320),
           fixed: getFixed('url'),
           ...makeSortProps('url', t({ id: 'pages.inventory.items.col.url' }), sort),
           render: (_, r) =>
@@ -584,10 +557,7 @@ export function CatalogPage() {
         remark: {
           key: 'remark',
           title: t({ id: 'pages.inventory.items.col.remark' }),
-          ...widthForHeader(
-            t({ id: 'pages.inventory.items.col.remark' }),
-            Math.min(dataWidths['remark'] ?? 0, 320),
-          ),
+          ...w('remark', t({ id: 'pages.inventory.items.col.remark' }), 320),
           fixed: getFixed('remark'),
           ...makeSortProps('remark', t({ id: 'pages.inventory.items.col.remark' }), sort),
           render: (_, r) => {
@@ -746,7 +716,7 @@ export function CatalogPage() {
     // changes (previously masked by visibleColumns changing identity every
     // render; the 017 hook memoizes it).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, dataWidths, actionsColWidth, flatMode, definitions, toggledIds, sort.sortOrderForField, sort.activeRules, cols.fixedForKey, cols.visibleColumns, navigate, currencySymbolsMap, table.activeSearch],
+    [t, actionsColWidth, flatMode, definitions, toggledIds, sort.sortOrderForField, sort.activeRules, cols.fixedForKey, cols.visibleColumns, navigate, currencySymbolsMap, table.activeSearch],
   );
 
   const caretColumn = useMemo<ProColumns<CatalogRow>>(
@@ -803,7 +773,6 @@ export function CatalogPage() {
         columnEmptyText={false}
         indentSize={0}
         expandable={{ showExpandColumn: false, expandedRowKeys: flatMode ? [] : expandedKeys }}
-        scroll={{ x: computeScrollX(columns) }}
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
         footer={() => (

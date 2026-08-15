@@ -5,7 +5,8 @@ import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, measureTextWidth, widthForHeader } from '@/components/PageTable';
+import PageTable, { computeScrollX, resolveAutoWidths } from '@/components/PageTable';
+import type { SizedColumn } from '@/components/PageTable';
 import type { Account } from '@/services/unihub-backend/finance';
 import {
   listAccounts,
@@ -84,27 +85,21 @@ export function BalanceSheetEditPage() {
     }
   };
 
-  const dataWidths = useMemo(() => {
-    const w = { name: 0, currency: 0, amount: 0 };
-    for (const a of accounts) {
-      w.name = Math.max(w.name, measureTextWidth(a.name));
-      w.currency = Math.max(w.currency, measureTextWidth(a.currency));
-      // Amount column: addonBefore symbol + a representative large number
-      w.amount = Math.max(w.amount, measureTextWidth(`${getCurrencySymbol(a.currency)}  00,000.00`));
-    }
-    return w;
-  }, [accounts]);
-
-  const columns: ProColumns<Account>[] = useMemo(() => [
+  const columns: ProColumns<Account>[] = useMemo(() => {
+    const defs: SizedColumn<Account>[] = [
     {
       title: t({ id: 'pages.finance.balanceSheets.detail.col.account' }),
       dataIndex: 'name',
-      ...widthForHeader('Account', dataWidths.name),
+      autoWidth: { header: 'Account' },
     },
     {
       title: t({ id: 'pages.finance.balanceSheets.detail.col.amount' }),
       key: 'amount',
-      ...widthForHeader('Amount', Math.max(160, dataWidths.amount)),
+      autoWidth: {
+        header: 'Amount',
+        min: 160,
+        measure: (a: Account) => `${getCurrencySymbol(a.currency)}  00,000.00`,
+      },
       render: (_, record) => (
         <InputNumber<string>
           stringMode
@@ -122,10 +117,12 @@ export function BalanceSheetEditPage() {
     {
       title: t({ id: 'common.currency' }),
       dataIndex: 'currency',
-      ...widthForHeader('Currency', dataWidths.currency),
+      autoWidth: { header: 'Currency' },
       render: (val) => <Tag>{val as string}</Tag>,
     },
-  ], [t, dataWidths, amountMap]);
+    ];
+    return resolveAutoWidths<Account>(defs, accounts) as ProColumns<Account>[];
+  }, [t, amountMap, accounts]);
 
   if (sheetsLoading) return <Spin />;
   if (!sheet) return <Spin />;

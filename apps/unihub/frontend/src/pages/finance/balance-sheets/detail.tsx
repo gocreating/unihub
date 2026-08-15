@@ -13,7 +13,8 @@ import Decimal from 'decimal.js';
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, measureTextWidth, widthForHeader } from '@/components/PageTable';
+import PageTable, { computeScrollX, resolveAutoWidths } from '@/components/PageTable';
+import type { SizedColumn } from '@/components/PageTable';
 import type { Balance } from '@/services/unihub-backend/finance';
 import {
   listBalances,
@@ -246,41 +247,36 @@ export function BalanceSheetDetailPage() {
     setExpandedKeys(collectDefaultExpandedKeys(treeWithRoot));
   }, [treeWithRoot]);
 
-  // ── PageTable-pattern column widths for the breakdown table ──────────────
-  // Computed from VISIBLE nodes (changes as user expands/collapses rows).
-  const aggDataWidths = useMemo(() => {
-    const expandedKeySet = new Set<React.Key>(expandedKeys);
-    const visibleNodes = collectVisibleNodes(treeWithRoot, expandedKeySet);
-    const w = { label: 0, amount: 0, netWorth: 0 };
-    for (const node of visibleNodes) {
-      w.label = Math.max(w.label, measureTextWidth(node.label));
-      if (node.currency) {
-        w.amount = Math.max(w.amount, measureTextWidth(`${getCurrencySymbol(node.currency)} ${formatAmount(node.amount.toString())}`));
-      }
-      if (baseCurrency && node.netWorthInBase != null) {
-        w.netWorth = Math.max(w.netWorth, measureTextWidth(`${getCurrencySymbol(baseCurrency)} ${formatAmount(node.netWorthInBase.toString())}`));
-      }
-    }
-    if (baseCurrency && w.netWorth === 0) {
-      w.netWorth = measureTextWidth(`${getCurrencySymbol(baseCurrency)} 00,000.00`);
-    }
-    return w;
-  }, [treeWithRoot, expandedKeys, baseCurrency]);
+  // Visible nodes drive the measurement (widths change as rows expand).
+  const aggVisibleNodes = useMemo(
+    () => collectVisibleNodes(treeWithRoot, new Set<React.Key>(expandedKeys)),
+    [treeWithRoot, expandedKeys],
+  );
 
-  const aggTableColumns = useMemo((): ProColumns<AggTreeNode>[] => [
+  const aggTableColumns = useMemo((): ProColumns<AggTreeNode>[] => {
+    const defs: SizedColumn<AggTreeNode>[] = [
     {
       title: t({ id: 'pages.finance.balanceSheets.detail.aggregation.col.group' }),
       dataIndex: 'label',
       key: 'label',
       fixed: 'left',
-      ...widthForHeader('Group', Math.max(160, aggDataWidths.label + TREE_INDENT_BUDGET)),
+      autoWidth: {
+        header: 'Group',
+        min: 160,
+        measure: (n: AggTreeNode) => `${n.label}${' '.repeat(Math.ceil(TREE_INDENT_BUDGET / 8))}`,
+      },
     },
     {
       title: t({ id: 'pages.finance.balanceSheets.detail.aggregation.col.amount' }),
       dataIndex: 'amount',
       key: 'amount',
       align: 'right',
-      ...widthForHeader('Amount', Math.max(120, aggDataWidths.amount)),
+      autoWidth: {
+        header: 'Amount',
+        min: 120,
+        measure: (n: AggTreeNode) =>
+          n.currency ? `${getCurrencySymbol(n.currency)} ${formatAmount(n.amount.toString())}` : '',
+      },
       render: (_dom, record) => {
         // Root node and multi-currency aggregates (e.g. "Asset" spanning TWD+USD):
         // summing different currencies is meaningless, show placeholder.
@@ -298,42 +294,46 @@ export function BalanceSheetDetailPage() {
           key: 'netWorthInBase',
           dataIndex: 'netWorthInBase',
           align: 'right' as const,
-          ...widthForHeader('Net Worth', Math.max(120, aggDataWidths.netWorth)),
+          autoWidth: {
+            header: 'Net Worth',
+            min: 120,
+            measure: (n: AggTreeNode) =>
+              n.netWorthInBase != null
+                ? `${getCurrencySymbol(baseCurrency)} ${formatAmount(n.netWorthInBase.toString())}`
+                : `${getCurrencySymbol(baseCurrency)} 00,000.00`,
+          },
           render: (_dom: unknown, record: AggTreeNode) =>
             record.netWorthInBase != null
               ? `${getCurrencySymbol(baseCurrency)} ${formatAmount(record.netWorthInBase.toString())}`
               : <EmptyValue />,
-        } satisfies ProColumns<AggTreeNode>]
+        } satisfies SizedColumn<AggTreeNode>]
       : []),
-  ], [t, baseCurrency, aggDataWidths]);
+    ];
+    return resolveAutoWidths<AggTreeNode>(defs, aggVisibleNodes) as ProColumns<AggTreeNode>[];
+  }, [t, baseCurrency, aggVisibleNodes]);
 
-  const dataWidths = useMemo(() => {
-    const w = { account_name: 0, currency: 0, amount: 0 };
-    for (const b of balances) {
-      w.account_name = Math.max(w.account_name, measureTextWidth(b.account_name));
-      w.currency = Math.max(w.currency, measureTextWidth(b.currency));
-      w.amount = Math.max(w.amount, measureTextWidth(`${getCurrencySymbol(b.currency)} ${formatAmount(b.amount)}`));
-    }
-    return w;
-  }, [balances]);
-
-  const columns: ProColumns<Balance>[] = useMemo(() => [
+  const columns: ProColumns<Balance>[] = useMemo(() => {
+    const defs: SizedColumn<Balance>[] = [
     {
       title: t({ id: 'pages.finance.balanceSheets.detail.col.account' }),
       dataIndex: 'account_name',
-      ...widthForHeader('Account', dataWidths.account_name),
+      autoWidth: { header: 'Account' },
       render: (val) => <Tag>{val as string}</Tag>,
     },
     {
       title: t({ id: 'common.currency' }),
       dataIndex: 'currency',
-      ...widthForHeader('Currency', dataWidths.currency),
+      autoWidth: { header: 'Currency' },
       render: (val) => <Tag>{val as string}</Tag>,
     },
     {
       title: t({ id: 'pages.finance.balanceSheets.detail.col.amountWithSymbol' }),
       dataIndex: 'amount',
-      ...widthForHeader('Amount', Math.max(160, dataWidths.amount)),
+      autoWidth: {
+        header: 'Amount',
+        min: 160,
+        measure: (b: Balance) => `${getCurrencySymbol(b.currency)} ${formatAmount(b.amount)}`,
+      },
       align: 'right',
       render: (_dom, record) => `${getCurrencySymbol(record.currency)} ${formatAmount(record.amount)}`,
     },
@@ -350,7 +350,9 @@ export function BalanceSheetDetailPage() {
           },
         }]
       : []),
-  ], [t, dataWidths, baseCurrency, computeNw]);
+    ];
+    return resolveAutoWidths<Balance>(defs, balances) as ProColumns<Balance>[];
+  }, [t, baseCurrency, computeNw, balances]);
 
   const isPieEmpty =
     chartType !== 'aggregation' && (

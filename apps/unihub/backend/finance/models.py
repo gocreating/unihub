@@ -29,7 +29,7 @@ class Portfolio(models.Model):
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     name = models.CharField(max_length=255)
     base_currency = models.CharField(max_length=10)
-    description = models.CharField(max_length=500, blank=True, default="")
+    description = models.TextField(blank=True, default="")
     state = models.CharField(
         max_length=20, choices=PORTFOLIO_STATE_CHOICES, default=PORTFOLIO_STATE_ACTIVE
     )

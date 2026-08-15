@@ -4,6 +4,8 @@ from django.db import transaction
 from rest_framework import serializers
 
 from finance.models import (
+    PORTFOLIO_STATE_ACTIVE,
+    PORTFOLIO_STATE_CLOSED,
     Account,
     Asset,
     Balance,
@@ -77,6 +79,32 @@ class PortfolioUpdateSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def validate(self, attrs):
+        """FR-026: a closed portfolio is frozen — except for reopening it.
+
+        The naive "reject every write while closed" rule also makes the
+        portfolio unreopenable, so the ONE permitted change is setting the
+        state back to active.
+        """
+        instance = self.instance
+        if instance is not None and instance.state == PORTFOLIO_STATE_CLOSED:
+            becoming_active = attrs.get("state") == PORTFOLIO_STATE_ACTIVE
+            other_changes = {
+                field: value
+                for field, value in attrs.items()
+                if field != "state" and value != getattr(instance, field)
+            }
+            if not becoming_active or other_changes:
+                raise serializers.ValidationError(
+                    {
+                        "portfolio": (
+                            "This portfolio is closed. Reopen it before making "
+                            "any other change."
+                        )
+                    }
+                )
+        return attrs
+
 
 class TransferSerializer(serializers.ModelSerializer):
     asset_name = serializers.CharField(source="asset.name", read_only=True)
@@ -123,10 +151,20 @@ class TransactionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "portfolio_name", "created_at", "updated_at"]
 
     def validate(self, attrs):
-        portfolio = attrs.get("portfolio")
-        if portfolio and portfolio.state != "active":
+        # FR-026: a closed portfolio freezes its transactions. On create the
+        # target comes from the payload; on update it comes from the existing
+        # row, since `portfolio` is not resent.
+        portfolio = attrs.get("portfolio") or (
+            self.instance.portfolio if self.instance is not None else None
+        )
+        if portfolio and portfolio.state != PORTFOLIO_STATE_ACTIVE:
             raise serializers.ValidationError(
-                {"portfolio": "Cannot add a transaction to a closed portfolio."}
+                {
+                    "portfolio": (
+                        "This portfolio is closed. Reopen it before adding or "
+                        "changing its transactions."
+                    )
+                }
             )
         transfers = attrs.get("transfers", [])
         if not transfers:

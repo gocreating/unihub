@@ -10,35 +10,35 @@
 
 ## Phase 1: PageTable owns column sizing (FR-023) — blocks the page conversions
 
-- [ ] T201 Write failing tests `src/components/PageTable/autoWidth.test.tsx`: a column with `autoWidth: { header }` is sized to the widest of its header and its rendered values; `measure` overrides the `dataIndex` read; `min`/`max` clamp; a `max` narrower than the content still yields exactly `max` (no overflow); columns with an explicit `width` are left untouched; `scroll.x` totals the resolved widths; an empty `dataSource` falls back to the header width (SC-010)
-- [ ] T202 Implement `autoWidth` resolution inside `src/components/PageTable/index.tsx` per research I5-1 (resolve widths + `scroll.x` in a `useMemo` over `columns` × `dataSource`); T201 passes
-- [ ] T203 Verify-the-verifier: break the clamp (drop `max`) and the header floor in turn, confirm T201 fails on each, restore
+- [X] T201 Write failing tests `src/components/PageTable/autoWidth.test.tsx`: a column with `autoWidth: { header }` is sized to the widest of its header and its rendered values; `measure` overrides the `dataIndex` read; `min`/`max` clamp; a `max` narrower than the content still yields exactly `max` (no overflow); columns with an explicit `width` are left untouched; `scroll.x` totals the resolved widths; an empty `dataSource` falls back to the header width (SC-010)
+- [X] T202 Implement `autoWidth` resolution inside `src/components/PageTable/index.tsx` per research I5-1 (resolve widths + `scroll.x` in a `useMemo` over `columns` × `dataSource`); T201 passes
+- [X] T203 Verify-the-verifier: break the clamp (drop `max`) and the header floor in turn, confirm T201 fails on each, restore
 
 ## Phase 2: Two-line clamp (FR-024)
 
-- [ ] T204 Write failing tests `src/components/ClampedText/ClampedText.test.tsx`: renders its text; applies a 2-line clamp style; attaches a tooltip ONLY when `scrollHeight > clientHeight`; no tooltip when the text fits; the full text is the tooltip title
-- [ ] T205 Implement `src/components/ClampedText/index.tsx` per research I5-2 and export it; T204 passes. Do NOT modify `OverflowTooltip` — it stays the single-line primitive
+- [X] T204 Write failing tests `src/components/ClampedText/ClampedText.test.tsx`: renders its text; applies a 2-line clamp style; attaches a tooltip ONLY when `scrollHeight > clientHeight`; no tooltip when the text fits; the full text is the tooltip title
+- [X] T205 Implement `src/components/ClampedText/index.tsx` per research I5-2 and export it; T204 passes. Do NOT modify `OverflowTooltip` — it stays the single-line primitive
 
 ## Phase 3: Convert the eleven pages (FR-023/FR-024)
 
 Each task: replace the page's `dataWidths` memo + `widthForHeader(...)` spreads with `autoWidth`, keep every existing test green, and wrap overflow-prone text columns in `ClampedText`.
 
-- [ ] T206 [P] `src/pages/finance/portfolios/index.tsx` — includes the **reproduced description defect**: assert the fix with a test (≤2 lines, no overflow, tooltip present)
-- [ ] T207 [P] `src/pages/finance/currencies/index.tsx`
-- [ ] T208 [P] `src/pages/finance/accounts/index.tsx`
-- [ ] T209 [P] `src/pages/finance/exchange-rates/index.tsx`
-- [ ] T210 [P] `src/pages/finance/assets/index.tsx`
-- [ ] T211 [P] `src/pages/finance/balance-sheets/index.tsx` + `detail.tsx` + `edit.tsx` + `new.tsx`
-- [ ] T212 [P] `src/pages/inventory/catalog/index.tsx` — the largest; keep the `url` 320px cap behaviour and the measure-what-you-render note intact
-- [ ] T213 `src/pages/finance/portfolios/detail.tsx` — convert after Phase 5/6 touch the same file, to avoid edit collisions
-- [ ] T214 Grep gate: zero `measureTextWidth` / `dataWidths` occurrences under `src/pages/` (SC-010); `widthForHeader` remains only where a genuinely fixed width is intended
+- [X] T206 [P] `src/pages/finance/portfolios/index.tsx` — includes the **reproduced description defect**: assert the fix with a test (≤2 lines, no overflow, tooltip present)
+- [X] T207 [P] `src/pages/finance/currencies/index.tsx`
+- [X] T208 [P] `src/pages/finance/accounts/index.tsx`
+- [X] T209 [P] `src/pages/finance/exchange-rates/index.tsx`
+- [X] T210 [P] `src/pages/finance/assets/index.tsx`
+- [X] T211 [P] `src/pages/finance/balance-sheets/index.tsx` + `detail.tsx` + `edit.tsx` + `new.tsx`
+- [X] T212 [P] `src/pages/inventory/catalog/index.tsx` — the largest; keep the `url` 320px cap behaviour and the measure-what-you-render note intact
+- [X] T213 `src/pages/finance/portfolios/detail.tsx` — convert after Phase 5/6 touch the same file, to avoid edit collisions
+- [X] T214 Grep gate: zero `measureTextWidth` / `dataWidths` occurrences under `src/pages/` (SC-010); `widthForHeader` remains only where a genuinely fixed width is intended
 
 ## Phase 4: Backend — multi-line description + closed-portfolio freeze (FR-025, FR-026)
 
-- [ ] T215 Write failing tests `backend/tests/finance/test_portfolios.py`: a closed portfolio rejects portfolio field edits (400), and `backend/tests/finance/test_transactions.py`: creating (already covered), **editing**, and **deleting** a transaction of a closed portfolio all fail; **reopening a closed portfolio succeeds** (the case a naive validator bricks); an active portfolio is unaffected; deleting the portfolio itself is still allowed (SC-012)
-- [ ] T216 Widen `Portfolio.description` to `TextField` in `backend/finance/models.py` and `makemigrations finance` → 0013 (FR-025)
-- [ ] T217 Implement the freeze per research I5-3 in `backend/finance/serializers.py` + `views.py`; T215 passes
-- [ ] T218 Regenerate `openapi.yaml` (spectacular) and `src/generated/api-types.ts`; verify the finance `data_io` TableDescriptors still match the model (Principle I)
+- [X] T215 Write failing tests `backend/tests/finance/test_portfolios.py`: a closed portfolio rejects portfolio field edits (400), and `backend/tests/finance/test_transactions.py`: creating (already covered), **editing**, and **deleting** a transaction of a closed portfolio all fail; **reopening a closed portfolio succeeds** (the case a naive validator bricks); an active portfolio is unaffected; deleting the portfolio itself is still allowed (SC-012)
+- [X] T216 Widen `Portfolio.description` to `TextField` in `backend/finance/models.py` and `makemigrations finance` → 0013 (FR-025)
+- [X] T217 Implement the freeze per research I5-3 in `backend/finance/serializers.py` + `views.py`; T215 passes
+- [X] T218 Regenerate `openapi.yaml` (spectacular) and `src/generated/api-types.ts`; verify the finance `data_io` TableDescriptors still match the model (Principle I)
 
 ## Phase 5: Portfolio list + detail UI (FR-025, FR-026, FR-027, FR-028)
 

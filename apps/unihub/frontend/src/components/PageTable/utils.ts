@@ -88,3 +88,13 @@ export const twoLineCellStyle: React.CSSProperties = {
   flexDirection: 'column',
   lineHeight: '20px',
 };
+
+/**
+ * Of several candidate lines, the one that renders widest. Used by two-row
+ * cells whose measured width is max(primary, secondary) — keeps pages out of
+ * the measurement business (constitution v1.26.0) while still letting them
+ * declare which text a cell draws.
+ */
+export function widestText(lines: readonly string[]): string {
+  return lines.reduce((a, b) => (canvasMeasure(b) > canvasMeasure(a) ? b : a), '');
+}

@@ -486,3 +486,88 @@ class TestTransactionSearch:
         data = auth_client.get("/api/v1/finance/transactions/", {"search": "apple"}).json()
         assert data["count"] == 1
         assert len(data["results"]) == 1
+
+
+@pytest.mark.django_db
+class TestClosedPortfolioFreezesTransactions:
+    """FR-026: while closed, a portfolio's transactions cannot change at all."""
+
+    @pytest.fixture
+    def closed_with_txn(self, auth_client, portfolio, asset):
+        txn = _make_txn(auth_client, portfolio, asset, description="before close")
+        resp = auth_client.patch(
+            f"/api/v1/finance/portfolios/{portfolio['id']}/",
+            {"state": "closed"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        return txn
+
+    def test_creating_a_transaction_is_rejected(self, auth_client, portfolio, asset, closed_with_txn):
+        resp = auth_client.post(
+            "/api/v1/finance/transactions/",
+            {
+                "portfolio": portfolio["id"],
+                "timestamp": "2026-06-02T00:00:00Z",
+                "transfers": [{"asset": asset["id"], "asset_change_amount": "1"}],
+            },
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+
+    def test_editing_a_transaction_is_rejected(self, auth_client, closed_with_txn, asset):
+        # A COMPLETE, otherwise-valid payload — so a 400 is attributable to the
+        # freeze and not to ordinary validation (a description-only PATCH is
+        # rejected regardless of state, which would pass this test falsely).
+        resp = auth_client.patch(
+            f"/api/v1/finance/transactions/{closed_with_txn['id']}/",
+            {
+                "description": "edited while closed",
+                "transfers": [{"asset": asset["id"], "asset_change_amount": "5.0"}],
+            },
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+        from finance.models import Transaction
+
+        assert Transaction.objects.get(pk=closed_with_txn["id"]).description == "before close"
+
+    def test_deleting_a_transaction_is_rejected(self, auth_client, closed_with_txn):
+        resp = auth_client.delete(f"/api/v1/finance/transactions/{closed_with_txn['id']}/")
+        assert resp.status_code == 400
+        from finance.models import Transaction
+
+        assert Transaction.objects.filter(pk=closed_with_txn["id"]).exists()
+
+    def test_everything_works_again_after_reopening(self, auth_client, portfolio, closed_with_txn, asset):
+        reopen = auth_client.patch(
+            f"/api/v1/finance/portfolios/{portfolio['id']}/",
+            {"state": "active"},
+            content_type="application/json",
+        )
+        assert reopen.status_code == 200
+        resp = auth_client.patch(
+            f"/api/v1/finance/transactions/{closed_with_txn['id']}/",
+            {
+                "description": "edited after reopen",
+                "transfers": [{"asset": asset["id"], "asset_change_amount": "5.0"}],
+            },
+            content_type="application/json",
+        )
+        assert resp.status_code == 200, resp.content
+        assert resp.json()["description"] == "edited after reopen"
+
+    def test_an_active_portfolios_transactions_are_unaffected(self, auth_client, portfolio, asset):
+        txn = _make_txn(auth_client, portfolio, asset)
+        assert (
+            auth_client.patch(
+                f"/api/v1/finance/transactions/{txn['id']}/",
+                {
+                    "description": "fine",
+                    "transfers": [{"asset": asset["id"], "asset_change_amount": "5.0"}],
+                },
+                content_type="application/json",
+            ).status_code
+            == 200
+        )
+        assert auth_client.delete(f"/api/v1/finance/transactions/{txn['id']}/").status_code == 204

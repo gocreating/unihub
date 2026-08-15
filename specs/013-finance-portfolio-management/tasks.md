@@ -49,13 +49,13 @@ Each task: replace the page's `dataWidths` memo + `widthForHeader(...)` spreads 
 
 ## Phase 6: Charts (FR-029)
 
-- [ ] T223 Write failing tests for the chart card: renders an AntD Card with `tabList` (Waterfall / Breakdown); mocks `echarts-for-react` and asserts the ECharts **option** — waterfall has a transparent base series plus a delta series in chronological order with cumulative values; breakdown has one bar per asset summing that asset's Value Change; transfers with null value_change are excluded; an empty state renders when nothing is valued
-- [ ] T224 Implement `src/pages/finance/portfolios/PortfolioCharts.tsx` per research I5-4 (ECharts, `renderer: 'svg'`, `notMerge`, `overflowX: auto` wrapper, `minWidth: 600`, `Decimal` sums) and mount it on the detail page above the Transactions panel; T223 passes
-- [ ] T225 Locale keys for both charts, the tab labels, the exclusion note, and the empty state — both locale files, same commit (Principle VIII)
+- [X] T223 Write failing tests for the chart card: renders an AntD Card with `tabList` (Waterfall / Breakdown); mocks `echarts-for-react` and asserts the ECharts **option** — waterfall has a transparent base series plus a delta series in chronological order with cumulative values; breakdown has one bar per asset summing that asset's Value Change; transfers with null value_change are excluded; an empty state renders when nothing is valued
+- [X] T224 Implement `src/pages/finance/portfolios/PortfolioCharts.tsx` per research I5-4 (ECharts, `renderer: 'svg'`, `notMerge`, `overflowX: auto` wrapper, `minWidth: 600`, `Decimal` sums) and mount it on the detail page above the Transactions panel; T223 passes
+- [X] T225 Locale keys for both charts, the tab labels, the exclusion note, and the empty state — both locale files, same commit (Principle VIII)
 
 ## Phase 7: Polish & verification
 
-- [ ] T226 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend `uv run ruff check . && uv run pytest`
+- [X] T226 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend `uv run ruff check . && uv run pytest`
 - [ ] T227 Real-data probe after rebuilding the frontend image (compare container image id vs built image id and `--force-recreate` — the iteration-4 gotcha): Portfolios description ≤2 lines with no overflow and a working tooltip (SC-011), description hidden until revealed, a closed portfolio's controls disabled, footer counts correct on the 49-transaction portfolio (SC-013), both charts render with real values
 - [ ] T228 Backend probe: closed-portfolio mutations rejected at the API and reopen accepted, against a scratch DB — never the real one
 

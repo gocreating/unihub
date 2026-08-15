@@ -32,6 +32,7 @@ import {
 } from '@/services/unihub-backend/finance';
 import { PanelHeaderActions } from '@/components/PanelHeaderActions';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
+import { PortfolioCharts } from './PortfolioCharts';
 import { PortfolioFormModal } from './PortfolioFormModal';
 import type { PortfolioUpdateFormValues } from './PortfolioFormModal';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
@@ -547,6 +548,9 @@ export function PortfolioDetailPage() {
           </Descriptions>
         </Card>
       </div>
+
+      {/* FR-029: visual summary above the table it summarises. */}
+      <PortfolioCharts transactions={transactions} baseCurrency={baseCurrency} />
 
       <PageTable<TxnRow>
         key={table.cols.pinFingerprint}

@@ -526,6 +526,12 @@ export default {
   'pages.finance.transactions.transfer.remark': 'Remark',
   'pages.finance.transactions.footerCounts':
     '{transactions, plural, one {# transaction} other {# transactions}}, {transfers, plural, one {# transfer} other {# transfers}}',
+  'pages.finance.portfolios.charts.waterfall': 'Waterfall',
+  'pages.finance.portfolios.charts.breakdown': 'Breakdown by asset',
+  'pages.finance.portfolios.charts.empty':
+    'This portfolio has no valued transfers yet — charts show Value Change, and every transfer here records a position change only.',
+  'pages.finance.portfolios.charts.valuedNote':
+    'Based on {valued} of {total} transfers — those recording a Value Change.',
   'pages.finance.transactions.closedHint': 'This portfolio is closed — reopen it to make changes.',
   'pages.finance.transactions.transferCountSummary':
     '{count, plural, one {# transfer} other {# transfers}}',

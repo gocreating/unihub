@@ -518,6 +518,10 @@ export default {
   'pages.finance.transactions.transfer.valueChange': '價值變動（{currency}）',
   'pages.finance.transactions.transfer.remark': '備註',
   'pages.finance.transactions.footerCounts': '{transactions} 筆交易、{transfers} 筆轉帳',
+  'pages.finance.portfolios.charts.waterfall': '瀑布圖',
+  'pages.finance.portfolios.charts.breakdown': '依資產分佈',
+  'pages.finance.portfolios.charts.empty': '此投資組合尚無具價值變動的轉帳 — 圖表以價值變動為準，目前的轉帳皆僅記錄部位變動。',
+  'pages.finance.portfolios.charts.valuedNote': '依據 {total} 筆轉帳中的 {valued} 筆（有記錄價值變動者）。',
   'pages.finance.transactions.closedHint': '此投資組合已關閉 — 重新開啟後才能修改。',
   'pages.finance.transactions.transferCountSummary': '{count} 筆轉帳',
 

@@ -526,6 +526,16 @@ export default {
   'pages.finance.transactions.transfer.remark': 'Remark',
   'pages.finance.transactions.footerCounts':
     '{transactions, plural, one {# transaction} other {# transactions}}, {transfers, plural, one {# transfer} other {# transfers}}',
+  'pages.finance.portfolios.pnl.realized': 'realized',
+  'pages.finance.portfolios.pnl.net': 'net',
+  'pages.finance.portfolios.value.panelTitle': 'Value',
+  'pages.finance.portfolios.value.realizedPnl': 'Realized PnL',
+  'pages.finance.portfolios.value.invested': 'Invested',
+  'pages.finance.portfolios.value.returned': 'Returned',
+  'pages.finance.portfolios.value.netInvested': 'Net invested',
+  'pages.finance.portfolios.value.holdings': 'Still holding',
+  'pages.finance.portfolios.value.noPricesNote': 'Unrealized PnL needs market prices, which unihub does not track. Close the portfolio once its positions are settled to see the realized result.',
+  'pages.finance.portfolios.col.pnl': 'PnL / Net',
   'pages.finance.portfolios.charts.waterfall': 'Waterfall',
   'pages.finance.portfolios.charts.breakdown': 'Breakdown by asset',
   'pages.finance.portfolios.charts.empty':

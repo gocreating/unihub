@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.db.models import ProtectedError, Q
+from django.db.models import ProtectedError, Q, Sum
 from django.utils.dateparse import parse_datetime
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -18,6 +18,7 @@ from finance.models import (
     ExchangeRate,
     Portfolio,
     Transaction,
+    Transfer,
 )
 from finance.serializers import (
     AccountSerializer,
@@ -60,6 +61,11 @@ class AssetViewSet(viewsets.ModelViewSet):
 
 class PortfolioViewSet(viewsets.ModelViewSet):
     queryset = Portfolio.objects.all()
+    # FR-031: value aggregates are computed HERE, over every transfer. The
+    # transactions panel paginates at 25 rows and the largest portfolio has 49
+    # transactions, so a client-side sum would silently report half the truth —
+    # and a wrong PnL looks exactly like a right one.
+    VALUE_PATH = "transactions__transfers__value_change"
     filter_backends = [EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter]
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
@@ -81,15 +87,60 @@ class PortfolioViewSet(viewsets.ModelViewSet):
         "base_currency",
         "last_transaction_time",
         "first_transaction_time",
+        "net_value_change",
         "created_at",
     ]
     pagination_class = EntityOffsetPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
+    def get_queryset(self):
+        # NULL (not 0) when a portfolio has no transfers — "no data" and "nets
+        # to zero" are different facts and both reach the UI.
+        return (
+            super()
+            .get_queryset()
+            .annotate(
+                value_invested=Sum(self.VALUE_PATH, filter=Q(**{f"{self.VALUE_PATH}__lt": 0})),
+                value_returned=Sum(self.VALUE_PATH, filter=Q(**{f"{self.VALUE_PATH}__gt": 0})),
+                net_value_change=Sum(self.VALUE_PATH),
+            )
+            # Re-assert the model's default order (FR-004c). Annotating adds a
+            # GROUP BY, which drops Meta.ordering's nulls_last expression and
+            # would float never-used portfolios to the top of the list.
+            .order_by(*Portfolio._meta.ordering)
+        )
+
     def get_serializer_class(self):
         if self.action in ("create",):
             return PortfolioCreateSerializer
         return PortfolioUpdateSerializer
+
+    @action(detail=True, methods=["get"])
+    def holdings(self, request, pk=None):
+        """FR-034: net quantity per asset across ALL of this portfolio's transfers.
+
+        Assets whose net is exactly zero are omitted — a fully exited position
+        is not a holding. Splits need no special handling: a position-only
+        transfer (+N, no value change) simply moves the net (FR-035).
+        """
+        portfolio = self.get_object()
+        rows = (
+            Transfer.objects.filter(transaction__portfolio=portfolio)
+            .values("asset_id", "asset__name")
+            .annotate(quantity=Sum("asset_change_amount"))
+            .exclude(quantity=0)
+            .order_by("asset__name")
+        )
+        return Response(
+            [
+                {
+                    "asset_id": r["asset_id"],
+                    "asset_name": r["asset__name"],
+                    "quantity": str(r["quantity"]),
+                }
+                for r in rows
+            ]
+        )
 
     def destroy(self, request, *args, **kwargs):
         try:

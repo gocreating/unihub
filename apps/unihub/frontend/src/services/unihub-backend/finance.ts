@@ -216,6 +216,10 @@ export interface Portfolio {
   base_currency: string;
   description: string;
   state: 'active' | 'closed';
+  /** Value aggregates over ALL transfers (FR-031); null when the portfolio has none. */
+  value_invested: string | null;
+  value_returned: string | null;
+  net_value_change: string | null;
   first_transaction_time: string | null;
   last_transaction_time: string | null;
   created_at: string;
@@ -241,6 +245,17 @@ export function updatePortfolio(
   data: Partial<Pick<Portfolio, 'name' | 'state' | 'description'>>,
 ): Promise<Portfolio> {
   return fetchJson<Portfolio>(`/api/v1/finance/portfolios/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export interface PortfolioHolding {
+  asset_id: string;
+  asset_name: string;
+  /** Net quantity across all transfers; zero-net assets are omitted. */
+  quantity: string;
+}
+
+export function getPortfolioHoldings(id: string): Promise<PortfolioHolding[]> {
+  return fetchJson<PortfolioHolding[]>(`/api/v1/finance/portfolios/${id}/holdings/`);
 }
 
 export function deletePortfolio(id: string): Promise<void> {

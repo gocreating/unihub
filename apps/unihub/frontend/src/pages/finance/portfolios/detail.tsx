@@ -33,6 +33,7 @@ import {
 import { PanelHeaderActions } from '@/components/PanelHeaderActions';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { PortfolioCharts } from './PortfolioCharts';
+import { PortfolioPnlPanel } from './PortfolioPnlPanel';
 import { PortfolioFormModal } from './PortfolioFormModal';
 import type { PortfolioUpdateFormValues } from './PortfolioFormModal';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
@@ -341,6 +342,7 @@ export function PortfolioDetailPage() {
         },
         description: {
           dataIndex: 'description',
+          title: t({ id: 'pages.finance.transactions.col.description' }),
           autoWidth: {
             header: t({ id: 'pages.finance.transactions.col.description' }),
             max: 320,
@@ -360,6 +362,7 @@ export function PortfolioDetailPage() {
         },
         asset: {
           key: 'asset',
+          title: t({ id: 'pages.finance.transactions.transfer.asset' }),
           width: 160,
           fixed: getFixed('asset'),
           // Parent summarises (clarified 2026-08-15); child names its asset.
@@ -381,6 +384,7 @@ export function PortfolioDetailPage() {
         },
         asset_change: {
           key: 'asset_change',
+          title: t({ id: 'pages.finance.transactions.transfer.assetChange' }),
           width: 160,
           align: 'right',
           fixed: getFixed('asset_change'),
@@ -389,6 +393,7 @@ export function PortfolioDetailPage() {
         },
         value_change: {
           key: 'value_change',
+          title: t({ id: 'pages.finance.transactions.transfer.valueChange' }, { currency: baseCurrency }),
           width: 180,
           align: 'right',
           fixed: getFixed('value_change'),
@@ -400,6 +405,7 @@ export function PortfolioDetailPage() {
         },
         remark: {
           key: 'remark',
+          title: t({ id: 'pages.finance.transactions.transfer.remark' }),
           width: 160,
           fixed: getFixed('remark'),
           render: (_, r) =>
@@ -548,6 +554,10 @@ export function PortfolioDetailPage() {
           </Descriptions>
         </Card>
       </div>
+
+      {portfolio && (
+        <PortfolioPnlPanel portfolio={portfolio} columns={descriptionColumns} />
+      )}
 
       {/* FR-029: visual summary above the table it summarises. */}
       <PortfolioCharts transactions={transactions} baseCurrency={baseCurrency} />

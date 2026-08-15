@@ -26,6 +26,17 @@ class AssetSerializer(serializers.ModelSerializer):
 
 
 class PortfolioCreateSerializer(serializers.ModelSerializer):
+    # FR-031: read-only annotations from PortfolioViewSet.get_queryset().
+    value_invested = serializers.DecimalField(
+        max_digits=38, decimal_places=18, coerce_to_string=True, read_only=True, allow_null=True
+    )
+    value_returned = serializers.DecimalField(
+        max_digits=38, decimal_places=18, coerce_to_string=True, read_only=True, allow_null=True
+    )
+    net_value_change = serializers.DecimalField(
+        max_digits=38, decimal_places=18, coerce_to_string=True, read_only=True, allow_null=True
+    )
+
     class Meta:
         model = Portfolio
         fields = [
@@ -36,6 +47,9 @@ class PortfolioCreateSerializer(serializers.ModelSerializer):
             "state",
             "first_transaction_time",
             "last_transaction_time",
+            "value_invested",
+            "value_returned",
+            "net_value_change",
             "created_at",
             "updated_at",
         ]
@@ -43,6 +57,9 @@ class PortfolioCreateSerializer(serializers.ModelSerializer):
             "id",
             "first_transaction_time",
             "last_transaction_time",
+            "value_invested",
+            "value_returned",
+            "net_value_change",
             "created_at",
             "updated_at",
         ]
@@ -57,6 +74,17 @@ class PortfolioCreateSerializer(serializers.ModelSerializer):
 
 
 class PortfolioUpdateSerializer(serializers.ModelSerializer):
+    # FR-031: read-only annotations from PortfolioViewSet.get_queryset().
+    value_invested = serializers.DecimalField(
+        max_digits=38, decimal_places=18, coerce_to_string=True, read_only=True, allow_null=True
+    )
+    value_returned = serializers.DecimalField(
+        max_digits=38, decimal_places=18, coerce_to_string=True, read_only=True, allow_null=True
+    )
+    net_value_change = serializers.DecimalField(
+        max_digits=38, decimal_places=18, coerce_to_string=True, read_only=True, allow_null=True
+    )
+
     class Meta:
         model = Portfolio
         fields = [
@@ -67,6 +95,9 @@ class PortfolioUpdateSerializer(serializers.ModelSerializer):
             "state",
             "first_transaction_time",
             "last_transaction_time",
+            "value_invested",
+            "value_returned",
+            "net_value_change",
             "created_at",
             "updated_at",
         ]
@@ -75,6 +106,9 @@ class PortfolioUpdateSerializer(serializers.ModelSerializer):
             "base_currency",
             "first_transaction_time",
             "last_transaction_time",
+            "value_invested",
+            "value_returned",
+            "net_value_change",
             "created_at",
             "updated_at",
         ]

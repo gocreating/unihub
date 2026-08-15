@@ -26,6 +26,9 @@ const PORTFOLIO = {
   state: 'active' as const,
   first_transaction_time: '2026-01-05T09:00:00Z',
   last_transaction_time: '2026-07-01T09:00:00Z',
+  value_invested: '-474391',
+  value_returned: null,
+  net_value_change: '-474391',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-07-01T09:00:00Z',
 };
@@ -223,6 +226,41 @@ describe('PortfoliosPage — description column sizing (iteration 5)', () => {
     // Guard for SC-010: the module must not import the measuring helpers.
     const src = await import('./index?raw').catch(() => null);
     if (src) expect(String((src as { default?: string }).default ?? '')).not.toContain('measureTextWidth');
+  });
+});
+
+// FR-033: the list carries a PnL/Net column that never presents deployed
+// capital as a loss and never sums across currencies.
+describe('PortfoliosPage — PnL column (iteration 6)', () => {
+  it('shows the net figure with the row currency, marked "net" while open', async () => {
+    renderPage();
+    await screen.findByRole('link', { name: 'Tech Fund' });
+    const row = screen.getByRole('link', { name: 'Tech Fund' }).closest('tr')!;
+    expect(row.textContent).toContain('-474391');
+    expect(row.textContent).toContain('USD');
+    expect(row.textContent).toContain('net');
+    expect(row.textContent).not.toMatch(/realized/i);
+  });
+
+  it('marks a closed portfolio as realized', async () => {
+    vi.mocked(financeService.listPortfolios).mockResolvedValue({
+      count: 1, next: null, previous: null,
+      results: [{ ...PORTFOLIO, state: 'closed', net_value_change: '2737' }],
+    } as never);
+    renderPage();
+    const row = (await screen.findByRole('link', { name: 'Tech Fund' })).closest('tr')!;
+    expect(row.textContent).toContain('realized');
+  });
+
+  it('renders the empty placeholder when a portfolio has no transfers', async () => {
+    vi.mocked(financeService.listPortfolios).mockResolvedValue({
+      count: 1, next: null, previous: null,
+      results: [{ ...PORTFOLIO, net_value_change: null }],
+    } as never);
+    renderPage();
+    const row = (await screen.findByRole('link', { name: 'Tech Fund' })).closest('tr')!;
+    // "no data" must not read as 0.
+    expect(row.textContent).not.toMatch(/\b0\s*USD/);
   });
 });
 

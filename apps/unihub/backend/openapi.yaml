@@ -1254,6 +1254,33 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/finance/portfolios/{id}/holdings/:
+    get:
+      operationId: v1_finance_portfolios_holdings_retrieve
+      description: |-
+        FR-034: net quantity per asset across ALL of this portfolio's transfers.
+
+        Assets whose net is exactly zero are omitted — a fully exited position
+        is not a holding. Splits need no special handling: a position-only
+        transfer (+N, no value change) simply moves the net (FR-035).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        description: A unique value identifying this portfolio.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioUpdate'
+          description: ''
   /api/v1/finance/transactions/:
     get:
       operationId: v1_finance_transactions_list
@@ -3157,6 +3184,24 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        value_invested:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
+          readOnly: true
+          nullable: true
+        value_returned:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
+          readOnly: true
+          nullable: true
+        net_value_change:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -3283,6 +3328,24 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        value_invested:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
+          readOnly: true
+          nullable: true
+        value_returned:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
+          readOnly: true
+          nullable: true
+        net_value_change:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -3298,7 +3361,10 @@ components:
       - id
       - last_transaction_time
       - name
+      - net_value_change
       - updated_at
+      - value_invested
+      - value_returned
     PortfolioUpdate:
       type: object
       properties:
@@ -3325,6 +3391,24 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        value_invested:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
+          readOnly: true
+          nullable: true
+        value_returned:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
+          readOnly: true
+          nullable: true
+        net_value_change:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -3340,7 +3424,10 @@ components:
       - id
       - last_transaction_time
       - name
+      - net_value_change
       - updated_at
+      - value_invested
+      - value_returned
     Scenario:
       type: object
       properties:

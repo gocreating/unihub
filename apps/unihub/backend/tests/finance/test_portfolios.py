@@ -417,3 +417,235 @@ class TestPortfolioDescriptionIsMultiline:
         )
         assert resp.status_code == 201, resp.content
         assert resp.json()["description"] == text
+
+
+@pytest.mark.django_db
+class TestPortfolioValueAggregates:
+    """FR-031/SC-015: sums come from the BACKEND over ALL transfers.
+
+    The transactions panel paginates at 25, so these fixtures deliberately
+    exceed one page — a frontend-side sum would report roughly half.
+    """
+
+    @pytest.fixture
+    def asset(self, auth_client):
+        return auth_client.post(
+            "/api/v1/finance/assets/", {"name": "AAPL"}, content_type="application/json"
+        ).json()
+
+    @pytest.fixture
+    def funded(self, auth_client, usd, asset):
+        p = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Aggregates", "base_currency": "USD"},
+            content_type="application/json",
+        ).json()
+        # 30 buys of -100 and 2 sales of +250 → invested -3000, returned +500.
+        for i in range(30):
+            auth_client.post(
+                "/api/v1/finance/transactions/",
+                {
+                    "portfolio": p["id"],
+                    "timestamp": f"2026-06-{(i % 28) + 1:02d}T00:00:00Z",
+                    "transfers": [
+                        {"asset": asset["id"], "asset_change_amount": "1", "value_change": "-100"}
+                    ],
+                },
+                content_type="application/json",
+            )
+        for i in range(2):
+            auth_client.post(
+                "/api/v1/finance/transactions/",
+                {
+                    "portfolio": p["id"],
+                    "timestamp": f"2026-07-{i + 1:02d}T00:00:00Z",
+                    "transfers": [
+                        {"asset": asset["id"], "asset_change_amount": "-1", "value_change": "250"}
+                    ],
+                },
+                content_type="application/json",
+            )
+        return p
+
+    def _get(self, auth_client, pid):
+        return auth_client.get(f"/api/v1/finance/portfolios/{pid}/").json()
+
+    def test_aggregates_cover_every_transfer_not_just_one_page(
+        self, auth_client, funded
+    ):
+        from decimal import Decimal
+
+        data = self._get(auth_client, funded["id"])
+        assert Decimal(data["value_invested"]) == Decimal("-3000")
+        assert Decimal(data["value_returned"]) == Decimal("500")
+        assert Decimal(data["net_value_change"]) == Decimal("-2500")
+
+    def test_aggregates_match_a_direct_database_sum(self, auth_client, funded):
+        from decimal import Decimal
+
+        from django.db.models import Sum
+
+        from finance.models import Transfer
+
+        direct = Transfer.objects.filter(
+            transaction__portfolio_id=funded["id"]
+        ).aggregate(total=Sum("value_change"))["total"]
+        data = self._get(auth_client, funded["id"])
+        assert Decimal(data["net_value_change"]) == direct
+
+    def test_a_portfolio_with_no_transfers_reports_null_not_zero(self, auth_client, usd):
+        """"No data" and "nets to zero" are different facts."""
+        p = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Empty", "base_currency": "USD"},
+            content_type="application/json",
+        ).json()
+        data = self._get(auth_client, p["id"])
+        assert data["net_value_change"] is None
+        assert data["value_invested"] is None
+        assert data["value_returned"] is None
+
+    def test_position_only_transfers_do_not_affect_the_aggregates(
+        self, auth_client, usd, asset
+    ):
+        from decimal import Decimal
+
+        p = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Split", "base_currency": "USD"},
+            content_type="application/json",
+        ).json()
+        auth_client.post(
+            "/api/v1/finance/transactions/",
+            {
+                "portfolio": p["id"],
+                "timestamp": "2026-06-01T00:00:00Z",
+                "transfers": [
+                    {"asset": asset["id"], "asset_change_amount": "100", "value_change": "-1000"}
+                ],
+            },
+            content_type="application/json",
+        )
+        before = Decimal(self._get(auth_client, p["id"])["net_value_change"])
+        # A 2:1 split — position only, no value (FR-035).
+        auth_client.post(
+            "/api/v1/finance/transactions/",
+            {
+                "portfolio": p["id"],
+                "timestamp": "2026-06-02T00:00:00Z",
+                "description": "2:1 split",
+                "transfers": [{"asset": asset["id"], "asset_change_amount": "100"}],
+            },
+            content_type="application/json",
+        )
+        assert Decimal(self._get(auth_client, p["id"])["net_value_change"]) == before
+
+    def test_list_can_order_by_net_value_change(self, auth_client, usd, funded, asset):
+        """Ordering by the annotation works on portfolios that HAVE values."""
+        winner = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Profitable", "base_currency": "USD"},
+            content_type="application/json",
+        ).json()
+        auth_client.post(
+            "/api/v1/finance/transactions/",
+            {
+                "portfolio": winner["id"],
+                "timestamp": "2026-06-01T00:00:00Z",
+                "transfers": [
+                    {"asset": asset["id"], "asset_change_amount": "1", "value_change": "900"}
+                ],
+            },
+            content_type="application/json",
+        )
+        names = [
+            p["name"]
+            for p in auth_client.get(
+                "/api/v1/finance/portfolios/?ordering=net_value_change"
+            ).json()["results"]
+        ]
+        # Aggregates nets -2500, Profitable nets +900.
+        assert names.index("Aggregates") < names.index("Profitable")
+
+    def test_portfolios_without_values_can_be_pushed_last(self, auth_client, usd, funded):
+        """Null placement uses the project's existing __nullslast convention."""
+        auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "NoData", "base_currency": "USD"},
+            content_type="application/json",
+        )
+        names = [
+            p["name"]
+            for p in auth_client.get(
+                "/api/v1/finance/portfolios/?ordering=net_value_change__nullslast"
+            ).json()["results"]
+        ]
+        assert names[-1] == "NoData"
+
+
+@pytest.mark.django_db
+class TestPortfolioHoldings:
+    """FR-034: per-asset net quantity across ALL transfers."""
+
+    @pytest.fixture
+    def setup(self, auth_client, usd):
+        a = auth_client.post(
+            "/api/v1/finance/assets/", {"name": "AAPL"}, content_type="application/json"
+        ).json()
+        b = auth_client.post(
+            "/api/v1/finance/assets/", {"name": "Cash"}, content_type="application/json"
+        ).json()
+        p = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Holdings", "base_currency": "USD"},
+            content_type="application/json",
+        ).json()
+        auth_client.post(
+            "/api/v1/finance/transactions/",
+            {
+                "portfolio": p["id"],
+                "timestamp": "2026-06-01T00:00:00Z",
+                "transfers": [
+                    {"asset": a["id"], "asset_change_amount": "100"},
+                    {"asset": b["id"], "asset_change_amount": "50"},
+                    {"asset": b["id"], "asset_change_amount": "-50"},
+                ],
+            },
+            content_type="application/json",
+        )
+        return p, a, b
+
+    def test_reports_net_quantity_per_asset(self, auth_client, setup):
+        from decimal import Decimal
+
+        p, a, _b = setup
+        rows = auth_client.get(f"/api/v1/finance/portfolios/{p['id']}/holdings/").json()
+        by_id = {r["asset_id"]: r for r in rows}
+        assert Decimal(by_id[a["id"]]["quantity"]) == Decimal("100")
+        assert by_id[a["id"]]["asset_name"] == "AAPL"
+
+    def test_omits_assets_whose_net_is_zero(self, auth_client, setup):
+        p, _a, b = setup
+        rows = auth_client.get(f"/api/v1/finance/portfolios/{p['id']}/holdings/").json()
+        assert b["id"] not in {r["asset_id"] for r in rows}
+
+    def test_a_2_for_1_split_doubles_the_holding(self, auth_client, setup):
+        """SC-017: splits work through the ordinary position-only transfer."""
+        from decimal import Decimal
+
+        p, a, _b = setup
+        auth_client.post(
+            "/api/v1/finance/transactions/",
+            {
+                "portfolio": p["id"],
+                "timestamp": "2026-06-02T00:00:00Z",
+                "description": "2:1 split",
+                "transfers": [
+                    {"asset": a["id"], "asset_change_amount": "100", "remark": "2:1 split"}
+                ],
+            },
+            content_type="application/json",
+        )
+        rows = auth_client.get(f"/api/v1/finance/portfolios/{p['id']}/holdings/").json()
+        by_id = {r["asset_id"]: r for r in rows}
+        assert Decimal(by_id[a["id"]]["quantity"]) == Decimal("200")

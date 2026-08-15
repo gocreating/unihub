@@ -11,8 +11,9 @@ export interface PortfolioCreateFormValues {
 
 export interface PortfolioUpdateFormValues {
   name: string;
-  state: 'active' | 'closed';
   description?: string;
+  /** Set only by the panel's Close/Reopen action, never by the form (FR-036). */
+  state?: 'active' | 'closed';
 }
 
 interface PortfolioFormModalProps {
@@ -53,7 +54,7 @@ export function PortfolioFormModal({
           form={updateForm}
           layout="vertical"
           onFinish={(values) => onUpdate?.(values)}
-          initialValues={{ name: portfolio.name, state: portfolio.state, description: portfolio.description }}
+          initialValues={{ name: portfolio.name, description: portfolio.description }}
           preserve={false}
         >
           <Form.Item name="name" label={t({ id: 'pages.finance.portfolios.form.name' })} rules={[{ required: true }]}>
@@ -66,15 +67,12 @@ export function PortfolioFormModal({
               placeholder={t({ id: 'pages.finance.portfolios.form.descriptionPlaceholder' })}
             />
           </Form.Item>
+          {/* FR-036: base currency is immutable (shown for context only) and
+              state is owned by the panel's Close/Reopen action — neither is an
+              editable field here. */}
           <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
             {t({ id: 'pages.finance.portfolios.col.baseCurrency' })}: <Tag>{portfolio.base_currency}</Tag>
           </Typography.Text>
-          <Form.Item name="state" label={t({ id: 'pages.finance.portfolios.form.state' })}>
-            <Select>
-              <Select.Option value="active">{t({ id: 'pages.finance.portfolios.state.active' })}</Select.Option>
-              <Select.Option value="closed">{t({ id: 'pages.finance.portfolios.state.closed' })}</Select.Option>
-            </Select>
-          </Form.Item>
         </Form>
       ) : (
         <Form

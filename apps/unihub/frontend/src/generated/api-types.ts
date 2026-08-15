@@ -455,6 +455,29 @@ export interface paths {
         patch: operations["v1_finance_portfolios_partial_update"];
         trace?: never;
     };
+    "/api/v1/finance/portfolios/{id}/holdings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description FR-034: net quantity per asset across ALL of this portfolio's transfers.
+         *
+         *     Assets whose net is exactly zero are omitted — a fully exited position
+         *     is not a holding. Splits need no special handling: a position-only
+         *     transfer (+N, no value change) simply moves the net (FR-035).
+         */
+        get: operations["v1_finance_portfolios_holdings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/finance/transactions/": {
         parameters: {
             query?: never;
@@ -1434,6 +1457,12 @@ export interface components {
             readonly first_transaction_time?: string | null;
             /** Format: date-time */
             readonly last_transaction_time?: string | null;
+            /** Format: decimal */
+            readonly value_invested?: string | null;
+            /** Format: decimal */
+            readonly value_returned?: string | null;
+            /** Format: decimal */
+            readonly net_value_change?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -1488,6 +1517,12 @@ export interface components {
             readonly first_transaction_time: string | null;
             /** Format: date-time */
             readonly last_transaction_time: string | null;
+            /** Format: decimal */
+            readonly value_invested: string | null;
+            /** Format: decimal */
+            readonly value_returned: string | null;
+            /** Format: decimal */
+            readonly net_value_change: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -1503,6 +1538,12 @@ export interface components {
             readonly first_transaction_time: string | null;
             /** Format: date-time */
             readonly last_transaction_time: string | null;
+            /** Format: decimal */
+            readonly value_invested: string | null;
+            /** Format: decimal */
+            readonly value_returned: string | null;
+            /** Format: decimal */
+            readonly net_value_change: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -2782,6 +2823,28 @@ export interface operations {
                 "multipart/form-data": components["schemas"]["PatchedPortfolioUpdate"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioUpdate"];
+                };
+            };
+        };
+    };
+    v1_finance_portfolios_holdings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique value identifying this portfolio. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

@@ -25,6 +25,9 @@ const PORTFOLIO = {
   state: 'active' as const,
   first_transaction_time: '2026-01-05T09:00:00Z',
   last_transaction_time: '2026-07-01T09:00:00Z',
+  value_invested: '-474391',
+  value_returned: null,
+  net_value_change: '-474391',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-07-01T09:00:00Z',
 };
@@ -99,6 +102,9 @@ beforeEach(() => {
   vi.mocked(financeService.deletePortfolio).mockResolvedValue(undefined as never);
   vi.mocked(financeService.updatePortfolio).mockResolvedValue(PORTFOLIO as never);
   vi.mocked(financeService.deleteTransaction).mockResolvedValue(undefined as never);
+  vi.mocked(financeService.getPortfolioHoldings).mockResolvedValue([
+    { asset_id: 'a1', asset_name: '00918.TW', quantity: '2145' },
+  ] as never);
 });
 
 describe('PortfolioDetailPage — breadcrumb + Portfolio panel (iteration 2, US2)', () => {
@@ -147,6 +153,18 @@ describe('PortfolioDetailPage — breadcrumb + Portfolio panel (iteration 2, US2
   });
 
   // FR-014e: Edit opens the portfolio form modal prefilled (staged — no API call before Save)
+  // FR-036: state is owned by Close/Reopen and base currency is immutable.
+  it('edit modal offers no State select and no Base Currency input', async () => {
+    renderPage();
+    await screen.findAllByText('Tech Fund');
+    fireEvent.click(screen.getByRole('button', { name: /Edit$/ }));
+    await screen.findByText('Edit Portfolio');
+    expect(screen.queryByLabelText('State')).toBeNull();
+    expect(screen.queryByLabelText('Base Currency')).toBeNull();
+    // Still shown read-only for context.
+    expect(screen.getAllByText('USD').length).toBeGreaterThan(0);
+  });
+
   it('opens the edit modal prefilled with the portfolio name on Edit click', async () => {
     renderPage();
     await screen.findAllByText('Tech Fund');
@@ -262,7 +280,8 @@ describe('PortfolioDetailPage — Descriptions panel + Close/Reopen (iteration 4
       await act(async () => {
         observed!.trigger();
       });
-      return container.querySelectorAll('.ant-descriptions-row').length;
+      // Scope to the Portfolio panel — the Value panel has its own Descriptions.
+      return container.querySelectorAll('.ant-descriptions')[0]!.querySelectorAll('.ant-descriptions-row').length;
     };
 
     expect(panel).toBeTruthy();
@@ -360,6 +379,73 @@ describe('PortfolioDetailPage — closed freeze + footer counts (iteration 5)', 
     await screen.findByText('DCA buy');
     // TXN carries 2 transfers.
     expect(await screen.findByText(/1 transaction, 2 transfers/)).toBeInTheDocument();
+  });
+});
+
+// FR-032 / SC-016: vocabulary is the requirement. An OPEN portfolio must not
+// present a cash-flow figure as PnL — -474,391 TWD is 49 buys with no sales.
+describe('PortfolioDetailPage — PnL panel (iteration 6)', () => {
+  it('an OPEN portfolio shows invested/returned/net and NEVER the word PnL', async () => {
+    const { container } = renderPage();
+    await screen.findAllByText('Tech Fund');
+    expect(await screen.findByText(/Invested/)).toBeInTheDocument();
+    expect(screen.getByText(/Net invested/)).toBeInTheDocument();
+    // No FIGURE may be labelled PnL. (The note explaining that unrealized PnL
+    // is unavailable legitimately uses the term — that is the point of it.)
+    const labels = [...container.querySelectorAll('.ant-descriptions-item-label')].map(
+      (el) => el.textContent ?? '',
+    );
+    expect(labels.some((l) => /PnL/i.test(l))).toBe(false);
+    expect(screen.getByText(/market prices/i)).toBeInTheDocument();
+  });
+
+  it('an OPEN portfolio lists the positions it still holds', async () => {
+    renderPage();
+    await screen.findAllByText('Tech Fund');
+    expect(await screen.findByText(/00918\.TW/)).toBeInTheDocument();
+    expect(screen.getByText(/2145/)).toBeInTheDocument();
+  });
+
+  it('a CLOSED portfolio shows a single Realized PnL figure', async () => {
+    vi.mocked(financeService.getPortfolio).mockResolvedValue({
+      ...PORTFOLIO, state: 'closed', net_value_change: '2737', value_returned: '2737',
+    } as never);
+    renderPage();
+    await screen.findAllByText('Tech Fund');
+    expect(await screen.findByText(/Realized PnL/)).toBeInTheDocument();
+    expect(screen.queryByText(/Net invested/)).toBeNull();
+  });
+
+  it('shows the empty placeholder when the portfolio has no transfers', async () => {
+    vi.mocked(financeService.getPortfolio).mockResolvedValue({
+      ...PORTFOLIO, value_invested: null, value_returned: null, net_value_change: null,
+    } as never);
+    vi.mocked(financeService.getPortfolioHoldings).mockResolvedValue([] as never);
+    const { container } = renderPage();
+    await screen.findAllByText('Tech Fund');
+    // "no data" must not read as 0.
+    expect(container.textContent).not.toMatch(/Net invested\s*0/);
+  });
+});
+
+// FR-030 / SC-014: every column needs a header. The iteration-4 merged column
+// set shipped 6 of 8 blank — only the caret may legitimately be label-less.
+describe('PortfolioDetailPage — every column has a header (iteration 6)', () => {
+  it('renders no blank column header except the caret control column', async () => {
+    vi.mocked(financeService.listTransactions).mockResolvedValue({
+      count: 1, next: null, previous: null, results: [TXN],
+    } as never);
+    const { container } = renderPage();
+    await screen.findByText('DCA buy');
+    const headers = [...container.querySelectorAll('.ant-table-thead th')].map(
+      (th) => (th.textContent ?? '').trim(),
+    );
+    // The caret column is deliberately label-less; everything else must speak.
+    const blanks = headers.filter((h) => h === '');
+    expect(blanks).toHaveLength(1);
+    expect(headers).toEqual(
+      expect.arrayContaining(['Time', 'Description', 'Asset', 'Remark', 'Actions']),
+    );
   });
 });
 

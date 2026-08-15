@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Tag, message } from 'antd';
+import { Button, Tag, Typography, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
@@ -25,6 +25,12 @@ import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 import { PortfolioFormModal } from './PortfolioFormModal';
 import type { PortfolioCreateFormValues } from './PortfolioFormModal';
 
+/** Trim the (38,18) zero padding the API sends. */
+function trimAmount(value: string): string {
+  if (!value.includes('.')) return value;
+  return value.replace(/0+$/, '').replace(/\.$/, '');
+}
+
 export function PortfoliosPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -45,8 +51,9 @@ export function PortfoliosPage() {
     { key: 'description', label: t({ id: 'pages.finance.portfolios.col.description' }), dataType: 'text', visible: false, order: 1 },
     { key: 'base_currency', label: t({ id: 'pages.finance.portfolios.col.baseCurrency' }), dataType: 'text', visible: true, order: 2 },
     { key: 'state', label: t({ id: 'pages.finance.portfolios.col.state' }), dataType: 'text', visible: true, order: 3 },
-    { key: 'last_transaction_time', label: t({ id: 'pages.finance.portfolios.col.lastTransactionTime' }), dataType: 'text', visible: true, order: 4 },
-    { key: 'first_transaction_time', label: t({ id: 'pages.finance.portfolios.col.firstTransactionTime' }), dataType: 'text', visible: true, order: 5 },
+    { key: 'net_value_change', label: t({ id: 'pages.finance.portfolios.col.pnl' }), dataType: 'number', visible: true, order: 4 },
+    { key: 'last_transaction_time', label: t({ id: 'pages.finance.portfolios.col.lastTransactionTime' }), dataType: 'text', visible: true, order: 5 },
+    { key: 'first_transaction_time', label: t({ id: 'pages.finance.portfolios.col.firstTransactionTime' }), dataType: 'text', visible: true, order: 6 },
     // No actions column (constitution v1.25.0): View is replaced by whole-row
     // navigation, Edit/Delete live on the detail panel (iteration 2), and
     // Close/Reopen moved there too (FR-020) — nothing is left to render.
@@ -159,6 +166,32 @@ export function PortfoliosPage() {
             </Tag>
           ),
           ...makeSortProps('state', t({ id: 'pages.finance.portfolios.col.state' }), table.sort),
+        },
+        net_value_change: {
+          key: 'net_value_change',
+          align: 'right',
+          autoWidth: {
+            header: t({ id: 'pages.finance.portfolios.col.pnl' }),
+            measure: (p: Portfolio) => `${p.net_value_change ?? ''} ${p.base_currency} realized`,
+          },
+          fixed: getFixed('net_value_change'),
+          // Realized for a closed portfolio; for an open one this is capital
+          // still deployed, so it is labelled "net" and never called PnL
+          // (FR-032/FR-033). Currencies differ per row, so each carries its own.
+          render: (_, record) =>
+            record.net_value_change == null ? (
+              <EmptyValue />
+            ) : (
+              <span>
+                {trimAmount(record.net_value_change)} {record.base_currency}{' '}
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {record.state === 'closed'
+                    ? t({ id: 'pages.finance.portfolios.pnl.realized' })
+                    : t({ id: 'pages.finance.portfolios.pnl.net' })}
+                </Typography.Text>
+              </span>
+            ),
+          ...makeSortProps('net_value_change', t({ id: 'pages.finance.portfolios.col.pnl' }), table.sort),
         },
         last_transaction_time: {
           dataIndex: 'last_transaction_time',

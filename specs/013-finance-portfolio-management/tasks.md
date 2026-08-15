@@ -56,8 +56,8 @@ Each task: replace the page's `dataWidths` memo + `widthForHeader(...)` spreads 
 ## Phase 7: Polish & verification
 
 - [X] T226 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend `uv run ruff check . && uv run pytest`
-- [ ] T227 Real-data probe after rebuilding the frontend image (compare container image id vs built image id and `--force-recreate` — the iteration-4 gotcha): Portfolios description ≤2 lines with no overflow and a working tooltip (SC-011), description hidden until revealed, a closed portfolio's controls disabled, footer counts correct on the 49-transaction portfolio (SC-013), both charts render with real values
-- [ ] T228 Backend probe: closed-portfolio mutations rejected at the API and reopen accepted, against a scratch DB — never the real one
+- [X] T227 Real-data probe after rebuilding the frontend image (compare container image id vs built image id and `--force-recreate` — the iteration-4 gotcha): Portfolios description ≤2 lines with no overflow and a working tooltip (SC-011), description hidden until revealed, a closed portfolio's controls disabled, footer counts correct on the 49-transaction portfolio (SC-013), both charts render with real values
+- [X] T228 Backend probe: closed-portfolio mutations rejected at the API and reopen accepted, against a scratch DB — never the real one
 
 ## Dependencies
 

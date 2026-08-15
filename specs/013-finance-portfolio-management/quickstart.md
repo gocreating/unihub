@@ -213,3 +213,32 @@ rebuilt the image but left the container on the OLD one (it reported
 with `docker inspect unihub-frontend-1 --format '{{.Image}}'` against
 `docker image inspect unihub-frontend --format '{{.Id}}'`, and force it with
 `--force-recreate --no-deps` when they differ.
+
+---
+
+# Iteration 5 verification (2026-08-16) — constitution v1.26.0
+
+Both containers rebuilt with `--force-recreate --no-deps` (container image id
+compared against the built image id first — the iteration-4 gotcha); migration
+0013 confirmed applied.
+
+**UI probe against real data — 7/7 passed**
+
+- Portfolios list ships **without** the description column
+  (`Name | Base Currency | State | Last Transaction | First Transaction`) and
+  it appears once revealed through the Columns control.
+- **SC-011**: all 8 non-empty description cells render at **2 lines, clamp: 2,
+  with zero horizontal overflow** in a 280px column. Before the fix the same
+  cells wrapped to 3 lines with 356px of content in that 280px cell.
+  (Row height stays 69px because the First/Last Transaction columns render
+  `DateTimeCell`'s two rows by design — the constitution exempts those.)
+- **SC-013**: the footer reads **"49 transactions, 75 transfers"**.
+- Charts: tabbed card `Waterfall | Breakdown by asset`, SVG-rendered, both
+  tabs draw.
+
+**API probe on a scratch SQLite DB (never the real one) — 8/8 passed**
+
+Multi-line description accepted; while closed, CREATE / EDIT / DELETE of a
+transaction and EDIT of the portfolio all return 400; **reopening returns 200**
+and editing works again afterwards — the case a naive "reject all writes when
+closed" guard bricks.

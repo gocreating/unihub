@@ -174,3 +174,31 @@ Ran against the live stack. Backup taken (1.3 MB), then: 38 / 55 / 359 / 837 cre
 3. Wei-scale amounts render exactly (e.g. −0.000000067305900768 ETH), not rounded to 8dp.
 4. Assets & Portfolios pages show view tabs + quick search identical to Currencies/Accounts; no `Modal.confirm` anywhere under `pages/finance/assets|portfolios`.
 5. Re-run import → all skipped; counts unchanged.
+
+---
+
+# Iteration 4 verification (2026-08-15) — constitution v1.25.0
+
+Read-only Playwright probe against the running stack with real data, after
+rebuilding the frontend image. **14/14 checks passed**:
+
+- Portfolios list: no Actions column (`Name | Description | Base Currency |
+  State | Last Transaction | First Transaction`), no View button, no
+  Close/Reopen; rows show `cursor: pointer`; **Ctrl+click opened
+  `/finance/portfolios/AcAN8qJU` in a new tab without navigating in place**;
+  a plain click navigated to the detail page.
+- Portfolio panel: `Descriptions` carries Name, Base Currency, State,
+  Description, First/Last Transaction; header shows `Close` and `Edit` with
+  Delete in the kebab; narrowing the panel reflowed 2 rows → 3 rows.
+- Transactions: a collapsed row summarised `1 transfer` with its net value;
+  expanding added child rows to the SAME table (22 → 23 rows) with the
+  header count unchanged at 1 — no nested table.
+- Balance sheets: no View action; clicking Delete opened the shared confirm
+  dialog and did NOT navigate (SC-008). The dialog was cancelled.
+
+**Docker gotcha worth repeating**: `docker compose up -d --build frontend`
+rebuilt the image but left the container on the OLD one (it reported
+`Running`, not `Recreated`), so the probe initially tested stale code. Verify
+with `docker inspect unihub-frontend-1 --format '{{.Image}}'` against
+`docker image inspect unihub-frontend --format '{{.Id}}'`, and force it with
+`--force-recreate --no-deps` when they differ.

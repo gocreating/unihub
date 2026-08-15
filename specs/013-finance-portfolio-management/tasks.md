@@ -40,7 +40,7 @@
 
 - [X] T117 Full quality loops: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck — run it before committing). Backend untouched; run `uv run pytest` once to confirm no collateral damage
 - [X] T118 Grep gates: zero `EyeOutlined`/`common.view` under `src/pages`; every table with a detail route passes `onRow`; no `expandedRowRender` left in the portfolio detail page
-- [ ] T119 Read-only browser probe against the running stack (real data): portfolio row click opens the detail page, Ctrl+click opens a tab, Delete on balance-sheets does not navigate, the Portfolio panel Descriptions reflows at a narrow width, and a real transaction expands into child rows sharing columns. Rebuild the docker images first — the served app is a built image, so source edits are invisible until then
+- [X] T119 Read-only browser probe against the running stack (real data): portfolio row click opens the detail page, Ctrl+click opens a tab, Delete on balance-sheets does not navigate, the Portfolio panel Descriptions reflows at a narrow width, and a real transaction expands into child rows sharing columns. Rebuild the docker images first — the served app is a built image, so source edits are invisible until then
 
 ## Dependencies
 

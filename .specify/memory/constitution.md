@@ -1,6 +1,53 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.25.0 → 1.26.0 (minor — two NEW mandatory rules from user
+  feedback, 2026-08-16, both aimed at one recurring failure: table cell sizing
+  re-implemented per page.
+
+  (1) Principle VII — "Column width sizing belongs to PageTable, not to pages".
+  PageTable now owns measurement, clamping and scroll.x; a page declares that a
+  column is auto-sized (and optionally a bound) instead of looping its rows
+  calling measureTextWidth. Supersedes the weaker prior line, which mandated
+  the HELPERS but left orchestration to each page — eleven pages carried eleven
+  copies of the same recipe.
+  (2) Principle VI — "Table cells clamp to two lines". At most two lines, then
+  ellipsis plus a truncation-gated tooltip; multi-line truncation is detected
+  via scrollHeight vs clientHeight, which the existing single-line
+  OverflowTooltip check cannot see.
+
+  Bump rationale — MINOR: no principle is removed and governance is unchanged;
+  one rule is added to Principle VI and one rule in Principle VII is widened
+  from "use these helpers" to "PageTable owns this". Existing pages become
+  non-compliant, so the violations are enumerated below rather than deferred,
+  matching the v1.25.0 precedent.
+
+  Evidence: measured on the running app against real data — the Portfolios
+  description column, capped at 280px with no truncation, rendered 69px-tall
+  three-line rows whose content overflowed to 356px; 8/8 non-empty description
+  cells wrapped or overflowed.)
+Modified principles:
+  - VII. PageTable Layout — column-width rule rewritten (helpers → PageTable
+    owns the computation); added a dedicated rationale paragraph.
+  - VI. UI/UX Reference: ov-fleet — added "Table cells clamp to two lines";
+    extended the rationale with the measured description-column failure.
+Added sections: none
+Removed sections: none
+Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ No changes needed (generic gate)
+  - .specify/templates/spec-template.md ✅ No changes needed
+  - .specify/templates/tasks-template.md ✅ No changes needed
+Known violations at amendment time (to be corrected by feature 013 iteration 5):
+  - Eleven pages hand-roll the `dataWidths` measurement loop:
+    finance/{accounts,assets,currencies,exchange-rates}/index.tsx,
+    finance/balance-sheets/{index,detail,edit,new}.tsx,
+    finance/portfolios/{index,detail}.tsx, inventory/catalog/index.tsx
+  - finance/portfolios/index.tsx description column — capped width with no
+    truncation (the reproduced bug)
+Follow-up TODOs: none
+
+PREVIOUS REPORT (1.24.0 → 1.25.0)
+==================
 Version change: 1.24.0 → 1.25.0 (minor — Principle VI gains one NEW mandatory
   rule from user feedback, 2026-08-15: "Whole-row navigation replaces the View
   action". Clicking anywhere on an entity row MUST navigate to that entity's
@@ -252,6 +299,19 @@ reference implementation to follow.
   overflow (scrollWidth vs clientWidth) and attaches the tooltip conditionally.
   Tooltips that add information beyond the visible text are exempt.
   Unconditional same-content tooltips are a constitution violation.
+- **Table cells clamp to two lines (NON-NEGOTIABLE)**: A table cell whose text
+  can exceed its column width MUST render **at most two lines**, ellipsise the
+  overflow, and expose the full value through a truncation-gated tooltip (the
+  rule above). A cell MUST NEVER wrap to a third line: unbounded wrapping makes
+  row heights ragged, destroys vertical scanning, and silently defeats any
+  max-width the column declares. Canonical implementation: the shared clamped
+  cell (`-webkit-line-clamp: 2` with `overflow: hidden`) wired to
+  `<OverflowTooltip>`; multi-line truncation MUST be detected by comparing
+  `scrollHeight` against `clientHeight` (the single-line `scrollWidth` check
+  cannot see a clamped second line). Deliberately single-line columns stay
+  single-line — two lines is the CEILING, not a target. Cells that render
+  structured two-row content by design (e.g. `DateTimeCell`'s absolute +
+  relative rows) already satisfy this and need no tooltip.
 - **Panel-header actions (responsive kebab)**: A panel's (Card's) action
   buttons MUST sit on the **right-hand side of the panel header** (the AntD
   Card `extra` slot). Which actions are directly visible is context-dependent,
@@ -375,7 +435,11 @@ swallows Ctrl+click, breaking the open-several-records-in-tabs workflow.
 Centralising it in one helper keeps that guarantee identical on every
 table, and the interactive-element and text-selection guards prevent the
 classic regression where selecting a cell's text or hitting Delete
-navigates the user away.
+navigates the user away. The two-line ceiling exists because a max-width
+without truncation is not a narrower column — it is a taller row: capping
+the Portfolios description column at 280px while its cell rendered plain
+text produced 69px-tall three-line rows with content still overflowing to
+356px, which is the worst of both outcomes.
 
 ### VII. PageTable Layout — NON-NEGOTIABLE
 
@@ -420,8 +484,21 @@ system page that renders a table).
   elements rendered ABOVE or OUTSIDE `PageTable` are a constitution violation.
 - Modals (create/edit forms) are rendered as React portals and do not affect
   the layout; they are acceptable siblings to `PageTable` in the page JSX.
-- All column widths MUST use `widthForHeader()`, `measureTextWidth()`, and
-  `computeScrollX()` exported from `PageTable`.
+- **Column width sizing belongs to `PageTable`, not to pages
+  (NON-NEGOTIABLE)**: `PageTable` MUST compute each column's width itself from the
+  header text and the rendered rows. A page MUST NOT loop over its data
+  measuring cell text (the `dataWidths` / `measureTextWidth`-per-row pattern);
+  it DECLARES intent on the column — that the column is auto-sized, and
+  optionally a max/min bound or how to read the value — and `PageTable`
+  performs the measurement, the clamping, and the `scroll.x` total. Pages MAY
+  still set an explicit fixed `width` for a column that should not be measured.
+  Calling `measureTextWidth()` from a page is a constitution violation.
+  `widthForHeader()`, `measureTextWidth()` and `computeScrollX()` remain
+  exported for `PageTable`'s own use and for the rare fixed-width case, but
+  they are no longer the page-level interface.
+  **A max-width bound MUST come with truncation** — clamping a column's width
+  while its cell renders unclamped text does not narrow the column, it wraps
+  the text and grows the row (see Principle VI's two-line rule).
 - **Footer layout (information left, controls right)**: The standard table
   footer (`EntityOffsetFooter` / `EntityCursorFooter`) MUST place
   **non-interactive information on the LEFT** — the total record count (e.g.
@@ -437,6 +514,16 @@ system page that renders a table).
   NOT re-implement or re-order the footer locally.
 - The `PageTable` component lives at
   `apps/unihub/frontend/src/components/PageTable/`.
+
+**Rationale (column sizing)**: Width measurement was previously a *recipe*
+every page re-typed — build a `dataWidths` map, loop the rows, clamp, hand the
+result to `widthForHeader` — and eleven pages had eleven copies of it. Shared
+helpers with per-page orchestration is not a shared implementation: the parts
+that drift are the clamp and the truncation that must accompany it, which is
+exactly where the Portfolios description bug came from. Moving the whole
+computation inside `PageTable` makes correct sizing the default a page gets
+for free, and makes the failure mode impossible to reintroduce one page at a
+time.
 
 **Rationale**: This layout is the single most visible pattern in the product.
 Every domain that adds a table page MUST land with exactly this structure —
@@ -791,4 +878,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.25.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-08-15
+**Version**: 1.26.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-08-16

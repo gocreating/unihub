@@ -260,3 +260,60 @@ It returns `{ style: { cursor: 'pointer' }, onClick, onAuxClick }`:
 | `pages/inventory/catalog/index.tsx` | — | Exempt: rows have no detail page and parents only expand; the constitution explicitly excludes expand-only rows. Its caret gains `data-row-link-ignore` defensively |
 
 `common.view` and `EyeOutlined` become dead in `pages/` — the locale key is retained only if still referenced elsewhere, otherwise removed from both locale files.
+
+---
+
+# Iteration 5 research (2026-08-16) — constitution v1.26.0 + data model + charts
+
+## I5-1: The `autoWidth` column contract (PageTable owns sizing)
+
+**Decision**: `PageTable` gains per-column `autoWidth`:
+
+```ts
+autoWidth?: {
+  header: string;                                  // text to measure for the header
+  measure?: (record: T) => string | null | undefined;  // text the CELL renders
+  min?: number;
+  max?: number;
+}
+```
+
+`PageTable` computes `width = clamp(max(widthForHeader(header), max_rows(measureTextWidth(text))), min, max)` for every such column and derives `scroll.x` itself. `measure` defaults to reading `dataIndex` off the record.
+
+**Why `header` is explicit rather than read from `title`**: `makeSortProps` sets `title` to a ReactNode (label + sort carets), so the string is not recoverable from the column. The page already holds that label when it calls `makeSortProps(field, label, sort)`, so passing it once more is a declaration, not a new duplication.
+
+**Why `measure` exists**: columns that render something other than the raw field (formatted amounts, tags, composed cells) must still declare the text they draw. That is intent, not a measurement loop — the constitution permits "optionally how to read the value" and forbids the per-row `dataWidths` accumulation.
+
+**Rationale**: eleven pages carried eleven copies of the same recipe across 81 call sites, and the copies drifted exactly where it mattered (the clamp, and the truncation that must accompany it). One implementation inside the component makes correct sizing the default.
+
+**Alternatives considered**: (a) measuring the DOM after render with a ResizeObserver — accurate but reflow-heavy and racy against AntD's own sizing; (b) keeping helpers and adding a lint rule — leaves the orchestration duplicated, so the next page still gets it wrong; (c) deriving header text from `columnDefs` — PageTable does not receive them and threading them adds a second source of truth.
+
+## I5-2: Two-line clamp (`ClampedText`)
+
+**Decision**: new shared `components/ClampedText/` rendering `-webkit-line-clamp: 2` + `overflow: hidden`, wrapped in a `Tooltip` whose title is populated ONLY when truncated. Truncation is detected by **`scrollHeight > clientHeight`** — the existing `OverflowTooltip` compares `scrollWidth`/`clientWidth`, which cannot see a clamped second line. `OverflowTooltip` stays as-is for genuinely single-line cells.
+
+**Rationale**: measured failure — the Portfolios description column capped at 280px with untruncated text rendered 69px three-line rows whose content still overflowed to 356px. A max-width without truncation is not a narrower column, it is a taller row.
+
+## I5-3: Closed-portfolio freeze — enforced in the backend
+
+**Decision**: a `closed` portfolio rejects every mutation but reopening. Enforcement lives in the **serializers/viewsets**, not the UI:
+- `TransactionSerializer.validate()` already blocks *creating* against a closed portfolio; extend to **update and delete** (`TransactionViewSet.update/partial_update/destroy` → 400 when `instance.portfolio.state == 'closed'`).
+- `PortfolioUpdateSerializer.validate()` rejects any field change while `state == 'closed'` **except** a change that sets `state` back to `active` (otherwise a closed portfolio could never be reopened).
+- Portfolio DELETE is unaffected (removal is not an update; FR-010 still guards it).
+The UI disables New/Edit/Delete transaction controls and the panel's Edit action so the block is visible before it is attempted.
+
+**Gotcha to encode in tests**: the reopen path must be permitted by the same validator that blocks everything else — the natural "reject all writes when closed" one-liner also bricks the portfolio, which is why FR-026 names Reopen explicitly.
+
+## I5-4: Charts — waterfall + breakdown (Principle X/XI compliant)
+
+**Decision**: an AntD `Card` with `tabList` (Principle XI mandates the tabbed Card when a page has both a chart and a table section), `ReactECharts` with `opts={{ renderer: 'svg' }}` and `notMerge`, wrapped in `<div style={{ overflowX: 'auto' }}>` with `minWidth: 600` (Principle X).
+
+- **Waterfall**: cumulative Value Change over the portfolio's transactions in chronological order. ECharts idiom = a transparent "base" bar series stacked under the visible delta series; rising and falling steps get distinct colors.
+- **Breakdown**: bar of summed Value Change per asset (≤5 assets per portfolio in the real data).
+- Both plot **Value Change only**. Asset amounts are unit-incomparable (419 shares vs 6.7e-8 ETH) and MUST never share an axis.
+- Transfers with `value_change = null` (223 of 837 — the position-only legs) are excluded, and the card states so.
+- Sums use `Decimal`, matching the iteration-4 net-value fix.
+
+**Data shape measured before designing**: ≤53 transactions per portfolio (median **2**), ≤5 distinct assets. So the charts must degrade gracefully — a median portfolio yields a two-step waterfall — and an empty state is the common case, not an edge case.
+
+**Scale caveat**: the charts summarise the transactions currently loaded by the panel's query (which is paginated and filter/search-scoped), so what they show always matches the table beneath them. That is stated in the card rather than silently implied.

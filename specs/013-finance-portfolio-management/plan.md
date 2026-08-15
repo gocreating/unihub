@@ -34,7 +34,7 @@ Iteration 3 delivers three work streams on top of the accepted Stories 1–3:
 
 ## Constitution Check
 
-*Constitution v1.25.0 — evaluated 2026-08-15 (iteration 4), re-evaluated after Phase 1 design: PASS*
+*Constitution v1.26.0 — evaluated 2026-08-16 (iteration 5), re-evaluated after Phase 1 design: PASS*
 
 | Gate | Principle | Status |
 |---|---|---|
@@ -142,3 +142,48 @@ iteration, so the data-portability and OpenAPI rules are not engaged.
   expansion, so the expansion test must assert child rows actually appear.
 - The catalog must NOT become row-clickable; its regression tests stay green as the
   proof.
+
+---
+
+## Iteration 5 (2026-08-16) — constitution v1.26.0, data model, charts
+
+**Constitution Check (v1.26.0)**: PASS. This iteration exists largely to *satisfy*
+the two new rules (Principle VII column sizing, Principle VI two-line clamp). It
+also engages: Principle X/XI (the new charts must be ECharts+SVG in a tabbed Card
+with the 600px min-width and overflow-x wrapper), Principle VIII (both locales in
+the same commit), Principle I (`Portfolio.description` type change must keep the
+`data_io` TableDescriptor consistent — verify the finance descriptors after the
+migration), and Principle IV (schema change → regenerate `openapi.yaml` and the
+frontend types).
+
+### Scope, in dependency order
+
+1. **`PageTable.autoWidth`** (research I5-1, FR-023) — the component computes every
+   column width and `scroll.x`; then convert all eleven pages (81 call sites) and
+   delete the per-page `dataWidths` loops.
+2. **`ClampedText`** (I5-2, FR-024) — two-line clamp + truncation-gated tooltip;
+   adopt on the text columns that can overflow, starting with the reproduced
+   Portfolios description defect.
+3. **Backend** (I5-3, FR-025/FR-026) — `Portfolio.description` → `TextField`
+   (migration 0013); closed-portfolio freeze in serializers/viewsets with tests
+   that also prove Reopen still works.
+4. **Portfolio list** (FR-027) — description column hidden by default.
+5. **Transactions footer** (FR-028) — "X transactions, Y transfers".
+6. **Charts** (I5-4, FR-029) — tabbed Card with waterfall + asset breakdown.
+
+### Risks & mitigations
+
+- **The width refactor is the risky part**: 81 call sites across 11 pages, and a
+  mistake shows up as a subtly wrong column rather than a crash. Mitigation: the
+  behaviour is locked by PageTable-level tests first (SC-010), pages are converted
+  one at a time with their existing suites as the net, and a real-data probe
+  re-measures the pages afterwards.
+- **`useActionsColWidth`** already measures action buttons per page; it is a
+  PageTable export and stays, but it must not be confused with the removed
+  `dataWidths` pattern — it sizes controls, not content.
+- **Reopen bricking**: the naive "block all writes when closed" validator also
+  blocks reopening. FR-026 and the test suite name that case explicitly.
+- **Chart emptiness is the common case** (median 2 transactions), so the empty
+  state is a first-class requirement, not an afterthought.
+- **`description` widening is not free**: `TextField` has no length cap, so the
+  clamp (FR-024) is what keeps a pasted essay from destroying the table.

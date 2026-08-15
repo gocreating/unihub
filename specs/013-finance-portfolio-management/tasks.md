@@ -1,65 +1,77 @@
-# Tasks: Finance Portfolio Management — Iteration 4 (constitution v1.25.0 sweep + portfolio UX)
+# Tasks: Finance Portfolio Management — Iteration 5 (constitution v1.26.0 + data model + charts)
 
-**Input**: spec.md Clarifications 2026-08-15 (FR-018…FR-022, SC-007…SC-009), research.md I4-1…I4-4, plan.md iteration-4 section, constitution v1.25.0.
+**Input**: spec.md Clarifications 2026-08-16 (FR-023…FR-029, SC-010…SC-013), research.md I5-1…I5-4, plan.md iteration-5 section, constitution v1.26.0.
 
-**Tests**: TDD red-first. Frontend-only iteration — no backend, model, or API change.
+**Tests**: TDD red-first.
 
-**Paths**: relative to `apps/unihub/frontend/`.
+**Paths**: `apps/unihub/frontend/` unless prefixed `backend/`.
 
-> Iterations 1–3 are complete; a summary is archived at the end of this file.
+> Iterations 1–4 are complete; a summary is archived at the end of this file.
 
-## Phase 1: Foundational — the shared helper (blocks everything)
+## Phase 1: PageTable owns column sizing (FR-023) — blocks the page conversions
 
-- [X] T101 Write failing tests `src/components/PageTable/useRowLink.test.tsx`: plain click navigates; **Ctrl/Cmd/Shift+click calls `window.open(url,'_blank','noopener,noreferrer')` and does NOT navigate**; **middle click (`auxclick`, `button: 1`) opens a new tab and calls `preventDefault()`**; a click inside `[data-actions-col]`, a `<button>`, an `<a>`, an `<input>`, or `[data-row-link-ignore]` does nothing; a click while `window.getSelection()` holds non-empty text does nothing; a null/empty url yields `{}` (no cursor, no handlers) (FR-018, SC-007, SC-008)
-- [X] T102 Implement `src/components/PageTable/useRowLink.ts` per research I4-1 and export it from `src/components/PageTable/index.tsx`; T101 passes
-- [X] T103 Verify-the-verifier: temporarily strip the modifier branch and the selection guard, confirm T101 fails on both, restore (the round-9 lesson — a net that cannot fail proves nothing)
+- [ ] T201 Write failing tests `src/components/PageTable/autoWidth.test.tsx`: a column with `autoWidth: { header }` is sized to the widest of its header and its rendered values; `measure` overrides the `dataIndex` read; `min`/`max` clamp; a `max` narrower than the content still yields exactly `max` (no overflow); columns with an explicit `width` are left untouched; `scroll.x` totals the resolved widths; an empty `dataSource` falls back to the header width (SC-010)
+- [ ] T202 Implement `autoWidth` resolution inside `src/components/PageTable/index.tsx` per research I5-1 (resolve widths + `scroll.x` in a `useMemo` over `columns` × `dataSource`); T201 passes
+- [ ] T203 Verify-the-verifier: break the clamp (drop `max`) and the header floor in turn, confirm T201 fails on each, restore
 
-## Phase 2: System-wide sweep (FR-019) — independent per page
+## Phase 2: Two-line clamp (FR-024)
 
-- [X] T104 [P] Update `src/pages/finance/portfolios/PortfoliosPage.test.tsx`: no View button anywhere; **no Actions column at all**; no Close/Reopen button; row click navigates to the detail page; Ctrl+click opens a new tab instead; the existing Name-hyperlink assertions stay green
-- [X] T105 [P] Amend `src/pages/finance/portfolios/index.tsx`: delete the actions column def (and its `useActionsColWidth`, `EyeOutlined`, `toggleState`/`updateMutation` if now unused), drop `actions` from `columnDefs`, wire `onRow={rowLink(...)}` (FR-013, FR-020)
-- [X] T106 [P] Update `src/pages/finance/balance-sheets/` tests: View button gone; row click navigates to the sheet detail; Edit still a real hyperlink to `/edit`; clicking Delete does NOT navigate (SC-008)
-- [X] T107 [P] Amend `src/pages/finance/balance-sheets/index.tsx`: remove the View button, wire `onRow`, keep Edit/Delete
-- [X] T108 [P] Update inventory scenarios tests + `src/pages/inventory/scenarios/index.tsx`: row click navigates; the name `<Link>` stays
-- [X] T109 [P] Add `data-row-link-ignore` to the catalog caret in `src/pages/inventory/catalog/index.tsx` and add a catalog test asserting its rows are NOT clickable (the exemption is deliberate, so it gets a lock)
-- [X] T110 Remove the now-dead `common.view` key from both locale files **only if** a repo-wide grep shows no remaining reference (constitution VIII: both locales, same commit)
+- [ ] T204 Write failing tests `src/components/ClampedText/ClampedText.test.tsx`: renders its text; applies a 2-line clamp style; attaches a tooltip ONLY when `scrollHeight > clientHeight`; no tooltip when the text fits; the full text is the tooltip title
+- [ ] T205 Implement `src/components/ClampedText/index.tsx` per research I5-2 and export it; T204 passes. Do NOT modify `OverflowTooltip` — it stays the single-line primitive
 
-## Phase 3: Portfolio panel — Descriptions + Close/Reopen (FR-020, FR-021)
+## Phase 3: Convert the eleven pages (FR-023/FR-024)
 
-- [X] T111 Update `src/pages/finance/portfolios/PortfolioDetailPage.test.tsx`: the panel renders an AntD `Descriptions` containing Name, Base Currency, State, Description, First/Last Transaction (no separate page title); a visible **Close** button sits beside Edit and toggles to **Reopen** for a closed portfolio; Delete stays in the kebab; clicking Close calls `updatePortfolio` with the flipped state
-- [X] T112 Amend `src/pages/finance/portfolios/detail.tsx`: replace the ad-hoc `Space`/`Typography`/div block with `<Descriptions>` whose `column` derives from the existing `useContainerWidth()` `width` (`<560 → 1`, `<900 → 2`, else 3 — research I4-2); add Close/Reopen to `PanelHeaderActions.visible` beside Edit
-- [X] T113 Add a narrow-panel test asserting the Descriptions column count collapses from measured **content** width (mock `ResizeObserver`/width as the existing container-width tests do), not viewport breakpoints
+Each task: replace the page's `dataWidths` memo + `widthForHeader(...)` spreads with `autoWidth`, keep every existing test green, and wrap overflow-prone text columns in `ClampedText`.
 
-## Phase 4: Transactions tree table (FR-022)
+- [ ] T206 [P] `src/pages/finance/portfolios/index.tsx` — includes the **reproduced description defect**: assert the fix with a test (≤2 lines, no overflow, tooltip present)
+- [ ] T207 [P] `src/pages/finance/currencies/index.tsx`
+- [ ] T208 [P] `src/pages/finance/accounts/index.tsx`
+- [ ] T209 [P] `src/pages/finance/exchange-rates/index.tsx`
+- [ ] T210 [P] `src/pages/finance/assets/index.tsx`
+- [ ] T211 [P] `src/pages/finance/balance-sheets/index.tsx` + `detail.tsx` + `edit.tsx` + `new.tsx`
+- [ ] T212 [P] `src/pages/inventory/catalog/index.tsx` — the largest; keep the `url` 320px cap behaviour and the measure-what-you-render note intact
+- [ ] T213 `src/pages/finance/portfolios/detail.tsx` — convert after Phase 5/6 touch the same file, to avoid edit collisions
+- [ ] T214 Grep gate: zero `measureTextWidth` / `dataWidths` occurrences under `src/pages/` (SC-010); `widthForHeader` remains only where a genuinely fixed width is intended
 
-- [X] T114 Update the transactions-panel tests in `PortfolioDetailPage.test.tsx`: expanding a transaction adds its transfers as rows **of the same table** sharing the parent's columns, with **no nested table header** in the DOM; a collapsed parent shows `N transfers` in the Asset column and the **net** value change; the caret toggles; child rows show asset/change/value/remark; the Actions column renders only on parents (SC-009)
-- [X] T115 Amend `src/pages/finance/portfolios/detail.tsx`: build the `TxnRow` union with `children`, add the `__caret` column (width 44, `data-row-link-ignore`, participates in column config), set `indentSize={0}` + `expandable={{ showExpandColumn: false, expandedRowKeys }}`, switch renderers on `rowType`, and use the composite `rowKey` `` `${rowType}:${id}` `` (research I4-3); delete the nested `expandedRowRender` ProTable and the now-unused `transferCols`
-- [X] T116 Reflect the merged column set in `columnDefs` and both locale files (the Asset column header now serves both row types; the old transfer-count column is absorbed into the parent summary)
+## Phase 4: Backend — multi-line description + closed-portfolio freeze (FR-025, FR-026)
 
-## Phase 5: Polish & verification
+- [ ] T215 Write failing tests `backend/tests/finance/test_portfolios.py`: a closed portfolio rejects portfolio field edits (400), and `backend/tests/finance/test_transactions.py`: creating (already covered), **editing**, and **deleting** a transaction of a closed portfolio all fail; **reopening a closed portfolio succeeds** (the case a naive validator bricks); an active portfolio is unaffected; deleting the portfolio itself is still allowed (SC-012)
+- [ ] T216 Widen `Portfolio.description` to `TextField` in `backend/finance/models.py` and `makemigrations finance` → 0013 (FR-025)
+- [ ] T217 Implement the freeze per research I5-3 in `backend/finance/serializers.py` + `views.py`; T215 passes
+- [ ] T218 Regenerate `openapi.yaml` (spectacular) and `src/generated/api-types.ts`; verify the finance `data_io` TableDescriptors still match the model (Principle I)
 
-- [X] T117 Full quality loops: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck — run it before committing). Backend untouched; run `uv run pytest` once to confirm no collateral damage
-- [X] T118 Grep gates: zero `EyeOutlined`/`common.view` under `src/pages`; every table with a detail route passes `onRow`; no `expandedRowRender` left in the portfolio detail page
-- [X] T119 Read-only browser probe against the running stack (real data): portfolio row click opens the detail page, Ctrl+click opens a tab, Delete on balance-sheets does not navigate, the Portfolio panel Descriptions reflows at a narrow width, and a real transaction expands into child rows sharing columns. Rebuild the docker images first — the served app is a built image, so source edits are invisible until then
+## Phase 5: Portfolio list + detail UI (FR-025, FR-026, FR-027, FR-028)
+
+- [ ] T219 Portfolios list: description column `visible: false` by default (FR-027); test asserts it is absent initially and appears via the Columns control, and that the default saved-view baseline reflects it
+- [ ] T220 `PortfolioFormModal`: description uses a multi-line text area with no maxLength (FR-025); detail panel renders the description clamped
+- [ ] T221 Closed-portfolio UI: disable New/Edit/Delete transaction controls and the panel Edit action when `state === 'closed'`; Reopen stays enabled; tests assert disabled state (the backend is the real guard — SC-012)
+- [ ] T222 Transactions footer: "X transactions, Y transfers" on the footer's information side (FR-028); count transfers across the loaded transactions; test asserts both numbers
+
+## Phase 6: Charts (FR-029)
+
+- [ ] T223 Write failing tests for the chart card: renders an AntD Card with `tabList` (Waterfall / Breakdown); mocks `echarts-for-react` and asserts the ECharts **option** — waterfall has a transparent base series plus a delta series in chronological order with cumulative values; breakdown has one bar per asset summing that asset's Value Change; transfers with null value_change are excluded; an empty state renders when nothing is valued
+- [ ] T224 Implement `src/pages/finance/portfolios/PortfolioCharts.tsx` per research I5-4 (ECharts, `renderer: 'svg'`, `notMerge`, `overflowX: auto` wrapper, `minWidth: 600`, `Decimal` sums) and mount it on the detail page above the Transactions panel; T223 passes
+- [ ] T225 Locale keys for both charts, the tab labels, the exclusion note, and the empty state — both locale files, same commit (Principle VIII)
+
+## Phase 7: Polish & verification
+
+- [ ] T226 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend `uv run ruff check . && uv run pytest`
+- [ ] T227 Real-data probe after rebuilding the frontend image (compare container image id vs built image id and `--force-recreate` — the iteration-4 gotcha): Portfolios description ≤2 lines with no overflow and a working tooltip (SC-011), description hidden until revealed, a closed portfolio's controls disabled, footer counts correct on the 49-transaction portfolio (SC-013), both charts render with real values
+- [ ] T228 Backend probe: closed-portfolio mutations rejected at the API and reopen accepted, against a scratch DB — never the real one
 
 ## Dependencies
 
-- T101–T103 block every later phase (all pages consume the helper).
-- Phase 2 tasks are mutually independent (different files): T104/T105 portfolios, T106/T107 balance-sheets, T108 scenarios, T109 catalog.
-- Phase 3 and Phase 4 both edit `detail.tsx` — run Phase 3 first, then Phase 4, to avoid edit collisions.
-- T110 after Phase 2 (needs the greps to be clean).
-- Phase 5 last.
+- T201–T203 block Phase 3. T204–T205 block the `ClampedText` adoptions in Phase 3.
+- Phase 3 tasks are per-file and parallel, except T213 which waits for Phases 5–6.
+- T215–T217 (backend) are independent of the frontend phases; T218 gates any frontend use of the new types.
+- Phase 6 depends on nothing but the detail page existing; run after Phase 5 to avoid `detail.tsx` collisions.
+- Phase 7 last.
 
-**Total: 19 tasks** (Foundational 3, Sweep 7, Panel 3, Tree 3, Polish 3)
+**Total: 28 tasks** (Sizing 3, Clamp 2, Conversions 9, Backend 4, UI 4, Charts 3, Polish 3)
 
 ---
 
-# Archive — Iterations 1–3 (complete)
+# Archive — Iterations 1–4 (complete)
 
-Iteration 3 (2026-08-13/14, 26 tasks, all complete) shipped the legacy CSV import
-(38 assets / 55 portfolios / 359 transactions / 837 transfers, executed against
-real data on 2026-08-14), the transactions-list 500 fix (filter contract), model
-amendments (migration 0012 — 18-decimal transfer amounts, `Portfolio.description`,
-`Transaction.chain_id`/`tx_hash`, `Transfer.remark`, `Asset.category` dropped), and
-the entity-views / quick-search / shared-confirm-dialog policy adoption.
-Task-level detail is preserved in git history at commits `39478fa` and `a09ef48`.
+- **Iteration 3** (2026-08-13/14, 26 tasks): legacy CSV import (38 assets / 55 portfolios / 359 transactions / 837 transfers, run against real data 2026-08-14), the transactions-list 500 fix, migration 0012 (18-decimal amounts, `Portfolio.description`, `Transaction.chain_id`/`tx_hash`, `Transfer.remark`, `Asset.category` dropped), and entity-views / quick-search / shared-confirm-dialog adoption. Commits `39478fa`, `a09ef48`.
+- **Iteration 4** (2026-08-15, 19 tasks): constitution v1.25.0 whole-row navigation with the shared `useRowLink` helper, View buttons removed system-wide, portfolio panel converted to responsive `Descriptions`, Close/Reopen moved to the panel header, and the Transactions panel rebuilt as a catalog-style tree table with Decimal-summed parent summaries. Verified 14/14 against real data. Commits `c6db24b`, `e26758b`, `9e714ee`, `c8916e2`.

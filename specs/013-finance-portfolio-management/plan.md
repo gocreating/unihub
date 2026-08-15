@@ -34,7 +34,7 @@ Iteration 3 delivers three work streams on top of the accepted Stories 1–3:
 
 ## Constitution Check
 
-*Constitution v1.26.0 — evaluated 2026-08-16 (iteration 5), re-evaluated after Phase 1 design: PASS*
+*Constitution v1.26.0 — evaluated 2026-08-16 (iteration 6), re-evaluated after Phase 1 design: PASS*
 
 | Gate | Principle | Status |
 |---|---|---|
@@ -187,3 +187,39 @@ frontend types).
   state is a first-class requirement, not an afterthought.
 - **`description` widening is not free**: `TextField` has no length cap, so the
   clamp (FR-024) is what keeps a pasted essay from destroying the table.
+
+---
+
+## Iteration 6 (2026-08-16) — PnL, holdings, header defect, modal cleanup
+
+**Constitution Check (v1.26.0)**: PASS. New table columns use `autoWidth` and
+must carry titles (the defect being fixed is itself a Principle VII/VI concern);
+the PnL panel follows the panel-header and `Descriptions` rules already
+established; Principle IV requires regenerating `openapi.yaml` + types for the
+new serializer fields and the holdings action; Principle VIII, both locales in
+the same commit; Principle I, the new fields are **annotations, not columns**, so
+no migration and no `data_io` descriptor change — worth stating explicitly since
+schema changes normally trigger that rule.
+
+### Scope
+
+1. **Header defect** (I6-4, FR-030) — titles on all five untitled columns, plus a
+   guard test. Smallest change, largest visible improvement; do it first.
+2. **Backend aggregates** (I6-1, FR-031) — annotate invested/returned/net on the
+   Portfolio queryset, expose read-only, allow ordering by net.
+3. **Holdings action** (I6-3, FR-034) — per-asset net quantities, zero-net omitted.
+4. **PnL panel + list column** (I6-2, FR-032/FR-033) — realized for closed;
+   invested/returned/net + holdings for open, with the no-price-feed note.
+5. **Edit modal cleanup** (FR-036) — drop State and Base Currency inputs.
+
+### Risks & mitigations
+
+- **A wrong PnL looks exactly like a right one.** Mitigated by computing
+  server-side over all transfers and asserting the API figures against a direct
+  SQL sum on the real data (SC-015), not merely against a fixture.
+- **NULL vs 0**: a portfolio with no transfers must read as "no data", not
+  "breaks even". Both paths get tests.
+- **Vocabulary is the feature here**, so the tests assert the *absence* of the
+  word PnL on an open portfolio, not just the presence of numbers.
+- Removing the modal's State field must not remove the ability to change state —
+  Close/Reopen already owns it (FR-020); a test keeps that path alive.

@@ -1,77 +1,53 @@
-# Tasks: Finance Portfolio Management — Iteration 5 (constitution v1.26.0 + data model + charts)
+# Tasks: Finance Portfolio Management — Iteration 6 (PnL, holdings, header defect)
 
-**Input**: spec.md Clarifications 2026-08-16 (FR-023…FR-029, SC-010…SC-013), research.md I5-1…I5-4, plan.md iteration-5 section, constitution v1.26.0.
+**Input**: spec.md Clarifications 2026-08-16b (FR-030…FR-036, SC-014…SC-017), research.md I6-1…I6-4, plan.md iteration-6 section, constitution v1.26.0.
 
-**Tests**: TDD red-first.
+**Tests**: TDD red-first. No migration — the new API fields are query annotations.
 
 **Paths**: `apps/unihub/frontend/` unless prefixed `backend/`.
 
-> Iterations 1–4 are complete; a summary is archived at the end of this file.
+## Phase 1: The empty-header defect (FR-030) — smallest change, most visible
 
-## Phase 1: PageTable owns column sizing (FR-023) — blocks the page conversions
+- [ ] T301 Write a failing guard test in `src/pages/finance/portfolios/PortfolioDetailPage.test.tsx`: every Transactions-panel header is non-empty EXCEPT the caret control column (live page currently renders 6 of 8 blank)
+- [ ] T302 Give `description`, `asset`, `asset_change`, `value_change` and `remark` explicit `title`s in `src/pages/finance/portfolios/detail.tsx`; T301 passes
 
-- [X] T201 Write failing tests `src/components/PageTable/autoWidth.test.tsx`: a column with `autoWidth: { header }` is sized to the widest of its header and its rendered values; `measure` overrides the `dataIndex` read; `min`/`max` clamp; a `max` narrower than the content still yields exactly `max` (no overflow); columns with an explicit `width` are left untouched; `scroll.x` totals the resolved widths; an empty `dataSource` falls back to the header width (SC-010)
-- [X] T202 Implement `autoWidth` resolution inside `src/components/PageTable/index.tsx` per research I5-1 (resolve widths + `scroll.x` in a `useMemo` over `columns` × `dataSource`); T201 passes
-- [X] T203 Verify-the-verifier: break the clamp (drop `max`) and the header floor in turn, confirm T201 fails on each, restore
+## Phase 2: Backend aggregates + holdings (FR-031, FR-034)
 
-## Phase 2: Two-line clamp (FR-024)
+- [ ] T303 Write failing tests in `backend/tests/finance/test_portfolios.py`: the portfolio API returns `value_invested`, `value_returned`, `net_value_change` summed over ALL transfers (build >25 transactions so a page-sized sum would be wrong); a portfolio with no transfers returns null for each, NOT zero; `ordering=net_value_change` sorts (SC-015)
+- [ ] T304 Annotate the three sums in `PortfolioViewSet.get_queryset()` and expose them read-only on both Portfolio serializers; add `net_value_change` to `ordering_fields` (research I6-1)
+- [ ] T305 Write failing tests for `GET /portfolios/{id}/holdings/`: per-asset net quantity across all transfers; assets whose net is zero are omitted; **a 2:1 split recorded as a position-only transfer doubles the holding and leaves the aggregates unchanged** (SC-017, FR-035)
+- [ ] T306 Implement the `holdings` action per research I6-3; T305 passes
+- [ ] T307 Regenerate `openapi.yaml` + `src/generated/api-types.ts`; extend the frontend `Portfolio` type and add a `getPortfolioHoldings` service call
 
-- [X] T204 Write failing tests `src/components/ClampedText/ClampedText.test.tsx`: renders its text; applies a 2-line clamp style; attaches a tooltip ONLY when `scrollHeight > clientHeight`; no tooltip when the text fits; the full text is the tooltip title
-- [X] T205 Implement `src/components/ClampedText/index.tsx` per research I5-2 and export it; T204 passes. Do NOT modify `OverflowTooltip` — it stays the single-line primitive
+## Phase 3: PnL presentation (FR-032, FR-033)
 
-## Phase 3: Convert the eleven pages (FR-023/FR-024)
+- [ ] T308 Write failing tests: a CLOSED portfolio's panel shows one "Realized PnL" figure; an OPEN one shows Invested / Returned / Net invested + holdings and **contains no element whose text includes "PnL"** (the vocabulary is the requirement); a portfolio with no transfers shows `<EmptyValue />` rather than 0
+- [ ] T309 Implement the PnL panel on `detail.tsx` (Descriptions, per-state content, the no-price-feed note); locale keys in BOTH files
+- [ ] T310 Write failing tests then add the Portfolios list PnL column: shows the net figure with the row's own currency, marks open vs closed, sortable via `net_value_change`; never renders a cross-currency total (FR-033)
 
-Each task: replace the page's `dataWidths` memo + `widthForHeader(...)` spreads with `autoWidth`, keep every existing test green, and wrap overflow-prone text columns in `ClampedText`.
+## Phase 4: Edit modal cleanup (FR-036)
 
-- [X] T206 [P] `src/pages/finance/portfolios/index.tsx` — includes the **reproduced description defect**: assert the fix with a test (≤2 lines, no overflow, tooltip present)
-- [X] T207 [P] `src/pages/finance/currencies/index.tsx`
-- [X] T208 [P] `src/pages/finance/accounts/index.tsx`
-- [X] T209 [P] `src/pages/finance/exchange-rates/index.tsx`
-- [X] T210 [P] `src/pages/finance/assets/index.tsx`
-- [X] T211 [P] `src/pages/finance/balance-sheets/index.tsx` + `detail.tsx` + `edit.tsx` + `new.tsx`
-- [X] T212 [P] `src/pages/inventory/catalog/index.tsx` — the largest; keep the `url` 320px cap behaviour and the measure-what-you-render note intact
-- [X] T213 `src/pages/finance/portfolios/detail.tsx` — convert after Phase 5/6 touch the same file, to avoid edit collisions
-- [X] T214 Grep gate: zero `measureTextWidth` / `dataWidths` occurrences under `src/pages/` (SC-010); `widthForHeader` remains only where a genuinely fixed width is intended
+- [ ] T311 Update `PortfolioFormModal` tests: edit mode offers Name and Description only — no State select, no Base Currency input — while base currency remains VISIBLE read-only; a separate test keeps Close/Reopen working as the state path
+- [ ] T312 Remove the State and Base Currency form items from edit mode in `PortfolioFormModal.tsx`; keep them in create mode where base currency is chosen once
 
-## Phase 4: Backend — multi-line description + closed-portfolio freeze (FR-025, FR-026)
+## Phase 5: Polish & verification
 
-- [X] T215 Write failing tests `backend/tests/finance/test_portfolios.py`: a closed portfolio rejects portfolio field edits (400), and `backend/tests/finance/test_transactions.py`: creating (already covered), **editing**, and **deleting** a transaction of a closed portfolio all fail; **reopening a closed portfolio succeeds** (the case a naive validator bricks); an active portfolio is unaffected; deleting the portfolio itself is still allowed (SC-012)
-- [X] T216 Widen `Portfolio.description` to `TextField` in `backend/finance/models.py` and `makemigrations finance` → 0013 (FR-025)
-- [X] T217 Implement the freeze per research I5-3 in `backend/finance/serializers.py` + `views.py`; T215 passes
-- [X] T218 Regenerate `openapi.yaml` (spectacular) and `src/generated/api-types.ts`; verify the finance `data_io` TableDescriptors still match the model (Principle I)
-
-## Phase 5: Portfolio list + detail UI (FR-025, FR-026, FR-027, FR-028)
-
-- [X] T219 Portfolios list: description column `visible: false` by default (FR-027); test asserts it is absent initially and appears via the Columns control, and that the default saved-view baseline reflects it
-- [X] T220 `PortfolioFormModal`: description uses a multi-line text area with no maxLength (FR-025); detail panel renders the description clamped
-- [X] T221 Closed-portfolio UI: disable New/Edit/Delete transaction controls and the panel Edit action when `state === 'closed'`; Reopen stays enabled; tests assert disabled state (the backend is the real guard — SC-012)
-- [X] T222 Transactions footer: "X transactions, Y transfers" on the footer's information side (FR-028); count transfers across the loaded transactions; test asserts both numbers
-
-## Phase 6: Charts (FR-029)
-
-- [X] T223 Write failing tests for the chart card: renders an AntD Card with `tabList` (Waterfall / Breakdown); mocks `echarts-for-react` and asserts the ECharts **option** — waterfall has a transparent base series plus a delta series in chronological order with cumulative values; breakdown has one bar per asset summing that asset's Value Change; transfers with null value_change are excluded; an empty state renders when nothing is valued
-- [X] T224 Implement `src/pages/finance/portfolios/PortfolioCharts.tsx` per research I5-4 (ECharts, `renderer: 'svg'`, `notMerge`, `overflowX: auto` wrapper, `minWidth: 600`, `Decimal` sums) and mount it on the detail page above the Transactions panel; T223 passes
-- [X] T225 Locale keys for both charts, the tab labels, the exclusion note, and the empty state — both locale files, same commit (Principle VIII)
-
-## Phase 7: Polish & verification
-
-- [X] T226 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend `uv run ruff check . && uv run pytest`
-- [X] T227 Real-data probe after rebuilding the frontend image (compare container image id vs built image id and `--force-recreate` — the iteration-4 gotcha): Portfolios description ≤2 lines with no overflow and a working tooltip (SC-011), description hidden until revealed, a closed portfolio's controls disabled, footer counts correct on the 49-transaction portfolio (SC-013), both charts render with real values
-- [X] T228 Backend probe: closed-portfolio mutations rejected at the API and reopen accepted, against a scratch DB — never the real one
+- [ ] T313 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend `uv run ruff check . && uv run pytest`
+- [ ] T314 Real-data verification after rebuilding + force-recreating the containers: Transactions headers all populated; `永豐 DCA TW.00918` reports invested −474,391 / returned 0 / net −474,391 matching a direct SQL sum, with the word PnL absent from that page; a closed portfolio shows Realized PnL; holdings list non-empty
 
 ## Dependencies
 
-- T201–T203 block Phase 3. T204–T205 block the `ClampedText` adoptions in Phase 3.
-- Phase 3 tasks are per-file and parallel, except T213 which waits for Phases 5–6.
-- T215–T217 (backend) are independent of the frontend phases; T218 gates any frontend use of the new types.
-- Phase 6 depends on nothing but the detail page existing; run after Phase 5 to avoid `detail.tsx` collisions.
-- Phase 7 last.
+- Phase 1 is independent — land it first.
+- T303–T304 block T310 (the list column reads the annotation); T305–T307 block T309's holdings line.
+- Phase 3 and Phase 4 both touch portfolio UI files; run Phase 3 then Phase 4.
+- Phase 5 last.
 
-**Total: 28 tasks** (Sizing 3, Clamp 2, Conversions 9, Backend 4, UI 4, Charts 3, Polish 3)
+**Total: 14 tasks** (Header 2, Backend 5, PnL 3, Modal 2, Polish 2)
 
 ---
 
-# Archive — Iterations 1–4 (complete)
+# Archive — Iterations 1–5 (complete)
 
 - **Iteration 3** (2026-08-13/14, 26 tasks): legacy CSV import (38 assets / 55 portfolios / 359 transactions / 837 transfers, run against real data 2026-08-14), the transactions-list 500 fix, migration 0012 (18-decimal amounts, `Portfolio.description`, `Transaction.chain_id`/`tx_hash`, `Transfer.remark`, `Asset.category` dropped), and entity-views / quick-search / shared-confirm-dialog adoption. Commits `39478fa`, `a09ef48`.
+- **Iteration 5** (2026-08-16, 28 tasks): constitution v1.26.0 — PageTable took ownership of column sizing (`autoWidth`, eleven pages converted, 81 call sites removed), `ClampedText` two-line cells, `Portfolio.description` → TextField (migration 0013), closed-portfolio freeze enforced server-side, description hidden by default, footer counts, and the waterfall + breakdown charts. Verified 7/7 UI and 8/8 API. Commits `0ccca3d`, `f264092`, `16b2b0c`, `253c3d7`, `368e95f`.
 - **Iteration 4** (2026-08-15, 19 tasks): constitution v1.25.0 whole-row navigation with the shared `useRowLink` helper, View buttons removed system-wide, portfolio panel converted to responsive `Descriptions`, Close/Reopen moved to the panel header, and the Transactions panel rebuilt as a catalog-style tree table with Decimal-summed parent summaries. Verified 14/14 against real data. Commits `c6db24b`, `e26758b`, `9e714ee`, `c8916e2`.

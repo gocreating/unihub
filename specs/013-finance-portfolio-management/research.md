@@ -317,3 +317,49 @@ The UI disables New/Edit/Delete transaction controls and the panel's Edit action
 **Data shape measured before designing**: ≤53 transactions per portfolio (median **2**), ≤5 distinct assets. So the charts must degrade gracefully — a median portfolio yields a two-step waterfall — and an empty state is the common case, not an edge case.
 
 **Scale caveat**: the charts summarise the transactions currently loaded by the panel's query (which is paginated and filter/search-scoped), so what they show always matches the table beneath them. That is stated in the card rather than silently implied.
+
+---
+
+# Iteration 6 research (2026-08-16) — PnL, holdings, header defect
+
+## I6-1: Aggregates are computed in the BACKEND, over all transfers
+
+**Decision**: `PortfolioViewSet.get_queryset()` annotates three sums and the serializer exposes them read-only:
+
+```python
+value_invested  = Sum("transactions__transfers__value_change", filter=Q(...__lt=0))
+value_returned  = Sum("transactions__transfers__value_change", filter=Q(...__gt=0))
+net_value_change = Sum("transactions__transfers__value_change")
+```
+
+`net_value_change` joins `ordering_fields` so the list column sorts.
+
+**Rationale — this is a correctness requirement, not an optimisation.** The transactions panel is paginated at 25 rows and the largest portfolio has 49 transactions, so any frontend sum would silently report roughly half the truth. The iteration-5 charts already carry this caveat (they summarise the loaded page by design, stated in the card); PnL must NOT, because a wrong PnL looks exactly like a right one. It also keeps the list column O(1) queries instead of fetching every transfer for 55 portfolios.
+
+**Gotcha**: a portfolio with no transfers annotates `NULL`, not `0` — the difference between "no data" and "nets to zero" must survive to the UI, which renders `<EmptyValue />` for the former.
+
+**Second gotcha**: summing a `Sum` across the join multiplies rows if another multi-valued join is present. Only one relation is traversed here, so no `distinct` is needed — but the tests assert the aggregate against a direct DB sum so any future join bug shows up immediately.
+
+## I6-2: Realized vs open — vocabulary, not just formatting
+
+**Decision**: the figure `net_value_change` is presented as:
+- **closed** → "Realized PnL", one number;
+- **open** → "Invested / Returned / Net invested" plus held positions and an explicit note that unrealized PnL needs market prices.
+
+The word "PnL" never appears on an open portfolio.
+
+**Rationale**: measured against the real data, `[Active] 永豐 DCA TW.00918` nets −474,391 TWD from 49 purchases and **zero sales** — that figure is deployed capital. Labelling it "unrealized PnL" would state a 474k loss that did not happen. The 50 closed portfolios total +2,737, where the same arithmetic genuinely is profit. (Note also that a cross-portfolio total is meaningless: base currencies differ, and an earlier −1,283,062 figure quoted in discussion was invalid precisely because it added TWD to USD.)
+
+## I6-3: Holdings endpoint
+
+**Decision**: `GET /api/v1/finance/portfolios/{id}/holdings/` → `[{ asset_id, asset_name, quantity }]`, grouping transfers by asset, summing `asset_change_amount`, and omitting assets whose net is exactly zero.
+
+**Rationale**: the "still holding" line needs all transfers, same pagination argument as I6-1. A dedicated action keeps it off the list endpoint (55 portfolios × their assets) while giving the detail panel one cheap call. Zero-net assets are omitted because a fully exited position is not a holding.
+
+**Splits fall out for free** (FR-035): a 2:1 split is `+N` units with no Value Change, so the holding doubles and every PnL figure is untouched. No split entity — the 223 imported `UPDATE_POSITION` legs already have exactly this shape.
+
+## I6-4: The empty-header defect
+
+**Cause**: in the iteration-4 merged column set, `title` was only ever set by `makeSortProps` (timestamp) or explicitly (actions). The five columns added for the tree — `description`, `asset`, `asset_change`, `value_change`, `remark` — declared `key`/`render` but no `title`, so AntD rendered empty `<th>`s. Verified live: `["", "Time", "", "", "", "", "", "Actions"]`.
+
+**Fix**: give every column an explicit `title`; the caret stays deliberately blank. **Guard**: a test asserting that every header except the caret is non-empty, so the next merged column set cannot repeat this (FR-030/SC-014). The same guard is cheap to apply to any table and belongs with the panel's tests.

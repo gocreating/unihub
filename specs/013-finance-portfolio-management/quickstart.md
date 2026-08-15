@@ -93,22 +93,33 @@ def destroy(self, request, *args, **kwargs):
         return Response({'detail': '...'}, status=status.HTTP_409_CONFLICT)
 ```
 
-### Expandable transfer rows (frontend)
+### Expandable transfer rows (frontend) — SUPERSEDED in iteration 4
+
+The nested-`ProTable`-in-`expandedRowRender` pattern is gone (FR-022). Transfers
+are child ROWS of the transactions table sharing its columns, following the
+inventory catalog:
+
 ```tsx
-// In TransactionsPage, pass to PageTable:
-expandable={{
-  expandedRowRender: (record) => (
-    <ProTable
-      ghost
-      dataSource={record.transfers}
-      columns={transferColumns}
-      search={false}
-      toolBarRender={false}
-      pagination={false}
-    />
-  ),
-}}
+// Rows are a union; children hang off the transaction.
+const rows = transactions.map((txn) => ({
+  ...txn,
+  rowType: 'transaction' as const,
+  children: txn.transfers.map((tr) => ({ ...tr, rowType: 'transfer' as const })),
+}));
+
+<PageTable<TxnRow>
+  rowKey={rowKeyOf}            // `${rowType}:${id}` — PKs are not unique across the union
+  dataSource={rows}
+  columns={columns}            // ONE column set; each renderer switches on rowType
+  columnEmptyText={false}
+  indentSize={0}
+  expandable={{ showExpandColumn: false, expandedRowKeys }}
+/>
 ```
+
+A dedicated `__caret` column (width 44, `data-row-link-ignore`) owns the
+toggle. Collapsed parents summarise: transfer count in the Asset column, net
+value change — summed with `Decimal`, never `Number` — in Value Change.
 
 ### Value Change field label
 When rendering the Transfer form inside a transaction, derive the portfolio's `base_currency` from the selected transaction's portfolio and display the Value Change field label as:

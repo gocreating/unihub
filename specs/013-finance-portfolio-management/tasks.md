@@ -33,7 +33,7 @@
 ## Phase 5: Polish & verification
 
 - [X] T313 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend `uv run ruff check . && uv run pytest`
-- [ ] T314 Real-data verification after rebuilding + force-recreating the containers: Transactions headers all populated; `永豐 DCA TW.00918` reports invested −474,391 / returned 0 / net −474,391 matching a direct SQL sum, with the word PnL absent from that page; a closed portfolio shows Realized PnL; holdings list non-empty
+- [X] T314 Real-data verification after rebuilding + force-recreating the containers: Transactions headers all populated; `永豐 DCA TW.00918` reports invested −474,391 / returned 0 / net −474,391 matching a direct SQL sum, with the word PnL absent from that page; a closed portfolio shows Realized PnL; holdings list non-empty
 
 ## Dependencies
 

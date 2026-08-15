@@ -242,3 +242,34 @@ Multi-line description accepted; while closed, CREATE / EDIT / DELETE of a
 transaction and EDIT of the portfolio all return 400; **reopening returns 200**
 and editing works again afterwards — the case a naive "reject all writes when
 closed" guard bricks.
+
+---
+
+# Iteration 6 verification (2026-08-16) — PnL, holdings, headers
+
+Containers rebuilt and force-recreated (ids compared first). **13/13 passed.**
+
+- **API**: `JD2Wf2BF` reports `invested -474391 / returned null / net -474391`,
+  matching the direct SQL sum over all 49 transactions — proving the aggregate
+  is server-side and not a page-sized frontend sum.
+- **SC-014**: the Transactions header row is now
+  `["", "Time", "Description", "Asset", "Asset Change", "Value Change (TWD)", "Remark", "Actions"]`
+  — exactly one blank, the caret. It was 6 blanks before.
+- **SC-016**: on the open portfolio the Descriptions labels are
+  `… | Invested | Returned | Net invested` with **no label containing "PnL"**;
+  a closed portfolio shows `Realized PnL` and no "Net invested".
+- **SC-015**: −474,391 TWD is displayed, never described as a loss; the
+  no-price-feed note is present.
+- List: the `PnL / Net` column renders per-row currency with a realized/net
+  marker (e.g. `-18647.12007343 USD net`).
+
+## Follow-up worth a decision (observed during verification)
+
+The holdings line for the DCA portfolio reads
+`大華優利高填息30 × 20029, 新台幣 × -474391`. The negative 新台幣 (TWD) entry is
+arithmetically correct — cash legs are transfers of the TWD *asset*, a
+consequence of the iteration-3 "port legacy data as-is" decision — but as a
+"Still holding" line it restates the Invested figure as a negative holding.
+Options if it grates: exclude assets that are also Currency codes from
+holdings, or keep them for fidelity. Not changed unilaterally: it follows from
+a decision the user made deliberately.

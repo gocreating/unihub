@@ -34,7 +34,7 @@ Iteration 3 delivers three work streams on top of the accepted Stories 1–3:
 
 ## Constitution Check
 
-*Constitution v1.24.0 — evaluated 2026-08-13, re-evaluated after Phase 1 design: PASS*
+*Constitution v1.25.0 — evaluated 2026-08-15 (iteration 4), re-evaluated after Phase 1 design: PASS*
 
 | Gate | Principle | Status |
 |---|---|---|
@@ -100,3 +100,45 @@ migration/                                # 4 legacy CSVs — UNTRACKED, never c
 - **Importer**: `csv` stdlib parsing (quoted fields), `transaction.atomic()`, legacy `reference` → primary key (nanoid-compatible ≤12 chars) giving natural idempotency via `exists()` skip; `Decimal(raw) / 10**decimals` per legacy asset; settlement conversion uses the portfolio's settlement-asset decimals; `created_time`/`updated_time` preserved via post-insert `QuerySet.update()` (bypasses `auto_now*`); per-portfolio `refresh_transaction_times()` at the end; per-entity created/skipped report; abort on unknown reference.
 - **Precision end-to-end**: DB `Decimal(38,18)` → DRF `DecimalField(..., coerce_to_string=True)` → UI `InputNumber stringMode` + `precision`-free display with trailing-zero trim.
 - **Views/search adoption** follows the currencies/accounts pages verbatim (tableKeys `finance-assets`, `finance-portfolios`); the portfolio-detail transactions panel gets quick search only (no view tabs on embedded tables — consistent with the hub: view tabs exist solely on top-level entity list pages).
+
+---
+
+## Iteration 4 (2026-08-15) — constitution v1.25.0 sweep + portfolio UX
+
+**Constitution Check (v1.25.0)**: PASS. This iteration exists to *satisfy* the new
+Principle VI rule ("Whole-row navigation replaces the View action") across the whole
+system, and it touches three further Principle VI rules: panel-header actions
+(Close/Reopen becomes a visible action beside Edit), content-width responsiveness
+(the Descriptions column count follows measured panel width, not viewport
+breakpoints), and PageTable layout (Principle VII — the transactions tree keeps
+using `PageTable`; only its row model changes). Principle VIII: both locale files
+change in the same commit. No backend, model, or API change — this is a frontend-only
+iteration, so the data-portability and OpenAPI rules are not engaged.
+
+### Scope
+
+1. **Shared helper** `useRowLink()` (research I4-1) — the single implementation the
+   constitution requires, with modifier/middle-click parity and the
+   interactive-element + text-selection guards.
+2. **System-wide sweep** (research I4-4, FR-018/FR-019) — Portfolios, Balance Sheets,
+   Inventory Scenarios adopt row navigation; Portfolios and Balance Sheets lose their
+   View buttons; the Portfolios list loses its Actions column entirely.
+3. **Portfolio panel** (FR-021) — responsive AntD `Descriptions` holding every field,
+   with Close/Reopen promoted to a visible header action (FR-020).
+4. **Transactions tree** (FR-022) — transfers become child rows sharing the parent's
+   columns, with a caret column and summarising parents (research I4-3).
+
+### Risks & mitigations
+
+- **Whole-row navigation is a classic source of regressions**: a Delete click or a
+  text selection that navigates away. Mitigated by the two guards in the one shared
+  helper and asserted directly (SC-008) rather than assumed.
+- **Middle-click cannot be tested with `fireEvent.click`** — it needs an `auxclick`
+  event with `button: 1`; a test that only fires a plain click would pass against a
+  helper that ignores modifiers entirely, which is exactly the failure the rule
+  targets. Tests must fire real `auxclick`/modifier events and assert `window.open`.
+- **Composite `rowKey`** in the transactions tree: switching from `id` to
+  `rowType:id` also changes `expandedRowKeys`; a mismatch silently disables
+  expansion, so the expansion test must assert child rows actually appear.
+- The catalog must NOT become row-clickable; its regression tests stay green as the
+  proof.

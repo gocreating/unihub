@@ -209,3 +209,54 @@ entity's page can no longer render.
 **Rationale**: 016 FR-039 mandates ONE pattern with no per-page variation and one baseline definition (`viewConfigFromColumns`); 019 put search on every entity table. Reusing the currencies page verbatim keeps the five+2 pages mechanically identical, and the per-page vitest locks from 016 round 12 define the assertions the new pages' tests must replicate (first request carries no filter/ordering + default page size; stored default view applied on arrival with no indicator).
 
 **Alternatives considered**: View tabs on the detail-page transactions table — rejected: no precedent in the hub, sessionless per-visit tabs make little sense scoped under a parent record, and the panel's filter context (portfolio id) must stay outside user-editable view state.
+
+---
+
+# Iteration 4 research (2026-08-15) — constitution v1.25.0 sweep + portfolio UX
+
+## I4-1: One shared row-link helper (`rowLinkProps`)
+
+**Decision**: New `useRowLink()` hook in `components/PageTable/useRowLink.ts`, exported from the PageTable barrel (it feeds `PageTable`'s `onRow`, so it belongs beside the table, not in generic `hooks/`). Usage is one line per page:
+
+```tsx
+const rowLink = useRowLink();
+<PageTable onRow={(record) => rowLink(`/finance/portfolios/${record.id}`)} … />
+```
+
+It returns `{ style: { cursor: 'pointer' }, onClick, onAuxClick }`:
+- `onClick`: modifier (Ctrl/Cmd/Shift) → `window.open(url, '_blank', 'noopener,noreferrer')`; otherwise `navigate(url)`.
+- `onAuxClick`: `button === 1` (middle) → `preventDefault()` + `window.open(...)`. React's `onAuxClick` is the only way to catch middle-click; `onClick` never fires for button 1 in Chrome.
+- Both bail via a shared `shouldIgnore(e)` guard: `e.target.closest(INTERACTIVE)` where INTERACTIVE covers `a, button, input, select, textarea, label, [role="button"], [role="checkbox"], .ant-checkbox, .ant-switch, [data-actions-col], [data-row-link-ignore]`, plus a non-collapsed `window.getSelection()` whose trimmed text is non-empty.
+
+**Rationale**: constitution v1.25.0 mandates ONE helper so semantics cannot drift (the FR-039 "one pattern" lesson). `[data-actions-col]` already wraps every actions cell in this codebase, so the Delete-button guard works on every existing table for free; `[data-row-link-ignore]` is the opt-out for bespoke controls such as an expand caret.
+
+**Alternatives considered**: (a) an invisible absolutely-positioned `<a>` overlaying the row — defeated by AntD's sticky/fixed columns which repaint cells into separate DOM subtrees; (b) wrapping every cell's content in an anchor — destroys cell layout and nests anchors inside the existing name link; (c) plain `onClick` with no modifier handling — explicitly the failure mode the constitution rule names.
+
+## I4-2: Responsive `Descriptions` driven by CONTENT width
+
+**Decision**: The Portfolio panel uses AntD `Descriptions` with a numeric `column` derived from the existing `useContainerWidth()` measurement (`width < 560 → 1`, `< 900 → 2`, else `3`), NOT AntD's `column={{ xs, sm, md … }}` breakpoint object.
+
+**Rationale**: AntD's Descriptions breakpoints follow the **viewport**, and the constitution's form-layout rule already establishes that narrowness MUST be judged by the actual content width, because a collapsed-sidebar-narrow content area must also stack. The detail page already measures its panel with `useContainerWidth(720)` for `PanelHeaderActions`; the same `width` now also drives the column count — one measurement, two consumers, no new observer.
+
+## I4-3: Transactions as a single tree table (catalog pattern)
+
+**Decision**: Replace the nested `<ProTable>` inside `expandedRowRender` with real child rows:
+- Row union `TxnRow = (Transaction & { rowType: 'transaction'; children: TxnRow[] }) | (Transfer & { rowType: 'transfer' })`.
+- Shared columns: `__caret | timestamp | description | asset | asset_change | value_change | remark | actions`; every renderer switches on `rowType`.
+- `indentSize={0}`, `expandable={{ showExpandColumn: false, expandedRowKeys }}`, caret column keyed `__caret` (width 44) that participates in column config exactly as the catalog's does, and carries `data-row-link-ignore`.
+- **Parent summary (clarified 2026-08-15)**: a transaction row renders `N transfers` in the Asset column and the **sum of its transfers' `value_change`** in the Value Change column; child rows render their own asset/amount/value/remark; the Actions column renders only on the parent.
+- **`rowKey` is composite** — `` `${rowType}:${id}` `` — because transaction and transfer PKs come from two different legacy tables whose references were reused verbatim as primary keys, so a bare `id` is not guaranteed unique across the union. `expandedRowKeys` uses the same composite form.
+
+**Rationale**: matches the inventory catalog, the most-current table in the hub, and removes a nested header row that duplicated column labels inside every expanded transaction. Summarising on the parent mirrors the catalog's own behaviour (a collapsed acquisition merges its single item's data rather than rendering blanks).
+
+## I4-4: System-wide violation sweep
+
+| Page | Violation | Fix |
+| --- | --- | --- |
+| `pages/finance/portfolios/index.tsx` | View button; no row nav | Row link; **whole Actions column removed** (View gone per constitution, Close/Reopen moved to the detail panel, Edit/Delete already gone in iteration 2) |
+| `pages/finance/balance-sheets/index.tsx` | View button; no row nav | Remove View; row link; Edit (→ `/edit`, a *different* target) and Delete stay |
+| `pages/inventory/scenarios/index.tsx` | Name links but row does not navigate | Add row link (name `<Link>` stays) |
+| Currencies, Accounts, Exchange Rates, Assets | — | Exempt: no detail page |
+| `pages/inventory/catalog/index.tsx` | — | Exempt: rows have no detail page and parents only expand; the constitution explicitly excludes expand-only rows. Its caret gains `data-row-link-ignore` defensively |
+
+`common.view` and `EyeOutlined` become dead in `pages/` — the locale key is retained only if still referenced elsewhere, otherwise removed from both locale files.

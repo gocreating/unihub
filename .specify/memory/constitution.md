@@ -1,27 +1,45 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.23.0 → 1.24.0 (minor — Principle VI gains one NEW mandatory
-  rule from user feedback, 2026-07-20: "Hyperlinked row identifiers & actions"
-  — when an entity has a detail or edit page, the table row's primary
-  identifier and every page-navigating row action MUST be real hyperlinks
-  (<a href> / router <Link>), never onClick-only navigation, so users can
-  open them in another tab. Codifies the Edit→href pattern established in
-  the inventory iterations 19/21. Note: originally drafted as 1.23.0; renumbered
-  to 1.24.0 because feature 017's per-column pinning amendment claimed 1.23.0
-  on main first.)
+Version change: 1.24.0 → 1.25.0 (minor — Principle VI gains one NEW mandatory
+  rule from user feedback, 2026-08-15: "Whole-row navigation replaces the View
+  action". Clicking anywhere on an entity row MUST navigate to that entity's
+  detail page with full hyperlink semantics (plain click = SPA nav;
+  Ctrl/Cmd/Shift+click and middle-click = new tab), and the row MUST NOT carry
+  a separate View/eye action button. Guards are mandatory: clicks originating
+  in an interactive control (button, anchor, input, checkbox, expand caret) or
+  made while text is selected MUST NOT navigate, and the behaviour MUST come
+  from one shared helper rather than per-page handlers.
+
+  Bump rationale — MINOR, not MAJOR: no principle is removed or redefined and
+  governance is unchanged; this adds one mandatory rule inside Principle VI
+  and prohibits one widget (the View button) it implies. This follows the
+  precedent set by v1.24.0, which was likewise scored MINOR for adding a
+  mandatory Principle VI rule carrying an "applies immediately to existing
+  pages" clause. The rule does make currently-compliant pages non-compliant;
+  those violations are enumerated below rather than deferred.)
 Modified principles:
-  - VI. UI/UX Reference: ov-fleet — added "Hyperlinked row identifiers &
-    actions (open-in-new-tab)" mandatory rule.
+  - VI. UI/UX Reference: ov-fleet — added "Whole-row navigation replaces the
+    View action" mandatory rule; extended the rationale paragraph to cover why
+    modifier-click parity (not merely an onClick) is the point of the rule.
 Added sections: none
 Removed sections: none
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ No changes needed (generic gate)
   - .specify/templates/spec-template.md ✅ No changes needed
   - .specify/templates/tasks-template.md ✅ No changes needed
-Follow-up TODOs: none — existing pages that navigate via onClick-only
-  handlers (if any remain) fall under the "applies immediately" clause and
-  are picked up by the next feature touching each page.
+Known violations at amendment time (system-wide sweep, to be corrected by
+feature 013 iteration 4 — NOT deferred):
+  - pages/finance/portfolios/index.tsx — View (eye) action button; no row click
+  - pages/finance/balance-sheets/index.tsx — View (eye) action button; no row
+    click
+  - pages/inventory/scenarios/index.tsx — name is a real <Link> but the row
+    itself does not navigate
+  Exempt (no detail page, so no row target): currencies, accounts,
+  exchange-rates, assets, and the inventory catalog (its rows open an Edit
+  page and its parent rows expand — the rule explicitly excludes expand-only
+  rows from becoming clickable).
+Follow-up TODOs: none
 -->
 
 # UniHub Constitution
@@ -266,6 +284,32 @@ reference implementation to follow.
   constitution violation. Row actions that do NOT navigate (e.g. Delete, which
   opens a confirmation modal) remain buttons. Applies immediately to all
   existing entity tables, not only new ones.
+- **Whole-row navigation replaces the View action**: When an entity has a
+  detail page, **clicking anywhere on its table row MUST navigate to that
+  page with the same effect as clicking the hyperlink**, and the row MUST NOT
+  carry a separate "View" (eye-icon) action — the row click replaces it. A
+  `View` button in an Actions column is a violation. Because a `<tr>` cannot
+  itself be an `<a>`, the row MUST reproduce every anchor affordance:
+  - The primary identifier cell still renders a real `<a href>` (rule above),
+    so right-click → copy link and native middle-click keep working there.
+  - A **plain left click anywhere on the row** navigates in-SPA.
+  - **Ctrl/Cmd/Shift+click and middle-click (auxiliary button)** anywhere on
+    the row MUST open the detail page in a **new tab**
+    (`window.open(url, '_blank', 'noopener,noreferrer')`), exactly as the
+    anchor would.
+  - The row MUST signal clickability with `cursor: pointer`.
+  - Row clicks MUST be **ignored** when the event originates inside an
+    interactive control — button, anchor, input, select, checkbox, or an
+    expand/collapse caret — or when the user has a **non-empty text
+    selection**. Pressing Delete or selecting a cell's text MUST NOT navigate.
+  - Every table MUST obtain this behaviour from **one shared helper** feeding
+    the table's `onRow` (a single `useRowLink`/`rowLinkProps(url)` utility),
+    never a hand-rolled per-page handler, so the semantics cannot drift
+    between tables.
+  - Rows that have no detail page (e.g. a tree row that only expands) MUST NOT
+    become clickable, and row actions targeting a **different** page than the
+    row itself (e.g. Edit → edit page) remain real hyperlinks.
+  Applies immediately to all existing entity tables, not only new ones.
 - **Standalone-page navigation (no Cancel button)**: Full-page create, edit, and
   detail views (e.g. an entity create/edit page, a record detail page) MUST use a
   breadcrumb for navigation (parent → current) and MUST NOT render a Cancel button.
@@ -320,7 +364,18 @@ instead of wrapped or clipped button rows. Rendering row identifiers and
 page-navigating actions as real hyperlinks restores the browser behaviours
 users rely on for multi-record workflows — opening several records in tabs,
 copying a link to a record — at zero implementation cost over an onClick
-handler.
+handler. Making the whole row navigate removes the redundant View action
+entirely: the row already IS the record, so a button that merely re-states
+"open this record" costs a column of horizontal space and an extra click
+target for no information. Reproducing the modifier-click and middle-click
+behaviours on the row (rather than settling for a plain onClick) is what
+keeps the row a *hyperlink* and not merely a click handler — the failure
+mode this rule exists to prevent is a row that navigates but silently
+swallows Ctrl+click, breaking the open-several-records-in-tabs workflow.
+Centralising it in one helper keeps that guarantee identical on every
+table, and the interactive-element and text-selection guards prevent the
+classic regression where selecting a cell's text or hitting Delete
+navigates the user away.
 
 ### VII. PageTable Layout — NON-NEGOTIABLE
 
@@ -736,4 +791,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.24.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-07-20
+**Version**: 1.25.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-08-15

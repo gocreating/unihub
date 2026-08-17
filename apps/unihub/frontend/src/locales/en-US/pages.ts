@@ -499,6 +499,8 @@ export default {
   'pages.finance.transactions.delete.confirm': 'Delete this transaction and all its transfers? This cannot be undone.',
   'pages.finance.transactions.col.portfolio': 'Portfolio',
   'pages.finance.transactions.col.timestamp': 'Time',
+  'pages.finance.transactions.col.pnl': 'PnL',
+  'pages.finance.transactions.col.position': 'Position',
   'pages.finance.transactions.col.description': 'Description',
   'pages.finance.transactions.col.transferCount': 'Transfers',
   'pages.finance.transactions.form.portfolio': 'Portfolio',

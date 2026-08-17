@@ -73,7 +73,7 @@ class TestTransactions:
                     {
                         "asset": asset["id"],
                         "asset_change_amount": "10.00000000",
-                        "value_change": "-1520.00000000",
+                        "pnl_change": "-1520.00000000",
                     },
                     {
                         "asset": asset2["id"],
@@ -270,7 +270,7 @@ class TestTransactions:
         )
         assert resp.status_code == 201
         transfer = resp.json()["transfers"][0]
-        assert transfer["value_change"] is None
+        assert transfer["pnl_change"] is None
 
     def test_transaction_atomic_rollback_on_bad_transfer(self, auth_client, portfolio):
         from finance.models import Transaction
@@ -392,23 +392,6 @@ class TestTransactionNewFields:
         assert txn["chain_id"] == ""
         assert txn["tx_hash"] == ""
 
-    def test_transfer_remark_round_trip(self, auth_client, portfolio, asset):
-        resp = auth_client.post(
-            "/api/v1/finance/transactions/",
-            {
-                "portfolio": portfolio["id"],
-                "timestamp": "2026-06-01T00:00:00Z",
-                "transfers": [
-                    {"asset": asset["id"], "asset_change_amount": "-1", "remark": "手續費"},
-                    {"asset": asset["id"], "asset_change_amount": "5.0"},
-                ],
-            },
-            content_type="application/json",
-        )
-        assert resp.status_code == 201
-        remarks = sorted(t["remark"] for t in resp.json()["transfers"])
-        assert remarks == ["", "手續費"]
-
     def test_18_decimal_precision_survives_round_trip(self, auth_client, portfolio, asset):
         """Wei-level legacy amounts (FR-008c) — 8dp storage would corrupt these."""
         from decimal import Decimal
@@ -423,7 +406,7 @@ class TestTransactionNewFields:
                     {
                         "asset": asset["id"],
                         "asset_change_amount": wei_amount,
-                        "value_change": "0.000000000000000001",
+                        "pnl_change": "0.000000000000000001",
                     }
                 ],
             },
@@ -433,7 +416,7 @@ class TestTransactionNewFields:
         txn_id = resp.json()["id"]
         transfer = auth_client.get(f"/api/v1/finance/transactions/{txn_id}/").json()["transfers"][0]
         assert Decimal(transfer["asset_change_amount"]) == Decimal(wei_amount)
-        assert Decimal(transfer["value_change"]) == Decimal("1E-18")
+        assert Decimal(transfer["pnl_change"]) == Decimal("1E-18")
 
 
 @pytest.mark.django_db
@@ -446,27 +429,6 @@ class TestTransactionSearch:
         resp = auth_client.get("/api/v1/finance/transactions/", {"search": "interest"})
         assert resp.status_code == 200
         assert resp.json()["count"] == 1
-
-    def test_search_matches_transfer_remark_and_asset_name(self, auth_client, portfolio, asset):
-        resp = auth_client.post(
-            "/api/v1/finance/transactions/",
-            {
-                "portfolio": portfolio["id"],
-                "timestamp": "2026-06-01T00:00:00Z",
-                "transfers": [
-                    {"asset": asset["id"], "asset_change_amount": "-1", "remark": "broker fee"}
-                ],
-            },
-            content_type="application/json",
-        )
-        assert resp.status_code == 201
-        assert auth_client.get(
-            "/api/v1/finance/transactions/", {"search": "broker fee"}
-        ).json()["count"] == 1
-        # Asset name reaches search through the transfers relation
-        assert auth_client.get(
-            "/api/v1/finance/transactions/", {"search": "apple inc"}
-        ).json()["count"] == 1
 
     def test_search_multivalued_join_does_not_duplicate_rows(self, auth_client, portfolio, asset):
         """One transaction with TWO transfers on the same asset must appear once."""
@@ -571,3 +533,99 @@ class TestClosedPortfolioFreezesTransactions:
             == 200
         )
         assert auth_client.delete(f"/api/v1/finance/transactions/{txn['id']}/").status_code == 204
+
+
+@pytest.mark.django_db
+class TestTransferShape:
+    """FR-037: optional pnl_change + EXACTLY ONE of currency / asset."""
+
+    def _post(self, auth_client, portfolio, transfer):
+        return auth_client.post(
+            "/api/v1/finance/transactions/",
+            {
+                "portfolio": portfolio["id"],
+                "timestamp": "2026-06-01T00:00:00Z",
+                "transfers": [transfer],
+            },
+            content_type="application/json",
+        )
+
+    def test_a_cash_leg_uses_currency_and_currency_amount(self, auth_client, portfolio):
+        resp = self._post(
+            auth_client,
+            portfolio,
+            {"currency": "USD", "currency_amount": "-9977", "pnl_change": "-9977"},
+        )
+        assert resp.status_code == 201, resp.content
+        tr = resp.json()["transfers"][0]
+        assert tr["currency"] == "USD"
+        assert tr["asset"] is None
+        from decimal import Decimal
+
+        assert Decimal(tr["currency_amount"]) == Decimal("-9977")
+        assert Decimal(tr["pnl_change"]) == Decimal("-9977")
+
+    def test_a_position_leg_uses_asset_and_asset_change_amount(
+        self, auth_client, portfolio, asset
+    ):
+        resp = self._post(
+            auth_client, portfolio, {"asset": asset["id"], "asset_change_amount": "419"}
+        )
+        assert resp.status_code == 201, resp.content
+        tr = resp.json()["transfers"][0]
+        assert tr["asset"] == asset["id"]
+        assert tr["currency"] is None
+        assert tr["pnl_change"] is None
+
+    def test_both_currency_and_asset_is_rejected(self, auth_client, portfolio, asset):
+        resp = self._post(
+            auth_client,
+            portfolio,
+            {
+                "currency": "USD",
+                "currency_amount": "-1",
+                "asset": asset["id"],
+                "asset_change_amount": "1",
+            },
+        )
+        assert resp.status_code == 400
+
+    def test_neither_currency_nor_asset_is_rejected(self, auth_client, portfolio):
+        resp = self._post(auth_client, portfolio, {"pnl_change": "-100"})
+        assert resp.status_code == 400
+
+    def test_a_currency_leg_requires_an_amount(self, auth_client, portfolio):
+        resp = self._post(auth_client, portfolio, {"currency": "USD", "pnl_change": "-1"})
+        assert resp.status_code == 400
+
+    def test_an_asset_leg_requires_an_amount(self, auth_client, portfolio, asset):
+        resp = self._post(auth_client, portfolio, {"asset": asset["id"]})
+        assert resp.status_code == 400
+
+    def test_remark_is_gone(self, auth_client, portfolio, asset):
+        resp = self._post(
+            auth_client,
+            portfolio,
+            {"asset": asset["id"], "asset_change_amount": "1", "remark": "ignored"},
+        )
+        assert resp.status_code == 201
+        assert "remark" not in resp.json()["transfers"][0]
+
+    def test_the_database_itself_rejects_an_invalid_shape(self, auth_client, portfolio, asset):
+        """The constraint is a DB constraint, not only serializer validation."""
+        from django.db.utils import IntegrityError
+
+        from finance.models import Asset, Portfolio, Transaction, Transfer
+
+        txn = Transaction.objects.create(
+            portfolio=Portfolio.objects.get(pk=portfolio["id"]),
+            timestamp="2026-06-01T00:00:00Z",
+        )
+        with pytest.raises(IntegrityError):
+            Transfer.objects.create(
+                transaction=txn,
+                asset=Asset.objects.get(pk=asset["id"]),
+                asset_change_amount="1",
+                currency_id="USD",
+                currency_amount="1",
+            )

@@ -44,21 +44,25 @@ const TXN = {
   transfers: [
     {
       id: 'tr1',
+      pnl_change: null,
+      currency: null,
+      currency_symbol: null,
+      currency_amount: null,
       asset: 'a1',
       asset_name: '00918.TW',
       asset_change_amount: '419.000000000000000000',
-      value_change: null,
-      remark: '',
       created_at: '2026-06-01T00:00:00Z',
       updated_at: '2026-06-01T00:00:00Z',
     },
     {
       id: 'tr2',
-      asset: 'a2',
-      asset_name: 'TWD',
-      asset_change_amount: '-1.000000000000000000',
-      value_change: '-1.000000000000000000',
-      remark: '手續費',
+      pnl_change: '-1.000000000000000000',
+      currency: 'TWD',
+      currency_symbol: 'NT$',
+      currency_amount: '-1.000000000000000000',
+      asset: null,
+      asset_name: null,
+      asset_change_amount: null,
       created_at: '2026-06-01T00:00:01Z',
       updated_at: '2026-06-01T00:00:01Z',
     },
@@ -301,28 +305,6 @@ describe('PortfolioDetailPage — Descriptions panel + Close/Reopen (iteration 4
 
 // Iteration 3 (US3): chain/tx metadata, transfer remarks, 18dp amounts.
 describe('PortfolioDetailPage — transaction & transfer fields (iteration 3)', () => {
-  it('transaction form offers Chain ID, Tx Hash, and per-transfer Remark fields', async () => {
-    renderPage();
-    await screen.findAllByText('Tech Fund');
-    fireEvent.click(screen.getByRole('button', { name: /New Transaction/ }));
-    expect(await screen.findByLabelText('Chain ID')).toBeTruthy();
-    expect(screen.getByLabelText('Tx Hash')).toBeTruthy();
-    expect(screen.getByPlaceholderText('Optional, e.g. fee')).toBeTruthy();
-  });
-
-  it('expanded transfer rows show remark and trailing-zero-trimmed amounts', async () => {
-    vi.mocked(financeService.listTransactions).mockResolvedValue({
-      count: 1, next: null, previous: null, results: [TXN],
-    } as never);
-    const { container } = renderPage();
-    await screen.findByText('DCA buy');
-    fireEvent.click(container.querySelector('[data-row-link-ignore]') as HTMLElement);
-    expect(await screen.findByText('手續費')).toBeTruthy();
-    // 18dp storage must not leak trailing zeros into the display
-    expect(screen.getByText('419')).toBeTruthy();
-    expect(screen.queryByText('419.000000000000000000')).toBeNull();
-  });
-
   it('deletes a transaction through the shared confirm dialog', async () => {
     vi.mocked(financeService.listTransactions).mockResolvedValue({
       count: 1, next: null, previous: null, results: [TXN],
@@ -444,7 +426,7 @@ describe('PortfolioDetailPage — every column has a header (iteration 6)', () =
     const blanks = headers.filter((h) => h === '');
     expect(blanks).toHaveLength(1);
     expect(headers).toEqual(
-      expect.arrayContaining(['Time', 'Description', 'Asset', 'Remark', 'Actions']),
+      expect.arrayContaining(['Time', 'PnL', 'Position', 'Description', 'Actions']),
     );
   });
 });
@@ -467,7 +449,7 @@ describe('PortfolioDetailPage — transactions tree table (iteration 4)', () => 
     expect(bodyRows(container)).toHaveLength(1);
 
     fireEvent.click(container.querySelector('[data-row-link-ignore]') as HTMLElement);
-    await screen.findByText('手續費');
+    await screen.findAllByText(/00918\.TW/);
 
     // 1 transaction + its 2 transfers, all rows of the SAME table.
     expect(bodyRows(container)).toHaveLength(3);
@@ -475,55 +457,25 @@ describe('PortfolioDetailPage — transactions tree table (iteration 4)', () => 
     expect(container.querySelectorAll('.ant-table-thead')).toHaveLength(1);
   });
 
-  it('summarises transfers on the collapsed parent row', async () => {
-    renderPage();
-    const parent = (await screen.findByText('DCA buy')).closest('tr')!;
-    // Asset column shows the count; Value Change shows the net (0 + -1).
-    expect(parent.textContent).toContain('2 transfers');
-    expect(parent.textContent).toContain('-1');
-  });
-
-  // The whole point of the (38,18) columns: the parent summary must not be
-  // computed in float. Number arithmetic yields -1.0000000673059009 and can
-  // emit scientific notation for wei-scale values.
-  it('sums the parent net value at full 18dp precision, never in float', async () => {
-    vi.mocked(financeService.listTransactions).mockResolvedValue({
-      count: 1,
-      next: null,
-      previous: null,
-      results: [
-        {
-          ...TXN,
-          transfers: [
-            { ...TXN.transfers[0]!, value_change: '-0.000000067305900768' },
-            { ...TXN.transfers[1]!, value_change: '-1.000000000000000000' },
-          ],
-        },
-      ],
-    } as never);
-    renderPage();
-    const parent = (await screen.findByText('DCA buy')).closest('tr')!;
-    expect(parent.textContent).toContain('-1.000000067305900768');
-    expect(parent.textContent).not.toContain('e-');
-  });
-
   it('toggles the caret open and closed', async () => {
     const { container } = renderPage();
     await screen.findByText('DCA buy');
-    const caret = container.querySelector('[data-row-link-ignore]') as HTMLElement;
-    fireEvent.click(caret);
-    await screen.findByText('手續費');
+    const bodyRows = () =>
+      container.querySelectorAll('.ant-table-tbody tr.ant-table-row').length;
+    expect(bodyRows()).toBe(1);
+
     fireEvent.click(container.querySelector('[data-row-link-ignore]') as HTMLElement);
-    await waitFor(() => {
-      expect(screen.queryByText('手續費')).toBeNull();
-    });
+    await waitFor(() => expect(bodyRows()).toBe(3)); // parent + 2 legs
+
+    fireEvent.click(container.querySelector('[data-row-link-ignore]') as HTMLElement);
+    await waitFor(() => expect(bodyRows()).toBe(1));
   });
 
   it('renders row actions on the parent only', async () => {
     const { container } = renderPage();
     await screen.findByText('DCA buy');
     fireEvent.click(container.querySelector('[data-row-link-ignore]') as HTMLElement);
-    await screen.findByText('手續費');
+    await screen.findAllByText(/00918\.TW/);
     const rows = bodyRows(container);
     expect(rows[0]!.querySelectorAll('button').length).toBeGreaterThan(0);
     const childRows = rows.slice(1);

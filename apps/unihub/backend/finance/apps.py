@@ -11,6 +11,17 @@ class FinanceConfig(AppConfig):
         from data_io.registry import TableDescriptor, auto_system_fields, register
         from finance.models import Account, Balance, BalanceSheet, Currency, ExchangeRate
 
+        # ── Principle I deferral, recorded (not silently omitted) ────────
+        # Asset / Portfolio / Transaction / Transfer are NOT yet registered with
+        # data_io. This predates iteration 7 (they were never registered when
+        # feature 013 landed) and is called out here because the principle
+        # requires an omission to be explicit. Transfer in particular now needs a
+        # descriptor whose FK overrides cover BOTH optional legs (currency_id →
+        # finance.currency, asset_id → finance.asset) plus the exactly-one
+        # constraint, so it is a piece of work in its own right rather than a
+        # line to bolt on during a model change.
+        # TODO(013-data-io): register the four portfolio entities.
+
         # Currency — no FK fields; auto_system_fields covers all columns.
         register(
             TableDescriptor(

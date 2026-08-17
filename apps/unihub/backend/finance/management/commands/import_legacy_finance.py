@@ -82,6 +82,12 @@ class Command(BaseCommand):
 
     def _import_assets(self, asset_rows, created, skipped):
         for r in asset_rows:
+            # FR-038: a settleable legacy asset IS a currency. Creating an Asset
+            # for it is what conflated the two concepts in the first place; its
+            # transfers become currency legs instead (see _import_transfers).
+            if r["is_settleable"].strip().lower() == "true":
+                skipped["assets"] += 1
+                continue
             if Asset.objects.filter(pk=r["reference"]).exists():
                 skipped["assets"] += 1
                 continue
@@ -90,7 +96,15 @@ class Command(BaseCommand):
             created["assets"] += 1
 
     def _ensure_currencies(self, portfolio_rows, legacy_assets, created):
-        for ref in sorted({r["settlement_asset_reference"] for r in portfolio_rows}):
+        refs = {r["settlement_asset_reference"] for r in portfolio_rows}
+        # Every settleable asset becomes a Currency (FR-038), whether or not a
+        # portfolio settles in it — its transfers need the code to point at.
+        refs |= {
+            ref
+            for ref, a in legacy_assets.items()
+            if a["is_settleable"].strip().lower() == "true"
+        }
+        for ref in sorted(refs):
             legacy = legacy_assets.get(ref)
             if legacy is None:
                 raise CommandError(f"Portfolio settlement asset not in asset CSV: {ref}")
@@ -164,19 +178,22 @@ class Command(BaseCommand):
                 )
             amount = self._convert(r["asset_amount_change"], asset["decimals"], r["reference"])
             if r["flow_type"] == "UPDATE_POSITION":
-                value = None  # pure position change → blank Value Change (FR-012d)
+                pnl = None  # pure position change → no PnL impact (FR-012d)
             else:
                 settlement = legacy_assets[portfolio_settlement[portfolio_ref]]
-                value = self._convert(
+                pnl = self._convert(
                     r["settlement_asset_amount_change"], settlement["decimals"], r["reference"]
                 )
+            # FR-037: exactly one leg kind. A settleable legacy asset is cash.
+            is_cash = asset["is_settleable"].strip().lower() == "true"
             Transfer.objects.create(
                 id=r["reference"],
                 transaction_id=r["transaction_reference"],
-                asset_id=r["asset_reference"],
-                asset_change_amount=amount,
-                value_change=value,
-                remark=r.get("remark") or "",
+                currency_id=asset["symbol"] if is_cash else None,
+                currency_amount=amount if is_cash else None,
+                asset_id=None if is_cash else r["asset_reference"],
+                asset_change_amount=None if is_cash else amount,
+                pnl_change=pnl,
             )
             self._stamp(Transfer, r)
             created["transfers"] += 1

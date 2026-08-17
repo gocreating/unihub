@@ -24,6 +24,25 @@ class AssetSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
+    def validate_name(self, value):
+        """FR-038: a currency is NOT an asset.
+
+        The legacy import once created 新台幣/美元 as Assets so cash could be
+        recorded; the model now has a currency leg for that, and this guard stops
+        the conflation returning by hand.
+        """
+        candidate = value.strip()
+        folded = candidate.casefold()
+        for code, name, symbol in Currency.objects.values_list("code", "name", "symbol"):
+            if folded in {code.casefold(), name.casefold()} or (
+                symbol and candidate == symbol
+            ):
+                raise serializers.ValidationError(
+                    f'"{candidate}" is the currency {code}. Record cash as a currency '
+                    "transfer instead of creating an asset for it."
+                )
+        return candidate
+
 
 class PortfolioCreateSerializer(serializers.ModelSerializer):
     # FR-031: read-only annotations from PortfolioViewSet.get_queryset().
@@ -140,28 +159,57 @@ class PortfolioUpdateSerializer(serializers.ModelSerializer):
         return attrs
 
 
+def _decimal(**kwargs):
+    return serializers.DecimalField(
+        max_digits=38, decimal_places=18, coerce_to_string=True, **kwargs
+    )
+
+
 class TransferSerializer(serializers.ModelSerializer):
     asset_name = serializers.CharField(source="asset.name", read_only=True)
-    asset_change_amount = serializers.DecimalField(
-        max_digits=38, decimal_places=18, coerce_to_string=True
-    )
-    value_change = serializers.DecimalField(
-        max_digits=38, decimal_places=18, coerce_to_string=True, allow_null=True, required=False
-    )
+    currency_symbol = serializers.CharField(source="currency.symbol", read_only=True)
+    pnl_change = _decimal(allow_null=True, required=False)
+    currency_amount = _decimal(allow_null=True, required=False)
+    asset_change_amount = _decimal(allow_null=True, required=False)
 
     class Meta:
         model = Transfer
         fields = [
             "id",
+            "pnl_change",
+            "currency",
+            "currency_symbol",
+            "currency_amount",
             "asset",
             "asset_name",
             "asset_change_amount",
-            "value_change",
-            "remark",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "asset_name", "created_at", "updated_at"]
+        read_only_fields = ["id", "asset_name", "currency_symbol", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        """FR-037: optional PnL plus EXACTLY ONE of currency / asset.
+
+        Mirrors the database CheckConstraint so the caller gets a 400 with a
+        readable message instead of an IntegrityError.
+        """
+        currency = attrs.get("currency")
+        asset = attrs.get("asset")
+        if bool(currency) == bool(asset):
+            raise serializers.ValidationError(
+                "A transfer must record either a currency change or an asset change — "
+                "exactly one, never both."
+            )
+        if currency and attrs.get("currency_amount") is None:
+            raise serializers.ValidationError(
+                {"currency_amount": "Required for a currency (cash) transfer."}
+            )
+        if asset and attrs.get("asset_change_amount") is None:
+            raise serializers.ValidationError(
+                {"asset_change_amount": "Required for an asset (position) transfer."}
+            )
+        return attrs
 
 
 class TransactionSerializer(serializers.ModelSerializer):

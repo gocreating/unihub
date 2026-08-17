@@ -3556,8 +3556,25 @@ components:
         id:
           type: string
           readOnly: true
+        pnl_change:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        currency_symbol:
+          type: string
+          readOnly: true
+        currency_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
+          nullable: true
         asset:
           type: string
+          nullable: true
         asset_name:
           type: string
           readOnly: true
@@ -3565,14 +3582,7 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
-        value_change:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,20}(?:\.\d{0,18})?$
           nullable: true
-        remark:
-          type: string
-          maxLength: 255
         created_at:
           type: string
           format: date-time
@@ -3582,10 +3592,9 @@ components:
           format: date-time
           readOnly: true
       required:
-      - asset
-      - asset_change_amount
       - asset_name
       - created_at
+      - currency_symbol
       - id
       - updated_at
     UnitFamilyEnum:

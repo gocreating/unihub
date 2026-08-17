@@ -49,7 +49,7 @@ export function PortfolioCharts({ transactions, baseCurrency }: PortfolioChartsP
   const valuedTransfers = useMemo(
     () =>
       transactions.reduce(
-        (n, txn) => n + txn.transfers.filter((tr) => tr.value_change != null).length,
+        (n, txn) => n + txn.transfers.filter((tr) => tr.pnl_change != null).length,
         0,
       ),
     [transactions],

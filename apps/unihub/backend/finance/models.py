@@ -70,20 +70,59 @@ class Transaction(models.Model):
 
 
 class Transfer(models.Model):
+    """One leg of a transaction (FR-037).
+
+    A transfer carries an optional PnL impact plus EXACTLY ONE of:
+      * a **currency change** — cash moving in or out, or
+      * an **asset change** — a position growing or shrinking.
+
+    Cash and positions are distinguished structurally, not by the convention
+    "value present, quantity absent". The earlier shape had no way to record
+    cash at all except by creating Asset rows for 新台幣/美元, which conflated
+    currencies with assets — the thing this model exists to keep apart.
+    """
+
     id = models.CharField(max_length=12, primary_key=True, default=generate_id, editable=False)
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="transfers")
-    asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name="transfers")
-    # (38,18): legacy 18-decimals tokens carry wei-level values (FR-008c)
-    asset_change_amount = models.DecimalField(max_digits=38, decimal_places=18)
-    value_change = models.DecimalField(max_digits=38, decimal_places=18, null=True, blank=True)
-    remark = models.CharField(max_length=255, blank=True, default="")
+
+    # Optional PnL impact, denominated in the PORTFOLIO's base currency.
+    # (38,18): legacy 18-decimals tokens carry wei-level values (FR-008c).
+    pnl_change = models.DecimalField(max_digits=38, decimal_places=18, null=True, blank=True)
+
+    # A cash leg …
+    currency = models.ForeignKey(
+        "Currency", on_delete=models.PROTECT, related_name="transfers", null=True, blank=True
+    )
+    currency_amount = models.DecimalField(max_digits=38, decimal_places=18, null=True, blank=True)
+
+    # … or a position leg.
+    asset = models.ForeignKey(
+        Asset, on_delete=models.PROTECT, related_name="transfers", null=True, blank=True
+    )
+    asset_change_amount = models.DecimalField(
+        max_digits=38, decimal_places=18, null=True, blank=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [
+            # Exactly one leg kind — enforced in the database so no code path,
+            # import or shell session can create an ambiguous transfer.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(currency__isnull=False, asset__isnull=True)
+                    | models.Q(currency__isnull=True, asset__isnull=False)
+                ),
+                name="transfer_exactly_one_of_currency_or_asset",
+            ),
+        ]
 
     def __str__(self):
+        if self.currency_id:
+            return f"{self.currency_id} {self.currency_amount}"
         return f"{self.asset} x{self.asset_change_amount}"
 
 

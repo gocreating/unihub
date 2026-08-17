@@ -264,13 +264,19 @@ export function deletePortfolio(id: string): Promise<void> {
 
 // ── Transactions ─────────────────────────────────────────────────────
 
+/**
+ * One leg of a transaction (FR-037): an optional PnL impact plus EXACTLY ONE of
+ * a currency change (cash) or an asset change (position).
+ */
 export interface Transfer {
   id: string;
-  asset: string;
-  asset_name: string;
-  asset_change_amount: string;
-  value_change: string | null;
-  remark: string;
+  pnl_change: string | null;
+  currency: string | null;
+  currency_symbol: string | null;
+  currency_amount: string | null;
+  asset: string | null;
+  asset_name: string | null;
+  asset_change_amount: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -289,10 +295,13 @@ export interface Transaction {
 }
 
 export interface TransferInput {
-  asset: string;
-  asset_change_amount: string;
-  value_change?: string | null;
-  remark?: string;
+  pnl_change?: string | null;
+  /** Cash leg … */
+  currency?: string | null;
+  currency_amount?: string | null;
+  /** … or position leg (exactly one). */
+  asset?: string | null;
+  asset_change_amount?: string | null;
 }
 
 export interface TransactionInput {

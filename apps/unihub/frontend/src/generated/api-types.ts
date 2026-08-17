@@ -1596,13 +1596,16 @@ export interface components {
         };
         Transfer: {
             readonly id: string;
-            asset: string;
+            /** Format: decimal */
+            pnl_change?: string | null;
+            currency?: string | null;
+            readonly currency_symbol: string;
+            /** Format: decimal */
+            currency_amount?: string | null;
+            asset?: string | null;
             readonly asset_name: string;
             /** Format: decimal */
-            asset_change_amount: string;
-            /** Format: decimal */
-            value_change?: string | null;
-            remark?: string;
+            asset_change_amount?: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */

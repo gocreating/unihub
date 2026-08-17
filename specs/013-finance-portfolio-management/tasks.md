@@ -8,22 +8,22 @@
 
 ## Phase 1: Transfer model redesign (FR-037, FR-039) — foundation
 
-- [ ] T401 Write failing model/API tests in `backend/tests/finance/test_transactions.py`: a transfer accepts `pnl_change` + `currency`/`currency_amount` (cash leg) OR `pnl_change` + `asset`/`asset_change_amount` (position leg); BOTH set → rejected; NEITHER set → rejected; `pnl_change` alone → rejected; `remark` no longer exists in the payload (FR-037, SC-019, SC-020)
-- [ ] T402 Redesign `Transfer` in `backend/finance/models.py`: add `currency` FK + `currency_amount`, rename `value_change` → `pnl_change`, make `asset`/`asset_change_amount` nullable, drop `remark`; add the exactly-one `CheckConstraint`
-- [ ] T403 Write the data migration (0014): convert transfers whose asset is a settleable legacy currency into currency legs (currency set, quantity moved to `currency_amount`, asset cleared, `pnl_change` untouched), then delete the now-unreferenced currency Assets, then add the constraint. Test asserts the total `pnl_change` is identical before and after (SC-019)
-- [ ] T404 Update `TransferSerializer` (fields, validation) and every `value_change` reference: `PortfolioViewSet` annotations, `searchable_fields`, holdings action; update the `data_io` TableDescriptor for `finance.transfer` (Principle I)
+- [X] T401 Write failing model/API tests in `backend/tests/finance/test_transactions.py`: a transfer accepts `pnl_change` + `currency`/`currency_amount` (cash leg) OR `pnl_change` + `asset`/`asset_change_amount` (position leg); BOTH set → rejected; NEITHER set → rejected; `pnl_change` alone → rejected; `remark` no longer exists in the payload (FR-037, SC-019, SC-020)
+- [X] T402 Redesign `Transfer` in `backend/finance/models.py`: add `currency` FK + `currency_amount`, rename `value_change` → `pnl_change`, make `asset`/`asset_change_amount` nullable, drop `remark`; add the exactly-one `CheckConstraint`
+- [X] T403 Write the data migration (0014): convert transfers whose asset is a settleable legacy currency into currency legs (currency set, quantity moved to `currency_amount`, asset cleared, `pnl_change` untouched), then delete the now-unreferenced currency Assets, then add the constraint. Test asserts the total `pnl_change` is identical before and after (SC-019)
+- [X] T404 Update `TransferSerializer` (fields, validation) and every `value_change` reference: `PortfolioViewSet` annotations, `searchable_fields`, holdings action; update the `data_io` TableDescriptor for `finance.transfer` (Principle I)
 
 ## Phase 2: Keep currencies out of Assets (FR-038)
 
-- [ ] T405 Write failing tests: creating or renaming an Asset whose name or symbol matches a Currency code or name is rejected (`新台幣`, `TWD`, `美元`, `USD`); an unrelated name is accepted
-- [ ] T406 Implement the validation in `AssetSerializer`; T405 passes
-- [ ] T407 Update `import_legacy_finance` so `is_settleable` legacy assets become **currency legs** and are never created as Assets; extend the synthetic-fixture suite to prove a re-run cannot reintroduce them
-- [ ] T408 Regenerate `openapi.yaml` + `src/generated/api-types.ts`; update the frontend `Transfer`/`TransferInput` types (`pnl_change`, `currency`, `currency_amount`, no `remark`)
+- [X] T405 Write failing tests: creating or renaming an Asset whose name or symbol matches a Currency code or name is rejected (`新台幣`, `TWD`, `美元`, `USD`); an unrelated name is accepted
+- [X] T406 Implement the validation in `AssetSerializer`; T405 passes
+- [X] T407 Update `import_legacy_finance` so `is_settleable` legacy assets become **currency legs** and are never created as Assets; extend the synthetic-fixture suite to prove a re-run cannot reintroduce them
+- [X] T408 Regenerate `openapi.yaml` + `src/generated/api-types.ts`; update the frontend `Transfer`/`TransferInput` types (`pnl_change`, `currency`, `currency_amount`, no `remark`)
 
 ## Phase 3: Transaction table (FR-044)
 
-- [ ] T409 Write failing tests: column order is Time, PnL, Position, Description; no Remark column; a transaction row shows an accumulated PnL with a currency symbol and per-asset accumulated Position; a transfer row shows only its own signed change (`+123 0050.TW`) (SC-022)
-- [ ] T410 Rework the columns in `src/pages/finance/portfolios/detail.tsx` accordingly, using `getCurrencySymbol` for symbols and `Decimal` for the running totals
+- [X] T409 Write failing tests: column order is Time, PnL, Position, Description; no Remark column; a transaction row shows an accumulated PnL with a currency symbol and per-asset accumulated Position; a transfer row shows only its own signed change (`+123 0050.TW`) (SC-022)
+- [X] T410 Rework the columns in `src/pages/finance/portfolios/detail.tsx` accordingly, using `getCurrencySymbol` for symbols and `Decimal` for the running totals
 
 ## Phase 4: Merged PnL / Trend panel (FR-040…FR-043)
 

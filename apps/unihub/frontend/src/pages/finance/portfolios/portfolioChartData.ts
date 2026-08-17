@@ -26,9 +26,9 @@ export function waterfallSteps(transactions: readonly Transaction[]): WaterfallS
     .map((txn) => ({
       txn,
       delta: txn.transfers
-        .filter((tr) => tr.value_change != null)
-        .reduce((sum, tr) => sum.plus(new Decimal(tr.value_change as string)), new Decimal(0)),
-      hasValue: txn.transfers.some((tr) => tr.value_change != null),
+        .filter((tr) => tr.pnl_change != null)
+        .reduce((sum, tr) => sum.plus(new Decimal(tr.pnl_change as string)), new Decimal(0)),
+      hasValue: txn.transfers.some((tr) => tr.pnl_change != null),
     }))
     .filter((r) => r.hasValue)
     .sort((a, b) => a.txn.timestamp.localeCompare(b.txn.timestamp));
@@ -49,9 +49,9 @@ export function breakdownByAsset(transactions: readonly Transaction[]): { asset:
   const totals = new Map<string, Decimal>();
   for (const txn of transactions) {
     for (const tr of txn.transfers) {
-      if (tr.value_change == null) continue;
-      const prev = totals.get(tr.asset_name) ?? new Decimal(0);
-      totals.set(tr.asset_name, prev.plus(new Decimal(tr.value_change)));
+      if (tr.pnl_change == null) continue;
+      const prev = totals.get((tr.asset_name ?? tr.currency ?? "—")) ?? new Decimal(0);
+      totals.set((tr.asset_name ?? tr.currency ?? "—"), prev.plus(new Decimal(tr.pnl_change)));
     }
   }
   return [...totals.entries()]

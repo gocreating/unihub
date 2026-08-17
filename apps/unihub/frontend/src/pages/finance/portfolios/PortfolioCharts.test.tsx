@@ -22,6 +22,7 @@ vi.mock('echarts-for-react', () => ({
 }));
 
 function txn(id: string, timestamp: string, transfers: [string, string | null][]): Transaction {
+  // [assetName, pnlChange] — an asset (position) leg with an optional PnL.
   return {
     id,
     portfolio: 'p1',
@@ -32,17 +33,19 @@ function txn(id: string, timestamp: string, transfers: [string, string | null][]
     tx_hash: '',
     created_at: timestamp,
     updated_at: timestamp,
-    transfers: transfers.map(([asset_name, value_change], i) => ({
+    transfers: transfers.map(([asset_name, pnl_change], i) => ({
       id: `${id}-${i}`,
+      pnl_change,
+      currency: null,
+      currency_symbol: null,
+      currency_amount: null,
       asset: `a${i}`,
       asset_name,
       asset_change_amount: '1',
-      value_change,
-      remark: '',
       created_at: timestamp,
       updated_at: timestamp,
     })),
-  } as Transaction;
+  } as unknown as Transaction;
 }
 
 // Deliberately out of chronological order — the waterfall must sort.

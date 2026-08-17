@@ -16,6 +16,7 @@ import dayjs from 'dayjs';
 import PageTable, { useActionsColWidth } from '@/components/PageTable';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { ClampedText } from '@/components/ClampedText';
+import { SignedAmount } from './SignedAmount';
 import { DateTimeCell } from '@/components/DateTimeCell';
 import { EmptyValue } from '@/components/EmptyValue';
 import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
@@ -32,6 +33,7 @@ import {
 } from '@/services/unihub-backend/finance';
 import { PanelHeaderActions } from '@/components/PanelHeaderActions';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
+import { getCurrencySymbol } from '@/utils/finance';
 import { PortfolioCharts } from './PortfolioCharts';
 import { PortfolioPnlPanel } from './PortfolioPnlPanel';
 import { PortfolioFormModal } from './PortfolioFormModal';
@@ -41,10 +43,13 @@ import type { ColumnDef, EntityListParams, FilterableAttribute } from '@/compone
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 
 interface TransferFormRow {
-  asset: string;
-  asset_change_amount: string;
-  value_change?: string;
-  remark?: string;
+  /** FR-037: a transfer records EITHER cash or a position, never both. */
+  leg?: 'currency' | 'asset';
+  currency?: string;
+  currency_amount?: string;
+  asset?: string;
+  asset_change_amount?: string;
+  pnl_change?: string;
 }
 
 interface TransactionFormValues {
@@ -82,21 +87,6 @@ function rowKeyOf(r: TxnRow): string {
   return `${r.rowType}:${r.id}`;
 }
 
-/**
- * Net base-currency effect of a transaction — what the collapsed row shows.
- *
- * Summed with Decimal, never `Number`: these are (38,18) values, and float
- * arithmetic both loses digits (-1.000000067305900768 → -1.0000000673059009)
- * and renders wei-scale results in scientific notation.
- */
-function netValueChange(txn: Transaction): string | null {
-  const contributing = txn.transfers.filter((tr) => tr.value_change != null);
-  if (contributing.length === 0) return null;
-  return contributing
-    .reduce((sum, tr) => sum.plus(new Decimal(tr.value_change as string)), new Decimal(0))
-    .toFixed();
-}
-
 export function PortfolioDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -120,6 +110,8 @@ export function PortfolioDetailPage() {
   });
 
   const baseCurrency = portfolio?.base_currency ?? '???';
+  // FR-041: symbols come from the same helper the Balance Sheets list uses.
+  const currencySymbol = getCurrencySymbol(baseCurrency);
   // FR-026: a closed portfolio is frozen except for reopening it.
   const isClosed = portfolio?.state === 'closed';
 
@@ -134,17 +126,16 @@ export function PortfolioDetailPage() {
     { key: 'timestamp', label: t({ id: 'pages.finance.transactions.col.timestamp' }), dataType: 'date' },
   ], [t]);
 
-  // FR-022: one shared column set serving both transaction and transfer rows.
+  // FR-044: one shared column set for both row types, ordered
+  // Time → PnL → Position → Description. Remark is gone (FR-039).
   const columnDefs = useMemo<ColumnDef[]>(() => [
     { key: '__caret', label: '', dataType: 'text', visible: true, order: 0 },
     { key: 'timestamp', label: t({ id: 'pages.finance.transactions.col.timestamp' }), dataType: 'text', visible: true, order: 1 },
-    { key: 'description', label: t({ id: 'pages.finance.transactions.col.description' }), dataType: 'text', visible: true, order: 2 },
-    { key: 'asset', label: t({ id: 'pages.finance.transactions.transfer.asset' }), dataType: 'text', visible: true, order: 3 },
-    { key: 'asset_change', label: t({ id: 'pages.finance.transactions.transfer.assetChange' }), dataType: 'text', visible: true, order: 4 },
-    { key: 'value_change', label: t({ id: 'pages.finance.transactions.transfer.valueChange' }, { currency: baseCurrency }), dataType: 'text', visible: true, order: 5 },
-    { key: 'remark', label: t({ id: 'pages.finance.transactions.transfer.remark' }), dataType: 'text', visible: true, order: 6 },
-    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 7 },
-  ], [t, baseCurrency]);
+    { key: 'pnl', label: t({ id: 'pages.finance.transactions.col.pnl' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'position', label: t({ id: 'pages.finance.transactions.col.position' }), dataType: 'text', visible: true, order: 3 },
+    { key: 'description', label: t({ id: 'pages.finance.transactions.col.description' }), dataType: 'text', visible: true, order: 4 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 5 },
+  ], [t]);
 
   const table = useEntityTable({ key: `portfolio-transactions-${id}`, filterableAttrs, columnDefs });
 
@@ -175,6 +166,33 @@ export function PortfolioDetailPage() {
       })),
     [transactions],
   );
+
+  /**
+   * FR-044: a transaction row shows ACCUMULATED balances. PnL accumulates into
+   * one figure (all base currency); Position accumulates PER ASSET, because
+   * quantities of different assets cannot be added. Computed oldest → newest
+   * across the loaded page, with Decimal (never float).
+   */
+  const runningTotals = useMemo(() => {
+    const chronological = [...transactions].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    let pnl = new Decimal(0);
+    const positions = new Map<string, Decimal>();
+    const out = new Map<string, { pnl: Decimal; positions: [string, Decimal][] }>();
+    for (const txn of chronological) {
+      for (const tr of txn.transfers) {
+        if (tr.pnl_change != null) pnl = pnl.plus(new Decimal(tr.pnl_change));
+        if (tr.asset && tr.asset_change_amount != null) {
+          const key = tr.asset_name ?? tr.asset;
+          positions.set(key, (positions.get(key) ?? new Decimal(0)).plus(tr.asset_change_amount));
+        }
+      }
+      out.set(txn.id, {
+        pnl,
+        positions: [...positions.entries()].filter(([, q]) => !q.isZero()),
+      });
+    }
+    return out;
+  }, [transactions]);
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const toggleExpand = (key: string) =>
@@ -279,22 +297,31 @@ export function PortfolioDetailPage() {
       chain_id: txn.chain_id,
       tx_hash: txn.tx_hash,
       transfers: txn.transfers.map((tr) => ({
-        asset: tr.asset,
-        asset_change_amount: tr.asset_change_amount,
-        value_change: tr.value_change ?? undefined,
-        remark: tr.remark,
+        leg: tr.currency ? ('currency' as const) : ('asset' as const),
+        currency: tr.currency ?? undefined,
+        currency_amount: tr.currency_amount ?? undefined,
+        asset: tr.asset ?? undefined,
+        asset_change_amount: tr.asset_change_amount ?? undefined,
+        pnl_change: tr.pnl_change ?? undefined,
       })),
     });
     setModalOpen(true);
   };
 
   const onFinish = (values: TransactionFormValues) => {
-    const transfers: TransferInput[] = values.transfers.map((tr) => ({
-      asset: tr.asset,
-      asset_change_amount: String(tr.asset_change_amount),
-      value_change: tr.value_change ? String(tr.value_change) : null,
-      remark: tr.remark ?? '',
-    }));
+    const transfers: TransferInput[] = values.transfers.map((tr) =>
+      tr.leg === 'currency'
+        ? {
+            currency: tr.currency ?? baseCurrency,
+            currency_amount: String(tr.currency_amount ?? '0'),
+            pnl_change: tr.pnl_change ? String(tr.pnl_change) : null,
+          }
+        : {
+            asset: tr.asset,
+            asset_change_amount: String(tr.asset_change_amount ?? '0'),
+            pnl_change: tr.pnl_change ? String(tr.pnl_change) : null,
+          },
+    );
     const shared = {
       timestamp: values.timestamp.toISOString(),
       description: values.description ?? '',
@@ -360,56 +387,51 @@ export function PortfolioDetailPage() {
               )
             ) : null,
         },
-        asset: {
-          key: 'asset',
-          title: t({ id: 'pages.finance.transactions.transfer.asset' }),
-          width: 160,
-          fixed: getFixed('asset'),
-          // Parent summarises (clarified 2026-08-15); child names its asset.
-          render: (_, r) =>
-            isTransaction(r) ? (
-              r.transfers.length > 0 ? (
-                <Typography.Text type="secondary">
-                  {t(
-                    { id: 'pages.finance.transactions.transferCountSummary' },
-                    { count: r.transfers.length },
-                  )}
-                </Typography.Text>
-              ) : (
-                <EmptyValue />
-              )
-            ) : (
-              <Tag><SearchMark text={r.asset_name} /></Tag>
-            ),
-        },
-        asset_change: {
-          key: 'asset_change',
-          title: t({ id: 'pages.finance.transactions.transfer.assetChange' }),
-          width: 160,
+        pnl: {
+          key: 'pnl',
+          title: t({ id: 'pages.finance.transactions.col.pnl' }),
           align: 'right',
-          fixed: getFixed('asset_change'),
-          render: (_, r) =>
-            isTransaction(r) ? null : <SearchMark text={formatAmount(r.asset_change_amount)} />,
-        },
-        value_change: {
-          key: 'value_change',
-          title: t({ id: 'pages.finance.transactions.transfer.valueChange' }, { currency: baseCurrency }),
-          width: 180,
-          align: 'right',
-          fixed: getFixed('value_change'),
+          autoWidth: { header: t({ id: 'pages.finance.transactions.col.pnl' }), min: 140 },
+          fixed: getFixed('pnl'),
+          // Transaction → accumulated balance with a symbol ("+ NT$ 666").
+          // Transfer    → only its own signed change.
           render: (_, r) => {
-            const raw = isTransaction(r) ? netValueChange(r) : r.value_change;
-            if (raw == null) return <EmptyValue />;
-            return <SearchMark text={formatAmount(String(raw))} />;
+            if (isTransaction(r)) {
+              const total = runningTotals.get(r.id)?.pnl;
+              if (!total) return <EmptyValue />;
+              return <SignedAmount value={total.toFixed()} unit={currencySymbol} unitFirst />;
+            }
+            return r.pnl_change == null ? (
+              <EmptyValue />
+            ) : (
+              <SignedAmount value={r.pnl_change} unit={currencySymbol} unitFirst />
+            );
           },
         },
-        remark: {
-          key: 'remark',
-          title: t({ id: 'pages.finance.transactions.transfer.remark' }),
-          width: 160,
-          fixed: getFixed('remark'),
-          render: (_, r) =>
-            isTransaction(r) ? null : r.remark ? <SearchMark text={r.remark} /> : <EmptyValue />,
+        position: {
+          key: 'position',
+          title: t({ id: 'pages.finance.transactions.col.position' }),
+          align: 'right',
+          autoWidth: { header: t({ id: 'pages.finance.transactions.col.position' }), min: 160 },
+          fixed: getFixed('position'),
+          render: (_, r) => {
+            if (isTransaction(r)) {
+              const rows = runningTotals.get(r.id)?.positions ?? [];
+              if (rows.length === 0) return <EmptyValue />;
+              return (
+                <ClampedText text={rows.map(([a, q]) => `${q.toFixed()} ${a}`).join(', ')}>
+                  <span>{rows.map(([a, q]) => `${formatAmount(q.toFixed())} ${a}`).join(', ')}</span>
+                </ClampedText>
+              );
+            }
+            // A cash leg has no position; a position leg shows "+123 0050.TW".
+            if (r.currency) return <EmptyValue />;
+            return r.asset_change_amount == null ? (
+              <EmptyValue />
+            ) : (
+              <SignedAmount value={r.asset_change_amount} unit={r.asset_name ?? ''} neutral />
+            );
+          },
         },
         actions: {
           title: t({ id: 'common.actions' }),
@@ -445,7 +467,7 @@ export function PortfolioDetailPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, actionsColWidth, expandedIds, baseCurrency, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
+    [t, actionsColWidth, expandedIds, baseCurrency, currencySymbol, runningTotals, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<TxnRow>[]>(

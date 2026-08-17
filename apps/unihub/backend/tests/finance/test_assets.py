@@ -198,3 +198,43 @@ class TestAssetSearch:
         resp = auth_client.get("/api/v1/finance/assets/", {"search": "  "})
         assert resp.status_code == 200
         assert resp.json()["count"] >= 1
+
+
+@pytest.mark.django_db
+class TestAssetsCannotBeCurrencies:
+    """FR-038: currencies are not assets — the conflation cannot return by hand."""
+
+    @pytest.fixture
+    def twd(self, auth_client):
+        return auth_client.post(
+            "/api/v1/finance/currencies/",
+            {"code": "TWD", "name": "新台幣", "symbol": "NT$"},
+            content_type="application/json",
+        ).json()
+
+    def _create(self, auth_client, name):
+        return auth_client.post(
+            "/api/v1/finance/assets/", {"name": name}, content_type="application/json"
+        )
+
+    def test_an_asset_named_like_a_currency_name_is_rejected(self, auth_client, twd):
+        assert self._create(auth_client, "新台幣").status_code == 400
+
+    def test_an_asset_named_like_a_currency_code_is_rejected(self, auth_client, twd):
+        assert self._create(auth_client, "TWD").status_code == 400
+        assert self._create(auth_client, "twd").status_code == 400
+
+    def test_an_asset_named_like_a_currency_symbol_is_rejected(self, auth_client, twd):
+        assert self._create(auth_client, "NT$").status_code == 400
+
+    def test_an_ordinary_asset_name_is_accepted(self, auth_client, twd):
+        assert self._create(auth_client, "0050.TW").status_code == 201
+
+    def test_renaming_an_asset_into_a_currency_is_rejected(self, auth_client, twd):
+        asset = self._create(auth_client, "0050.TW").json()
+        resp = auth_client.patch(
+            f"/api/v1/finance/assets/{asset['id']}/",
+            {"name": "新台幣"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 400

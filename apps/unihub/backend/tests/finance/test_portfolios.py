@@ -448,7 +448,7 @@ class TestPortfolioValueAggregates:
                     "portfolio": p["id"],
                     "timestamp": f"2026-06-{(i % 28) + 1:02d}T00:00:00Z",
                     "transfers": [
-                        {"asset": asset["id"], "asset_change_amount": "1", "value_change": "-100"}
+                        {"asset": asset["id"], "asset_change_amount": "1", "pnl_change": "-100"}
                     ],
                 },
                 content_type="application/json",
@@ -460,7 +460,7 @@ class TestPortfolioValueAggregates:
                     "portfolio": p["id"],
                     "timestamp": f"2026-07-{i + 1:02d}T00:00:00Z",
                     "transfers": [
-                        {"asset": asset["id"], "asset_change_amount": "-1", "value_change": "250"}
+                        {"asset": asset["id"], "asset_change_amount": "-1", "pnl_change": "250"}
                     ],
                 },
                 content_type="application/json",
@@ -489,7 +489,7 @@ class TestPortfolioValueAggregates:
 
         direct = Transfer.objects.filter(
             transaction__portfolio_id=funded["id"]
-        ).aggregate(total=Sum("value_change"))["total"]
+        ).aggregate(total=Sum("pnl_change"))["total"]
         data = self._get(auth_client, funded["id"])
         assert Decimal(data["net_value_change"]) == direct
 
@@ -521,7 +521,7 @@ class TestPortfolioValueAggregates:
                 "portfolio": p["id"],
                 "timestamp": "2026-06-01T00:00:00Z",
                 "transfers": [
-                    {"asset": asset["id"], "asset_change_amount": "100", "value_change": "-1000"}
+                    {"asset": asset["id"], "asset_change_amount": "100", "pnl_change": "-1000"}
                 ],
             },
             content_type="application/json",
@@ -553,7 +553,7 @@ class TestPortfolioValueAggregates:
                 "portfolio": winner["id"],
                 "timestamp": "2026-06-01T00:00:00Z",
                 "transfers": [
-                    {"asset": asset["id"], "asset_change_amount": "1", "value_change": "900"}
+                    {"asset": asset["id"], "asset_change_amount": "1", "pnl_change": "900"}
                 ],
             },
             content_type="application/json",

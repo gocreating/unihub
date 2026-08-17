@@ -77,38 +77,45 @@ def run(csv_dir):
 class TestImportLegacyFinance:
     def test_counts_and_reference_pks(self, legacy_dir):
         out = run(legacy_dir)
-        assert Asset.objects.count() == 4
+        # FR-038: settleable legacy assets (TWD, USD) become Currencies, NOT Assets.
+        assert Asset.objects.count() == 2
         assert Portfolio.objects.count() == 3
         assert Transaction.objects.count() == 3
         assert Transfer.objects.count() == 6
         # Legacy references ARE the primary keys (FR-012b)
         assert Asset.objects.filter(pk="astETH00").exists()
+        assert not Asset.objects.filter(pk__in=["astTWD00", "astUSD00"]).exists()
         assert Portfolio.objects.filter(pk="pfACT0000").exists()
         assert Transaction.objects.filter(pk="txn000001").exists()
         assert Transfer.objects.filter(pk="trf000004").exists()
         # Report mentions the created counts
-        assert "4" in out and "6" in out
+        assert "6" in out
 
     def test_minor_unit_conversion_by_asset_decimals(self, legacy_dir):
         run(legacy_dir)
-        assert Transfer.objects.get(pk="trf000001").asset_change_amount == Decimal("-9977")
+        # A settleable leg is now a CURRENCY leg.
+        cash = Transfer.objects.get(pk="trf000001")
+        assert cash.currency_id == "TWD"
+        assert cash.currency_amount == Decimal("-9977")
+        assert cash.asset_id is None
         # 18-decimals wei value survives exactly (FR-008c/FR-012c)
         assert Transfer.objects.get(pk="trf000004").asset_change_amount == Decimal(
             "-0.000000067305900768"
         )
+        assert Transfer.objects.get(pk="trf000004").currency_id is None
         # 2-decimals settleable asset: 12345 minor units → 123.45
-        assert Transfer.objects.get(pk="trf000005").asset_change_amount == Decimal("123.45")
+        assert Transfer.objects.get(pk="trf000005").currency_amount == Decimal("123.45")
 
     def test_value_change_mapping(self, legacy_dir):
         run(legacy_dir)
         # UPDATE_POSITION → blank (FR-012d)
-        assert Transfer.objects.get(pk="trf000003").value_change is None
-        assert Transfer.objects.get(pk="trf000006").value_change is None
+        assert Transfer.objects.get(pk="trf000003").pnl_change is None
+        assert Transfer.objects.get(pk="trf000006").pnl_change is None
         # COST/EXPENSE in a TWD-settled portfolio (0 decimals)
-        assert Transfer.objects.get(pk="trf000001").value_change == Decimal("-9977")
-        assert Transfer.objects.get(pk="trf000004").value_change == Decimal("-1")
+        assert Transfer.objects.get(pk="trf000001").pnl_change == Decimal("-9977")
+        assert Transfer.objects.get(pk="trf000004").pnl_change == Decimal("-1")
         # REVENUE in a USD-settled portfolio (2 decimals): 12345 → 123.45
-        assert Transfer.objects.get(pk="trf000005").value_change == Decimal("123.45")
+        assert Transfer.objects.get(pk="trf000005").pnl_change == Decimal("123.45")
 
     def test_portfolio_state_from_prefix_names_verbatim(self, legacy_dir):
         run(legacy_dir)
@@ -124,7 +131,7 @@ class TestImportLegacyFinance:
         assert txn.chain_id == "1"
         assert txn.tx_hash == "0xabc123"
         assert txn.description == "first buy"
-        assert Transfer.objects.get(pk="trf000002").remark == "手續費"
+        assert Transfer.objects.get(pk="trf000002").currency_id == "TWD"
 
     def test_timestamps_preserved_and_derived_times_recomputed(self, legacy_dir):
         run(legacy_dir)
@@ -174,7 +181,7 @@ class TestImportLegacyFinance:
         run(legacy_dir)
         keep.refresh_from_db()
         assert keep.name == "My Manual Asset"
-        assert Asset.objects.count() == 5  # 4 imported + 1 pre-existing
+        assert Asset.objects.count() == 3  # 2 imported + 1 pre-existing
 
     def test_unknown_reference_aborts_atomically(self, tmp_path):
         csv_dir = write_csvs(

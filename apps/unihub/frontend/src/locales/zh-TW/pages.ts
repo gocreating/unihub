@@ -492,6 +492,8 @@ export default {
   'pages.finance.transactions.delete.confirm': '確定刪除此交易及其所有轉帳記錄？此操作無法復原。',
   'pages.finance.transactions.col.portfolio': '投資組合',
   'pages.finance.transactions.col.timestamp': '時間',
+  'pages.finance.transactions.col.pnl': '損益',
+  'pages.finance.transactions.col.position': '部位',
   'pages.finance.transactions.col.description': '描述',
   'pages.finance.transactions.col.transferCount': '轉帳數',
   'pages.finance.transactions.form.portfolio': '投資組合',

@@ -65,7 +65,7 @@ class PortfolioViewSet(viewsets.ModelViewSet):
     # transactions panel paginates at 25 rows and the largest portfolio has 49
     # transactions, so a client-side sum would silently report half the truth —
     # and a wrong PnL looks exactly like a right one.
-    VALUE_PATH = "transactions__transfers__value_change"
+    VALUE_PATH = "transactions__transfers__pnl_change"
     filter_backends = [EntityFilterBackend, EntitySearchFilter, NullsOrderingFilter]
     filterable_fields = {
         "name": {"lookup": "name", "type": "text"},
@@ -125,7 +125,7 @@ class PortfolioViewSet(viewsets.ModelViewSet):
         """
         portfolio = self.get_object()
         rows = (
-            Transfer.objects.filter(transaction__portfolio=portfolio)
+            Transfer.objects.filter(transaction__portfolio=portfolio, asset__isnull=False)
             .values("asset_id", "asset__name")
             .annotate(quantity=Sum("asset_change_amount"))
             .exclude(quantity=0)
@@ -169,7 +169,8 @@ class TransactionViewSet(viewsets.ModelViewSet):
         "tx_hash": "text",
         "timestamp": "cast",
         "transfers__asset__name": "text",
-        "transfers__remark": "text",
+        "transfers__currency__code": "text",
+        "transfers__currency__name": "text",
     }
     ordering_fields = ["timestamp", "created_at"]
     ordering = ["-timestamp"]

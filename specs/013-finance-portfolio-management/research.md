@@ -363,3 +363,96 @@ The word "PnL" never appears on an open portfolio.
 **Cause**: in the iteration-4 merged column set, `title` was only ever set by `makeSortProps` (timestamp) or explicitly (actions). The five columns added for the tree — `description`, `asset`, `asset_change`, `value_change`, `remark` — declared `key`/`render` but no `title`, so AntD rendered empty `<th>`s. Verified live: `["", "Time", "", "", "", "", "", "Actions"]`.
 
 **Fix**: give every column an explicit `title`; the caret stays deliberately blank. **Guard**: a test asserting that every header except the caret is non-empty, so the next merged column set cannot repeat this (FR-030/SC-014). The same guard is cheap to apply to any table and belongs with the panel's tests.
+
+---
+
+# Iteration 7 research (2026-08-16) — Transfer redesign, charts, modal
+
+## I7-1: The corrected Transfer model (breaking)
+
+**Decision** (user's design):
+
+```python
+class Transfer:
+    transaction          FK Transaction
+    pnl_change           Decimal(38,18) NULL   # optional; portfolio base currency
+    currency             FK Currency    NULL   # a CASH leg …
+    currency_amount      Decimal(38,18) NULL   # … and how much of it
+    asset                FK Asset       NULL   # a POSITION leg …
+    asset_change_amount  Decimal(38,18) NULL   # … and the signed quantity
+    # CheckConstraint: exactly one of (currency, asset) is set
+```
+
+Cash and positions are now distinguished **structurally**, not by the convention
+"value present, amount absent" that I invented in iteration 3. `value_change` is
+renamed `pnl_change` to match the vocabulary the UI and charts already use.
+
+**Why the old shape was wrong**: it forced 新台幣/美元 to exist as Asset rows so
+cash could be recorded at all — which is exactly the currency/asset conflation
+the user warned about before the migration started. The measured cost of that
+mistake: 2 bogus Asset rows and 301 transfers carrying the same number twice
+(for TWD, `asset_change_amount` and `value_change` are byte-identical).
+
+**Three-way semantics fall out of the model** and drive the chart palette
+(FR-041): a leg with negative PnL is **cost/fee** (red), positive PnL is
+**income** (green), and an asset leg with no PnL is **position** (grey).
+
+## I7-2: Migration of real data (301 transfers, 2 assets)
+
+Order matters, and a snapshot is taken first:
+
+1. Schema: add `currency`/`currency_amount`, rename `value_change` → `pnl_change`,
+   make `asset`/`asset_change_amount` nullable, drop `remark`.
+2. Data: for transfers whose asset is a legacy settleable currency (新台幣→TWD,
+   美元→USD) set `currency`, move the quantity to `currency_amount`, clear
+   `asset`/`asset_change_amount`, keep `pnl_change` untouched.
+3. Delete the two currency Assets (now unreferenced).
+4. Add the CheckConstraint **last** — it cannot hold mid-migration.
+
+**Guard**: the data migration is written as a Django data migration so it runs
+exactly once per database and is verifiable in isolation, with a test that
+asserts `pnl_change` totals are identical before and after (SC-019).
+
+**`remark` removal is verified lossless**: 29 of 36 values are 手續費 (conveyed by
+the red cost/fee colour) and the remaining 7 are byte-identical to their own
+transaction's `description`.
+
+**Importer** must map `is_settleable` legacy assets to currency legs rather than
+creating Asset rows, otherwise a re-run reintroduces exactly what this iteration
+removes.
+
+**Belt and braces** (FR-038): `AssetSerializer.validate_name` rejects a name or
+symbol matching any Currency code or name, so the conflation cannot return by
+hand either.
+
+## I7-3: Charts
+
+- **One panel, two tabs** (PnL, Trend) replacing the separate value and chart
+  panels — AntD `Card` + `tabList`, as Principle XI already requires.
+- **PnL tab**: a line chart mirroring the Balance Sheets equity curve; the last
+  point equals the portfolio's realized (closed) or net-to-date (open) PnL, so
+  the chart and the headline figure can never disagree.
+- **Trend tab**: one x point per transaction, three y series — cost (red),
+  income (green), position (grey). Negative values are plotted **as negatives**
+  so bars grow downward; taking absolute values would hide direction, which is
+  the whole point of the chart. A **Waterfall** toggle switches between
+  cumulative (running total, transparent base bar) and plain per-transaction
+  bars.
+- Position is per asset (clarified): one grey series per asset.
+- Currency symbols come from the existing `getCurrencySymbol` in
+  `@/utils/finance` — the same helper the Balance Sheets list uses.
+
+## I7-4: Transaction table and modal
+
+- Column order **Time, PnL, Position, Description**; Remark gone.
+- A **transaction** row shows accumulated balances (PnL as one figure with a
+  symbol, e.g. `+ NT$ 666`; Position per asset); a **transfer** row shows only
+  its own change (`+123 0050.TW`). Accumulation is chronological within the
+  loaded page and stated as such.
+- **Modal (FR-045)**: the current `Modal` uses AntD's default footer, which
+  right-aligns `[Cancel][OK]` — a Principle VI violation (primary right, all
+  others grouped LEFT, Cancel left-most). The fix reuses the same footer shape
+  `confirmDialog` already implements. The body splits into **General** and
+  **Transfers** tabs, transfer rows become a **table** (they currently overflow
+  a 640px modal as a `Space` list), and "Add transfer" becomes a `type="link"`
+  button.

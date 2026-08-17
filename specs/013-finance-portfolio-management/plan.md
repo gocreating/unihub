@@ -34,7 +34,7 @@ Iteration 3 delivers three work streams on top of the accepted Stories 1–3:
 
 ## Constitution Check
 
-*Constitution v1.26.0 — evaluated 2026-08-16 (iteration 6), re-evaluated after Phase 1 design: PASS*
+*Constitution v1.26.0 — evaluated 2026-08-16 (iteration 7), re-evaluated after Phase 1 design: PASS*
 
 | Gate | Principle | Status |
 |---|---|---|
@@ -223,3 +223,39 @@ schema changes normally trigger that rule.
   word PnL on an open portfolio, not just the presence of numbers.
 - Removing the modal's State field must not remove the ability to change state —
   Close/Reopen already owns it (FR-020); a test keeps that path alive.
+
+---
+
+## Iteration 7 (2026-08-16) — Transfer redesign, charts, modal
+
+**Constitution Check (v1.26.0)**: PASS, with three rules directly engaged.
+Principle I: the Transfer schema changes, so the `data_io` TableDescriptor for
+`finance.transfer` MUST be updated in the same change (new/renamed/removed
+fields) — this is the rule iteration 6 did not have to touch and this one does.
+Principle IV: regenerate `openapi.yaml` + types. Principle VI: the modal footer
+fix is a violation being corrected. Principle X/XI: ECharts + SVG, tabbed Card,
+600px min width, semantic palette. Principle VIII: both locales, same commit.
+
+### Scope, in dependency order
+
+1. **Model redesign + data migration** (I7-1, I7-2 / FR-037…FR-039) — the
+   foundation; everything else reads these fields.
+2. **Importer + Asset validation** — so the removal cannot be undone.
+3. **Transaction table** (I7-4 / FR-044) — new column order, accumulation.
+4. **Merged PnL/Trend panel** (I7-3 / FR-040…FR-043).
+5. **Modal rework** (I7-4 / FR-045).
+
+### Risks & mitigations
+
+- **This rewrites real financial rows.** A `pg_dump` snapshot is taken before
+  the migration runs on the live database, and the test suite asserts that the
+  sum of `pnl_change` is unchanged by the conversion (SC-019).
+- **The CheckConstraint cannot hold mid-migration** — it is added after the data
+  step, in the same migration, so no intermediate state is left invalid.
+- **A re-run of the importer could reintroduce the currency-Assets**; the
+  importer change is therefore part of this iteration, not a follow-up, and has
+  its own test on synthetic fixtures.
+- **Renaming `value_change` → `pnl_change`** touches serializers, filters,
+  search fields, annotations, charts, tests and both locales. Compiler and tests
+  catch the mechanical part; the annotation names in `PortfolioViewSet` are the
+  one place a stale string would silently produce zeros, so they are asserted.

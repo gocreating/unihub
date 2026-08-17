@@ -1,53 +1,60 @@
-# Tasks: Finance Portfolio Management — Iteration 6 (PnL, holdings, header defect)
+# Tasks: Finance Portfolio Management — Iteration 7 (Transfer redesign, charts, modal)
 
-**Input**: spec.md Clarifications 2026-08-16b (FR-030…FR-036, SC-014…SC-017), research.md I6-1…I6-4, plan.md iteration-6 section, constitution v1.26.0.
+**Input**: spec.md Clarifications 2026-08-16c (FR-037…FR-045, SC-018…SC-022), research.md I7-1…I7-4, plan.md iteration-7 section, constitution v1.26.0.
 
-**Tests**: TDD red-first. No migration — the new API fields are query annotations.
+**Tests**: TDD red-first. **This iteration rewrites real financial rows — snapshot before migrating.**
 
 **Paths**: `apps/unihub/frontend/` unless prefixed `backend/`.
 
-## Phase 1: The empty-header defect (FR-030) — smallest change, most visible
+## Phase 1: Transfer model redesign (FR-037, FR-039) — foundation
 
-- [X] T301 Write a failing guard test in `src/pages/finance/portfolios/PortfolioDetailPage.test.tsx`: every Transactions-panel header is non-empty EXCEPT the caret control column (live page currently renders 6 of 8 blank)
-- [X] T302 Give `description`, `asset`, `asset_change`, `value_change` and `remark` explicit `title`s in `src/pages/finance/portfolios/detail.tsx`; T301 passes
+- [ ] T401 Write failing model/API tests in `backend/tests/finance/test_transactions.py`: a transfer accepts `pnl_change` + `currency`/`currency_amount` (cash leg) OR `pnl_change` + `asset`/`asset_change_amount` (position leg); BOTH set → rejected; NEITHER set → rejected; `pnl_change` alone → rejected; `remark` no longer exists in the payload (FR-037, SC-019, SC-020)
+- [ ] T402 Redesign `Transfer` in `backend/finance/models.py`: add `currency` FK + `currency_amount`, rename `value_change` → `pnl_change`, make `asset`/`asset_change_amount` nullable, drop `remark`; add the exactly-one `CheckConstraint`
+- [ ] T403 Write the data migration (0014): convert transfers whose asset is a settleable legacy currency into currency legs (currency set, quantity moved to `currency_amount`, asset cleared, `pnl_change` untouched), then delete the now-unreferenced currency Assets, then add the constraint. Test asserts the total `pnl_change` is identical before and after (SC-019)
+- [ ] T404 Update `TransferSerializer` (fields, validation) and every `value_change` reference: `PortfolioViewSet` annotations, `searchable_fields`, holdings action; update the `data_io` TableDescriptor for `finance.transfer` (Principle I)
 
-## Phase 2: Backend aggregates + holdings (FR-031, FR-034)
+## Phase 2: Keep currencies out of Assets (FR-038)
 
-- [X] T303 Write failing tests in `backend/tests/finance/test_portfolios.py`: the portfolio API returns `value_invested`, `value_returned`, `net_value_change` summed over ALL transfers (build >25 transactions so a page-sized sum would be wrong); a portfolio with no transfers returns null for each, NOT zero; `ordering=net_value_change` sorts (SC-015)
-- [X] T304 Annotate the three sums in `PortfolioViewSet.get_queryset()` and expose them read-only on both Portfolio serializers; add `net_value_change` to `ordering_fields` (research I6-1)
-- [X] T305 Write failing tests for `GET /portfolios/{id}/holdings/`: per-asset net quantity across all transfers; assets whose net is zero are omitted; **a 2:1 split recorded as a position-only transfer doubles the holding and leaves the aggregates unchanged** (SC-017, FR-035)
-- [X] T306 Implement the `holdings` action per research I6-3; T305 passes
-- [X] T307 Regenerate `openapi.yaml` + `src/generated/api-types.ts`; extend the frontend `Portfolio` type and add a `getPortfolioHoldings` service call
+- [ ] T405 Write failing tests: creating or renaming an Asset whose name or symbol matches a Currency code or name is rejected (`新台幣`, `TWD`, `美元`, `USD`); an unrelated name is accepted
+- [ ] T406 Implement the validation in `AssetSerializer`; T405 passes
+- [ ] T407 Update `import_legacy_finance` so `is_settleable` legacy assets become **currency legs** and are never created as Assets; extend the synthetic-fixture suite to prove a re-run cannot reintroduce them
+- [ ] T408 Regenerate `openapi.yaml` + `src/generated/api-types.ts`; update the frontend `Transfer`/`TransferInput` types (`pnl_change`, `currency`, `currency_amount`, no `remark`)
 
-## Phase 3: PnL presentation (FR-032, FR-033)
+## Phase 3: Transaction table (FR-044)
 
-- [X] T308 Write failing tests: a CLOSED portfolio's panel shows one "Realized PnL" figure; an OPEN one shows Invested / Returned / Net invested + holdings and **contains no element whose text includes "PnL"** (the vocabulary is the requirement); a portfolio with no transfers shows `<EmptyValue />` rather than 0
-- [X] T309 Implement the PnL panel on `detail.tsx` (Descriptions, per-state content, the no-price-feed note); locale keys in BOTH files
-- [X] T310 Write failing tests then add the Portfolios list PnL column: shows the net figure with the row's own currency, marks open vs closed, sortable via `net_value_change`; never renders a cross-currency total (FR-033)
+- [ ] T409 Write failing tests: column order is Time, PnL, Position, Description; no Remark column; a transaction row shows an accumulated PnL with a currency symbol and per-asset accumulated Position; a transfer row shows only its own signed change (`+123 0050.TW`) (SC-022)
+- [ ] T410 Rework the columns in `src/pages/finance/portfolios/detail.tsx` accordingly, using `getCurrencySymbol` for symbols and `Decimal` for the running totals
 
-## Phase 4: Edit modal cleanup (FR-036)
+## Phase 4: Merged PnL / Trend panel (FR-040…FR-043)
 
-- [X] T311 Update `PortfolioFormModal` tests: edit mode offers Name and Description only — no State select, no Base Currency input — while base currency remains VISIBLE read-only; a separate test keeps Close/Reopen working as the state path
-- [X] T312 Remove the State and Base Currency form items from edit mode in `PortfolioFormModal.tsx`; keep them in create mode where base currency is chosen once
+- [ ] T411 Write failing tests for the merged panel: ONE Card with `PnL` and `Trend` tabs (the separate value and chart panels are gone); the PnL tab is a line series whose last point equals the portfolio's realized/net PnL; the Trend tab has cost/income/position series in red/green/grey with negative values plotted as negatives; the Waterfall toggle changes the series shape (SC-021)
+- [ ] T412 Rewrite `portfolioChartData.ts`: `pnlLineSeries()`, `trendSeries(mode)` with the three categories per transaction, and the semantic palette constants
+- [ ] T413 Replace `PortfolioCharts.tsx` + `PortfolioPnlPanel.tsx` with the single merged panel; keep the realized/net vocabulary from FR-032 and the no-price-feed note; locale keys in BOTH files
 
-## Phase 5: Polish & verification
+## Phase 5: Transaction modal (FR-045)
 
-- [X] T313 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend `uv run ruff check . && uv run pytest`
-- [X] T314 Real-data verification after rebuilding + force-recreating the containers: Transactions headers all populated; `永豐 DCA TW.00918` reports invested −474,391 / returned 0 / net −474,391 matching a direct SQL sum, with the word PnL absent from that page; a closed portfolio shows Realized PnL; holdings list non-empty
+- [ ] T414 Write failing tests: the modal footer places the primary action right with others grouped left (Cancel left-most); the body has General and Transfers tabs; transfer rows render as a table (no horizontal overflow); "Add transfer" is a link/text-style button
+- [ ] T415 Rework the modal in `detail.tsx`: custom footer matching the shared dialog's shape, `Tabs` for General/Transfers, transfer rows as a `Table`/`ProTable` with the currency-or-asset choice per row, and `type="link"` for Add transfer
+
+## Phase 6: Polish & verification
+
+- [ ] T416 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend `uv run ruff check . && uv run pytest`
+- [ ] T417 **Snapshot the real database** (`pg_dump`), rebuild + force-recreate the containers so migration 0014 runs, then verify: assets 40 → 38 with no 新台幣/美元; every transfer satisfies exactly-one; total `pnl_change` unchanged versus the snapshot; the table, merged panel and modal all render (SC-018, SC-019)
 
 ## Dependencies
 
-- Phase 1 is independent — land it first.
-- T303–T304 block T310 (the list column reads the annotation); T305–T307 block T309's holdings line.
-- Phase 3 and Phase 4 both touch portfolio UI files; run Phase 3 then Phase 4.
-- Phase 5 last.
+- Phase 1 blocks everything (all reads change).
+- T405–T407 are independent of the UI phases; T408 gates Phases 3–5.
+- Phase 3, 4 and 5 all edit `detail.tsx` — run them in order, not in parallel.
+- Phase 6 last; T417 needs the snapshot taken first.
 
-**Total: 14 tasks** (Header 2, Backend 5, PnL 3, Modal 2, Polish 2)
+**Total: 17 tasks** (Model 4, Guards 4, Table 2, Panel 3, Modal 2, Polish 2)
 
 ---
 
-# Archive — Iterations 1–5 (complete)
+# Archive — Iterations 1–6 (complete)
 
+- **Iteration 6** (2026-08-16, 14 tasks): fixed the empty Transactions headers (6 of 8 blank, introduced in iteration 4), backend value aggregates + holdings endpoint, the realized/net PnL panel and list column, and removal of State/Base Currency from the edit modal. Verified 13/13. Commits `6d25c61`, `513c61b`, `7032818`.
 - **Iteration 3** (2026-08-13/14, 26 tasks): legacy CSV import (38 assets / 55 portfolios / 359 transactions / 837 transfers, run against real data 2026-08-14), the transactions-list 500 fix, migration 0012 (18-decimal amounts, `Portfolio.description`, `Transaction.chain_id`/`tx_hash`, `Transfer.remark`, `Asset.category` dropped), and entity-views / quick-search / shared-confirm-dialog adoption. Commits `39478fa`, `a09ef48`.
 - **Iteration 5** (2026-08-16, 28 tasks): constitution v1.26.0 — PageTable took ownership of column sizing (`autoWidth`, eleven pages converted, 81 call sites removed), `ClampedText` two-line cells, `Portfolio.description` → TextField (migration 0013), closed-portfolio freeze enforced server-side, description hidden by default, footer counts, and the waterfall + breakdown charts. Verified 7/7 UI and 8/8 API. Commits `0ccca3d`, `f264092`, `16b2b0c`, `253c3d7`, `368e95f`.
 - **Iteration 4** (2026-08-15, 19 tasks): constitution v1.25.0 whole-row navigation with the shared `useRowLink` helper, View buttons removed system-wide, portfolio panel converted to responsive `Descriptions`, Close/Reopen moved to the panel header, and the Transactions panel rebuilt as a catalog-style tree table with Decimal-summed parent summaries. Verified 14/14 against real data. Commits `c6db24b`, `e26758b`, `9e714ee`, `c8916e2`.

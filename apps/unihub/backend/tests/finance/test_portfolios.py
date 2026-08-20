@@ -649,3 +649,118 @@ class TestPortfolioHoldings:
         rows = auth_client.get(f"/api/v1/finance/portfolios/{p['id']}/holdings/").json()
         by_id = {r["asset_id"]: r for r in rows}
         assert Decimal(by_id[a["id"]]["quantity"]) == Decimal("200")
+
+
+@pytest.mark.django_db
+class TestPortfolioListHoldings:
+    """FR-046: the Portfolios list carries a Position column.
+
+    Computed server-side over ALL transfers for the same reason the PnL
+    aggregates are (FR-031): the frontend only ever holds one page.
+    """
+
+    @pytest.fixture
+    def setup(self, auth_client, usd):
+        a = auth_client.post(
+            "/api/v1/finance/assets/", {"name": "AAPL"}, content_type="application/json"
+        ).json()
+        b = auth_client.post(
+            "/api/v1/finance/assets/", {"name": "ZZZZ"}, content_type="application/json"
+        ).json()
+        p = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Held", "base_currency": "USD"},
+            content_type="application/json",
+        ).json()
+        auth_client.post(
+            "/api/v1/finance/transactions/",
+            {
+                "portfolio": p["id"],
+                "timestamp": "2026-06-01T00:00:00Z",
+                "transfers": [
+                    {"asset": a["id"], "asset_change_amount": "100"},
+                    {"asset": b["id"], "asset_change_amount": "7"},
+                    {"asset": b["id"], "asset_change_amount": "-7"},
+                ],
+            },
+            content_type="application/json",
+        )
+        return p, a, b
+
+    def _row(self, auth_client, portfolio_id):
+        rows = auth_client.get("/api/v1/finance/portfolios/").json()["results"]
+        return next(r for r in rows if r["id"] == portfolio_id)
+
+    def test_list_row_carries_its_holdings(self, auth_client, setup):
+        from decimal import Decimal
+
+        p, a, _b = setup
+        row = self._row(auth_client, p["id"])
+        by_id = {h["asset_id"]: h for h in row["holdings"]}
+        assert Decimal(by_id[a["id"]]["quantity"]) == Decimal("100")
+        assert by_id[a["id"]]["asset_name"] == "AAPL"
+
+    def test_list_row_omits_fully_exited_positions(self, auth_client, setup):
+        p, _a, b = setup
+        row = self._row(auth_client, p["id"])
+        assert b["id"] not in {h["asset_id"] for h in row["holdings"]}
+
+    def test_a_portfolio_with_no_transfers_reports_an_empty_list(self, auth_client, usd):
+        p = auth_client.post(
+            "/api/v1/finance/portfolios/",
+            {"name": "Empty", "base_currency": "USD"},
+            content_type="application/json",
+        ).json()
+        assert self._row(auth_client, p["id"])["holdings"] == []
+
+    def test_holdings_cost_one_query_for_the_whole_page(
+        self, auth_client, setup, django_assert_max_num_queries
+    ):
+        """The N+1 this endpoint exists to avoid: 55 portfolios, 55 queries."""
+        for i in range(4):
+            auth_client.post(
+                "/api/v1/finance/portfolios/",
+                {"name": f"Extra {i}", "base_currency": "USD"},
+                content_type="application/json",
+            )
+        with django_assert_max_num_queries(8):
+            auth_client.get("/api/v1/finance/portfolios/")
+
+
+@pytest.mark.django_db
+class TestPortfolioDefaultOrdering:
+    """FR-047: last transaction descending, then state ascending.
+
+    State only breaks ties, but the tie is real and common: every portfolio
+    that has never been transacted has a null last_transaction_time, and those
+    should list active-first rather than in arbitrary order.
+    """
+
+    def test_orders_by_last_transaction_desc_then_state(self, auth_client, usd):
+        def mk(name, state="active"):
+            return auth_client.post(
+                "/api/v1/finance/portfolios/",
+                {"name": name, "base_currency": "USD", "state": state},
+                content_type="application/json",
+            ).json()
+
+        # Created active-first ON PURPOSE: the previous tiebreak was
+        # `-created_at`, which would put the LATER-created closed one first.
+        # Only a real `state` tiebreak passes this.
+        active_untouched = mk("A active untouched")
+        closed_untouched = mk("Z closed untouched", "closed")
+        transacted = mk("Transacted")
+        auth_client.post(
+            "/api/v1/finance/transactions/",
+            {
+                "portfolio": transacted["id"],
+                "timestamp": "2026-06-01T00:00:00Z",
+                "transfers": [{"currency": "USD", "currency_amount": "1"}],
+            },
+            content_type="application/json",
+        )
+
+        order = [r["id"] for r in auth_client.get("/api/v1/finance/portfolios/").json()["results"]]
+        # The transacted portfolio leads; among the untouched pair, active first.
+        assert order[0] == transacted["id"]
+        assert order.index(active_untouched["id"]) < order.index(closed_untouched["id"])

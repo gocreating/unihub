@@ -13,7 +13,7 @@ import Decimal from 'decimal.js';
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { computeScrollX, resolveAutoWidths } from '@/components/PageTable';
+import PageTable, { computeScrollX, resolveAutoWidths, useRowProps } from '@/components/PageTable';
 import type { SizedColumn } from '@/components/PageTable';
 import type { Balance } from '@/services/unihub-backend/finance';
 import {
@@ -242,6 +242,9 @@ export function BalanceSheetDetailPage() {
 
   // Controlled tree expand state — all parent nodes expanded by default, leaf accounts collapsed.
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>(() => collectDefaultExpandedKeys(treeWithRoot));
+  const rowProps = useRowProps();
+  const toggleAggRow = (key: React.Key) =>
+    setExpandedKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   // Reset to all-parents-expanded whenever the tree structure changes (dimensions switched, etc.).
   useEffect(() => {
     setExpandedKeys(collectDefaultExpandedKeys(treeWithRoot));
@@ -522,7 +525,6 @@ export function BalanceSheetDetailPage() {
                         : prev.filter((k) => k !== record.key),
                     );
                   },
-                  expandRowByClick: true,
                   expandIcon: ({ expanded, onExpand, record }) => {
                     const hasChildren = record.children && record.children.length > 0;
                     if (!hasChildren) return <span style={{ display: 'inline-block', width: 16, marginRight: 4 }} />;
@@ -542,9 +544,17 @@ export function BalanceSheetDetailPage() {
                 childrenColumnName="children"
                 size="small"
                 scroll={{ x: computeScrollX(aggTableColumns) }}
-                onRow={(record) => ({
-                  style: record.children && record.children.length > 0 ? { cursor: 'pointer' } : undefined,
-                })}
+                // Constitution v1.27.0: row-click expansion comes from the ONE
+                // shared helper, which carries the interactive-element and
+                // text-selection guards AntD's `expandRowByClick` lacks.
+                onRow={(record) =>
+                  rowProps({
+                    onToggle:
+                      record.children && record.children.length > 0
+                        ? () => toggleAggRow(record.key as React.Key)
+                        : null,
+                  })
+                }
                 locale={{
                   emptyText: (
                     <Typography.Text type="secondary">

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Tag, Typography, message } from 'antd';
+import { Button, Tag, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
@@ -8,6 +8,7 @@ import { useIntl } from 'react-intl';
 import PageTable, { useRowLink } from '@/components/PageTable';
 import { DateTimeCell } from '@/components/DateTimeCell';
 import { ClampedText } from '@/components/ClampedText';
+import { Price, formatMoney } from '@/components/Price';
 import { EmptyValue } from '@/components/EmptyValue';
 import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
 import type { Portfolio } from '@/services/unihub-backend/finance';
@@ -25,12 +26,6 @@ import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
 import { PortfolioFormModal } from './PortfolioFormModal';
 import type { PortfolioCreateFormValues } from './PortfolioFormModal';
 
-/** Trim the (38,18) zero padding the API sends. */
-function trimAmount(value: string): string {
-  if (!value.includes('.')) return value;
-  return value.replace(/0+$/, '').replace(/\.$/, '');
-}
-
 export function PortfoliosPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -44,16 +39,17 @@ export function PortfoliosPage() {
     { key: 'base_currency', label: t({ id: 'pages.finance.portfolios.col.baseCurrency' }), dataType: 'text' },
   ], [t]);
 
+  // FR-048: the default view is Name, PnL, Position. Everything else stays
+  // available through the Columns control and participates in saved views.
   const columnDefs = useMemo<ColumnDef[]>(() => [
     { key: 'name', label: t({ id: 'pages.finance.portfolios.col.name' }), dataType: 'text', visible: true, order: 0 },
-    // Hidden by default (FR-027) — revealed via the Columns control, and
-    // the choice participates in saved views like any other column.
-    { key: 'description', label: t({ id: 'pages.finance.portfolios.col.description' }), dataType: 'text', visible: false, order: 1 },
-    { key: 'base_currency', label: t({ id: 'pages.finance.portfolios.col.baseCurrency' }), dataType: 'text', visible: true, order: 2 },
-    { key: 'state', label: t({ id: 'pages.finance.portfolios.col.state' }), dataType: 'text', visible: true, order: 3 },
-    { key: 'net_value_change', label: t({ id: 'pages.finance.portfolios.col.pnl' }), dataType: 'number', visible: true, order: 4 },
-    { key: 'last_transaction_time', label: t({ id: 'pages.finance.portfolios.col.lastTransactionTime' }), dataType: 'text', visible: true, order: 5 },
-    { key: 'first_transaction_time', label: t({ id: 'pages.finance.portfolios.col.firstTransactionTime' }), dataType: 'text', visible: true, order: 6 },
+    { key: 'net_value_change', label: t({ id: 'pages.finance.portfolios.col.pnl' }), dataType: 'number', visible: true, order: 1 },
+    { key: 'holdings', label: t({ id: 'pages.finance.portfolios.col.position' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'description', label: t({ id: 'pages.finance.portfolios.col.description' }), dataType: 'text', visible: false, order: 3 },
+    { key: 'base_currency', label: t({ id: 'pages.finance.portfolios.col.baseCurrency' }), dataType: 'text', visible: false, order: 4 },
+    { key: 'state', label: t({ id: 'pages.finance.portfolios.col.state' }), dataType: 'text', visible: false, order: 5 },
+    { key: 'last_transaction_time', label: t({ id: 'pages.finance.portfolios.col.lastTransactionTime' }), dataType: 'text', visible: false, order: 6 },
+    { key: 'first_transaction_time', label: t({ id: 'pages.finance.portfolios.col.firstTransactionTime' }), dataType: 'text', visible: false, order: 7 },
     // No actions column (constitution v1.25.0): View is replaced by whole-row
     // navigation, Edit/Delete live on the detail panel (iteration 2), and
     // Close/Reopen moved there too (FR-020) — nothing is left to render.
@@ -172,26 +168,42 @@ export function PortfoliosPage() {
           align: 'right',
           autoWidth: {
             header: t({ id: 'pages.finance.portfolios.col.pnl' }),
-            measure: (p: Portfolio) => `${p.net_value_change ?? ''} ${p.base_currency} realized`,
+            measure: (p: Portfolio) =>
+              formatMoney(p.net_value_change, { currency: p.base_currency, signed: true }),
           },
           fixed: getFixed('net_value_change'),
-          // Realized for a closed portfolio; for an open one this is capital
-          // still deployed, so it is labelled "net" and never called PnL
-          // (FR-032/FR-033). Currencies differ per row, so each carries its own.
+          // FR-049: just "PnL", signed and coloured, with the row's own
+          // currency symbol. The realized/net qualifier is gone — it repeated
+          // the State column on every row to say nothing new.
+          render: (_, record) => (
+            <Price value={record.net_value_change} currency={record.base_currency} signed />
+          ),
+          ...makeSortProps('net_value_change', t({ id: 'pages.finance.portfolios.col.pnl' }), table.sort),
+        },
+        holdings: {
+          key: 'holdings',
+          autoWidth: {
+            header: t({ id: 'pages.finance.portfolios.col.position' }),
+            measure: (p: Portfolio) =>
+              (p.holdings ?? [])
+                .map((h) => formatMoney(h.quantity, { asset: h.asset_name }))
+                .join(', '),
+            max: 320,
+          },
+          fixed: getFixed('holdings'),
+          // FR-046: server-computed over every transfer. A portfolio holds 0–5
+          // assets in the real data, so the two-line clamp is the right ceiling
+          // rather than a workaround.
           render: (_, record) =>
-            record.net_value_change == null ? (
+            !record.holdings || record.holdings.length === 0 ? (
               <EmptyValue />
             ) : (
-              <span>
-                {trimAmount(record.net_value_change)} {record.base_currency}{' '}
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {record.state === 'closed'
-                    ? t({ id: 'pages.finance.portfolios.pnl.realized' })
-                    : t({ id: 'pages.finance.portfolios.pnl.net' })}
-                </Typography.Text>
-              </span>
+              <ClampedText
+                text={record.holdings
+                  .map((h) => formatMoney(h.quantity, { asset: h.asset_name }))
+                  .join(', ')}
+              />
             ),
-          ...makeSortProps('net_value_change', t({ id: 'pages.finance.portfolios.col.pnl' }), table.sort),
         },
         last_transaction_time: {
           dataIndex: 'last_transaction_time',

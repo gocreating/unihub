@@ -29,6 +29,7 @@ const PORTFOLIO = {
   value_invested: '-474391',
   value_returned: null,
   net_value_change: '-474391',
+  holdings: [{ asset_id: 'a1', asset_name: '00918.TW', quantity: '2145.000000000000000000' }],
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-07-01T09:00:00Z',
 };
@@ -236,20 +237,26 @@ describe('PortfoliosPage — PnL column (iteration 6)', () => {
     renderPage();
     await screen.findByRole('link', { name: 'Tech Fund' });
     const row = screen.getByRole('link', { name: 'Tech Fund' }).closest('tr')!;
-    expect(row.textContent).toContain('-474391');
-    expect(row.textContent).toContain('USD');
-    expect(row.textContent).toContain('net');
-    expect(row.textContent).not.toMatch(/realized/i);
+    // FR-049: signed, grouped, symbol-led — and NO "realized"/"net" noise.
+    expect(row.textContent).toContain('− USD 474,391');
+    expect(row.textContent).not.toMatch(/realized|net/i);
   });
 
-  it('marks a closed portfolio as realized', async () => {
+  it('shows a profit signed and green, with the same label', async () => {
     vi.mocked(financeService.listPortfolios).mockResolvedValue({
       count: 1, next: null, previous: null,
       results: [{ ...PORTFOLIO, state: 'closed', net_value_change: '2737' }],
     } as never);
     renderPage();
     const row = (await screen.findByRole('link', { name: 'Tech Fund' })).closest('tr')!;
-    expect(row.textContent).toContain('realized');
+    expect(row.textContent).toContain('+ USD 2,737');
+    expect(row.textContent).not.toMatch(/realized/i);
+  });
+
+  it('carries a Position column listing what the portfolio still holds', async () => {
+    renderPage();
+    const row = (await screen.findByRole('link', { name: 'Tech Fund' })).closest('tr')!;
+    expect(row.textContent).toContain('2,145 00918.TW');
   });
 
   it('renders the empty placeholder when a portfolio has no transfers', async () => {

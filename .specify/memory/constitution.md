@@ -1,6 +1,76 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.26.0 → 1.27.0 (minor — one NEW principle and one NEW rule
+  from user feedback, 2026-08-17. Both continue the theme of v1.26.0: a shared
+  HELPER with per-page orchestration is not a shared implementation.
+
+  (1) NEW Principle XIII — "Monetary & Numeric Display: ONE component, ONE
+  normalizer". Every amount, price, rate and quantity MUST be rendered by one
+  shared `<Price>` component built on pure, React-free normalizer functions
+  that the ECharts formatters call as well. It owns rounding, code, symbol,
+  spacing, sign, colour, tabular numerals and the precision tooltip. One
+  precision policy resolved from the currency; one symbol fallback; one
+  semantic palette (red = money out, green = money in, grey = directionless);
+  rounding always recoverable through a rounding-gated tooltip.
+  (2) Principle VI — "Expandable rows toggle on row click". Clicking anywhere
+  on an expandable row toggles it, with the same interactive-element and
+  text-selection guards as whole-row navigation, from the SAME shared helper.
+  Child rows never collapse their parent; if a row both expands and has a
+  detail page, navigation wins and expansion stays on the caret.
+
+  Bump rationale — MINOR: a principle is ADDED and one rule is added to
+  Principle VI; nothing is removed and governance is unchanged. The one
+  superseded line ("rows that have no detail page MUST NOT become clickable")
+  is narrowed, not deleted — non-expandable, non-navigating rows stay inert.
+  Existing code becomes non-compliant, so violations are enumerated below
+  rather than deferred, matching the v1.25.0 / v1.26.0 precedent.
+
+  Evidence for XIII (frontend survey, 2026-08-17): ~34 monetary render sites
+  across 11 files in 5 mutually inconsistent idioms — two parallel utility
+  stacks (utils/finance.ts symbol-first 2dp vs utils/currency.ts
+  "CODE symbol value" 4dp), FOUR precision policies (fixed 2dp / max 4dp / 0dp
+  / trim-trailing-zeros), TWO symbol fallbacks (code vs empty string), TWO
+  red/green palettes, `formatAmount` shadowed in portfolios/detail.tsx by a
+  same-named local with different semantics, one decimal-trimmer defined three
+  times, the balance-sheet symbol+amount chart closure hand-copied three times,
+  and exactly ONE use of tabular numerals in the codebase — inside a raw HTML
+  tooltip string.)
+Modified principles:
+  - VI. UI/UX Reference: ov-fleet — added "Expandable rows toggle on row
+    click"; narrowed the "rows that have no detail page" exclusion; extended
+    the rationale.
+Added sections:
+  - XIII. Monetary & Numeric Display — ONE Component, ONE Normalizer
+Removed sections: none
+Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ No changes needed (generic gate)
+  - .specify/templates/spec-template.md ✅ No changes needed
+  - .specify/templates/tasks-template.md ✅ No changes needed
+Known violations at amendment time (to be corrected by feature 013 iteration 8):
+  Principle XIII — no `Price` component exists yet; every site below is a
+  violation until it lands:
+  - Two utility stacks: src/utils/finance.ts (formatAmount, getCurrencySymbol)
+    and src/utils/currency.ts (formatPrice, currencySymbol)
+  - Local re-implementations: portfolios/financeDisplay.ts (trimDecimal),
+    portfolios/detail.tsx (local formatAmount shadowing the util),
+    portfolios/index.tsx (trimAmount), portfolios/PortfolioPnlPanel.tsx (trim)
+  - Inline composition: balance-sheets/index.tsx (cell render + two chart
+    closures + a 0dp axis formatter), balance-sheets/detail.tsx (third copy of
+    the chart closure), exchange-rates/index.tsx (measure and render disagree)
+  - Rival palettes: portfolios/financeDisplay.ts (#cf1322/#3f8600) vs
+    balance-sheets/{index,detail}.tsx (#ff4d4f/#52c41a);
+    portfolios/portfolioChartData.ts re-hardcodes the hex instead of importing
+  - Tabular numerals absent everywhere except one ECharts tooltip HTML string
+  - Finance pages do not subscribe to useCurrencySymbols (AppShell seed only)
+  Principle VI (row-click expansion) — three expandable tables, none of which
+  toggles on row click:
+  - finance/portfolios/detail.tsx, finance/balance-sheets/detail.tsx,
+    inventory/catalog/index.tsx
+Follow-up TODOs: none
+
+PREVIOUS REPORT (1.25.0 → 1.26.0)
+==================
 Version change: 1.25.0 → 1.26.0 (minor — two NEW mandatory rules from user
   feedback, 2026-08-16, both aimed at one recurring failure: table cell sizing
   re-implemented per page.
@@ -366,10 +436,32 @@ reference implementation to follow.
     the table's `onRow` (a single `useRowLink`/`rowLinkProps(url)` utility),
     never a hand-rolled per-page handler, so the semantics cannot drift
     between tables.
-  - Rows that have no detail page (e.g. a tree row that only expands) MUST NOT
-    become clickable, and row actions targeting a **different** page than the
-    row itself (e.g. Edit → edit page) remain real hyperlinks.
+  - Rows that neither have a detail page nor expand MUST NOT become clickable,
+    and row actions targeting a **different** page than the row itself
+    (e.g. Edit → edit page) remain real hyperlinks.
   Applies immediately to all existing entity tables, not only new ones.
+- **Expandable rows toggle on row click (NON-NEGOTIABLE)**: When a row is
+  **expandable** — it owns child rows or an expanded panel — **clicking anywhere
+  on that row MUST toggle its expanded state**, with exactly the effect of
+  clicking its caret. The caret is an affordance, not the only target: a 12px
+  glyph is a needlessly precise hit area for the one thing the row does.
+  - The row MUST signal this with `cursor: pointer`, the same as a navigating
+    row.
+  - The **caret itself keeps its own handler**, and the row handler MUST ignore
+    events originating in it — otherwise a caret click toggles twice and appears
+    inert. The interactive-control and text-selection guards from the
+    whole-row-navigation rule apply here **unchanged**: a click on a button,
+    input, link, or with text selected MUST NOT toggle.
+  - **Child rows do not toggle their parent.** A click on a child row does
+    nothing unless that child is itself expandable or has its own detail page.
+    Collapsing the group the user just clicked into would make the clicked row
+    vanish under the cursor.
+  - **Precedence**: if a row is expandable **and** has a detail page, the row
+    click **navigates** (the earlier rule wins) and expansion stays on the
+    caret. A row is the record first; toggling is secondary.
+  - Like whole-row navigation, this behaviour MUST come from the **same shared
+    row-props helper**, never a per-table `onRow` handler, so the guards cannot
+    drift apart between the two behaviours.
 - **Standalone-page navigation (no Cancel button)**: Full-page create, edit, and
   detail views (e.g. an entity create/edit page, a record detail page) MUST use a
   breadcrumb for navigation (parent → current) and MUST NOT render a Cancel button.
@@ -439,7 +531,12 @@ navigates the user away. The two-line ceiling exists because a max-width
 without truncation is not a narrower column — it is a taller row: capping
 the Portfolios description column at 280px while its cell rendered plain
 text produced 69px-tall three-line rows with content still overflowing to
-356px, which is the worst of both outcomes.
+356px, which is the worst of both outcomes. Row-click expansion completes
+the same idea for tree tables: a row that does exactly one thing should
+accept the click anywhere, and routing both behaviours through one helper
+is what keeps "navigate" and "toggle" from growing two different sets of
+guards — the interactive-element and text-selection exceptions are
+identical for both, and only one of them has ever been tested.
 
 ### VII. PageTable Layout — NON-NEGOTIABLE
 
@@ -809,6 +906,97 @@ the same traps. The Apply-gate pattern decouples user intent from server round-t
 which is critical for pages with large datasets. The `core/` opt-in approach keeps
 filter/sort/pagination infrastructure domain-independent (Principle II).
 
+### XIII. Monetary & Numeric Display — ONE Component, ONE Normalizer (NON-NEGOTIABLE)
+
+Every monetary amount, price, rate, and asset quantity rendered anywhere in the
+application MUST be produced by **one shared display component** backed by **one
+module of pure normalizer functions**. Composing an amount inline — a template
+string, a `toFixed`, a `toLocaleString`, a hand-written `` `${symbol} ${value}` ``,
+a locally defined `formatAmount`/`trimAmount`/`trim` — is a constitution
+violation, in page code and in chart option builders alike.
+
+**Component rule**:
+- The shared component (`apps/unihub/frontend/src/components/Price/`) is the
+  ONLY way an amount reaches the DOM. It owns, in one place: rounding, the
+  currency code, the currency symbol, the spacing between them, the sign, the
+  colour, the numeral styling, and the precision tooltip.
+- Its behaviour is selected by **props, not by re-implementation**. A caller
+  declares WHAT it is showing (a settled balance, a signed change, a position)
+  and the component decides how that looks. A caller that needs a variant the
+  component lacks MUST extend the component, never format around it.
+- Amounts MUST be **right-aligned** wherever they appear in a column, and the
+  column MUST NOT re-declare alignment ad hoc.
+
+**Normalizer rule (charts share the logic, not a copy)**:
+- The normalizers are **pure, React-free functions** in a sibling module, so
+  ECharts axis labels, tooltips, and data-label formatters call the exact same
+  code as the table cells. A chart formatter that re-composes symbol + number
+  is a violation — this is the concrete failure the rule exists to prevent
+  (the balance-sheet symbol+amount closure was hand-copied three times, and
+  its axis then used a fourth, different precision).
+- The component MUST be implemented **on top of** these normalizers, so there
+  is exactly one code path and the rendered string can never disagree with the
+  charted one.
+
+**Rounding & precision rule**:
+- There MUST be exactly ONE precision policy, resolved from the currency or
+  asset being displayed — never chosen at the call site. The four coexisting
+  policies (fixed 2dp, max 4dp, 0dp, trim-trailing-zeros) MUST collapse into it.
+- Rounding MUST be display-only. Stored values are `Decimal(38,18)`; the
+  underlying value MUST NEVER be rounded through `Number` before display, and
+  MUST NEVER be rendered in scientific notation.
+- **Rounding MUST be recoverable**: whenever the displayed text is a rounded
+  form of the stored value, the full-precision value MUST be reachable through
+  a tooltip. The tooltip is **gated on rounding actually having occurred** —
+  a value shown exactly carries no tooltip (Principle VI's truncation-gated
+  rule, applied to precision instead of width).
+
+**Symbol & code rule**:
+- Currency symbols come from the shared symbol registry seeded from the
+  Currency API. Hardcoded symbol tables are prohibited.
+- There MUST be ONE fallback behaviour when a symbol is unknown, applied
+  everywhere. Two fallbacks (one returning the code, one returning the empty
+  string) for the same missing symbol is the defect this rule closes.
+- Pages that render amounts MUST subscribe to the symbol registry so a
+  cold cache repaints when symbols arrive, rather than freezing a code-only
+  first render.
+
+**Sign & colour rule**:
+- The sign is explicit (`+` / `−`) whenever the value denotes a CHANGE, and
+  absent whenever it denotes a BALANCE or a price. Never leave a positive
+  change unsigned in a column that also holds negatives.
+- There MUST be exactly ONE semantic palette, exported from one module:
+  **red = money out (cost, fee, loss, debt)**, **green = money in (income,
+  gain)**, **grey = directionless (a position, a quantity)**. The two rival
+  red/green pairs currently in the codebase (`#cf1322`/`#3f8600` in portfolios,
+  `#ff4d4f`/`#52c41a` in balance sheets) MUST converge on it, and chart series
+  MUST import the same constants rather than re-typing the hex.
+- Colour MUST NEVER be the only carrier of meaning: the sign character always
+  accompanies it.
+
+**Numeral styling rule**:
+- Every rendered number MUST use **tabular (fixed-width) figures** so digits
+  align vertically down a column and a changing value does not shift its
+  neighbours. Proportional digits in a numeric column are a violation.
+
+**Rationale**: Money is the single most repeated rendering in this product and
+it had no owner. A survey of the frontend found roughly **34 amount render
+sites across 11 files in 5 mutually inconsistent idioms**: two parallel utility
+stacks (`utils/finance.ts` symbol-first 2dp vs `utils/currency.ts`
+`CODE symbol value` 4dp), four precision policies, two symbol fallbacks, two
+red/green palettes, one `formatAmount` shadowed by a same-named local function
+with entirely different semantics, one decimal-trimmer defined three times, the
+balance-sheet chart formatter hand-copied three times, and exactly one use of
+tabular numerals in the entire codebase — inside a raw HTML tooltip string.
+Shared *helpers* were already available and did not prevent any of this,
+because helpers with per-call-site orchestration are not a shared
+implementation (the same lesson Principle VII learned about column widths).
+Only a component that owns the whole composition, resting on normalizers the
+charts also call, makes a consistent amount the default a page gets for free.
+Requiring the full-precision tooltip protects the reason the schema is
+`Decimal(38,18)` in the first place: an 18-decimal wei balance displayed
+rounded is fine, silently unreachable is data loss.
+
 ## Development Constraints
 
 - **Package managers**: `pnpm` for frontend, `uv` for backend. Never use `npm`,
@@ -878,4 +1066,4 @@ UniHub. In cases of conflict, the constitution takes precedence.
   that gates work against these principles before Phase 0 research begins.
 - Re-check constitution compliance after Phase 1 design.
 
-**Version**: 1.26.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-08-16
+**Version**: 1.27.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-08-17

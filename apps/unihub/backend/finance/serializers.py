@@ -55,6 +55,14 @@ class PortfolioCreateSerializer(serializers.ModelSerializer):
     net_value_change = serializers.DecimalField(
         max_digits=38, decimal_places=18, coerce_to_string=True, read_only=True, allow_null=True
     )
+    # FR-046: the Position column. Bulk-computed once per page by
+    # PortfolioViewSet.list(); [] on any other action, where the detail
+    # `holdings` endpoint is the right source.
+    holdings = serializers.SerializerMethodField()
+
+    def get_holdings(self, obj) -> list[dict]:
+        view = self.context.get("view")
+        return getattr(view, "holdings_map", {}).get(obj.pk, [])
 
     class Meta:
         model = Portfolio
@@ -69,6 +77,7 @@ class PortfolioCreateSerializer(serializers.ModelSerializer):
             "value_invested",
             "value_returned",
             "net_value_change",
+            "holdings",
             "created_at",
             "updated_at",
         ]
@@ -103,6 +112,14 @@ class PortfolioUpdateSerializer(serializers.ModelSerializer):
     net_value_change = serializers.DecimalField(
         max_digits=38, decimal_places=18, coerce_to_string=True, read_only=True, allow_null=True
     )
+    # FR-046: the Position column. Bulk-computed once per page by
+    # PortfolioViewSet.list(); [] on any other action, where the detail
+    # `holdings` endpoint is the right source.
+    holdings = serializers.SerializerMethodField()
+
+    def get_holdings(self, obj) -> list[dict]:
+        view = self.context.get("view")
+        return getattr(view, "holdings_map", {}).get(obj.pk, [])
 
     class Meta:
         model = Portfolio
@@ -117,6 +134,7 @@ class PortfolioUpdateSerializer(serializers.ModelSerializer):
             "value_invested",
             "value_returned",
             "net_value_change",
+            "holdings",
             "created_at",
             "updated_at",
         ]

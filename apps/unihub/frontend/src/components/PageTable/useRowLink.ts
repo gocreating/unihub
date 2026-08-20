@@ -75,35 +75,77 @@ export interface RowLinkProps {
   onAuxClick?: (event: MouseEvent<HTMLElement>) => void;
 }
 
+export interface RowBehaviour {
+  /** Detail page for this row, if it has one. Navigation wins over toggling. */
+  url?: string | null;
+  /** Toggles this row's expanded state, for a row that owns child rows. */
+  onToggle?: (() => void) | null;
+}
+
 /**
- * Returns a factory: give it the row's detail URL and spread the result from
- * the table's `onRow`. A nullish URL yields `{}` — a row with no detail page
- * must not look or behave clickable.
+ * The ONE row-props factory. Give it what the row can do and spread the result
+ * from the table's `onRow`:
+ *
+ *   const rowProps = useRowProps();
+ *   onRow={(r) => rowProps({ url: `/finance/portfolios/${r.id}` })}
+ *   onRow={(r) => rowProps({ onToggle: () => toggle(r.id) })}
+ *
+ * A row that can do NEITHER yields `{}` — it must not look or behave
+ * clickable. A row that can do BOTH navigates: the row IS the record, and
+ * expansion stays on the caret (constitution v1.27.0, Principle VI).
+ *
+ * Both behaviours share one set of guards deliberately. Their exceptions —
+ * interactive controls, active text selections — are identical, and keeping
+ * them in one function is what stops the untested one from drifting.
  */
-export function useRowLink(): (url: string | null | undefined) => RowLinkProps {
+export function useRowProps(): (behaviour: RowBehaviour) => RowLinkProps {
   const navigate = useNavigate();
 
   return useCallback(
-    (url: string | null | undefined): RowLinkProps => {
-      if (!url) return {};
-      return {
-        style: { cursor: 'pointer' },
-        onClick: (event) => {
-          if (shouldIgnore(event)) return;
-          if (event.ctrlKey || event.metaKey || event.shiftKey) {
+    ({ url, onToggle }: RowBehaviour): RowLinkProps => {
+      if (url) {
+        return {
+          style: { cursor: 'pointer' },
+          onClick: (event) => {
+            if (shouldIgnore(event)) return;
+            if (event.ctrlKey || event.metaKey || event.shiftKey) {
+              openInNewTab(url);
+              return;
+            }
+            navigate(url);
+          },
+          onAuxClick: (event) => {
+            if (event.button !== 1) return; // middle button only; right click is the context menu
+            if (shouldIgnore(event)) return;
+            event.preventDefault();
             openInNewTab(url);
-            return;
-          }
-          navigate(url);
-        },
-        onAuxClick: (event) => {
-          if (event.button !== 1) return; // middle button only; right click is the context menu
-          if (shouldIgnore(event)) return;
-          event.preventDefault();
-          openInNewTab(url);
-        },
-      };
+          },
+        };
+      }
+
+      if (onToggle) {
+        return {
+          style: { cursor: 'pointer' },
+          onClick: (event) => {
+            // The caret carries `[data-row-link-ignore]` and toggles itself.
+            // Without this guard a caret click would toggle twice and look inert.
+            if (shouldIgnore(event)) return;
+            onToggle();
+          },
+        };
+      }
+
+      return {};
     },
     [navigate],
   );
+}
+
+/**
+ * Navigation-only shorthand for the many tables that only navigate.
+ * Equivalent to `useRowProps()({ url })`.
+ */
+export function useRowLink(): (url: string | null | undefined) => RowLinkProps {
+  const rowProps = useRowProps();
+  return useCallback((url: string | null | undefined) => rowProps({ url }), [rowProps]);
 }

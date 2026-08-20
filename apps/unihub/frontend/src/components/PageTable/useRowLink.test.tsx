@@ -3,7 +3,7 @@ import type { MockInstance } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import { useRowLink } from './useRowLink';
+import { useRowLink, useRowProps } from './useRowLink';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -15,6 +15,11 @@ const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter>{childr
 
 function setupHook() {
   const { result } = renderHook(() => useRowLink(), { wrapper });
+  return result;
+}
+
+function setupProps() {
+  const { result } = renderHook(() => useRowProps(), { wrapper });
   return result;
 }
 
@@ -138,5 +143,66 @@ describe('useRowLink — guards (SC-008)', () => {
     const props = setupHook().current('/finance/portfolios/p1');
     props.onClick?.(evt(cell));
     expect(mockNavigate).toHaveBeenCalledWith('/finance/portfolios/p1');
+  });
+});
+
+// Constitution v1.27.0, Principle VI — "Expandable rows toggle on row click".
+describe('useRowProps — expansion', () => {
+  it('a plain click on an expandable row toggles it', () => {
+    const onToggle = vi.fn();
+    const props = setupProps().current({ onToggle });
+    props.onClick?.(evt(cellIn('<td data-probe>cell</td>')));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('marks an expandable row as clickable', () => {
+    expect(setupProps().current({ onToggle: vi.fn() }).style?.cursor).toBe('pointer');
+  });
+
+  it('leaves a row that neither navigates nor expands completely inert', () => {
+    const props = setupProps().current({});
+    expect(props).toEqual({});
+  });
+
+  it('does NOT toggle twice when the caret itself is clicked', () => {
+    // The caret carries its own handler; without the guard the row handler
+    // would toggle again and the caret would look inert.
+    const onToggle = vi.fn();
+    const props = setupProps().current({ onToggle });
+    props.onClick?.(evt(cellIn('<td><span data-row-link-ignore data-probe>caret</span></td>')));
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a button', '<td><button data-probe>Delete</button></td>'],
+    ['an anchor', '<td><a href="/x" data-probe>link</a></td>'],
+    ['an input', '<td><input data-probe /></td>'],
+  ])('ignores toggle clicks originating in %s', (_label, html) => {
+    const onToggle = vi.fn();
+    setupProps().current({ onToggle }).onClick?.(evt(cellIn(html)));
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('ignores a toggle click made while the user has text selected', () => {
+    const cell = cellIn('<td data-probe>some selectable text</td>');
+    const range = document.createRange();
+    range.selectNodeContents(cell);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    const onToggle = vi.fn();
+    setupProps().current({ onToggle }).onClick?.(evt(cell));
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('NAVIGATES when a row both expands and has a detail page', () => {
+    // Precedence: the row IS the record; expansion stays on the caret.
+    const onToggle = vi.fn();
+    const props = setupProps().current({ url: '/finance/portfolios/p1', onToggle });
+    props.onClick?.(evt(cellIn('<td data-probe>cell</td>')));
+    expect(mockNavigate).toHaveBeenCalledWith('/finance/portfolios/p1');
+    expect(onToggle).not.toHaveBeenCalled();
   });
 });

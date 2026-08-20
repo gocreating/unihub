@@ -1,22 +1,20 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Breadcrumb, Button, Card, DatePicker, Descriptions, Form, Input, InputNumber, Modal,
-  Select, Space, Spin, Tag, Typography, message,
+  Breadcrumb, Button, Card, Descriptions, Space, Spin, Tag, message,
 } from 'antd';
 import {
-  CaretDownOutlined, CaretRightOutlined, DeleteOutlined, EditOutlined, MinusCircleOutlined,
+  CaretDownOutlined, CaretRightOutlined, DeleteOutlined, EditOutlined,
   PlusOutlined, RedoOutlined, StopOutlined,
 } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 import Decimal from 'decimal.js';
-import dayjs from 'dayjs';
-import PageTable, { useActionsColWidth } from '@/components/PageTable';
+import PageTable, { useActionsColWidth, useRowProps } from '@/components/PageTable';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { ClampedText } from '@/components/ClampedText';
-import { SignedAmount } from './SignedAmount';
+import { Price, formatMoney } from '@/components/Price';
 import { DateTimeCell } from '@/components/DateTimeCell';
 import { EmptyValue } from '@/components/EmptyValue';
 import { SearchHighlightProvider, SearchMark } from '@/components/HighlightText/SearchMark';
@@ -27,44 +25,21 @@ import {
   deleteTransaction,
   getPortfolio,
   listAssets,
+  listCurrencies,
   listTransactions,
   updatePortfolio,
   updateTransaction,
 } from '@/services/unihub-backend/finance';
 import { PanelHeaderActions } from '@/components/PanelHeaderActions';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
-import { getCurrencySymbol } from '@/utils/finance';
-import { PortfolioCharts } from './PortfolioCharts';
-import { PortfolioPnlPanel } from './PortfolioPnlPanel';
+import { PortfolioValuePanel } from './PortfolioValuePanel';
 import { PortfolioFormModal } from './PortfolioFormModal';
 import type { PortfolioUpdateFormValues } from './PortfolioFormModal';
+import { TransactionFormModal } from './TransactionFormModal';
+import type { TransactionFormValues } from './TransactionFormModal';
 import { EntityOffsetFooter, EntityToolbar, useEntityTable } from '@/components/EntityToolbar';
 import type { ColumnDef, EntityListParams, FilterableAttribute } from '@/components/EntityToolbar';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
-
-interface TransferFormRow {
-  /** FR-037: a transfer records EITHER cash or a position, never both. */
-  leg?: 'currency' | 'asset';
-  currency?: string;
-  currency_amount?: string;
-  asset?: string;
-  asset_change_amount?: string;
-  pnl_change?: string;
-}
-
-interface TransactionFormValues {
-  timestamp: dayjs.Dayjs;
-  description?: string;
-  chain_id?: string;
-  tx_hash?: string;
-  transfers: TransferFormRow[];
-}
-
-/** 18dp decimal strings arrive zero-padded ("419.000000000000000000") — trim for display. */
-function formatAmount(val: string): string {
-  if (!val.includes('.')) return val;
-  return val.replace(/0+$/, '').replace(/\.$/, '');
-}
 
 /**
  * FR-022: transfers are child ROWS of the transactions table sharing its
@@ -95,7 +70,6 @@ export function PortfolioDetailPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [portfolioModalOpen, setPortfolioModalOpen] = useState(false);
-  const [form] = Form.useForm<TransactionFormValues>();
   const { ref: panelRef, width: panelWidth, isNarrow } = useContainerWidth(720);
 
   // FR-021 / research I4-2: content-width driven, not viewport breakpoints.
@@ -110,8 +84,6 @@ export function PortfolioDetailPage() {
   });
 
   const baseCurrency = portfolio?.base_currency ?? '???';
-  // FR-041: symbols come from the same helper the Balance Sheets list uses.
-  const currencySymbol = getCurrencySymbol(baseCurrency);
   // FR-026: a closed portfolio is frozen except for reopening it.
   const isClosed = portfolio?.state === 'closed';
 
@@ -120,6 +92,14 @@ export function PortfolioDetailPage() {
     queryFn: () => listAssets({ limit: 500 }),
   });
   const assets = useMemo(() => assetsData?.results ?? [], [assetsData]);
+
+  // FR-037: a transfer's cash leg references a Currency, so the modal needs
+  // the currency list alongside the assets.
+  const { data: currenciesData } = useQuery({
+    queryKey: ['finance', 'currencies'],
+    queryFn: () => listCurrencies({ limit: 200 }),
+  });
+  const currencies = useMemo(() => currenciesData?.results ?? [], [currenciesData]);
 
   const filterableAttrs = useMemo<FilterableAttribute[]>(() => [
     { key: 'description', label: t({ id: 'pages.finance.transactions.col.description' }), dataType: 'text' },
@@ -204,6 +184,10 @@ export function PortfolioDetailPage() {
     });
   const expandedRowKeys = useMemo(() => Array.from(expandedIds), [expandedIds]);
 
+  // Constitution v1.27.0: clicking anywhere on an expandable row toggles it.
+  // Transactions have no detail page, so the whole row IS the caret.
+  const rowProps = useRowProps();
+
   // FR-028: the footer reports both counts for the loaded page.
   const transferCount = useMemo(
     () => transactions.reduce((n, txn) => n + txn.transfers.length, 0),
@@ -220,7 +204,6 @@ export function PortfolioDetailPage() {
     onSuccess: () => {
       invalidate();
       setModalOpen(false);
-      form.resetFields();
       message.success(t({ id: 'pages.finance.transactions.created' }));
     },
     onError: () => message.error(t({ id: 'pages.finance.transactions.createError' })),
@@ -232,7 +215,6 @@ export function PortfolioDetailPage() {
     onSuccess: () => {
       invalidate();
       setModalOpen(false);
-      form.resetFields();
       message.success(t({ id: 'pages.finance.transactions.updated' }));
     },
     onError: () => message.error(t({ id: 'pages.finance.transactions.updateError' })),
@@ -282,29 +264,15 @@ export function PortfolioDetailPage() {
     });
   };
 
+  // The modal owns its own form instance and seeds it from `editing`, so the
+  // page only decides WHICH transaction is being edited.
   const openCreate = () => {
     setEditingTransaction(null);
-    form.resetFields();
-    form.setFieldsValue({ transfers: [{}] as TransferFormRow[] });
     setModalOpen(true);
   };
 
   const openEdit = (txn: Transaction) => {
     setEditingTransaction(txn);
-    form.setFieldsValue({
-      timestamp: dayjs(txn.timestamp),
-      description: txn.description,
-      chain_id: txn.chain_id,
-      tx_hash: txn.tx_hash,
-      transfers: txn.transfers.map((tr) => ({
-        leg: tr.currency ? ('currency' as const) : ('asset' as const),
-        currency: tr.currency ?? undefined,
-        currency_amount: tr.currency_amount ?? undefined,
-        asset: tr.asset ?? undefined,
-        asset_change_amount: tr.asset_change_amount ?? undefined,
-        pnl_change: tr.pnl_change ?? undefined,
-      })),
-    });
     setModalOpen(true);
   };
 
@@ -399,12 +367,12 @@ export function PortfolioDetailPage() {
             if (isTransaction(r)) {
               const total = runningTotals.get(r.id)?.pnl;
               if (!total) return <EmptyValue />;
-              return <SignedAmount value={total.toFixed()} unit={currencySymbol} unitFirst />;
+              return <Price value={total.toFixed()} currency={baseCurrency} signed />;
             }
             return r.pnl_change == null ? (
               <EmptyValue />
             ) : (
-              <SignedAmount value={r.pnl_change} unit={currencySymbol} unitFirst />
+              <Price value={r.pnl_change} currency={baseCurrency} signed />
             );
           },
         },
@@ -419,9 +387,9 @@ export function PortfolioDetailPage() {
               const rows = runningTotals.get(r.id)?.positions ?? [];
               if (rows.length === 0) return <EmptyValue />;
               return (
-                <ClampedText text={rows.map(([a, q]) => `${q.toFixed()} ${a}`).join(', ')}>
-                  <span>{rows.map(([a, q]) => `${formatAmount(q.toFixed())} ${a}`).join(', ')}</span>
-                </ClampedText>
+                <ClampedText
+                  text={rows.map(([a, q]) => formatMoney(q.toFixed(), { asset: a })).join(', ')}
+                />
               );
             }
             // A cash leg has no position; a position leg shows "+123 0050.TW".
@@ -429,7 +397,7 @@ export function PortfolioDetailPage() {
             return r.asset_change_amount == null ? (
               <EmptyValue />
             ) : (
-              <SignedAmount value={r.asset_change_amount} unit={r.asset_name ?? ''} neutral />
+              <Price value={r.asset_change_amount} asset={r.asset_name ?? ''} signed neutral />
             );
           },
         },
@@ -467,7 +435,7 @@ export function PortfolioDetailPage() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, actionsColWidth, expandedIds, baseCurrency, currencySymbol, runningTotals, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
+    [t, actionsColWidth, expandedIds, baseCurrency, runningTotals, table.sort.sortOrderForField, table.sort.activeRules, table.cols.fixedForKey, table.cols.visibleColumns],
   );
 
   const columns = useMemo<ProColumns<TxnRow>[]>(
@@ -577,12 +545,14 @@ export function PortfolioDetailPage() {
         </Card>
       </div>
 
+      {/* FR-040: ONE panel — the PnL figure and the curve that ends at it. */}
       {portfolio && (
-        <PortfolioPnlPanel portfolio={portfolio} columns={descriptionColumns} />
+        <PortfolioValuePanel
+          portfolio={portfolio}
+          transactions={transactions}
+          columns={descriptionColumns}
+        />
       )}
-
-      {/* FR-029: visual summary above the table it summarises. */}
-      <PortfolioCharts transactions={transactions} baseCurrency={baseCurrency} />
 
       <PageTable<TxnRow>
         key={table.cols.pinFingerprint}
@@ -623,6 +593,12 @@ export function PortfolioDetailPage() {
         columnEmptyText={false}
         indentSize={0}
         expandable={{ showExpandColumn: false, expandedRowKeys }}
+        onRow={(r) =>
+          rowProps({
+            onToggle:
+              isTransaction(r) && r.children.length > 0 ? () => toggleExpand(rowKeyOf(r)) : null,
+          })
+        }
       />
 
       {portfolio && (
@@ -635,95 +611,16 @@ export function PortfolioDetailPage() {
         />
       )}
 
-      <Modal
-        title={editingTransaction ? t({ id: 'pages.finance.transactions.edit' }) : t({ id: 'pages.finance.transactions.new' })}
+      <TransactionFormModal
         open={modalOpen}
-        width={640}
-        onCancel={() => { setModalOpen(false); form.resetFields(); }}
-        onOk={() => form.submit()}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
-      >
-        <Form form={form} layout="vertical" onFinish={onFinish}>
-          <Form.Item
-            name="timestamp"
-            label={t({ id: 'pages.finance.transactions.form.timestamp' })}
-            rules={[{ required: true }]}
-          >
-            <DatePicker showTime style={{ width: '100%' }} />
-          </Form.Item>
-
-          <Form.Item name="description" label={t({ id: 'pages.finance.transactions.form.description' })}>
-            <Input placeholder={t({ id: 'pages.finance.transactions.form.descriptionPlaceholder' })} />
-          </Form.Item>
-
-          <Space style={{ display: 'flex' }} align="start">
-            <Form.Item name="chain_id" label={t({ id: 'pages.finance.transactions.form.chainId' })}>
-              <Input placeholder={t({ id: 'pages.finance.transactions.form.chainIdPlaceholder' })} maxLength={32} style={{ width: 140 }} />
-            </Form.Item>
-            <Form.Item name="tx_hash" label={t({ id: 'pages.finance.transactions.form.txHash' })}>
-              <Input placeholder={t({ id: 'pages.finance.transactions.form.txHashPlaceholder' })} maxLength={128} style={{ width: 300 }} />
-            </Form.Item>
-          </Space>
-
-          <Form.List name="transfers" rules={[{ validator: async (_, v) => { if (!v || v.length === 0) return Promise.reject(new Error('At least one transfer required')); } }]}>
-            {(fields, { add, remove }, { errors }) => (
-              <>
-                <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-                  {t({ id: 'pages.finance.transactions.form.transfers' })}
-                </Typography.Text>
-                {fields.map(({ key, name }) => (
-                  <Space key={key} align="start" style={{ display: 'flex', marginBottom: 8 }}>
-                    <Form.Item name={[name, 'asset']} rules={[{ required: true }]} style={{ marginBottom: 0 }}>
-                      <Select
-                        placeholder={t({ id: 'pages.finance.transactions.form.assetPlaceholder' })}
-                        style={{ width: 160 }}
-                        showSearch
-                        optionFilterProp="children"
-                      >
-                        {assets.map((a) => (
-                          <Select.Option key={a.id} value={a.id}>{a.name}</Select.Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
-                    <Form.Item name={[name, 'asset_change_amount']} rules={[{ required: true }]} style={{ marginBottom: 0 }}>
-                      {/* stringMode with no `step`: typed values keep full 18dp precision (FR-008c) */}
-                      <InputNumber
-                        placeholder={t({ id: 'pages.finance.transactions.form.assetChangeAmount' })}
-                        style={{ width: 140 }}
-                        stringMode
-                      />
-                    </Form.Item>
-                    <Form.Item name={[name, 'value_change']} style={{ marginBottom: 0 }}>
-                      <InputNumber
-                        placeholder={t({ id: 'pages.finance.transactions.form.valueChange' }, { currency: baseCurrency })}
-                        style={{ width: 160 }}
-                        stringMode
-                      />
-                    </Form.Item>
-                    <Form.Item name={[name, 'remark']} style={{ marginBottom: 0 }}>
-                      <Input
-                        placeholder={t({ id: 'pages.finance.transactions.form.remarkPlaceholder' })}
-                        maxLength={255}
-                        style={{ width: 120 }}
-                      />
-                    </Form.Item>
-                    <MinusCircleOutlined onClick={() => remove(name)} style={{ marginTop: 8 }} />
-                  </Space>
-                ))}
-                <Form.ErrorList errors={errors} />
-                <Button
-                  type="dashed"
-                  onClick={() => add()}
-                  icon={<PlusOutlined />}
-                  style={{ marginTop: 4 }}
-                >
-                  {t({ id: 'pages.finance.transactions.form.addTransfer' })}
-                </Button>
-              </>
-            )}
-          </Form.List>
-        </Form>
-      </Modal>
+        editing={editingTransaction}
+        assets={assets}
+        currencies={currencies}
+        baseCurrency={baseCurrency}
+        submitting={createMutation.isPending || updateMutation.isPending}
+        onCancel={() => setModalOpen(false)}
+        onSubmit={onFinish}
+      />
     </SearchHighlightProvider>
   );
 }

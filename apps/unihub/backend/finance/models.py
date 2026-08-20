@@ -39,7 +39,13 @@ class Portfolio(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = [F("last_transaction_time").desc(nulls_last=True), "-created_at"]
+        # FR-047: most-recently-transacted first; among portfolios that have
+        # never been transacted (all null, all tied) the active ones lead.
+        ordering = [
+            F("last_transaction_time").desc(nulls_last=True),
+            "state",
+            "-created_at",
+        ]
 
     def __str__(self):
         return self.name

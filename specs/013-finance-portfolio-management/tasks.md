@@ -58,3 +58,59 @@
 - **Iteration 3** (2026-08-13/14, 26 tasks): legacy CSV import (38 assets / 55 portfolios / 359 transactions / 837 transfers, run against real data 2026-08-14), the transactions-list 500 fix, migration 0012 (18-decimal amounts, `Portfolio.description`, `Transaction.chain_id`/`tx_hash`, `Transfer.remark`, `Asset.category` dropped), and entity-views / quick-search / shared-confirm-dialog adoption. Commits `39478fa`, `a09ef48`.
 - **Iteration 5** (2026-08-16, 28 tasks): constitution v1.26.0 — PageTable took ownership of column sizing (`autoWidth`, eleven pages converted, 81 call sites removed), `ClampedText` two-line cells, `Portfolio.description` → TextField (migration 0013), closed-portfolio freeze enforced server-side, description hidden by default, footer counts, and the waterfall + breakdown charts. Verified 7/7 UI and 8/8 API. Commits `0ccca3d`, `f264092`, `16b2b0c`, `253c3d7`, `368e95f`.
 - **Iteration 4** (2026-08-15, 19 tasks): constitution v1.25.0 whole-row navigation with the shared `useRowLink` helper, View buttons removed system-wide, portfolio panel converted to responsive `Descriptions`, Close/Reopen moved to the panel header, and the Transactions panel rebuilt as a catalog-style tree table with Decimal-summed parent summaries. Verified 14/14 against real data. Commits `c6db24b`, `e26758b`, `9e714ee`, `c8916e2`.
+
+## Iteration 8 (2026-08-18) — pricing component, row-click expand, list default view
+
+Constitution v1.27.0: new Principle XIII (one pricing component + normalizers)
+and a new Principle VI rule (expandable rows toggle on row click).
+
+### Phase 1 — the shared pricing surface (FR-050)
+
+- [x] T501 Write failing tests for `normalizeAmount` / `formatMoney` / `<Price>`:
+      one precision policy (money 2dp, quantity 8dp, trailing zeros trimmed,
+      integer grouped), one symbol fallback (code when unknown), explicit sign
+      only for changes, red/green/grey palette, tabular figures, and a
+      full-precision tooltip gated on rounding having occurred
+- [x] T502 `src/components/Price/format.ts` — pure, React-free normalizers plus
+      `moneyFormatter()` for ECharts; `Decimal` throughout, never `Number`
+- [x] T503 `src/components/Price/Price.tsx` + a plain `.ts` barrel (a `.tsx`
+      file may export only components — react-refresh)
+- [x] T504 Migrate the portfolio surfaces: retire `SignedAmount.tsx` and
+      `financeDisplay.ts`, delete `trimAmount`/`trimDecimal`/the local
+      `formatAmount` shadow, and point `portfolioChartData.ts` at
+      `moneyFormatter` instead of its own axis formatter
+- [ ] T505 Migrate the remaining violators listed in the constitution's Sync
+      Impact Report: balance-sheets list + detail (cell render, two chart
+      closures, the 0dp axis, the third copy of the closure), exchange-rates
+      (measure and render disagree), and the `#ff4d4f`/`#52c41a` palette
+
+### Phase 2 — row-click expansion (FR-051)
+
+- [x] T506 Write failing tests: a plain click on an expandable row toggles it;
+      the caret does not toggle twice; interactive-element and text-selection
+      guards hold; a row with BOTH a detail page and children navigates
+- [x] T507 `useRowProps({ url, onToggle })` in `useRowLink.ts` — one factory,
+      one set of guards; `useRowLink` becomes a thin wrapper
+- [x] T508 Adopt in all three expandable tables: portfolio detail transactions,
+      inventory catalog, balance-sheets aggregation (which was using AntD's
+      `expandRowByClick`, and so had neither guard)
+
+### Phase 3 — Portfolios list (FR-046…FR-049)
+
+- [x] T509 Write failing backend tests: list rows carry `holdings`, zero-net
+      assets omitted, empty list for an untransacted portfolio, ONE query for
+      the whole page; default ordering is last-transaction desc then state asc
+      (the first version of the ordering test passed on `-created_at` — it was
+      rewritten to actually discriminate)
+- [x] T510 `Portfolio.Meta.ordering` gains `state`; `PortfolioViewSet._holdings_for()`
+      + `list()` bulk-compute holdings; both Portfolio serializers expose them
+- [x] T511 Frontend: default view Name/PnL/Position, PnL column relabelled and
+      rendered via `<Price signed>`, new Position column clamped to two lines
+- [x] T512 Locale keys for both locales; dead keys removed
+
+### Phase 4 — verification
+
+- [x] T513 Migration 0014 confirmed against the real database: 38 assets, 837
+      transfers (301 currency legs + 536 asset legs), 0 constraint violations,
+      no asset named 新台幣/美元
+- [ ] T514 Re-run the full quality loop and rebuild the docker stack

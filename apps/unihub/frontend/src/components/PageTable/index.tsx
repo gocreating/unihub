@@ -24,8 +24,8 @@ export { widthForHeader, measureTextWidth, computeScrollX, computeStickyScrollX,
 // eslint-disable-next-line react-refresh/only-export-components
 export { useActionsColWidth } from './useActionsColWidth';
 // eslint-disable-next-line react-refresh/only-export-components
-export { useRowLink } from './useRowLink';
-export type { RowLinkProps } from './useRowLink';
+export { useRowLink, useRowProps } from './useRowLink';
+export type { RowBehaviour, RowLinkProps } from './useRowLink';
 // eslint-disable-next-line react-refresh/only-export-components
 export { resolveAutoWidths } from './autoWidth';
 export type { AutoWidthSpec } from './autoWidth';

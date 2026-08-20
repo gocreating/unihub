@@ -115,6 +115,46 @@ class PortfolioViewSet(viewsets.ModelViewSet):
             return PortfolioCreateSerializer
         return PortfolioUpdateSerializer
 
+    @staticmethod
+    def _holdings_for(portfolio_ids):
+        """FR-046: net quantity per asset for MANY portfolios in ONE query.
+
+        The list page needs a Position cell per row. Calling the detail
+        `holdings` action per row would be one query per portfolio — 55 on the
+        real data — so the grouping carries the portfolio id and the result is
+        bucketed in Python.
+        """
+        rows = (
+            Transfer.objects.filter(
+                transaction__portfolio_id__in=list(portfolio_ids), asset__isnull=False
+            )
+            .values("transaction__portfolio_id", "asset_id", "asset__name")
+            .annotate(quantity=Sum("asset_change_amount"))
+            .exclude(quantity=0)
+            .order_by("asset__name")
+        )
+        buckets: dict[str, list[dict]] = {pid: [] for pid in portfolio_ids}
+        for r in rows:
+            buckets.setdefault(r["transaction__portfolio_id"], []).append(
+                {
+                    "asset_id": r["asset_id"],
+                    "asset_name": r["asset__name"],
+                    "quantity": str(r["quantity"]),
+                }
+            )
+        return buckets
+
+    def list(self, request, *args, **kwargs):
+        """Attach the page's holdings before serializing (see `_holdings_for`)."""
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        rows = page if page is not None else list(queryset)
+        self.holdings_map = self._holdings_for([p.pk for p in rows])
+        serializer = self.get_serializer(rows, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
     @action(detail=True, methods=["get"])
     def holdings(self, request, pk=None):
         """FR-034: net quantity per asset across ALL of this portfolio's transfers.

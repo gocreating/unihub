@@ -220,6 +220,12 @@ export interface Portfolio {
   value_invested: string | null;
   value_returned: string | null;
   net_value_change: string | null;
+  /**
+   * FR-046: positions still held, bulk-computed server-side for the whole
+   * page. Present on the LIST response; empty on create/update responses,
+   * where `getPortfolioHoldings` is the source.
+   */
+  holdings: PortfolioHolding[];
   first_transaction_time: string | null;
   last_transaction_time: string | null;
   created_at: string;

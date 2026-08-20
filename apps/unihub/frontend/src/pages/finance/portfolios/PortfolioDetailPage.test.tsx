@@ -367,35 +367,38 @@ describe('PortfolioDetailPage — closed freeze + footer counts (iteration 5)', 
 // FR-032 / SC-016: vocabulary is the requirement. An OPEN portfolio must not
 // present a cash-flow figure as PnL — -474,391 TWD is 49 buys with no sales.
 describe('PortfolioDetailPage — PnL panel (iteration 6)', () => {
-  it('an OPEN portfolio shows invested/returned/net and NEVER the word PnL', async () => {
+  it('labels the figure just "PnL" — no inline "realized" or "net" qualifier', async () => {
     const { container } = renderPage();
     await screen.findAllByText('Tech Fund');
-    expect(await screen.findByText(/Invested/)).toBeInTheDocument();
-    expect(screen.getByText(/Net invested/)).toBeInTheDocument();
-    // No FIGURE may be labelled PnL. (The note explaining that unrealized PnL
-    // is unavailable legitimately uses the term — that is the point of it.)
     const labels = [...container.querySelectorAll('.ant-descriptions-item-label')].map(
       (el) => el.textContent ?? '',
     );
-    expect(labels.some((l) => /PnL/i.test(l))).toBe(false);
-    expect(screen.getByText(/market prices/i)).toBeInTheDocument();
+    expect(labels).toContain('PnL');
+    // FR-040: the qualifier the user called annoying moved into a tooltip.
+    // Nothing on screen may say "realized" or "net invested" any more.
+    expect(container.textContent).not.toMatch(/realized|net invested/i);
   });
 
   it('an OPEN portfolio lists the positions it still holds', async () => {
     renderPage();
     await screen.findAllByText('Tech Fund');
     expect(await screen.findByText(/00918\.TW/)).toBeInTheDocument();
-    expect(screen.getByText(/2145/)).toBeInTheDocument();
+    expect(screen.getByText(/2,145/)).toBeInTheDocument();
   });
 
-  it('a CLOSED portfolio shows a single Realized PnL figure', async () => {
+  it('a CLOSED portfolio prints the same PnL label, signed and coloured', async () => {
     vi.mocked(financeService.getPortfolio).mockResolvedValue({
       ...PORTFOLIO, state: 'closed', net_value_change: '2737', value_returned: '2737',
     } as never);
-    renderPage();
+    const { container } = renderPage();
     await screen.findAllByText('Tech Fund');
-    expect(await screen.findByText(/Realized PnL/)).toBeInTheDocument();
-    expect(screen.queryByText(/Net invested/)).toBeNull();
+    const labels = [...container.querySelectorAll('.ant-descriptions-item-label')].map(
+      (el) => el.textContent ?? '',
+    );
+    expect(labels).toContain('PnL');
+    // Symbol-first, explicit sign; the registry is unseeded in tests so the
+    // symbol falls back to the currency code.
+    expect(await screen.findByText('+ USD 2,737')).toBeInTheDocument();
   });
 
   it('shows the empty placeholder when the portfolio has no transfers', async () => {
@@ -406,7 +409,7 @@ describe('PortfolioDetailPage — PnL panel (iteration 6)', () => {
     const { container } = renderPage();
     await screen.findAllByText('Tech Fund');
     // "no data" must not read as 0.
-    expect(container.textContent).not.toMatch(/Net invested\s*0/);
+    expect(container.textContent).not.toMatch(/PnL\s*0/);
   });
 });
 

@@ -13,7 +13,7 @@ import type { ProColumns } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useIntl } from 'react-intl';
-import PageTable, { useActionsColWidth, widestText } from '@/components/PageTable';
+import PageTable, { useActionsColWidth, useRowProps, widestText } from '@/components/PageTable';
 import { DateTimeCell, dateTimeLines } from '@/components/DateTimeCell';
 import { EmptyValue } from '@/components/EmptyValue';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
@@ -258,6 +258,7 @@ export function CatalogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [acquisitions, toggledIds],
   );
+  const rowProps = useRowProps();
   const toggleExpand = (id: string) =>
     setToggledIds((prev) => {
       const next = new Set(prev);
@@ -773,6 +774,16 @@ export function CatalogPage() {
         columnEmptyText={false}
         indentSize={0}
         expandable={{ showExpandColumn: false, expandedRowKeys: flatMode ? [] : expandedKeys }}
+        // Constitution v1.27.0: an expandable row toggles on a row click, not
+        // only on its caret.
+        onRow={(r) =>
+          rowProps({
+            onToggle:
+              !flatMode && r.rowType === 'acquisition' && r.children.length > 0
+                ? () => toggleExpand(r.id)
+                : null,
+          })
+        }
         onChange={(_, __, sorter) => table.handleTableSorterChange(sorter as never)}
         pagination={false}
         footer={() => (

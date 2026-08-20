@@ -1044,9 +1044,22 @@ describe('CatalogPage — rows are deliberately NOT row-clickable', () => {
     });
   });
 
-  it('does not mark rows as clickable', async () => {
+  it('does not mark ITEM (child) rows as clickable', async () => {
+    // Constitution v1.27.0: a child row never collapses its parent — the row
+    // the user just clicked into would vanish under the cursor.
     renderPage();
     const row = (await screen.findByText('Backpack')).closest('tr')!;
     expect(row.style.cursor).not.toBe('pointer');
+  });
+
+  it('DOES make the expandable acquisition row clickable, and it toggles', async () => {
+    renderPage();
+    const parent = (await screen.findByText('Shop USD $ 10')).closest('tr')!;
+    expect(parent.style.cursor).toBe('pointer');
+
+    // ACQ starts expanded (more than one item), so a row click collapses it.
+    expect(screen.getByText('Backpack')).toBeInTheDocument();
+    fireEvent.click(parent);
+    await waitFor(() => expect(screen.queryByText('Backpack')).toBeNull());
   });
 });

@@ -456,3 +456,145 @@ hand either.
   **Transfers** tabs, transfer rows become a **table** (they currently overflow
   a 640px modal as a `Space` list), and "Add transfer" becomes a `type="link"`
   button.
+
+---
+
+# Iteration 9 research (2026-08-25) — chart polish, position badges, accumulated vs change columns
+
+## I9-1: Blank Position header — fix the class, not the instance
+
+**Decision**: `resolveAutoWidths` (PageTable) defaults a column's `title` to
+its `autoWidth.header` when the column declares no `title`.
+
+**Rationale**: the Portfolios list `holdings` column declares
+`autoWidth: { header: 'Position' }` and nothing else, so the header text is
+known to the table but never rendered — the third occurrence of the
+iteration-6 defect (5 blank headers then, 1 now). Every previous fix added a
+`title` to the offending column; the header text already lives on the column,
+so the component can supply it and a page cannot forget again. `makeSortProps`
+columns keep their ReactNode title (label + carets) because it is set
+explicitly; the default only fills a missing one.
+
+**Alternatives**: add `title` on the one column (fixes one instance; the
+memory note "shared helpers need shared orchestration" says this is how the
+drift happens) — rejected.
+
+## I9-2: Holdings as badges, through the pricing component
+
+**Decision**: a shared `HoldingTags` component (portfolios folder, used by the
+list and the detail table) renders one default AntD `<Tag>` per asset holding
+`<Price value={quantity} asset={name} plain mutedUnit />`; tags wrap in the
+cell. `<Price>` gains `mutedUnit`, which renders the unit in the secondary
+text tone in its own span.
+
+**Rationale**: a comma-separated clamped string of `2145 00918.TW, 20 0050.TW`
+puts numbers and tickers in one tone and one run, which is what the user could
+not read. Foreign-key values render as tags (Principle VI); the quantity is a
+balance (unsigned) whose colour carries no direction, so it takes the strong
+tone and the asset name the muted one. Principle XIII forbids composing the
+amount around the component, so the two-tone rendering is a component
+variant, not a page-level template.
+
+**Alternatives**: coloured tags per asset (rejected — colour would imply
+meaning, and the FK-tag rule specifies the default appearance); `ClampedText`
+over tag markup (rejected — a clamp cannot ellipsize a row of tags cleanly;
+≤5 assets per portfolio in the real data wrap within two lines at the
+column's 360px cap).
+
+## I9-3: One chart tooltip builder, shared with Balance Sheets
+
+**Decision**: `components/Price/chartTooltip.ts` (pure, React-free) exports
+`chartTooltipHtml(title, rows)`, `seriesMarker(color)` and
+`pinnedAxisTooltip(maxWidth)` — the bold date title, the two-column table with
+a right-aligned tabular value cell, and the `appendToBody` + custom `position`
+callback that pins the box to the active x value inside the chart container.
+Balance-sheets list (both charts) and detail call it; every value passes
+through `formatMoney` / `moneyFormatter`.
+
+**Rationale**: the user asked for the portfolio tooltips to match the Balance
+Sheets one; "match" is only guaranteed by one implementation. The builder
+belongs beside the normalizers because the value cell is where Principle XIII
+was broken three times (the hand-copied `sym + amount` closures). Moving the
+balance-sheets charts onto it retires those closures, the 0dp axis formatter
+and the `#ff4d4f`/`#52c41a` pair in the same edit — the chart half of
+iteration 8's open T505.
+
+**Alternatives**: copy the balance-sheets formatter into the portfolio module
+(a fourth copy — rejected); ECharts' default tooltip with `valueFormatter`
+(what ships today: no date title, cursor-following, and it cannot format the
+waterfall's signed deltas — rejected).
+
+## I9-4: Whole-portfolio accumulation via one unpaginated fetch
+
+**Decision**: the detail page issues a second query for ALL of the
+portfolio's transactions (`filters: portfolio eq id`, `ordering:
+'timestamp,created_at'`, `limit: 500`) and derives the running totals and both
+chart series from it, mapping the totals onto the table's rows by transaction
+id. The table keeps its own paginated, user-sorted query.
+
+**Rationale**: "Accumulated PnL" over the newest 25 of 53 transactions is not
+partial, it is wrong — and the note that disclosed the page scope is being
+removed at the user's request. Measured: 3 of 55 real portfolios exceed the
+25-row page; the largest has 53; the backend cap is 500. The frontend already
+owns the Decimal accumulation and the chart builders, so the smallest change
+that makes the label true is to feed them the complete set. React Query
+dedupes and the existing `['finance','transactions']` prefix invalidation
+covers the new key.
+
+**Known bound**: a portfolio beyond 500 transactions would lose its OLDEST
+rows and the totals would drift. Recorded here rather than guarded, because
+the real data is an order of magnitude below the cap and a server-side
+window-function design (the alternative) is not justified by three
+portfolios. If that ever changes, the backend annotates `accumulated_pnl` per
+row and exposes a series action; the frontend contract (a chronological array
+of transactions) stays the same.
+
+**Alternatives**: backend window annotations + a `/series/` action (correct,
+but a new endpoint, OpenAPI regen, per-asset JSON aggregation — deferred as
+above); keep page scope and re-add the note (rejected — the user removed it).
+
+## I9-5: Trend "Position" is money, not quantity
+
+**Decision**: `trendPoints().position = −(cost + income)` per transaction, in
+the portfolio's base currency; `trendOption` has ONE y-axis; the grey series
+keeps the label "Position". In Waterfall mode its running total is the
+capital currently deployed (net invested).
+
+**Rationale**: the shipped series sums `asset_change_amount` across whichever
+assets a transaction touches — units that cannot be added. Against the real
+data 119 of 359 transactions plot a negative grey bar next to a red cost bar
+(e.g. −1,579 PT-sUSDE +1,256 DAI nets −323; a 2,014 USDT cost plots −2,014),
+which is the complaint "position bars should have positive values — opposite
+to cost". The only definition that is *opposite to cost* for every
+transaction and lives in one unit is the double-entry mirror of the cash
+flow: what left as cost entered the position, what returned as income left
+it. It also removes the second axis, whose existence was the symptom (shares
+and dollars on one chart).
+
+**Alternatives**: per-asset quantity series (Session 2026-08-16c's answer —
+rejected for the chart: a USDT-for-ETH purchase still plots one large
+negative bar, so it cannot satisfy the stated expectation); `−cost` only
+(rejected — a sale would plot no position movement at all); absolute values
+(rejected — FR-043 forbids hiding the sign).
+
+## I9-6: Accumulated vs Tx change columns — a strict split
+
+**Decision**: columns Time, Accumulated PnL, Accumulated Position, Tx PnL
+Change, Tx Position Change, Description, Actions. Parent rows fill only the
+two accumulated columns; transfer rows fill only the two change columns; a
+cash leg leaves Tx Position Change empty. Locale keys
+`col.accumulatedPnl` / `col.accumulatedPosition` / `col.txPnlChange` /
+`col.txPositionChange` replace `col.pnl` / `col.position` in both locales.
+
+**Rationale**: the user specified the split ("accumulation columns are for
+transactions, change columns are for transfers"); with both kinds of figure
+in one column, a reader had to know the row type to know what a number meant.
+The pairing order (accumulated pair, then change pair) follows the order the
+user listed them and keeps the parent row's figures nearest the timestamp.
+FR-022's stale "collapsed row summarises its transfers" clause is retired in
+the spec — a parent shows balances, never a summary.
+
+**Alternatives**: parent rows also showing their own net change in the Tx
+columns (rejected — contradicts the directive and the Tx column would then
+mean two things); interleaving accumulated/change per metric (rejected —
+cosmetic, and the strict row split makes the pairs read as blocks).

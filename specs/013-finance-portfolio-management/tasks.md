@@ -1,116 +1,71 @@
-# Tasks: Finance Portfolio Management — Iteration 7 (Transfer redesign, charts, modal)
+# Tasks: Finance Portfolio Management — Iteration 9 (chart polish, position badges, accumulated vs change columns)
 
-**Input**: spec.md Clarifications 2026-08-16c (FR-037…FR-045, SC-018…SC-022), research.md I7-1…I7-4, plan.md iteration-7 section, constitution v1.26.0.
+**Input**: spec.md Clarifications 2026-08-25 (FR-052…FR-057, SC-023…SC-027), research.md I9-1…I9-6, plan.md iteration-9 section, constitution v1.27.0.
 
-**Tests**: TDD red-first. **This iteration rewrites real financial rows — snapshot before migrating.**
+**Tests**: TDD red-first (repo practice). **Frontend-only** — no migration, no OpenAPI regeneration; the backend loop still runs.
 
-**Paths**: `apps/unihub/frontend/` unless prefixed `backend/`.
+**Paths**: `apps/unihub/frontend/` unless prefixed `backend/`. Stories: US2 = Portfolios (list), US3 = Transactions (detail page).
 
-## Phase 1: Transfer model redesign (FR-037, FR-039) — foundation
+## Phase 1: PageTable header default (FR-052, SC-023) — foundational, closes the defect class
 
-- [X] T401 Write failing model/API tests in `backend/tests/finance/test_transactions.py`: a transfer accepts `pnl_change` + `currency`/`currency_amount` (cash leg) OR `pnl_change` + `asset`/`asset_change_amount` (position leg); BOTH set → rejected; NEITHER set → rejected; `pnl_change` alone → rejected; `remark` no longer exists in the payload (FR-037, SC-019, SC-020)
-- [X] T402 Redesign `Transfer` in `backend/finance/models.py`: add `currency` FK + `currency_amount`, rename `value_change` → `pnl_change`, make `asset`/`asset_change_amount` nullable, drop `remark`; add the exactly-one `CheckConstraint`
-- [X] T403 Write the data migration (0014): convert transfers whose asset is a settleable legacy currency into currency legs (currency set, quantity moved to `currency_amount`, asset cleared, `pnl_change` untouched), then delete the now-unreferenced currency Assets, then add the constraint. Test asserts the total `pnl_change` is identical before and after (SC-019)
-- [X] T404 Update `TransferSerializer` (fields, validation) and every `value_change` reference: `PortfolioViewSet` annotations, `searchable_fields`, holdings action; update the `data_io` TableDescriptor for `finance.transfer` (Principle I)
+- [ ] T601 Write failing tests: in `src/components/PageTable/autoWidth.test.ts`, `resolveAutoWidths` returns `title === autoWidth.header` for a column that declares no `title`, and leaves an explicit `title` (including a ReactNode from `makeSortProps`) untouched; in `src/pages/finance/portfolios/PortfoliosPage.test.tsx`, the rendered header row has NO empty `th` (today the Position header is blank)
+- [ ] T602 Implement the default in `src/components/PageTable/autoWidth.ts` (`resolveAutoWidths` — set `title` from `autoWidth.header` when absent, before the marker is stripped); T601 passes
 
-## Phase 2: Keep currencies out of Assets (FR-038)
+## Phase 2: `<Price mutedUnit>` + `HoldingTags` (FR-052, SC-027) — foundational
 
-- [X] T405 Write failing tests: creating or renaming an Asset whose name or symbol matches a Currency code or name is rejected (`新台幣`, `TWD`, `美元`, `USD`); an unrelated name is accepted
-- [X] T406 Implement the validation in `AssetSerializer`; T405 passes
-- [X] T407 Update `import_legacy_finance` so `is_settleable` legacy assets become **currency legs** and are never created as Assets; extend the synthetic-fixture suite to prove a re-run cannot reintroduce them
-- [X] T408 Regenerate `openapi.yaml` + `src/generated/api-types.ts`; update the frontend `Transfer`/`TransferInput` types (`pnl_change`, `currency`, `currency_amount`, no `remark`)
+- [ ] T603 [P] Write failing tests in `src/components/Price/Price.test.tsx`: with `mutedUnit`, the unit renders in its own `span` in the secondary tone while the magnitude keeps the strong tone; without it the output is byte-identical to today; `formatMoney` is unaffected
+- [ ] T604 Implement `mutedUnit` in `src/components/Price/Price.tsx` (a prop, not a wrapper — Principle XIII); T603 passes
+- [ ] T605 Write failing tests in `src/pages/finance/portfolios/HoldingTags.test.tsx`: one `.ant-tag` per holding; each tag contains the quantity and the asset name in different tones; zero holdings renders `<EmptyValue />`; tags are inside a wrapping `Space`
+- [ ] T606 Implement `src/pages/finance/portfolios/HoldingTags.tsx` — `{ holdings: { asset_name: string; quantity: string }[] }` → `<Tag><Price value asset plain mutedUnit /></Tag>` per asset; T605 passes
+- [ ] T607 [US2] Adopt on the Portfolios list Position column in `src/pages/finance/portfolios/index.tsx`: replace the comma-joined `ClampedText` with `<HoldingTags>`, keep `autoWidth.measure` (space-joined text, `max: 360`); rewrite the "carries a Position column" test in `PortfoliosPage.test.tsx` to assert one tag per holding
 
-## Phase 3: Transaction table (FR-044)
+## Phase 3: Shared chart tooltip (FR-053, SC-026) — foundational
 
-- [X] T409 Write failing tests: column order is Time, PnL, Position, Description; no Remark column; a transaction row shows an accumulated PnL with a currency symbol and per-asset accumulated Position; a transfer row shows only its own signed change (`+123 0050.TW`) (SC-022)
-- [X] T410 Rework the columns in `src/pages/finance/portfolios/detail.tsx` accordingly, using `getCurrencySymbol` for symbols and `Decimal` for the running totals
+- [ ] T608 [P] Write failing tests in `src/components/Price/chartTooltip.test.ts`: `chartTooltipHtml(title, rows)` yields `<b>title</b>` followed by a table with one `<tr>` per row whose value cell is right-aligned with `tabular-nums`; `seriesMarker(color)` yields the 10px dot carrying that colour; `pinnedAxisTooltip(320)` sets `trigger: 'axis'`, `appendToBody: true`, `axisPointer.animation: false`, and its `position` callback places the box right of the x point when it fits and flips left (never past 5px) when it does not
+- [ ] T609 Implement `src/components/Price/chartTooltip.ts` (pure, React-free — lifted from the balance-sheets closures) and export it from `src/components/Price/index.ts`; T608 passes
+- [ ] T610 Migrate the Balance Sheets charts: in `src/pages/finance/balance-sheets/index.tsx` both tooltips call `pinnedAxisTooltip` + `chartTooltipHtml` with values from `moneyFormatter(baseCurrency)`, the y-axis label uses the same formatter (retiring `formatTick`), and `SHARP_BICOLOR`/the dot use `COST_COLOR`/`INCOME_COLOR`; delete the local `tooltipRow`/`fmtVal` closures; in `src/pages/finance/balance-sheets/detail.tsx` the pie tooltip's value goes through `formatMoney` inside `chartTooltipHtml`. Existing `BalanceSheetsPage.test.tsx`/`BalanceSheetDetailPage.test.tsx` stay green; add one assertion that the formatter output contains a normalizer-formatted value
 
-## Phase 4: Merged PnL / Trend panel (FR-040…FR-043)
+## Phase 4: Whole-portfolio transaction set (FR-057, SC-025) — US3
 
-- [ ] T411 Write failing tests for the merged panel: ONE Card with `PnL` and `Trend` tabs (the separate value and chart panels are gone); the PnL tab is a line series whose last point equals the portfolio's realized/net PnL; the Trend tab has cost/income/position series in red/green/grey with negative values plotted as negatives; the Waterfall toggle changes the series shape (SC-021)
-- [ ] T412 Rewrite `portfolioChartData.ts`: `pnlLineSeries()`, `trendSeries(mode)` with the three categories per transaction, and the semantic palette constants
-- [ ] T413 Replace `PortfolioCharts.tsx` + `PortfolioPnlPanel.tsx` with the single merged panel; keep the realized/net vocabulary from FR-032 and the no-price-feed note; locale keys in BOTH files
+- [ ] T611 [US3] Write failing tests in `src/pages/finance/portfolios/PortfolioDetailPage.test.tsx`: the page issues a second `listTransactions` call carrying the portfolio filter, `ordering: 'timestamp,created_at'` and `limit: 500`; when the PAGE query returns the newest 2 of 3 transactions and the FULL query returns all 3, the newest row's Accumulated PnL equals the three-transaction sum (not the two-row sum); re-sorting the page does not change any accumulated figure
+- [ ] T612 [US3] Implement in `src/pages/finance/portfolios/detail.tsx`: `useQuery(['finance','transactions','all', id])` → `allTransactions`; `runningTotals` iterates that set (oldest first) and is looked up by transaction id; `<PortfolioValuePanel transactions={allTransactions}>`; T611 passes
 
-## Phase 5: Transaction modal (FR-045)
+## Phase 5: Chart data (FR-055 / FR-043, SC-024) — US3
 
-- [ ] T414 Write failing tests: the modal footer places the primary action right with others grouped left (Cancel left-most); the body has General and Transfers tabs; transfer rows render as a table (no horizontal overflow); "Add transfer" is a link/text-style button
-- [ ] T415 Rework the modal in `detail.tsx`: custom footer matching the shared dialog's shape, `Tabs` for General/Transfers, transfer rows as a `Table`/`ProTable` with the currency-or-asset choice per row, and `type="link"` for Add transfer
+- [ ] T613 [US3] Write failing tests in `src/pages/finance/portfolios/PortfolioValuePanel.test.tsx`: `trendPoints` gives `position === -(cost + income)` for every transaction (a 1,000 cost → +1,000; a 1,200 income → −1,200; a position-only transfer → 0); `trendOption` has exactly ONE `yAxis` and no series with `yAxisIndex: 1`; its tooltip formatter, fed ECharts-style params for index i, returns `<b>date</b>` plus Cost/Income/Position rows formatted `− NT$ 1,000` / `+ NT$ 1,000` — identical in `bar` and `waterfall` mode (signed deltas, never heights); `pnlLineOption`'s formatter returns the date title and one signed PnL row; both options carry `appendToBody` and a `position` function. Replace the now-wrong tests ("gives position its own axis", quantity-based position expectations)
+- [ ] T614 [US3] Implement in `src/pages/finance/portfolios/portfolioChartData.ts`: money-valued position, single axis, tooltips via `pinnedAxisTooltip` + `chartTooltipHtml` reading the signed point set by `dataIndex`; T613 passes
 
-## Phase 6: Polish & verification
+## Phase 6: Chart-only panel (FR-054) — US3
 
-- [ ] T416 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; backend `uv run ruff check . && uv run pytest`
-- [ ] T417 **Snapshot the real database** (`pg_dump`), rebuild + force-recreate the containers so migration 0014 runs, then verify: assets 40 → 38 with no 新台幣/美元; every transfer satisfies exactly-one; total `pnl_change` unchanged versus the snapshot; the table, merged panel and modal all render (SC-018, SC-019)
+- [ ] T615 [US3] Write failing tests in `PortfolioValuePanel.test.tsx` and `PortfolioDetailPage.test.tsx`: the PnL tab renders no `Descriptions`, no "PnL" figure line, no "Still holding" text and no "Charted from" note; while the PnL tab is active an info icon in the tab bar carries the realized note for a closed portfolio and the no-prices note for an open one; the icon is absent on the Trend tab (the Waterfall toggle is there); `getPortfolioHoldings` is never called. Rewrite the iteration-6 detail tests that asserted the figure/holdings lines
+- [ ] T616 [US3] Implement in `src/pages/finance/portfolios/PortfolioValuePanel.tsx` (remove the Descriptions block, the holdings query and the page note; `tabBarExtraContent` = info icon on PnL / Segmented on Trend); delete `getPortfolioHoldings` from `src/services/unihub-backend/finance.ts` and its mocks in the two test files; remove `pages.finance.portfolios.charts.pageNote`, `.value.holdings`, `.value.pnl` from BOTH `src/locales/en-US/pages.ts` and `src/locales/zh-TW/pages.ts` (keep `.value.noPricesNote` / `.value.realizedNote`); T615 passes
+
+## Phase 7: Accumulated vs Tx change columns (FR-056, SC-027) — US3
+
+- [ ] T617 [US3] Write failing tests in `PortfolioDetailPage.test.tsx`: the header row reads exactly `["", "Time", "Accumulated PnL", "Accumulated Position", "Tx PnL Change", "Tx Position Change", "Description", "Actions"]`; a transaction row fills Accumulated PnL (`+ NT$ …`) and Accumulated Position (one tag per asset) and leaves both Tx cells empty; an expanded asset-leg transfer row fills Tx PnL Change and Tx Position Change (`+123 0050.TW`) and leaves both Accumulated cells empty; a cash-leg transfer row leaves Tx Position Change empty; the iteration-6 "no blank header except the caret" test still passes
+- [ ] T618 [US3] Implement in `src/pages/finance/portfolios/detail.tsx` (six data columns in `columnDefs`/`colDefMap`, strict parent/child split, `<HoldingTags>` for Accumulated Position, right-aligned amounts); add `pages.finance.transactions.col.accumulatedPnl` / `.accumulatedPosition` / `.txPnlChange` / `.txPositionChange` and remove `.col.pnl` / `.col.position` in BOTH locale files (zh-TW: 累計損益 / 累計部位 / 交易損益變動 / 交易部位變動); T617 passes
+
+## Phase 8: Polish & verification
+
+- [ ] T619 Full quality loops: frontend `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (build is stricter than typecheck); backend `uv run ruff check . && uv run pytest` — this also closes iteration 8's open T514
+- [ ] T620 Rebuild AND force-recreate the frontend container (compare container image id vs image id first), then run the quickstart "Iteration 9 verification plan" against the real data read-only — SC-023…SC-027, FR-054, FR-056 — and record the results in `specs/013-finance-portfolio-management/quickstart.md`
 
 ## Dependencies
 
-- Phase 1 blocks everything (all reads change).
-- T405–T407 are independent of the UI phases; T408 gates Phases 3–5.
-- Phase 3, 4 and 5 all edit `detail.tsx` — run them in order, not in parallel.
-- Phase 6 last; T417 needs the snapshot taken first.
+- Phase 1 and Phase 2 are independent of each other; Phase 3 is independent of both (T603/T608 can start in parallel).
+- Phase 2 blocks T607 (list) and T618 (table). Phase 3 blocks T614.
+- Phases 4 → 5 → 6 → 7 all edit `detail.tsx` / `PortfolioValuePanel.tsx` / `portfolioChartData.ts` — run them in order, not in parallel.
+- Phase 8 last; T620 needs T619 green.
 
-**Total: 17 tasks** (Model 4, Guards 4, Table 2, Panel 3, Modal 2, Polish 2)
+**Total: 20 tasks** (Header 2, Badges 5, Tooltip 3, Whole-portfolio 2, Chart data 2, Panel 2, Table 2, Polish 2). Parallel starts: T601, T603, T608.
 
 ---
 
-# Archive — Iterations 1–6 (complete)
+# Archive — Iterations 1–8 (complete)
 
+- **Iteration 8** (2026-08-18, 14 tasks): constitution v1.27.0 — the shared `<Price>` component over pure normalizers (`components/Price/`), row-click expansion from the shared `useRowProps` helper in all three expandable tables, Portfolios list default view Name/PnL/Position with server-side bulk holdings and last-transaction/state ordering. Migration 0014 verified on the real data (38 assets, 837 transfers: 301 currency legs + 536 asset legs). Commit `c5288c0`. **Carried forward**: T505 (balance-sheets + exchange-rates migration onto `<Price>`) — its CHART half (the tooltip closures, the 0dp axis, the hex palette) is done by iteration 9's T610; the balance-sheets cell render and the exchange-rates page remain open. T514 (quality loop + rebuild) is absorbed by T619/T620.
+- **Iteration 7** (2026-08-16, 17 tasks): breaking Transfer redesign — `pnl_change` + exactly one of a currency leg or an asset leg (DB constraint + serializer), currencies barred from Assets, `remark` removed, migration 0014 converting the 301 legacy cash legs, the merged PnL/Trend panel with the Waterfall toggle, the Time/PnL/Position/Description table with accumulated parents, and the constitution-compliant transaction modal (General/Transfers tabs, table rows, link-style Add). Commits `cd5b36c`, `08f8b7f`, `c5288c0`.
 - **Iteration 6** (2026-08-16, 14 tasks): fixed the empty Transactions headers (6 of 8 blank, introduced in iteration 4), backend value aggregates + holdings endpoint, the realized/net PnL panel and list column, and removal of State/Base Currency from the edit modal. Verified 13/13. Commits `6d25c61`, `513c61b`, `7032818`.
 - **Iteration 3** (2026-08-13/14, 26 tasks): legacy CSV import (38 assets / 55 portfolios / 359 transactions / 837 transfers, run against real data 2026-08-14), the transactions-list 500 fix, migration 0012 (18-decimal amounts, `Portfolio.description`, `Transaction.chain_id`/`tx_hash`, `Transfer.remark`, `Asset.category` dropped), and entity-views / quick-search / shared-confirm-dialog adoption. Commits `39478fa`, `a09ef48`.
 - **Iteration 5** (2026-08-16, 28 tasks): constitution v1.26.0 — PageTable took ownership of column sizing (`autoWidth`, eleven pages converted, 81 call sites removed), `ClampedText` two-line cells, `Portfolio.description` → TextField (migration 0013), closed-portfolio freeze enforced server-side, description hidden by default, footer counts, and the waterfall + breakdown charts. Verified 7/7 UI and 8/8 API. Commits `0ccca3d`, `f264092`, `16b2b0c`, `253c3d7`, `368e95f`.
 - **Iteration 4** (2026-08-15, 19 tasks): constitution v1.25.0 whole-row navigation with the shared `useRowLink` helper, View buttons removed system-wide, portfolio panel converted to responsive `Descriptions`, Close/Reopen moved to the panel header, and the Transactions panel rebuilt as a catalog-style tree table with Decimal-summed parent summaries. Verified 14/14 against real data. Commits `c6db24b`, `e26758b`, `9e714ee`, `c8916e2`.
-
-## Iteration 8 (2026-08-18) — pricing component, row-click expand, list default view
-
-Constitution v1.27.0: new Principle XIII (one pricing component + normalizers)
-and a new Principle VI rule (expandable rows toggle on row click).
-
-### Phase 1 — the shared pricing surface (FR-050)
-
-- [x] T501 Write failing tests for `normalizeAmount` / `formatMoney` / `<Price>`:
-      one precision policy (money 2dp, quantity 8dp, trailing zeros trimmed,
-      integer grouped), one symbol fallback (code when unknown), explicit sign
-      only for changes, red/green/grey palette, tabular figures, and a
-      full-precision tooltip gated on rounding having occurred
-- [x] T502 `src/components/Price/format.ts` — pure, React-free normalizers plus
-      `moneyFormatter()` for ECharts; `Decimal` throughout, never `Number`
-- [x] T503 `src/components/Price/Price.tsx` + a plain `.ts` barrel (a `.tsx`
-      file may export only components — react-refresh)
-- [x] T504 Migrate the portfolio surfaces: retire `SignedAmount.tsx` and
-      `financeDisplay.ts`, delete `trimAmount`/`trimDecimal`/the local
-      `formatAmount` shadow, and point `portfolioChartData.ts` at
-      `moneyFormatter` instead of its own axis formatter
-- [ ] T505 Migrate the remaining violators listed in the constitution's Sync
-      Impact Report: balance-sheets list + detail (cell render, two chart
-      closures, the 0dp axis, the third copy of the closure), exchange-rates
-      (measure and render disagree), and the `#ff4d4f`/`#52c41a` palette
-
-### Phase 2 — row-click expansion (FR-051)
-
-- [x] T506 Write failing tests: a plain click on an expandable row toggles it;
-      the caret does not toggle twice; interactive-element and text-selection
-      guards hold; a row with BOTH a detail page and children navigates
-- [x] T507 `useRowProps({ url, onToggle })` in `useRowLink.ts` — one factory,
-      one set of guards; `useRowLink` becomes a thin wrapper
-- [x] T508 Adopt in all three expandable tables: portfolio detail transactions,
-      inventory catalog, balance-sheets aggregation (which was using AntD's
-      `expandRowByClick`, and so had neither guard)
-
-### Phase 3 — Portfolios list (FR-046…FR-049)
-
-- [x] T509 Write failing backend tests: list rows carry `holdings`, zero-net
-      assets omitted, empty list for an untransacted portfolio, ONE query for
-      the whole page; default ordering is last-transaction desc then state asc
-      (the first version of the ordering test passed on `-created_at` — it was
-      rewritten to actually discriminate)
-- [x] T510 `Portfolio.Meta.ordering` gains `state`; `PortfolioViewSet._holdings_for()`
-      + `list()` bulk-compute holdings; both Portfolio serializers expose them
-- [x] T511 Frontend: default view Name/PnL/Position, PnL column relabelled and
-      rendered via `<Price signed>`, new Position column clamped to two lines
-- [x] T512 Locale keys for both locales; dead keys removed
-
-### Phase 4 — verification
-
-- [x] T513 Migration 0014 confirmed against the real database: 38 assets, 837
-      transfers (301 currency legs + 536 asset legs), 0 constraint violations,
-      no asset named 新台幣/美元
-- [ ] T514 Re-run the full quality loop and rebuild the docker stack

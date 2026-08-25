@@ -259,3 +259,84 @@ fix is a violation being corrected. Principle X/XI: ECharts + SVG, tabbed Card,
   search fields, annotations, charts, tests and both locales. Compiler and tests
   catch the mechanical part; the annotation names in `PortfolioViewSet` are the
   one place a stale string would silently produce zeros, so they are asserted.
+
+---
+
+## Iteration 9 (2026-08-25) — chart polish, position badges, accumulated vs change columns
+
+**Input**: Clarifications Session 2026-08-25 (FR-052…FR-057, SC-023…SC-027),
+research I9-1…I9-6. **Frontend-only** — no model, serializer, migration or
+OpenAPI change; the backend `holdings` action stays (FR-034) but the frontend
+stops calling it.
+
+**Constitution Check (v1.27.0)**: PASS — evaluated before and after design.
+
+| Gate | Principle | Status |
+|---|---|---|
+| Entity-centric domain; data_io descriptors | I | ✅ No schema change, so no descriptor change (stated explicitly, as iteration 6 did) |
+| API contract-driven | IV | ✅ No serializer/viewset change; the detail page consumes the existing list endpoint with `limit=500&ordering=timestamp,created_at` |
+| Quality loop | V | ✅ lint / typecheck / test / **build** (frontend); ruff / pytest unchanged but run |
+| UI/UX: FK tags, non-empty headers, tab-bar extra slot, truncation-gated tooltips | VI | ✅ Holdings as default `<Tag>`; the blank Position header is the defect being fixed; the realized/net caveat uses the card's tab-bar extra slot |
+| PageTable owns sizing | VII | ✅ The header default lands in `resolveAutoWidths`, so a declared header can never render blank on ANY table |
+| i18n both locales, same commit | VIII | ✅ New column keys added, `charts.pageNote` / `value.holdings` / `value.pnl` removed, in both files |
+| Chart rendering + library standards | X / XI | ✅ ECharts + SVG, `notMerge`, 600px min-width wrapper unchanged; tooltip pinned to the x-axis value and confined via the shared position callback (the balance-sheets one, now shared); no ECharts legend |
+| ONE pricing component + normalizers | XIII | ✅ Tooltip builder lives beside the normalizers and every value goes through `formatMoney`; `<Price>` gains a muted-unit variant instead of being formatted around; the shared palette replaces the balance-sheets hex pair in the charts it touches |
+
+No violations to justify.
+
+### Scope, in dependency order
+
+1. **PageTable header default** (I9-1, FR-052) — `resolveAutoWidths` sets
+   `title` from `autoWidth.header` when the column has none. Smallest change,
+   closes the defect class for every table; component-level test (SC-023).
+2. **`<Price mutedUnit>` + `HoldingTags`** (I9-2, FR-052) — the pricing
+   component gains a variant that renders the unit in the secondary tone; a
+   shared `HoldingTags` component renders one `<Tag>` per asset. Adopted on the
+   Portfolios list Position column first, then reused by the table.
+3. **Shared chart tooltip** (I9-3, FR-053) — `components/Price/chartTooltip.ts`:
+   `chartTooltipHtml`, `seriesMarker`, `pinnedAxisTooltip`. Balance-sheets list
+   + detail switch to it, which also retires their three hand-copied
+   `symbol + amount` closures, the 0dp axis formatter and the `#ff4d4f`/`#52c41a`
+   pair (the chart half of iteration 8's T505; the cell render and the
+   exchange-rates page stay with T505).
+4. **Whole-portfolio transaction set** (I9-4, FR-057) — a second query on the
+   detail page, `['finance','transactions','all', id]`, ordered oldest-first;
+   the running totals and both charts read it; the page table keeps its own
+   paginated query. Existing invalidation (`['finance','transactions']` prefix)
+   covers both.
+5. **Chart data** (I9-5, FR-055 / FR-043) — `trendPoints` position becomes
+   `−(cost + income)`; `trendOption` drops the second axis; both options use
+   the shared tooltip with normalizer-formatted, signed values.
+6. **Panel** (FR-054) — chart-only tabs; Descriptions block, holdings query and
+   page note removed; info icon (realized / no-prices note by state) in the
+   tab bar while the PnL tab is active; `getPortfolioHoldings` removed from the
+   service layer (dead).
+7. **Transactions table** (I9-6, FR-056) — six data columns, strict
+   parent/child split, `HoldingTags` in Accumulated Position, locale keys.
+8. **Verification** against the real data (SC-023…SC-027) — see quickstart.
+
+### Risks & mitigations
+
+- **"Position" now means two things**: money in the chart, quantity in the
+  table. The user's own vocabulary is kept for both; the chart tooltip carries
+  the currency symbol, and the table cell carries the asset name, so neither
+  can be read as the other. Research I9-5 records the definition and the data
+  that forced it (119 negative bars).
+- **The whole-portfolio fetch is bounded by the backend cap (500)**. The real
+  maximum is 53. The request passes `limit: 500` explicitly and a test asserts
+  it; a portfolio beyond the cap would truncate the OLDEST rows, so the running
+  totals would drift rather than crash — recorded as a known bound in
+  research I9-4, not silently ignored.
+- **A wrong accumulated figure looks like a right one** (the iteration-6
+  lesson). SC-025 checks the three >25-transaction portfolios against the
+  API's `net_value_change` on the live database, not a fixture.
+- **Balance-sheets tooltip swap** touches a page outside 013; its existing
+  tests are the net, plus one assertion that the formatter output contains a
+  normalizer-formatted value.
+- **Waterfall tooltips**: the visible waterfall bars are heights (absolute) on
+  transparent bases, so a naïve `valueFormatter` would print costs as positive.
+  The formatter reads the SIGNED deltas from the point set by `dataIndex`,
+  identical in both modes.
+- **Removing the PnL figure from the tab** could look like losing FR-049's
+  tooltip; the info icon in the tab bar keeps the realized/net caveat
+  reachable and a test asserts its text by portfolio state.

@@ -273,3 +273,52 @@ consequence of the iteration-3 "port legacy data as-is" decision — but as a
 Options if it grates: exclude assets that are also Currency codes from
 holdings, or keep them for fidelity. Not changed unilaterally: it follows from
 a decision the user made deliberately.
+
+---
+
+# Iteration 9 verification plan (2026-08-25) — chart polish, badges, accumulated columns
+
+Frontend-only. Rebuild AND force-recreate the frontend container (compare
+`docker inspect unihub-frontend-1 --format '{{.Image}}'` with
+`docker image inspect unihub-frontend --format '{{.Id}}'` first), or run
+`pnpm dev --port 3002` against the real backend for a GET-only probe.
+
+```bash
+# from apps/unihub/frontend/
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+# from apps/unihub/backend/ (nothing changes, but the loop is the loop)
+uv run ruff check . && uv run pytest
+```
+
+**Checklist (real data, read-only):**
+
+- **SC-023** — Portfolios list header row has no blank cell: `Name | PnL | Position`.
+  A `resolveAutoWidths` test proves a column with `autoWidth.header` and no
+  `title` still renders the header.
+- **SC-027** — Position cells render one `<Tag>` per held asset; inside each,
+  the quantity and the asset name are different tones (probe the computed
+  `color` of the two spans). Same on a transaction row's Accumulated Position.
+- **SC-024** — open a crypto portfolio whose purchases were paid in USDT
+  (the ones that plotted negative grey bars): every cost-only transaction now
+  plots a positive Position bar; the option has one `yAxis`. Assert on the
+  option from `trendOption` in tests: `position === -(cost + income)` for
+  every point.
+- **SC-025** — for each of the three >25-transaction portfolios
+  (`SELECT portfolio_id, count(*) FROM finance_transaction GROUP BY 1 HAVING count(*) > 25`):
+  the newest row's Accumulated PnL equals `GET /portfolios/{id}/` →
+  `net_value_change`, and the PnL curve's last point equals it. Also flip the
+  table to page 2 and re-sort ascending — the accumulated figures must not
+  change with the page.
+- **SC-026** — hover both charts: bold date title, then rows
+  `● Cost  − NT$ 1,234` etc. with the symbol and normalizer precision; the
+  tooltip stays inside the chart and does not follow the cursor. Hover the
+  Balance Sheets net-worth chart: same box. `grep -r pageNote src/locales`
+  returns nothing.
+- **FR-054** — PnL tab shows no "PnL:" line and no "Still holding" line; the
+  ⓘ in the tab bar shows the realized note on a closed portfolio and the
+  no-prices note on an open one; the ⓘ is absent on the Trend tab (the
+  Waterfall toggle sits there instead).
+- **FR-056** — header row reads
+  `["", "Time", "Accumulated PnL", "Accumulated Position", "Tx PnL Change", "Tx Position Change", "Description", "Actions"]`;
+  expand a transaction: the parent row's two Tx cells are empty, each transfer
+  row's two Accumulated cells are empty.

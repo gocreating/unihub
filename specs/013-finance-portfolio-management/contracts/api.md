@@ -290,3 +290,12 @@ All list endpoints below additionally accept the `search` query param (019 quick
 ## Filtering contract fix (bug)
 
 `GET /api/v1/finance/transactions/?filters={"groups":[{"logic":"and","conditions":[{"attr":"portfolio","op":"eq","val":"<id>"}]}]}` MUST return 200 with the portfolio's transactions. (Previously 500 — `filterable_fields` declared operators in `lookup`; the current core contract expects ORM field paths.) Same repair applies to the assets and portfolios endpoints.
+
+# Iteration 9 (2026-08-25) — no contract change
+
+The portfolio detail page additionally calls the existing
+`GET /api/v1/finance/transactions/?filters=<portfolio eq id>&ordering=timestamp,created_at&limit=500`
+to obtain the portfolio's complete transaction set for the Accumulated columns
+and the charts (FR-057). `ordering_fields` already allows both fields and the
+pagination cap is 500. `GET /portfolios/{id}/holdings/` remains available
+(FR-034) but the frontend no longer calls it.

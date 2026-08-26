@@ -89,4 +89,18 @@ describe('resolveAutoWidths', () => {
     const col = first([{ dataIndex: 'name' }]);
     expect(col.width).toBeUndefined();
   });
+
+  // FR-052 / I9-1: a column that declares its header text must never render a
+  // blank header. The Portfolios list Position column shipped with
+  // `autoWidth.header` and no `title` — the third blank-header defect.
+  it('defaults `title` to `autoWidth.header` when the column declares no title', () => {
+    const col = first([{ dataIndex: 'name', autoWidth: { header: 'Position' } }]);
+    expect(col.title).toBe('Position');
+  });
+
+  it('leaves an explicit title (e.g. the sort-caret ReactNode) untouched', () => {
+    const node = { type: 'span', props: { children: 'Name ▲' } };
+    const col = first([{ dataIndex: 'name', title: node, autoWidth: { header: 'Name' } }]);
+    expect(col.title).toBe(node);
+  });
 });

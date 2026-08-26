@@ -72,6 +72,12 @@ describe('formatMoney — composition', () => {
     expect(formatMoney('168', { currency: 'TWD' })).toBe('NT$ 168');
   });
 
+  it('keeps the minus on a NEGATIVE balance — only the plus is omitted', () => {
+    // A debt or an oversold holding must never read as positive.
+    expect(formatMoney('-168', { currency: 'TWD' })).toBe('− NT$ 168');
+    expect(formatMoney('-0.5', { asset: 'ETH' })).toBe('−0.5 ETH');
+  });
+
   it('trails the unit for a quantity: "+123 0050.TW"', () => {
     expect(formatMoney('123', { asset: '0050.TW', signed: true })).toBe('+123 0050.TW');
   });
@@ -121,5 +127,33 @@ describe('<Price>', () => {
     // Principle VI bans; only one node may ever carry this text.
     await new Promise((r) => setTimeout(r, 250));
     expect(screen.getAllByText('$ 1.25')).toHaveLength(1);
+  });
+});
+
+// FR-052 / I9-2: a holding badge shows the quantity and the asset name in
+// different tones. The variant lives IN the component (Principle XIII) — a
+// page must not split the string and restyle half of it.
+describe('<Price mutedUnit>', () => {
+  it('renders the unit in its own span in the secondary tone, magnitude in the strong tone', () => {
+    const { container } = render(<Price value="2145.000000000000000000" asset="00918.TW" plain mutedUnit />);
+    expect(container.textContent).toBe('2,145 00918.TW');
+    const unit = screen.getByText('00918.TW');
+    expect(unit.tagName).toBe('SPAN');
+    expect(unit).toHaveClass('ant-typography-secondary');
+    // The magnitude is NOT inside the muted span.
+    expect(unit.textContent).toBe('00918.TW');
+    expect(screen.getByText(/2,145/)).not.toHaveClass('ant-typography-secondary');
+  });
+
+  it('changes nothing without the flag', () => {
+    const { container } = render(<Price value="2145" asset="00918.TW" plain />);
+    expect(container.textContent).toBe('2,145 00918.TW');
+    expect(container.querySelector('.ant-typography-secondary')).toBeNull();
+  });
+
+  it('keeps the rounding-gated precision tooltip', async () => {
+    render(<Price value="0.123456789" asset="ETH" plain mutedUnit />);
+    fireEvent.mouseEnter(screen.getByText(/0\.12345679/));
+    expect(await screen.findByText('0.123456789 ETH')).toBeInTheDocument();
   });
 });

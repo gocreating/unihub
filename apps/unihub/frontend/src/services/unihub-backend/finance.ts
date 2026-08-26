@@ -222,8 +222,9 @@ export interface Portfolio {
   net_value_change: string | null;
   /**
    * FR-046: positions still held, bulk-computed server-side for the whole
-   * page. Present on the LIST response; empty on create/update responses,
-   * where `getPortfolioHoldings` is the source.
+   * page. Present on the LIST response; empty on create/update responses.
+   * (The per-portfolio `/holdings/` action still exists — FR-034 — but no
+   * page calls it since iteration 9.)
    */
   holdings: PortfolioHolding[];
   first_transaction_time: string | null;
@@ -258,10 +259,6 @@ export interface PortfolioHolding {
   asset_name: string;
   /** Net quantity across all transfers; zero-net assets are omitted. */
   quantity: string;
-}
-
-export function getPortfolioHoldings(id: string): Promise<PortfolioHolding[]> {
-  return fetchJson<PortfolioHolding[]>(`/api/v1/finance/portfolios/${id}/holdings/`);
 }
 
 export function deletePortfolio(id: string): Promise<void> {

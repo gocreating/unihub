@@ -15,6 +15,9 @@ export {
   formatParts,
   moneyFormatter,
   normalizeAmount,
+  splitParts,
   trimDecimal,
 } from './format';
-export type { NormalizeOptions, PriceParts } from './format';
+export type { NormalizeOptions, PriceParts, SplitParts } from './format';
+export { chartTooltipHtml, pinnedAxisTooltip, seriesMarker } from './chartTooltip';
+export type { ChartTooltipRow } from './chartTooltip';

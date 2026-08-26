@@ -322,3 +322,47 @@ uv run ruff check . && uv run pytest
   `["", "Time", "Accumulated PnL", "Accumulated Position", "Tx PnL Change", "Tx Position Change", "Description", "Actions"]`;
   expand a transaction: the parent row's two Tx cells are empty, each transfer
   row's two Accumulated cells are empty.
+
+## Executed 2026-08-25 (T620) — 25/25 passed
+
+Frontend image rebuilt from this worktree (`a7bf6a35436a`) and the container
+force-recreated (ids compared before and after; the served bundle contains
+"Accumulated PnL"). Read-only Playwright probe against the real data:
+
+- **SC-023**: Portfolios headers `["Name","PnL","Position"]` — no blank cell.
+- **SC-027**: Position cells render one `.ant-tag` per asset; inside a tag the
+  quantity is `rgba(0,0,0,0.88)` and the asset name `rgba(0,0,0,0.45)`.
+  Multi-asset rows (up to 4 tags) wrap within the cell.
+- **FR-056**: header row exactly
+  `["", "Time", "Accumulated PnL", "Accumulated Position", "Tx PnL Change", "Tx Position Change", "Description", "Actions"]`;
+  parent rows leave both Tx cells empty; expanded transfer rows leave both
+  Accumulated cells empty and show `− NT$ 6,554` / `+65 元大台灣50`.
+- **SC-025** (the three >25-transaction portfolios, all TWD): newest row's
+  Accumulated PnL = `− NT$ 347,264` (xUCeWNsp, 53 txns), `− NT$ 474,391`
+  (JD2Wf2BF, 49), `− NT$ 442,760` (P7cnm6zu, 48) — each equal to the direct
+  SQL sum over ALL transfers. A page-scoped sum would have shown −163,824 /
+  −254,997 / −226,018. Page boundaries also match SQL: the 25th-newest row
+  reads −190,012; sorted ascending, the oldest row reads its own −6,528 and
+  the 25th-oldest −163,778 — sort order does not move an accumulated figure.
+- **FR-054**: no "Still holding" and no "Charted from" text anywhere on the
+  page; the ⓘ in the tab bar carries the no-prices note on an open portfolio
+  and is absent on the Trend tab (the Bars/Waterfall toggle sits there).
+- **SC-026**: PnL tooltip `2025-12-16 | ● PnL − NT$ 203,175`; Trend tooltip
+  `2025-10-16 | ● Cost − NT$ 6,573 | ● Position + NT$ 6,573`; Balance Sheets
+  net-worth tooltip `2026-05-01 | ● Net Worth NT$ 2,426,802.29` — all three
+  the same bold-date + table shape from the one builder, pinned to the axis.
+- **SC-024**: the DCA portfolio's Trend tab plots 52 grey position bars, all
+  ABOVE the axis, mirroring the red cost bars below it, on one NT$ axis.
+
+**Quality loop**: lint, typecheck and `pnpm build` clean; backend ruff clean,
+619 pytest passed. Full `pnpm test`: 1011 passed, 3 timed out under
+full-suite load in files this iteration does not touch
+(`SyncTab.actions.test.tsx` ×2, `BalanceSheetEditPage.test.tsx` ×1) — all
+three pass when their files run alone (11/11).
+
+**Worth knowing (observed, not changed)**: `[Active] Bitfinex Lending` now
+reads `−18,647.12007343 USDT` in Position. The iteration-8 badge text showed
+`18,647.12…` because `<Price>` dropped the minus on an unsigned BALANCE (only
+the plus is meant to be omitted); the normalizer fix in this iteration keeps
+it. The negative net is real — the portfolio's USDT legs are recorded as
+outflows — and matches its `− $ 18,647.12` PnL.

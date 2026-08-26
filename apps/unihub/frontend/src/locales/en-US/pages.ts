@@ -499,8 +499,10 @@ export default {
   'pages.finance.transactions.delete.confirm': 'Delete this transaction and all its transfers? This cannot be undone.',
   'pages.finance.transactions.col.portfolio': 'Portfolio',
   'pages.finance.transactions.col.timestamp': 'Time',
-  'pages.finance.transactions.col.pnl': 'PnL',
-  'pages.finance.transactions.col.position': 'Position',
+  'pages.finance.transactions.col.accumulatedPnl': 'Accumulated PnL',
+  'pages.finance.transactions.col.accumulatedPosition': 'Accumulated Position',
+  'pages.finance.transactions.col.txPnlChange': 'Tx PnL Change',
+  'pages.finance.transactions.col.txPositionChange': 'Tx Position Change',
   'pages.finance.transactions.col.description': 'Description',
   'pages.finance.transactions.col.transferCount': 'Transfers',
   'pages.finance.transactions.form.portfolio': 'Portfolio',
@@ -531,8 +533,6 @@ export default {
   'pages.finance.transactions.form.atLeastOneTransfer': 'A transaction needs at least one transfer.',
   'pages.finance.transactions.footerCounts':
     '{transactions, plural, one {# transaction} other {# transactions}}, {transfers, plural, one {# transfer} other {# transfers}}',
-  'pages.finance.portfolios.value.pnl': 'PnL',
-  'pages.finance.portfolios.value.holdings': 'Still holding',
   'pages.finance.portfolios.value.noPricesNote': 'This portfolio is still open, so this is its net PnL to date — cash out minus cash in. Unrealized gains need market prices, which unihub does not track.',
   'pages.finance.portfolios.value.realizedNote': 'This portfolio is closed and its positions are settled, so this figure is its realized profit or loss.',
   'pages.finance.portfolios.col.pnl': 'PnL',
@@ -546,8 +546,6 @@ export default {
   'pages.finance.portfolios.charts.position': 'Position',
   'pages.finance.portfolios.charts.empty':
     'Nothing to plot yet — this portfolio has no transactions on this page.',
-  'pages.finance.portfolios.charts.pageNote':
-    'Charted from the {count, plural, one {# transaction} other {# transactions}} on this page; the PnL figure above covers the whole portfolio.',
   'pages.finance.transactions.closedHint': 'This portfolio is closed — reopen it to make changes.',
   'pages.finance.transactions.transferCountSummary':
     '{count, plural, one {# transfer} other {# transfers}}',

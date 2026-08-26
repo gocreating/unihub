@@ -106,9 +106,6 @@ beforeEach(() => {
   vi.mocked(financeService.deletePortfolio).mockResolvedValue(undefined as never);
   vi.mocked(financeService.updatePortfolio).mockResolvedValue(PORTFOLIO as never);
   vi.mocked(financeService.deleteTransaction).mockResolvedValue(undefined as never);
-  vi.mocked(financeService.getPortfolioHoldings).mockResolvedValue([
-    { asset_id: 'a1', asset_name: '00918.TW', quantity: '2145' },
-  ] as never);
 });
 
 describe('PortfolioDetailPage — breadcrumb + Portfolio panel (iteration 2, US2)', () => {
@@ -366,46 +363,37 @@ describe('PortfolioDetailPage — closed freeze + footer counts (iteration 5)', 
 
 // FR-032 / SC-016: vocabulary is the requirement. An OPEN portfolio must not
 // present a cash-flow figure as PnL — -474,391 TWD is 49 buys with no sales.
-describe('PortfolioDetailPage — PnL panel (iteration 6)', () => {
-  it('labels the figure just "PnL" — no inline "realized" or "net" qualifier', async () => {
+// FR-054 (iteration 9, superseding the iteration-6 figure/holdings lines):
+// the PnL tab is the chart. The realized/net caveat survives only as an info
+// icon in the tab bar; holdings reach the user through the list's Position
+// column and the newest row's Accumulated Position.
+describe('PortfolioDetailPage — chart-only PnL tab (iteration 9)', () => {
+  it('prints no PnL figure line and no holdings line on the page', async () => {
     const { container } = renderPage();
     await screen.findAllByText('Tech Fund');
     const labels = [...container.querySelectorAll('.ant-descriptions-item-label')].map(
       (el) => el.textContent ?? '',
     );
-    expect(labels).toContain('PnL');
-    // FR-040: the qualifier the user called annoying moved into a tooltip.
-    // Nothing on screen may say "realized" or "net invested" any more.
+    expect(labels).not.toContain('PnL');
+    expect(container.textContent).not.toMatch(/still holding/i);
+    expect(container.textContent).not.toMatch(/charted from/i);
     expect(container.textContent).not.toMatch(/realized|net invested/i);
   });
 
-  it('an OPEN portfolio lists the positions it still holds', async () => {
-    renderPage();
-    await screen.findAllByText('Tech Fund');
-    expect(await screen.findByText(/00918\.TW/)).toBeInTheDocument();
-    expect(screen.getByText(/2,145/)).toBeInTheDocument();
-  });
-
-  it('a CLOSED portfolio prints the same PnL label, signed and coloured', async () => {
+  it('keeps the caveat reachable from the tab bar, worded by state', async () => {
     vi.mocked(financeService.getPortfolio).mockResolvedValue({
       ...PORTFOLIO, state: 'closed', net_value_change: '2737', value_returned: '2737',
     } as never);
-    const { container } = renderPage();
+    renderPage();
     await screen.findAllByText('Tech Fund');
-    const labels = [...container.querySelectorAll('.ant-descriptions-item-label')].map(
-      (el) => el.textContent ?? '',
-    );
-    expect(labels).toContain('PnL');
-    // Symbol-first, explicit sign; the registry is unseeded in tests so the
-    // symbol falls back to the currency code.
-    expect(await screen.findByText('+ USD 2,737')).toBeInTheDocument();
+    fireEvent.mouseEnter(screen.getByLabelText('pnl-note'));
+    expect(await screen.findByText(/realized profit or loss/i)).toBeInTheDocument();
   });
 
-  it('shows the empty placeholder when the portfolio has no transfers', async () => {
+  it('shows nothing that reads as a zero PnL when the portfolio has no transfers', async () => {
     vi.mocked(financeService.getPortfolio).mockResolvedValue({
       ...PORTFOLIO, value_invested: null, value_returned: null, net_value_change: null,
     } as never);
-    vi.mocked(financeService.getPortfolioHoldings).mockResolvedValue([] as never);
     const { container } = renderPage();
     await screen.findAllByText('Tech Fund');
     // "no data" must not read as 0.
@@ -429,8 +417,68 @@ describe('PortfolioDetailPage — every column has a header (iteration 6)', () =
     const blanks = headers.filter((h) => h === '');
     expect(blanks).toHaveLength(1);
     expect(headers).toEqual(
-      expect.arrayContaining(['Time', 'PnL', 'Position', 'Description', 'Actions']),
+      expect.arrayContaining(['Time', 'Accumulated PnL', 'Accumulated Position', 'Description', 'Actions']),
     );
+  });
+});
+
+// FR-056 / SC-027 (iteration 9): accumulated columns belong to transaction
+// rows, Tx change columns to transfer rows — a strict split, so a reader
+// never has to know the row type to know what a number means.
+describe('PortfolioDetailPage — Accumulated vs Tx change columns (iteration 9)', () => {
+  beforeEach(() => {
+    vi.mocked(financeService.listTransactions).mockResolvedValue({
+      count: 1, next: null, previous: null, results: [TXN],
+    } as never);
+  });
+  const CARET = 0, ACC_PNL = 2, ACC_POS = 3, TX_PNL = 4, TX_POS = 5;
+  const cells = (row: Element) => [...row.querySelectorAll('td')].map((td) => td.textContent ?? '');
+
+  it('carries the six data columns in the specified order', async () => {
+    const { container } = renderPage();
+    await screen.findByText('DCA buy');
+    const headers = [...container.querySelectorAll('.ant-table-thead th')].map(
+      (th) => (th.textContent ?? '').trim(),
+    );
+    expect(headers).toEqual([
+      '', 'Time', 'Accumulated PnL', 'Accumulated Position',
+      'Tx PnL Change', 'Tx Position Change', 'Description', 'Actions',
+    ]);
+  });
+
+  it('a transaction row fills ONLY the accumulated pair — PnL signed with the symbol, Position as badges', async () => {
+    const { container } = renderPage();
+    const row = (await screen.findByText('DCA buy')).closest('tr')!;
+    const c = cells(row);
+    expect(c[ACC_PNL]).toBe('− USD 1');
+    expect(row.querySelectorAll('td')[ACC_POS]!.querySelectorAll('.ant-tag')).toHaveLength(1);
+    expect(c[ACC_POS]).toBe('419 00918.TW');
+    expect(c[TX_PNL]).toBe('');
+    expect(c[TX_POS]).toBe('');
+    expect(container.querySelectorAll('.ant-table-thead')).toHaveLength(1);
+  });
+
+  it('a transfer row fills ONLY the Tx change pair; a cash leg leaves Tx Position Change empty', async () => {
+    const { container } = renderPage();
+    await screen.findByText('DCA buy');
+    fireEvent.click(container.querySelector('[data-row-link-ignore]') as HTMLElement);
+    await screen.findByText('+419 00918.TW');
+    const rows = [...container.querySelectorAll('.ant-table-tbody tr.ant-table-row')];
+    expect(rows).toHaveLength(3);
+    const assetLeg = cells(rows[1]!);
+    const cashLeg = cells(rows[2]!);
+    // Asset leg: no PnL of its own, +419 of the asset.
+    expect(assetLeg[ACC_PNL]).toBe('');
+    expect(assetLeg[ACC_POS]).toBe('');
+    expect(assetLeg[TX_PNL]).toBe('-');
+    expect(assetLeg[TX_POS]).toBe('+419 00918.TW');
+    // Cash leg: its PnL change, and no position change (Position = assets).
+    expect(cashLeg[ACC_PNL]).toBe('');
+    expect(cashLeg[ACC_POS]).toBe('');
+    expect(cashLeg[TX_PNL]).toBe('− USD 1');
+    expect(cashLeg[TX_POS]).toBe('-');
+    // The caret column belongs to parents only.
+    expect(assetLeg[CARET]).toBe('');
   });
 });
 
@@ -512,5 +560,59 @@ describe('PortfolioDetailPage — transactions quick search (iteration 3)', () =
       const marks = Array.from(container.querySelectorAll('.ant-table-tbody mark'));
       expect(marks.length).toBeGreaterThan(0);
     });
+  });
+});
+
+// FR-057 / I9-4 / SC-025: the Accumulated columns and the charts cover the
+// WHOLE portfolio. The table's page is paginated and user-sorted; a second,
+// unpaginated, oldest-first query feeds the running totals, which are then
+// looked up by transaction id — so page, page size and sort cannot change
+// an accumulated figure.
+describe('PortfolioDetailPage — whole-portfolio accumulation (iteration 9)', () => {
+  const leg = (pnl: string) => ({
+    id: `leg-${pnl}`,
+    pnl_change: pnl,
+    currency: 'USD',
+    currency_symbol: null,
+    currency_amount: pnl,
+    asset: null,
+    asset_name: null,
+    asset_change_amount: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  });
+  const T1 = { ...TXN, id: 't1', timestamp: '2026-01-01T00:00:00Z', description: 'oldest', transfers: [leg('-100')] };
+  const T2 = { ...TXN, id: 't2', timestamp: '2026-02-01T00:00:00Z', description: 'middle', transfers: [leg('-200')] };
+  const T3 = { ...TXN, id: 't3', timestamp: '2026-03-01T00:00:00Z', description: 'newest', transfers: [leg('-300')] };
+
+  beforeEach(() => {
+    vi.mocked(financeService.listTransactions).mockImplementation(async (params) =>
+      params?.limit === 500
+        ? ({ count: 3, next: null, previous: null, results: [T1, T2, T3] } as never)
+        // The page shows the newest two only (page size 2, newest first).
+        : ({ count: 3, next: 'x', previous: null, results: [T3, T2] } as never),
+    );
+  });
+
+  it('requests the complete transaction set once, oldest first, inside the portfolio filter', async () => {
+    renderPage();
+    await screen.findByText('newest');
+    const full = vi.mocked(financeService.listTransactions).mock.calls
+      .map((c) => c[0]!)
+      .filter((p) => p.limit === 500);
+    expect(full).toHaveLength(1);
+    expect(full[0]!.ordering).toBe('timestamp,created_at');
+    const conditions = full[0]!.filters!.groups.flatMap((g: { conditions: unknown[] }) => g.conditions);
+    expect(conditions).toContainEqual({ attr: 'portfolio', op: 'eq', val: 'p1' });
+  });
+
+  it('accumulates over ALL transactions, not the loaded page', async () => {
+    renderPage();
+    const newest = (await screen.findByText('newest')).closest('tr')!;
+    // −100 −200 −300 over the whole portfolio; a page-scoped sum would be −500.
+    expect(newest.textContent).toContain('− USD 600');
+    expect(newest.textContent).not.toContain('− USD 500');
+    const middle = screen.getByText('middle').closest('tr')!;
+    expect(middle.textContent).toContain('− USD 300');
   });
 });

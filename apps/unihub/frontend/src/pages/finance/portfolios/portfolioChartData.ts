@@ -16,14 +16,30 @@
  *    worse than no chart. A Waterfall toggle floats each series on its own
  *    running total instead of plotting bare deltas.
  *
- * Cost/income are the portfolio's base currency; position is a quantity of
- * assets. They cannot share a scale (419 shares vs 0.000000067 of a token), so
- * position gets its own right-hand axis.
+ * All three are the portfolio's base currency (FR-055, research I9-5):
+ * **position is the money mirror of the cash flow**, `−(cost + income)` — what
+ * left as cost entered the position, what came back as income left it. The
+ * earlier series summed asset QUANTITIES across whichever assets a transaction
+ * touched, which is meaningless across units and plotted a negative grey bar
+ * for 119 of the 359 real transactions (paying 1,579 PT-sUSDE for 1,256 DAI
+ * nets "−323"). One unit means one axis.
+ *
+ * Tooltips come from the shared builder (FR-053) and read the SIGNED point by
+ * `dataIndex`, so the waterfall's absolute bar heights never leak into text.
  */
 import type { EChartsOption } from 'echarts';
 import Decimal from 'decimal.js';
 import type { Transaction } from '@/services/unihub-backend/finance';
-import { COST_COLOR, INCOME_COLOR, NEUTRAL_COLOR, formatMoney, moneyFormatter } from '@/components/Price';
+import {
+  COST_COLOR,
+  INCOME_COLOR,
+  NEUTRAL_COLOR,
+  chartTooltipHtml,
+  formatMoney,
+  moneyFormatter,
+  pinnedAxisTooltip,
+  seriesMarker,
+} from '@/components/Price';
 
 export type TrendMode = 'bar' | 'waterfall';
 
@@ -41,7 +57,7 @@ export interface TrendPoint {
   cost: number;
   /** Sum of POSITIVE pnl_change — always ≥ 0. */
   income: number;
-  /** Net asset quantity change, signed. */
+  /** Base-currency value moved INTO (+) or OUT OF (−) positions: −(cost + income). */
   position: number;
 }
 
@@ -75,27 +91,26 @@ export function pnlPoints(transactions: readonly Transaction[]): PnlPoint[] {
   return out;
 }
 
-/** FR-043 — per-transaction cost / income / position, oldest first. */
+/** FR-043 / FR-055 — per-transaction cost / income / position, oldest first. */
 export function trendPoints(transactions: readonly Transaction[]): TrendPoint[] {
   return chronological(transactions).map((txn) => {
     let cost = new Decimal(0);
     let income = new Decimal(0);
-    let position = new Decimal(0);
     for (const tr of txn.transfers) {
       if (tr.pnl_change != null) {
         const v = new Decimal(tr.pnl_change);
         if (v.isNegative()) cost = cost.plus(v);
         else income = income.plus(v);
       }
-      if (tr.asset_change_amount != null) {
-        position = position.plus(new Decimal(tr.asset_change_amount));
-      }
     }
+    // Double-entry: the position moves by exactly what the cash did, negated.
+    // (`Decimal(0).negated()` is −0; a bar at −0 is a bar at 0.)
+    const position = cost.plus(income).negated();
     return {
       label: txn.timestamp.slice(0, 10),
       cost: cost.toNumber(),
       income: income.toNumber(),
-      position: position.toNumber(),
+      position: position.isZero() ? 0 : position.toNumber(),
     };
   });
 }
@@ -116,6 +131,7 @@ export interface MoneyAxisLabels {
 export function pnlLineOption(
   points: readonly PnlPoint[],
   { currency }: MoneyAxisLabels,
+  label = 'PnL',
 ): EChartsOption {
   const money = moneyFormatter(currency);
   const values = points.map((p) => p.value);
@@ -124,9 +140,21 @@ export function pnlLineOption(
 
   return {
     tooltip: {
-      trigger: 'axis',
-      confine: true,
-      valueFormatter: (v) => money(Number(v)),
+      ...pinnedAxisTooltip(320),
+      formatter: (raw) => {
+        const params = raw as unknown as { value: [number, number] }[];
+        const p = params[0];
+        if (!p) return '';
+        const [ts, v] = p.value;
+        const title = points.find((pt) => pt.time === ts)?.label ?? new Date(ts).toISOString().slice(0, 10);
+        return chartTooltipHtml(title, [
+          {
+            marker: seriesMarker(v >= 0 ? INCOME_COLOR : COST_COLOR),
+            name: label,
+            value: formatMoney(v, { currency, signed: true }),
+          },
+        ]);
+      },
     },
     grid: { left: 88, right: 24, top: 24, bottom: 48 },
     xAxis: { type: 'time' },
@@ -146,7 +174,7 @@ export function pnlLineOption(
     },
     series: [
       {
-        name: 'PnL',
+        name: label,
         type: 'line',
         showSymbol: points.length <= 60,
         symbolSize: 5,
@@ -168,7 +196,6 @@ function floatingSeries(
   color: string,
   deltas: readonly number[],
   stack: string,
-  yAxisIndex: number,
 ) {
   const bases: number[] = [];
   const heights: number[] = [];
@@ -184,7 +211,6 @@ function floatingSeries(
       name: `${name}-base`,
       type: 'bar' as const,
       stack,
-      yAxisIndex,
       silent: true,
       itemStyle: { color: 'transparent' },
       tooltip: { show: false },
@@ -194,7 +220,6 @@ function floatingSeries(
       name,
       type: 'bar' as const,
       stack,
-      yAxisIndex,
       itemStyle: { color },
       data: heights,
     },
@@ -215,29 +240,49 @@ export function trendOption(
 ): EChartsOption {
   const categories = points.map((p) => p.label);
   const money = moneyFormatter(currency);
+  const signed = (v: number) => formatMoney(v, { currency, signed: true });
 
   const series =
     mode === 'waterfall'
       ? [
-          ...floatingSeries(labels.cost, COST_COLOR, points.map((p) => p.cost), 'cost', 0),
-          ...floatingSeries(labels.income, INCOME_COLOR, points.map((p) => p.income), 'income', 0),
-          ...floatingSeries(labels.position, NEUTRAL_COLOR, points.map((p) => p.position), 'position', 1),
+          ...floatingSeries(labels.cost, COST_COLOR, points.map((p) => p.cost), 'cost'),
+          ...floatingSeries(labels.income, INCOME_COLOR, points.map((p) => p.income), 'income'),
+          ...floatingSeries(labels.position, NEUTRAL_COLOR, points.map((p) => p.position), 'position'),
         ]
       : [
-          { name: labels.cost, type: 'bar' as const, yAxisIndex: 0, itemStyle: { color: COST_COLOR }, data: points.map((p) => p.cost) },
-          { name: labels.income, type: 'bar' as const, yAxisIndex: 0, itemStyle: { color: INCOME_COLOR }, data: points.map((p) => p.income) },
-          { name: labels.position, type: 'bar' as const, yAxisIndex: 1, itemStyle: { color: NEUTRAL_COLOR }, data: points.map((p) => p.position) },
+          { name: labels.cost, type: 'bar' as const, itemStyle: { color: COST_COLOR }, data: points.map((p) => p.cost) },
+          { name: labels.income, type: 'bar' as const, itemStyle: { color: INCOME_COLOR }, data: points.map((p) => p.income) },
+          { name: labels.position, type: 'bar' as const, itemStyle: { color: NEUTRAL_COLOR }, data: points.map((p) => p.position) },
         ];
 
   return {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, confine: true },
-    grid: { left: 88, right: 72, top: 24, bottom: 64 },
+    tooltip: {
+      ...pinnedAxisTooltip(320),
+      axisPointer: { type: 'shadow', animation: false },
+      // Read the SIGNED point, not the series value: in waterfall mode the
+      // series carry absolute heights on transparent bases.
+      formatter: (raw) => {
+        const params = raw as unknown as { dataIndex: number }[];
+        const i = params[0]?.dataIndex;
+        const p = i == null ? undefined : points[i];
+        if (!p) return '';
+        const rows: [string, number, string][] = [
+          [labels.cost, p.cost, COST_COLOR],
+          [labels.income, p.income, INCOME_COLOR],
+          [labels.position, p.position, NEUTRAL_COLOR],
+        ];
+        return chartTooltipHtml(
+          p.label,
+          rows
+            .filter(([, v]) => v !== 0)
+            .map(([name, v, color]) => ({ marker: seriesMarker(color), name, value: signed(v) })),
+        );
+      },
+    },
+    grid: { left: 88, right: 24, top: 24, bottom: 64 },
     xAxis: { type: 'category', data: categories, axisLabel: { rotate: 45 } },
-    yAxis: [
-      { type: 'value', axisLabel: { formatter: money } },
-      // Quantities, not money — the same normalizer without a currency.
-      { type: 'value', axisLabel: { formatter: (v: number) => formatMoney(v) } },
-    ],
+    // ONE axis: cost, income and position are all money now (FR-055).
+    yAxis: { type: 'value', axisLabel: { formatter: money } },
     series,
   };
 }

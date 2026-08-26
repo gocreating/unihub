@@ -34,6 +34,7 @@ import {
 } from '@/utils/finance';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { resolveAccountColor } from '@/utils/chartData';
+import { COST_COLOR, INCOME_COLOR, chartTooltipHtml, formatMoney, moneyFormatter } from '@/components/Price';
 
 type BalanceDetailChartType = 'asset-vs-debt' | 'assets-only' | 'debts-only' | 'aggregation';
 
@@ -138,8 +139,11 @@ export function BalanceSheetDetailPage() {
   const debtBalances = useMemo(() => balances.filter((b) => new Decimal(b.amount).lt(0)), [balances]);
 
   const pieData = useMemo(() => {
-    const sym = getCurrencySymbol(baseCurrency ?? '');
-    const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
+    // Constitution XIII: the tooltip value is a normalizer string, not a
+    // hand-composed `symbol + amount` (this was the third copy of that closure).
+    const fmtVal = baseCurrency
+      ? moneyFormatter(baseCurrency)
+      : (v: number) => formatMoney(v, { maxDecimals: 2 });
 
     if (chartType === 'asset-vs-debt') {
       const assetTotal = assetBalances.reduce((s, b) => {
@@ -157,7 +161,7 @@ export function BalanceSheetDetailPage() {
         ],
         // Fixed green/red palette — always set at option level so ECharts doesn't carry
         // over the previous tab's palette when notMerge resets the chart.
-        colors: ['#52c41a', '#ff4d4f'] as string[],
+        colors: [INCOME_COLOR, COST_COLOR] as string[],
         fmtVal,
       };
     }
@@ -190,7 +194,11 @@ export function BalanceSheetDetailPage() {
         confine: true,
         formatter: (params) => {
           const p = params as { name: string; value: number; percent: number; marker: string };
-          return `${p.marker}${p.name}<br/>${fmtVal(p.value)} (${p.percent.toFixed(1)}%)`;
+          // FR-053: the shared shape — title, then marker + share on the left,
+          // the normalizer-formatted value on the right.
+          return chartTooltipHtml(p.name, [
+            { marker: p.marker, name: `${p.percent.toFixed(1)}%`, value: fmtVal(p.value) },
+          ]);
         },
       },
       legend: { show: false },

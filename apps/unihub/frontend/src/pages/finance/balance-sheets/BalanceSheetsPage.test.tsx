@@ -7,7 +7,13 @@ import enUS from '@/locales/en-US';
 import { BalanceSheetsPage } from './index';
 import * as financeService from '@/services/unihub-backend/finance';
 
-vi.mock('echarts-for-react', () => ({ default: () => null }));
+const optionSpy = vi.fn();
+vi.mock('echarts-for-react', () => ({
+  default: (props: { option: unknown }) => {
+    optionSpy(props.option);
+    return null;
+  },
+}));
 vi.mock('@/services/unihub-backend/finance');
 
 const SHEET_ID = 'sheet-abc';
@@ -119,5 +125,36 @@ describe('BalanceSheetsPage — chart card tab labels (US4)', () => {
     const labels = tabs.map((el) => el.textContent?.trim());
     expect(labels).toContain('SENTINEL_EQUITY');
     expect(labels).toContain('SENTINEL_ACCOUNT');
+  });
+});
+
+// FR-053 / SC-026: the chart tooltips come from the ONE shared builder, with
+// values through the normalizers — the closure that used to live here was
+// hand-copied three times.
+describe('BalanceSheetsPage — shared chart tooltip (013 iteration 9)', () => {
+  beforeEach(() => {
+    optionSpy.mockClear();
+    vi.mocked(financeService.listBalanceSheets).mockResolvedValue(ONE_PAGE);
+    vi.mocked(financeService.listCurrencies).mockResolvedValue(EMPTY_PAGE as never);
+    vi.mocked(financeService.listExchangeRates).mockResolvedValue(EMPTY_PAGE as never);
+    vi.mocked(financeService.listBalances).mockResolvedValue([]);
+  });
+
+  it('renders the net-worth tooltip as a bold date plus a normalizer-formatted row, pinned to the axis', async () => {
+    renderPage();
+    await screen.findAllByRole('link', { name: /edit/i });
+    type Opt = {
+      xAxis: { type: string };
+      tooltip: { trigger: string; appendToBody: boolean; position: unknown; formatter: (p: unknown) => string };
+    };
+    const line = (optionSpy.mock.calls.map((c) => c[0]) as Opt[]).find((o) => o.xAxis?.type === 'time');
+    expect(line).toBeTruthy();
+    expect(line!.tooltip.trigger).toBe('axis');
+    expect(line!.tooltip.appendToBody).toBe(true);
+    expect(typeof line!.tooltip.position).toBe('function');
+    const html = line!.tooltip.formatter([{ value: [Date.UTC(2024, 0, 15), 1234.5] }]);
+    expect(html.startsWith('<b>2024-01-15</b>')).toBe(true);
+    expect(html).toContain('1,234.5');
+    expect(html).toContain('tabular-nums');
   });
 });

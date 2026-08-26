@@ -23,6 +23,7 @@ import type { ColumnDef, FilterableAttribute, ViewConfig } from '@/components/En
 import { ViewTabs } from '@/components/EntityViews/ViewTabs';
 import { useEntityViews } from '@/components/EntityViews/useEntityViews';
 import { makeSortProps } from '@/components/EntityToolbar/makeSortProps';
+import { HoldingTags } from './HoldingTags';
 import { PortfolioFormModal } from './PortfolioFormModal';
 import type { PortfolioCreateFormValues } from './PortfolioFormModal';
 
@@ -187,23 +188,16 @@ export function PortfoliosPage() {
             measure: (p: Portfolio) =>
               (p.holdings ?? [])
                 .map((h) => formatMoney(h.quantity, { asset: h.asset_name }))
-                .join(', '),
-            max: 320,
+                .join(' '),
+            max: 360,
           },
           fixed: getFixed('holdings'),
-          // FR-046: server-computed over every transfer. A portfolio holds 0–5
-          // assets in the real data, so the two-line clamp is the right ceiling
-          // rather than a workaround.
-          render: (_, record) =>
-            !record.holdings || record.holdings.length === 0 ? (
-              <EmptyValue />
-            ) : (
-              <ClampedText
-                text={record.holdings
-                  .map((h) => formatMoney(h.quantity, { asset: h.asset_name }))
-                  .join(', ')}
-              />
-            ),
+          // FR-046 / FR-052: server-computed over every transfer, rendered as
+          // one badge per asset (the shared component the transactions table
+          // uses too). No `title` here on purpose — PageTable supplies it from
+          // `autoWidth.header` (I9-1), which is what the blank-header defect
+          // was about.
+          render: (_, record) => <HoldingTags holdings={record.holdings ?? []} />,
         },
         last_transaction_time: {
           dataIndex: 'last_transaction_time',

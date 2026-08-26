@@ -28,10 +28,6 @@ vi.mock('echarts-for-react', () => ({
   },
 }));
 
-vi.mock('@/services/unihub-backend/finance', () => ({
-  getPortfolioHoldings: vi.fn().mockResolvedValue([]),
-}));
-
 /** transfers: [pnlChange, assetChangeAmount] */
 function txn(id: string, timestamp: string, transfers: [string | null, string | null][]): Transaction {
   return {
@@ -94,13 +90,32 @@ describe('pnlPoints (FR-042)', () => {
   });
 });
 
-describe('trendPoints (FR-043)', () => {
-  it('splits each transaction into cost, income and position', () => {
+describe('trendPoints (FR-043 / FR-055)', () => {
+  it('splits each transaction into cost, income and position — position being the money mirror of the cash flow', () => {
+    // I9-5: position = −(cost + income). What left as cost entered the
+    // position; what came back as income left it. Asset QUANTITIES are not
+    // summed — they cannot be, across assets.
     expect(trendPoints(TXNS)).toEqual([
-      { label: '2026-01-01', cost: -1000, income: 0, position: 0 },
-      { label: '2026-02-01', cost: 0, income: 500, position: 10 },
-      { label: '2026-03-01', cost: -500, income: 0, position: 0 },
+      { label: '2026-01-01', cost: -1000, income: 0, position: 1000 },
+      { label: '2026-02-01', cost: 0, income: 500, position: -500 },
+      { label: '2026-03-01', cost: -500, income: 0, position: 500 },
     ]);
+  });
+
+  it('plots a POSITIVE position bar for every cost-only transaction (SC-024)', () => {
+    // The shipped series summed raw quantities across assets and plotted a
+    // negative bar for 119 of the 359 real transactions — e.g. paying 1,579
+    // PT-sUSDE for 1,256 DAI. In money the same transaction is +cost.
+    const swap = txn('swap', '2026-05-01T00:00:00Z', [['-1579', '-1579'], [null, '1256']]);
+    const [p] = trendPoints([swap]);
+    expect(p!.cost).toBe(-1579);
+    expect(p!.position).toBe(1579);
+    expect(p!.position).toBe(-(p!.cost + p!.income));
+  });
+
+  it('gives a position-only transfer (a split) zero position movement — no cash moved', () => {
+    const split = txn('split', '2026-04-01T00:00:00Z', [[null, '419']]);
+    expect(trendPoints([split])[0]!.position).toBe(0);
   });
 
   it('keeps costs NEGATIVE so the bar grows downward', () => {
@@ -149,23 +164,60 @@ describe('trendOption (FR-041/FR-043)', () => {
     expect(series[1]!.data[2]).toBe(500);
   });
 
-  it('gives position its own axis — shares and dollars do not share a scale', () => {
+  it('plots all three series on ONE money axis — position is money now (FR-055)', () => {
     const opt = trendOption(trendPoints(TXNS), 'bar', axis, labels);
-    const series = opt.series as { name: string; yAxisIndex: number }[];
-    expect(series.find((s) => s.name === 'Position')!.yAxisIndex).toBe(1);
-    expect(series.find((s) => s.name === 'Cost')!.yAxisIndex).toBe(0);
+    expect(Array.isArray(opt.yAxis)).toBe(false);
+    const series = opt.series as { name: string; yAxisIndex?: number }[];
+    for (const s of series) expect(s.yAxisIndex ?? 0).toBe(0);
   });
 
   it('labels the money axis with the currency symbol (FR-041)', () => {
     const opt = trendOption(trendPoints(TXNS), 'bar', axis, labels);
-    const [money] = opt.yAxis as { axisLabel: { formatter: (v: number) => string } }[];
-    expect(money!.axisLabel.formatter(1234)).toBe('NT$ 1,234');
+    const money = opt.yAxis as { axisLabel: { formatter: (v: number) => string } };
+    expect(money.axisLabel.formatter(1234)).toBe('NT$ 1,234');
   });
 
   it('falls back to the currency code when no symbol is known', () => {
     const opt = trendOption(trendPoints(TXNS), 'bar', { currency: 'XYZ' }, labels);
-    const [money] = opt.yAxis as { axisLabel: { formatter: (v: number) => string } }[];
-    expect(money!.axisLabel.formatter(7)).toBe('XYZ 7');
+    const money = opt.yAxis as { axisLabel: { formatter: (v: number) => string } };
+    expect(money.axisLabel.formatter(7)).toBe('XYZ 7');
+  });
+
+  // FR-053 / SC-026: the shared tooltip — bold date, one row per series, values
+  // through the normalizers, pinned to the axis instead of the cursor.
+  type Tip = {
+    trigger: string;
+    appendToBody: boolean;
+    position: unknown;
+    formatter: (params: unknown) => string;
+  };
+  const paramsFor = (dataIndex: number) =>
+    ['Cost', 'Income', 'Position'].map((seriesName) => ({ seriesName, dataIndex, marker: '' }));
+
+  it('formats the tooltip as the shared builder does, with signed money values', () => {
+    const tip = trendOption(trendPoints(TXNS), 'bar', axis, labels).tooltip as Tip;
+    expect(tip.trigger).toBe('axis');
+    expect(tip.appendToBody).toBe(true);
+    expect(typeof tip.position).toBe('function');
+    const html = tip.formatter(paramsFor(0));
+    expect(html.startsWith('<b>2026-01-01</b>')).toBe(true);
+    expect(html).toContain('Cost');
+    expect(html).toContain('− NT$ 1,000');
+    expect(html).toContain('Position');
+    expect(html).toContain('+ NT$ 1,000');
+    // A zero series is noise in a tooltip — omitted, like the balance-sheets stack.
+    expect(html).not.toContain('Income');
+  });
+
+  it('shows the SIGNED deltas in waterfall mode too — never the bar heights', () => {
+    // Waterfall bars are absolute heights on transparent bases; the tooltip
+    // must read the point set by dataIndex, so a cost stays negative.
+    const tip = trendOption(trendPoints(TXNS), 'waterfall', axis, labels).tooltip as Tip;
+    const html = tip.formatter([{ seriesName: 'Cost', dataIndex: 2, marker: '' }]);
+    expect(html.startsWith('<b>2026-03-01</b>')).toBe(true);
+    expect(html).toContain('− NT$ 500');
+    expect(html).toContain('+ NT$ 500');
+    expect(html).not.toContain('NT$ 1,500');
   });
 });
 
@@ -183,6 +235,21 @@ describe('pnlLineOption (FR-042)', () => {
     const vm = opt.visualMap as { inRange: { color: string[] } };
     expect(vm.inRange.color[0]).toBe(COST_COLOR);
     expect(vm.inRange.color.at(-1)).toBe(INCOME_COLOR);
+  });
+
+  it('formats the tooltip as the shared builder does — date title, one signed PnL row (FR-053)', () => {
+    const opt = pnlLineOption(pnlPoints(TXNS), { currency: 'TWD' }, 'PnL');
+    const tip = opt.tooltip as {
+      trigger: string; appendToBody: boolean; position: unknown; formatter: (p: unknown) => string;
+    };
+    expect(tip.trigger).toBe('axis');
+    expect(tip.appendToBody).toBe(true);
+    expect(typeof tip.position).toBe('function');
+    const html = tip.formatter([{ value: [Date.UTC(2026, 0, 1), -1000] }]);
+    expect(html.startsWith('<b>2026-01-01</b>')).toBe(true);
+    expect(html).toContain('PnL');
+    expect(html).toContain('− NT$ 1,000');
+    expect(html).toContain('tabular-nums');
   });
 });
 
@@ -204,11 +271,7 @@ function renderPanel(portfolio: Portfolio = PORTFOLIO) {
   return render(
     <QueryClientProvider client={client}>
       <IntlProvider locale="en-US" messages={enUS}>
-        <PortfolioValuePanel
-          portfolio={portfolio}
-          transactions={TXNS}
-          columns={2}
-        />
+        <PortfolioValuePanel portfolio={portfolio} transactions={TXNS} />
       </IntlProvider>
     </QueryClientProvider>,
   );
@@ -221,14 +284,39 @@ describe('PortfolioValuePanel (FR-040)', () => {
     expect(tabs.map((el) => el.textContent)).toEqual(['PnL', 'Trend']);
   });
 
-  it('prints the PnL figure with its currency symbol and sign', () => {
-    renderPanel();
-    expect(screen.getByText('− NT$ 1,000')).toBeInTheDocument();
+  // FR-054: the tab IS the chart. The figure, the holdings line and the
+  // "Charted from N transactions on this page" note are gone.
+  it('renders the chart only — no PnL figure line, no holdings line, no page note', () => {
+    const { container } = renderPanel();
+    expect(container.querySelector('.ant-descriptions')).toBeNull();
+    expect(screen.queryByText('− NT$ 1,000')).toBeNull();
+    expect(container.textContent).not.toMatch(/still holding/i);
+    expect(container.textContent).not.toMatch(/charted from/i);
+    expect(screen.getByTestId('echart')).toBeInTheDocument();
   });
 
-  it('never labels the figure "realized" or "net" inline', () => {
+  it('never labels anything "realized" or "net" inline', () => {
     const { container } = renderPanel();
     expect(container.textContent).not.toMatch(/realized|net invested/i);
+  });
+
+  it('keeps the no-prices caveat behind an info icon in the tab bar while the PnL tab is active', async () => {
+    renderPanel();
+    fireEvent.mouseEnter(screen.getByLabelText('pnl-note'));
+    expect(await screen.findByText(/unrealized gains need market prices/i)).toBeInTheDocument();
+  });
+
+  it('shows the realized caveat instead for a closed portfolio', async () => {
+    renderPanel({ ...PORTFOLIO, state: 'closed' } as Portfolio);
+    fireEvent.mouseEnter(screen.getByLabelText('pnl-note'));
+    expect(await screen.findByText(/realized profit or loss/i)).toBeInTheDocument();
+  });
+
+  it('drops the info icon on the Trend tab — the Waterfall toggle sits there instead', () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole('tab', { name: 'Trend' }));
+    expect(screen.queryByLabelText('pnl-note')).toBeNull();
+    expect(screen.getByText('Waterfall')).toBeInTheDocument();
   });
 
   it('shows the Waterfall toggle only on the Trend tab', () => {
@@ -254,11 +342,7 @@ describe('PortfolioValuePanel (FR-040)', () => {
     render(
       <QueryClientProvider client={client}>
         <IntlProvider locale="en-US" messages={enUS}>
-          <PortfolioValuePanel
-            portfolio={PORTFOLIO}
-            transactions={[]}
-              columns={2}
-          />
+          <PortfolioValuePanel portfolio={PORTFOLIO} transactions={[]} />
         </IntlProvider>
       </QueryClientProvider>,
     );

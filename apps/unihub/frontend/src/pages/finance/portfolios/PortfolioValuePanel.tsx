@@ -1,36 +1,30 @@
 /**
- * The portfolio value panel (FR-040…FR-043) — ONE card, two tabs.
+ * The portfolio value panel (FR-040…FR-043, FR-054, FR-055) — ONE card, two
+ * tabs, and each tab IS its chart.
  *
- * This replaces the former pair of panels (a Descriptions "Value" panel and a
- * separate charts card). They said the same thing twice: the figures panel
- * listed invested / returned / net, and the chart beside it plotted the same
- * running total. Merged, the headline figure and the curve that ends at it sit
- * in one place and cannot drift apart.
+ *  - **PnL tab**: the cumulative line whose LAST point is the portfolio's PnL
+ *    to date, in the Balance Sheets equity-curve style. The figure itself is
+ *    no longer printed above the chart (FR-054) — the Portfolios list and the
+ *    newest transaction row's Accumulated PnL already state it — and the
+ *    realized (closed) vs net-to-date (open, no market prices) caveat lives
+ *    behind an info icon in the tab bar.
+ *  - **Trend tab**: cost / income / position per transaction, all in the base
+ *    currency (position = −(cost + income), FR-055), with the Waterfall toggle
+ *    in the tab bar (Principle VI: panel-header actions).
  *
- *  - **PnL tab**: the portfolio's PnL to date plus the cumulative line whose
- *    LAST point is exactly that number, in the Balance Sheets equity-curve
- *    style, and the positions still held (FR-034).
- *  - **Trend tab**: cost / income / position per transaction, with the
- *    Waterfall toggle in the card header (Principle VI: panel-header actions).
- *
- * Every aggregate comes from the BACKEND, computed over all transfers: the
- * transactions table is paginated, so summing the loaded page would silently
- * report a fraction of the truth (research I6-1). The CHARTS necessarily plot
- * the loaded page, and the panel says so.
+ * The transactions handed in are the portfolio's COMPLETE set (FR-057), not
+ * the table's page, so the curve genuinely ends at the portfolio's PnL.
  *
  * Constitution X/XI: ECharts + SVG renderer, `notMerge`, an `overflowX: auto`
  * wrapper with a 600px minimum, and an AntD Card with `tabList`.
  */
 import { useMemo, useState } from 'react';
-import { Card, Descriptions, Segmented, Space, Tag, Tooltip, Typography } from 'antd';
+import { Card, Segmented, Tooltip, Typography } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
-import { useQuery } from '@tanstack/react-query';
 import { useIntl } from 'react-intl';
-import { EmptyValue } from '@/components/EmptyValue';
-import { getPortfolioHoldings } from '@/services/unihub-backend/finance';
+import { NEUTRAL_COLOR } from '@/components/Price';
 import type { Portfolio, Transaction } from '@/services/unihub-backend/finance';
-import { Price, formatMoney } from '@/components/Price';
 import {
   pnlLineOption,
   pnlPoints,
@@ -44,26 +38,16 @@ const CHART_HEIGHT = 320;
 
 export interface PortfolioValuePanelProps {
   portfolio: Portfolio;
+  /** Every transaction of the portfolio, not the table's page (FR-057). */
   transactions: readonly Transaction[];
-  /** Panel column count, driven by measured width like the Portfolio panel. */
-  columns: number;
 }
 
-export function PortfolioValuePanel({
-  portfolio,
-  transactions,
-  columns,
-}: PortfolioValuePanelProps) {
+export function PortfolioValuePanel({ portfolio, transactions }: PortfolioValuePanelProps) {
   const { formatMessage: t } = useIntl();
   const [tab, setTab] = useState<'pnl' | 'trend'>('pnl');
   const [mode, setMode] = useState<TrendMode>('bar');
   const ccy = portfolio.base_currency;
   const isClosed = portfolio.state === 'closed';
-
-  const { data: holdings = [] } = useQuery({
-    queryKey: ['finance', 'portfolios', portfolio.id, 'holdings'],
-    queryFn: () => getPortfolioHoldings(portfolio.id),
-  });
 
   const line = useMemo(() => pnlPoints(transactions), [transactions]);
   const bars = useMemo(() => trendPoints(transactions), [transactions]);
@@ -71,7 +55,7 @@ export function PortfolioValuePanel({
   const axis = { currency: ccy };
   const option =
     tab === 'pnl'
-      ? pnlLineOption(line, axis)
+      ? pnlLineOption(line, axis, t({ id: 'pages.finance.portfolios.charts.pnlTab' }))
       : trendOption(bars, mode, axis, {
           cost: t({ id: 'pages.finance.portfolios.charts.cost' }),
           income: t({ id: 'pages.finance.portfolios.charts.income' }),
@@ -99,73 +83,35 @@ export function PortfolioValuePanel({
               { value: 'waterfall', label: t({ id: 'pages.finance.portfolios.charts.waterfall' }) },
             ]}
           />
-        ) : null
+        ) : (
+          // FR-054: the realized/unrealized nuance is a detail on demand — an
+          // icon, not a sentence under the chart.
+          <Tooltip
+            title={t({
+              id: isClosed
+                ? 'pages.finance.portfolios.value.realizedNote'
+                : 'pages.finance.portfolios.value.noPricesNote',
+            })}
+          >
+            <InfoCircleOutlined aria-label="pnl-note" style={{ color: NEUTRAL_COLOR }} />
+          </Tooltip>
+        )
       }
     >
-      {tab === 'pnl' && (
-        <Descriptions size="small" column={columns} style={{ marginBottom: 8 }}>
-          <Descriptions.Item
-            label={
-              <Space size={4}>
-                {t({ id: 'pages.finance.portfolios.value.pnl' })}
-                {/* The realized/unrealized nuance lives here, not inline: the
-                    figure is the point, the caveat is a detail on demand. */}
-                <Tooltip
-                  title={t({
-                    id: isClosed
-                      ? 'pages.finance.portfolios.value.realizedNote'
-                      : 'pages.finance.portfolios.value.noPricesNote',
-                  })}
-                >
-                  <InfoCircleOutlined style={{ color: '#8c8c8c' }} />
-                </Tooltip>
-              </Space>
-            }
-          >
-            {portfolio.net_value_change == null ? (
-              <EmptyValue />
-            ) : (
-              <Price value={portfolio.net_value_change} currency={ccy} signed />
-            )}
-          </Descriptions.Item>
-          <Descriptions.Item label={t({ id: 'pages.finance.portfolios.value.holdings' })}>
-            {holdings.length === 0 ? (
-              <EmptyValue />
-            ) : (
-              <Space size={[8, 8]} wrap>
-                {holdings.map((h) => (
-                  <Tag key={h.asset_id}>
-                    {h.asset_name} × {formatMoney(h.quantity, { asset: '' })}
-                  </Tag>
-                ))}
-              </Space>
-            )}
-          </Descriptions.Item>
-        </Descriptions>
-      )}
-
       {isEmpty ? (
         <Typography.Text type="secondary">
           {t({ id: 'pages.finance.portfolios.charts.empty' })}
         </Typography.Text>
       ) : (
-        <>
-          {/* Principle X: horizontal scroll rather than a squeezed chart. */}
-          <div style={{ overflowX: 'auto' }}>
-            <ReactECharts
-              option={option}
-              notMerge
-              opts={{ renderer: 'svg' }}
-              style={{ minWidth: CHART_MIN_WIDTH, width: '100%', height: CHART_HEIGHT }}
-            />
-          </div>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {t(
-              { id: 'pages.finance.portfolios.charts.pageNote' },
-              { count: transactions.length },
-            )}
-          </Typography.Text>
-        </>
+        // Principle X: horizontal scroll rather than a squeezed chart.
+        <div style={{ overflowX: 'auto' }}>
+          <ReactECharts
+            option={option}
+            notMerge
+            opts={{ renderer: 'svg' }}
+            style={{ minWidth: CHART_MIN_WIDTH, width: '100%', height: CHART_HEIGHT }}
+          />
+        </div>
       )}
     </Card>
   );

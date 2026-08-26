@@ -16,7 +16,7 @@ import { Tooltip, Typography } from 'antd';
 import type { CSSProperties } from 'react';
 import Decimal from 'decimal.js';
 import { EmptyValue } from '@/components/EmptyValue';
-import { directionColor, formatParts, normalizeAmount } from './format';
+import { directionColor, formatParts, normalizeAmount, splitParts } from './format';
 
 export interface PriceProps {
   value: Decimal.Value | null | undefined;
@@ -33,6 +33,11 @@ export interface PriceProps {
   neutral?: boolean;
   /** Suppress colour entirely — for a plain balance in a neutral column. */
   plain?: boolean;
+  /**
+   * Render the unit in the secondary tone, in its own span — a holding badge
+   * reads `2,145 00918.TW` with the ticker muted so the number leads (FR-052).
+   */
+  mutedUnit?: boolean;
   maxDecimals?: number;
   style?: CSSProperties;
 }
@@ -44,13 +49,15 @@ export function Price({
   signed = false,
   neutral = false,
   plain = false,
+  mutedUnit = false,
   maxDecimals,
   style,
 }: PriceProps) {
   const parts = normalizeAmount(value, { currency, asset, signed, maxDecimals });
   if (!parts) return <EmptyValue />;
 
-  const text = formatParts(parts, Boolean(currency));
+  const currencyLeads = Boolean(currency);
+  const { before, unit, after } = splitParts(parts, currencyLeads);
   const body = (
     <Typography.Text
       style={{
@@ -61,7 +68,15 @@ export function Price({
         ...style,
       }}
     >
-      {text}
+      {mutedUnit && unit ? (
+        <>
+          {before}
+          <Typography.Text type="secondary">{unit}</Typography.Text>
+          {after}
+        </>
+      ) : (
+        formatParts(parts, currencyLeads)
+      )}
     </Typography.Text>
   );
 
@@ -69,7 +84,7 @@ export function Price({
   // displayed text actually lost something.
   if (!parts.rounded) return body;
   return (
-    <Tooltip title={formatParts({ ...parts, magnitude: parts.exact }, Boolean(currency))}>
+    <Tooltip title={formatParts({ ...parts, magnitude: parts.exact }, currencyLeads)}>
       {body}
     </Tooltip>
   );

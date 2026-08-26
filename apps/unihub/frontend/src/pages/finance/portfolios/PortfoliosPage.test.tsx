@@ -253,10 +253,35 @@ describe('PortfoliosPage — PnL column (iteration 6)', () => {
     expect(row.textContent).not.toMatch(/realized/i);
   });
 
-  it('carries a Position column listing what the portfolio still holds', async () => {
+  it('carries a Position column with one badge per held asset (FR-052)', async () => {
+    vi.mocked(financeService.listPortfolios).mockResolvedValue({
+      count: 1, next: null, previous: null,
+      results: [{
+        ...PORTFOLIO,
+        holdings: [
+          ...PORTFOLIO.holdings,
+          { asset_id: 'a2', asset_name: '0050.TW', quantity: '20' },
+        ],
+      }],
+    } as never);
     renderPage();
     const row = (await screen.findByRole('link', { name: 'Tech Fund' })).closest('tr')!;
-    expect(row.textContent).toContain('2,145 00918.TW');
+    const tags = [...row.querySelectorAll('.ant-tag')].map((el) => el.textContent);
+    expect(tags).toEqual(['2,145 00918.TW', '20 0050.TW']);
+    // Quantity strong, asset name muted — not one comma-separated run.
+    expect(row.querySelector('.ant-typography-secondary')!.textContent).toBe('00918.TW');
+    expect(row.textContent).not.toContain(',  ');
+  });
+
+  // SC-023: the Position header shipped blank (autoWidth.header, no title).
+  it('renders no blank column header — every th carries its text', async () => {
+    const { container } = renderPage();
+    await screen.findByRole('link', { name: 'Tech Fund' });
+    const headers = [...container.querySelectorAll('.ant-table-thead th')].map((h) =>
+      h.textContent?.trim() ?? '',
+    );
+    expect(headers).toContain('Position');
+    expect(headers.filter((h) => h === '')).toHaveLength(0);
   });
 
   it('renders the empty placeholder when a portfolio has no transfers', async () => {

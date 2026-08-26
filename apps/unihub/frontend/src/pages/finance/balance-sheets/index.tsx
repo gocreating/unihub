@@ -24,6 +24,15 @@ import {
   listExchangeRates,
 } from '@/services/unihub-backend/finance';
 import { computeNetWorthInBase, formatAmount, getCurrencySymbol } from '@/utils/finance';
+import {
+  COST_COLOR,
+  INCOME_COLOR,
+  chartTooltipHtml,
+  formatMoney,
+  moneyFormatter,
+  pinnedAxisTooltip,
+  seriesMarker,
+} from '@/components/Price';
 import { classifyAccountStacks, ECHARTS_COLORS, resolveAccountColor } from '@/utils/chartData';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 
@@ -196,21 +205,18 @@ export function BalanceSheetsPage() {
 
   // ── ECharts options ───────────────────────────────────────────────────────
 
-  /** Integer tick formatter — no decimal places. */
-  const formatTick = (v: number): string =>
-    new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(v);
-
-  /** Right-aligned tooltip row (pre-formatted value string). */
-  const tooltipRow = (marker: string, name: string, formattedValue: string): string =>
-    `<tr>` +
-    `<td style="padding:2px 20px 2px 0;white-space:nowrap">${marker}${name}</td>` +
-    `<td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${formattedValue}</td>` +
-    `</tr>`;
+  // Constitution XIII / FR-053: axis labels and tooltip values come from the
+  // shared normalizers — the same code path as every table cell — and the
+  // tooltip shape from the shared builder. With no base currency selected the
+  // amounts are raw balances in mixed currencies, so no symbol is shown but
+  // the money precision still applies.
+  const money = useMemo(
+    () => (baseCurrency ? moneyFormatter(baseCurrency) : (v: number) => formatMoney(v, { maxDecimals: 2 })),
+    [baseCurrency],
+  );
 
   const lineOption = useMemo((): EChartsOption => {
     const nwLabel = t({ id: 'pages.finance.balanceSheets.visualization.netWorth' });
-    const sym = getCurrencySymbol(baseCurrency ?? '');
-    const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
 
     // ECharts v6.1.0 bug: visualMap.piecewise crashes (reads .coord off an
     // undefined object) regardless of axis type.  Use visualMap.continuous
@@ -223,8 +229,8 @@ export function BalanceSheetsPage() {
     const values = netWorthData.map((d) => d.netWorth);
     const maxAbs = values.length > 0 ? Math.max(...values.map(Math.abs), 1) : 1;
     const SHARP_BICOLOR = [
-      ...Array(50).fill('#ff4d4f'),  // red  — net worth < 0 (debt)
-      ...Array(50).fill('#52c41a'),  // green — net worth ≥ 0 (asset)
+      ...Array(50).fill(COST_COLOR),   // red  — net worth < 0 (debt)
+      ...Array(50).fill(INCOME_COLOR), // green — net worth ≥ 0 (asset)
     ];
 
     // [timestamp, value] format required for time axis (also ensures dimension:1
@@ -246,39 +252,15 @@ export function BalanceSheetsPage() {
         inRange: { color: SHARP_BICOLOR },
       }],
       tooltip: {
-        trigger: 'axis',
-        appendToBody: true,
-        extraCssText: 'max-width:320px;',
-        axisPointer: { animation: false },
-        // With appendToBody:true ECharts provides point[0] in viewport coordinates.
-        // Simple rule: place RIGHT if space allows, otherwise LEFT. No convertToPixel
-        // needed — point[0] is already the snapped axis position in viewport coords.
-        // point[0] and the returned [tx, ty] are both in CHART-CONTAINER-RELATIVE
-        // coordinates. ECharts auto-adds the chart's viewport offset when
-        // appendToBody:true, so we must compare against size.viewSize[0]
-        // (chart container width) — NOT window.innerWidth (viewport width).
-        // Using window.innerWidth was the root cause of persistent overflow.
-        position: (point, _params, _dom, _rect, size) => {
-          const [x] = point as [number, number];
-          const sz = size as { contentSize: number[]; viewSize: number[] };
-          const [tw = 0] = sz.contentSize;
-          const [chartW = 1000] = sz.viewSize; // chart container width, same coords as x
-          const MAX_W = 320;
-          const w = tw > 0 ? Math.min(tw, MAX_W) : MAX_W;
-          const GAP = 8;
-          if (x + GAP + w < chartW - 5) {
-            return [x + GAP, 20];        // fits right within chart container
-          }
-          return [Math.max(5, x - GAP - w), 20]; // flip left — guaranteed no overflow
-        },
+        ...pinnedAxisTooltip(320),
         formatter: (raw) => {
           const params = raw as unknown as { value: [number, number] }[];
           const p = params[0];
           if (!p) return '';
           const [ts, v] = p.value;
-          const date = dayjs(ts).format('YYYY-MM-DD');
-          const dot = `<span style="display:inline-block;margin-right:4px;border-radius:50%;width:10px;height:10px;background:${v >= 0 ? '#52c41a' : '#ff4d4f'}"></span>`;
-          return `<b>${date}</b><table style="margin-top:6px;border-spacing:0">${tooltipRow(dot, nwLabel, fmtVal(v))}</table>`;
+          return chartTooltipHtml(dayjs(ts).format('YYYY-MM-DD'), [
+            { marker: seriesMarker(v >= 0 ? INCOME_COLOR : COST_COLOR), name: nwLabel, value: money(v) },
+          ]);
         },
       },
       grid: { left: '3%', right: '4%', bottom: '4%', containLabel: true },
@@ -289,7 +271,7 @@ export function BalanceSheetsPage() {
           rotate: 30,
         },
       },
-      yAxis: { type: 'value', axisLabel: { formatter: (v: number) => sym ? `${sym} ${formatTick(v)}` : formatTick(v) } },
+      yAxis: { type: 'value', axisLabel: { formatter: money } },
       series: [{
         name: nwLabel,
         type: 'line',
@@ -304,12 +286,10 @@ export function BalanceSheetsPage() {
         symbolSize: 6,
       }],
     };
-  }, [netWorthData, baseCurrency, t]);
+  }, [netWorthData, money, t]);
 
   const stackedOption = useMemo((): EChartsOption => {
     const dates = [...new Set(stackedData.map((d) => d.date))].sort();
-    const sym = getCurrencySymbol(baseCurrency ?? '');
-    const fmtVal = (v: number) => sym ? `${sym} ${formatAmount(String(v))}` : formatAmount(String(v));
 
     // Classify each account into 'assets' or 'debts' stacking group.
     const stackGroups = classifyAccountStacks(stackedData, stackedAccounts);
@@ -351,24 +331,7 @@ export function BalanceSheetsPage() {
         selected: Object.fromEntries(stackedAccounts.map((acc) => [acc, !hiddenSeries.has(acc)])),
       },
       tooltip: {
-        trigger: 'axis',
-        appendToBody: true,
-        extraCssText: 'max-width:600px;',
-        axisPointer: { animation: false },
-        // Same container-relative coordinate fix as the line chart.
-        position: (point, _params, _dom, _rect, size) => {
-          const [x] = point as [number, number];
-          const sz = size as { contentSize: number[]; viewSize: number[] };
-          const [tw = 0] = sz.contentSize;
-          const [chartW = 1000] = sz.viewSize;
-          const MAX_W = 600;
-          const w = tw > 0 ? Math.min(tw, MAX_W) : MAX_W;
-          const GAP = 8;
-          if (x + GAP + w < chartW - 5) {
-            return [x + GAP, 20];
-          }
-          return [Math.max(5, x - GAP - w), 20];
-        },
+        ...pinnedAxisTooltip(600),
         formatter: (raw) => {
           const params = raw as unknown as { value: [number, number]; seriesName: string; marker: string }[];
           const ts = params[0]?.value?.[0];
@@ -376,11 +339,8 @@ export function BalanceSheetsPage() {
           const rows = [...params]
             .filter((p) => p.value[1] !== 0)
             .sort((a, b) => Math.abs(b.value[1]) - Math.abs(a.value[1]))
-            .map((p) => tooltipRow(p.marker, p.seriesName, fmtVal(p.value[1])))
-            .join('');
-          return rows
-            ? `<b>${date}</b><table style="margin-top:6px;border-spacing:0">${rows}</table>`
-            : `<b>${date}</b>`;
+            .map((p) => ({ marker: p.marker, name: p.seriesName, value: money(p.value[1]) }));
+          return chartTooltipHtml(date, rows);
         },
       },
       grid: { left: '3%', right: '4%', bottom: '4%', containLabel: true },
@@ -391,13 +351,10 @@ export function BalanceSheetsPage() {
           rotate: 30,
         },
       },
-      yAxis: {
-        type: 'value',
-        axisLabel: { formatter: (v: number) => sym ? `${sym} ${formatTick(v)}` : formatTick(v) },
-      },
+      yAxis: { type: 'value', axisLabel: { formatter: money } },
       series,
     };
-  }, [stackedData, stackedAccounts, baseCurrency, hiddenSeries, accountColors]);
+  }, [stackedData, stackedAccounts, money, hiddenSeries, accountColors]);
 
   const sheetNetWorths = useMemo<Record<string, Decimal | null>>(() => {
     if (!baseCurrency) return {};

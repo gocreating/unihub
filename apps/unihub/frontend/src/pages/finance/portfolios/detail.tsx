@@ -32,6 +32,7 @@ import {
 } from '@/services/unihub-backend/finance';
 import { PanelHeaderActions } from '@/components/PanelHeaderActions';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
+import { HoldingTags } from './HoldingTags';
 import { PortfolioValuePanel } from './PortfolioValuePanel';
 import { PortfolioFormModal } from './PortfolioFormModal';
 import type { PortfolioUpdateFormValues } from './PortfolioFormModal';
@@ -106,27 +107,34 @@ export function PortfolioDetailPage() {
     { key: 'timestamp', label: t({ id: 'pages.finance.transactions.col.timestamp' }), dataType: 'date' },
   ], [t]);
 
-  // FR-044: one shared column set for both row types, ordered
-  // Time → PnL → Position → Description. Remark is gone (FR-039).
+  // FR-056: one shared column set for both row types — Time, then the
+  // ACCUMULATED pair (transaction rows only), then the Tx CHANGE pair
+  // (transfer rows only), then Description. Remark is gone (FR-039).
   const columnDefs = useMemo<ColumnDef[]>(() => [
     { key: '__caret', label: '', dataType: 'text', visible: true, order: 0 },
     { key: 'timestamp', label: t({ id: 'pages.finance.transactions.col.timestamp' }), dataType: 'text', visible: true, order: 1 },
-    { key: 'pnl', label: t({ id: 'pages.finance.transactions.col.pnl' }), dataType: 'text', visible: true, order: 2 },
-    { key: 'position', label: t({ id: 'pages.finance.transactions.col.position' }), dataType: 'text', visible: true, order: 3 },
-    { key: 'description', label: t({ id: 'pages.finance.transactions.col.description' }), dataType: 'text', visible: true, order: 4 },
-    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 5 },
+    { key: 'accumulated_pnl', label: t({ id: 'pages.finance.transactions.col.accumulatedPnl' }), dataType: 'text', visible: true, order: 2 },
+    { key: 'accumulated_position', label: t({ id: 'pages.finance.transactions.col.accumulatedPosition' }), dataType: 'text', visible: true, order: 3 },
+    { key: 'tx_pnl_change', label: t({ id: 'pages.finance.transactions.col.txPnlChange' }), dataType: 'text', visible: true, order: 4 },
+    { key: 'tx_position_change', label: t({ id: 'pages.finance.transactions.col.txPositionChange' }), dataType: 'text', visible: true, order: 5 },
+    { key: 'description', label: t({ id: 'pages.finance.transactions.col.description' }), dataType: 'text', visible: true, order: 6 },
+    { key: 'actions', label: t({ id: 'common.actions' }), dataType: 'text', visible: true, order: 7 },
   ], [t]);
 
   const table = useEntityTable({ key: `portfolio-transactions-${id}`, filterableAttrs, columnDefs });
 
+  const portfolioCondition = useMemo(
+    () => ({ attr: 'portfolio', op: 'eq' as const, val: id ?? '' }),
+    [id],
+  );
+
   const queryParams = useMemo((): EntityListParams => {
-    const portfolioCondition = { attr: 'portfolio', op: 'eq' as const, val: id ?? '' };
     const userGroups = table.queryParams.filters?.groups ?? [];
     const groups = userGroups.length === 0
       ? [{ logic: 'and' as const, conditions: [portfolioCondition] }]
       : userGroups.map((g) => ({ ...g, conditions: [portfolioCondition, ...g.conditions] }));
     return { ...table.queryParams, filters: { groups } };
-  }, [table.queryParams, id]);
+  }, [table.queryParams, portfolioCondition]);
 
   const { data: transactionsData, isLoading: txnLoading } = useQuery({
     queryKey: ['finance', 'transactions', queryParams],
@@ -135,6 +143,27 @@ export function PortfolioDetailPage() {
     meta: { errorMessage: t({ id: 'pages.finance.transactions.loadError' }) },
   });
   const transactions = useMemo(() => transactionsData?.results ?? [], [transactionsData]);
+
+  /**
+   * FR-057 / I9-4: the portfolio's COMPLETE transaction set, oldest first,
+   * for the accumulated columns and the charts. The query above is the
+   * table's — paginated, searched and user-sorted — so a running total built
+   * from it would depend on the page (3 of 55 real portfolios exceed one).
+   * This one is none of those things. Bounded by the backend cap of 500; the
+   * largest real portfolio has 53 (research I9-4 records the bound).
+   */
+  const { data: allTransactionsData } = useQuery({
+    queryKey: ['finance', 'transactions', 'all', id],
+    queryFn: () =>
+      listTransactions({
+        filters: { groups: [{ logic: 'and', conditions: [portfolioCondition] }] },
+        ordering: 'timestamp,created_at',
+        limit: 500,
+      }),
+    enabled: !!id,
+    meta: { errorMessage: t({ id: 'pages.finance.transactions.loadError' }) },
+  });
+  const allTransactions = useMemo(() => allTransactionsData?.results ?? [], [allTransactionsData]);
 
   // Tree rows: each transaction owns its transfers as children (FR-022).
   const rows = useMemo<TxnRow[]>(
@@ -148,13 +177,16 @@ export function PortfolioDetailPage() {
   );
 
   /**
-   * FR-044: a transaction row shows ACCUMULATED balances. PnL accumulates into
+   * FR-056: a transaction row shows ACCUMULATED balances. PnL accumulates into
    * one figure (all base currency); Position accumulates PER ASSET, because
    * quantities of different assets cannot be added. Computed oldest → newest
-   * across the loaded page, with Decimal (never float).
+   * across the WHOLE portfolio (FR-057), with Decimal (never float), and
+   * looked up by transaction id from whatever rows the page happens to show.
    */
   const runningTotals = useMemo(() => {
-    const chronological = [...transactions].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    // The backend already orders by (timestamp, created_at); the stable sort
+    // only guards against a cached response from elsewhere.
+    const chronological = [...allTransactions].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     let pnl = new Decimal(0);
     const positions = new Map<string, Decimal>();
     const out = new Map<string, { pnl: Decimal; positions: [string, Decimal][] }>();
@@ -172,7 +204,7 @@ export function PortfolioDetailPage() {
       });
     }
     return out;
-  }, [transactions]);
+  }, [allTransactions]);
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const toggleExpand = (key: string) =>
@@ -355,20 +387,56 @@ export function PortfolioDetailPage() {
               )
             ) : null,
         },
-        pnl: {
-          key: 'pnl',
-          title: t({ id: 'pages.finance.transactions.col.pnl' }),
+        // FR-056: the ACCUMULATED pair belongs to transaction rows and is
+        // blank on transfer rows; the Tx CHANGE pair is the reverse. A cell
+        // that does not apply to the row type renders nothing at all — the
+        // shared empty placeholder is reserved for "applies, but absent".
+        accumulated_pnl: {
+          key: 'accumulated_pnl',
+          title: t({ id: 'pages.finance.transactions.col.accumulatedPnl' }),
           align: 'right',
-          autoWidth: { header: t({ id: 'pages.finance.transactions.col.pnl' }), min: 140 },
-          fixed: getFixed('pnl'),
-          // Transaction → accumulated balance with a symbol ("+ NT$ 666").
-          // Transfer    → only its own signed change.
+          autoWidth: { header: t({ id: 'pages.finance.transactions.col.accumulatedPnl' }), min: 140 },
+          fixed: getFixed('accumulated_pnl'),
           render: (_, r) => {
-            if (isTransaction(r)) {
-              const total = runningTotals.get(r.id)?.pnl;
-              if (!total) return <EmptyValue />;
-              return <Price value={total.toFixed()} currency={baseCurrency} signed />;
-            }
+            if (!isTransaction(r)) return null;
+            const total = runningTotals.get(r.id)?.pnl;
+            if (!total) return <EmptyValue />;
+            return <Price value={total.toFixed()} currency={baseCurrency} signed />;
+          },
+        },
+        accumulated_position: {
+          key: 'accumulated_position',
+          title: t({ id: 'pages.finance.transactions.col.accumulatedPosition' }),
+          autoWidth: {
+            header: t({ id: 'pages.finance.transactions.col.accumulatedPosition' }),
+            max: 360,
+            measure: (r: TxnRow) =>
+              isTransaction(r)
+                ? (runningTotals.get(r.id)?.positions ?? [])
+                    .map(([a, q]) => formatMoney(q.toFixed(), { asset: a }))
+                    .join(' ')
+                : '',
+          },
+          fixed: getFixed('accumulated_position'),
+          // Per asset, as badges — the same component as the list's Position.
+          render: (_, r) =>
+            isTransaction(r) ? (
+              <HoldingTags
+                holdings={(runningTotals.get(r.id)?.positions ?? []).map(([asset_name, q]) => ({
+                  asset_name,
+                  quantity: q.toFixed(),
+                }))}
+              />
+            ) : null,
+        },
+        tx_pnl_change: {
+          key: 'tx_pnl_change',
+          title: t({ id: 'pages.finance.transactions.col.txPnlChange' }),
+          align: 'right',
+          autoWidth: { header: t({ id: 'pages.finance.transactions.col.txPnlChange' }), min: 140 },
+          fixed: getFixed('tx_pnl_change'),
+          render: (_, r) => {
+            if (isTransaction(r)) return null;
             return r.pnl_change == null ? (
               <EmptyValue />
             ) : (
@@ -376,29 +444,18 @@ export function PortfolioDetailPage() {
             );
           },
         },
-        position: {
-          key: 'position',
-          title: t({ id: 'pages.finance.transactions.col.position' }),
+        tx_position_change: {
+          key: 'tx_position_change',
+          title: t({ id: 'pages.finance.transactions.col.txPositionChange' }),
           align: 'right',
-          autoWidth: { header: t({ id: 'pages.finance.transactions.col.position' }), min: 160 },
-          fixed: getFixed('position'),
+          autoWidth: { header: t({ id: 'pages.finance.transactions.col.txPositionChange' }), min: 160 },
+          fixed: getFixed('tx_position_change'),
           render: (_, r) => {
-            if (isTransaction(r)) {
-              const rows = runningTotals.get(r.id)?.positions ?? [];
-              if (rows.length === 0) return <EmptyValue />;
-              return (
-                <ClampedText
-                  text={rows.map(([a, q]) => formatMoney(q.toFixed(), { asset: a })).join(', ')}
-                />
-              );
-            }
-            // A cash leg has no position; a position leg shows "+123 0050.TW".
-            if (r.currency) return <EmptyValue />;
-            return r.asset_change_amount == null ? (
-              <EmptyValue />
-            ) : (
-              <Price value={r.asset_change_amount} asset={r.asset_name ?? ''} signed neutral />
-            );
+            if (isTransaction(r)) return null;
+            // A cash leg has no position (Position = assets, FR-034); a
+            // position leg shows "+123 0050.TW".
+            if (r.currency || r.asset_change_amount == null) return <EmptyValue />;
+            return <Price value={r.asset_change_amount} asset={r.asset_name ?? ''} signed neutral />;
           },
         },
         actions: {
@@ -545,13 +602,9 @@ export function PortfolioDetailPage() {
         </Card>
       </div>
 
-      {/* FR-040: ONE panel — the PnL figure and the curve that ends at it. */}
+      {/* FR-040 / FR-057: ONE panel, charted over the whole portfolio. */}
       {portfolio && (
-        <PortfolioValuePanel
-          portfolio={portfolio}
-          transactions={transactions}
-          columns={descriptionColumns}
-        />
+        <PortfolioValuePanel portfolio={portfolio} transactions={allTransactions} />
       )}
 
       <PageTable<TxnRow>

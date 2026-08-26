@@ -88,7 +88,9 @@ export function normalizeAmount(
   const roundedRaw = trimDecimal(magnitudeDecimal.toFixed(ceiling, Decimal.ROUND_HALF_UP));
 
   return {
-    sign: signed ? (decimal.isNegative() ? '−' : '+') : '',
+    // A change is explicitly signed both ways; a balance omits the '+' but a
+    // negative balance (a debt, a short position) must still read as negative.
+    sign: decimal.isNegative() ? '−' : signed ? '+' : '',
     unit: currency ? getCurrencySymbol(currency) : (asset ?? ''),
     magnitude: group(roundedRaw),
     exact: group(exact),
@@ -98,15 +100,31 @@ export function normalizeAmount(
   };
 }
 
+export interface SplitParts {
+  before: string;
+  unit: string;
+  after: string;
+}
+
+/**
+ * The composed display string in three pieces — what precedes the unit, the
+ * unit, what follows it — so a component can restyle the unit (FR-052's
+ * muted asset name) while `formatParts` stays the ONE composition rule.
+ */
+export function splitParts(parts: PriceParts, currencyLeads: boolean): SplitParts {
+  const { sign, unit, magnitude } = parts;
+  if (!unit) return { before: sign ? `${sign} ${magnitude}` : magnitude, unit: '', after: '' };
+  if (currencyLeads) return { before: sign ? `${sign} ` : '', unit, after: ` ${magnitude}` };
+  return { before: sign ? `${sign}${magnitude} ` : `${magnitude} `, unit, after: '' };
+}
+
 /**
  * The display string. Currency leads (`+ NT$ 168`); an asset unit trails
  * (`+123 0050.TW`), because that is how a quantity reads aloud.
  */
 export function formatParts(parts: PriceParts, currencyLeads: boolean): string {
-  const { sign, unit, magnitude } = parts;
-  if (!unit) return sign ? `${sign} ${magnitude}` : magnitude;
-  if (currencyLeads) return sign ? `${sign} ${unit} ${magnitude}` : `${unit} ${magnitude}`;
-  return sign ? `${sign}${magnitude} ${unit}` : `${magnitude} ${unit}`;
+  const { before, unit, after } = splitParts(parts, currencyLeads);
+  return `${before}${unit}${after}`;
 }
 
 /** Convenience for one-shot formatting (chart tooltips, aria labels, tests). */

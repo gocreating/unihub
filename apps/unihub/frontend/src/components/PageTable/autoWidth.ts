@@ -87,6 +87,10 @@ export function resolveAutoWidths<T>(
     if (spec.min != null) width = Math.max(width, spec.min);
     if (spec.max != null) width = Math.min(width, spec.max);
 
-    return { ...rest, width };
+    // FR-052 / I9-1: a column that declares its header text can never render
+    // a blank header. The text already lives on the spec; only a column that
+    // set no `title` of its own (e.g. one without `makeSortProps`) gets it.
+    const title = rest.title === undefined ? spec.header : rest.title;
+    return { ...rest, title, width };
   });
 }
